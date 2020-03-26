@@ -8,6 +8,7 @@ class CleanScript(script.Script):
 
     queries = [
         "UPDATE res_users SET login='admin',password='admin' WHERE id IN (SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 1)",
+        "UPDATE res_users SET password='odoo' WHERE login != 'admin' AND password IS NOT NULL",
         "UPDATE ir_config_parameter SET value='2050-12-12' WHERE key='database.expiration_date'",
         "UPDATE ir_config_parameter SET value='http://localhost:8069' WHERE key='web.base.url'",
         "UPDATE ir_cron SET active='False'",

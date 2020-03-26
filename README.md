@@ -68,6 +68,7 @@ Makes a local Odoo database suitable for development:
 - Disables automated and scheduled actions
 - Disables mails
 - Set credentials for Administrator user  to **admin**:**admin**
+- Set password for all other users to **odoo**
 - Extend database validity to December 2050
 
 ```sh
