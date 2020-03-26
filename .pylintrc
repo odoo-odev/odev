@@ -1,0 +1,41 @@
+[MASTER]
+score=n
+
+[MESSAGES CONTROL]
+disable=all
+
+# This .pylintrc contains optional AND mandatory checks and is meant to be
+# loaded in an IDE to have it check everything, in the hope this will make
+# optional checks more visible to contributors who otherwise never look at a
+# green travis to see optional checks that failed.
+
+enable=anomalous-backslash-in-string,
+    assignment-from-none,
+    attribute-deprecated,
+    class-camelcase,
+    dangerous-default-value,
+    development-status-allowed,
+    incoherent-interpreter-exec-perm,
+    pointless-statement,
+    pointless-string-statement,
+    print-used,
+    redundant-keyword-arg,
+    reimported,
+    relative-import,
+    return-in-init,
+    sql-injection,
+    too-few-format-args,
+    unreachable,
+    use-vim-comment,
+    wrong-tabs-instead-of-spaces,
+    consider-merging-classes-inherited,
+    file-not-used,
+    no-utf8-coding-comment,
+    redefined-builtin,
+    too-complex,
+    unnecessary-utf8-coding-comment
+
+[REPORTS]
+msg-template={path}:{line}: [{msg_id}({symbol}), {obj}] {msg}
+output-format=colorized
+reports=no

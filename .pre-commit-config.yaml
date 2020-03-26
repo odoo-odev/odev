@@ -1,0 +1,163 @@
+minimum_pre_commit_version: "2"
+default_language_version:
+    python: python3.10
+default_stages: [commit]
+fail_fast: false
+exclude: ^(\.vscode|\.github|tests)
+
+repos:
+    - repo: https://github.com/pre-commit/mirrors-prettier
+      rev: v2.5.1
+      hooks:
+          - id: prettier
+            name: prettier (with plugin-xml)
+            additional_dependencies:
+                - "prettier@2.1.2"
+                - "@prettier/plugin-xml@0.12.0"
+            args:
+                - --plugin=@prettier/plugin-xml
+            files: \.(py|html|json|md|toml|xml|yaml|yml)$
+
+    - repo: https://github.com/psf/black
+      rev: 22.3.0
+      hooks:
+          - id: black
+            files: \.pyi?$
+            exclude: (\.git|\.hg|\.mypy_cache|\.tox|\.venv|_build|buck-out|build|dist|/static/util\.py)$
+            args:
+                - --line-length=120
+
+    - repo: https://github.com/PyCQA/isort
+      rev: 5.12.0
+      hooks:
+          - id: isort
+            exclude: (__init__|static/util)\.py$
+            args:
+                - --settings=.
+
+    - repo: https://github.com/myint/autoflake
+      rev: v1.4
+      hooks:
+          - id: autoflake
+            args:
+                - --in-place
+                - --ignore-init-module-imports
+                - --remove-unused-variables
+
+    - repo: https://github.com/PyCQA/flake8
+      rev: 4.0.1
+      hooks:
+          - id: flake8
+            name: flake8 (no __init__.py)
+            exclude: /(__init__|static/util)\.py$
+            additional_dependencies:
+                - flake8-bugbear==20.1.4
+                - flake8-comprehensions>3.0.1
+                - flake8-debugger==3.2.1
+                - flake8-deprecated==1.3
+                - flake8-docstrings==1.5.0
+                - flake8-pep3101==1.2.1
+                - flake8-print==3.1.4
+                - flake8-quotes==2.1.1
+                - flake8-requirements==1.5.2
+                - flake8-string-format==0.2.3
+          - id: flake8
+            name: flake8 (only __init__.py)
+            files: /__init__\.py$
+            args:
+                - --extend-ignore=F401,F403
+            additional_dependencies:
+                - flake8-docstrings==1.5.0
+                - flake8-print==3.1.4
+                - flake8-requirements==1.5.2
+
+    - repo: https://github.com/pre-commit/mirrors-mypy
+      rev: v1.9.0
+      hooks:
+          - id: mypy
+            exclude: (odev/(scripts|upgrades)/.*\.py)
+            args:
+                - --no-strict-optional
+                - --ignore-missing-imports
+                - --check-untyped-defs
+                - --explicit-package-bases
+            additional_dependencies:
+                - types-decorator==5.1.4
+                - types-docutils==0.17.5
+                - types-html5lib==1.1.5
+                - types-Jinja2==2.11.9
+                - types-Markdown==3.3.12
+                - types-paramiko==2.8.13
+                - types-psycopg2==2.9.6
+                - types-requests==2.27.9
+
+    - repo: https://github.com/asottile/pyupgrade
+      rev: v2.31.0
+      hooks:
+          - id: pyupgrade
+            args:
+                - --keep-percent-format
+
+    - repo: https://github.com/PyCQA/pylint
+      rev: v2.15.8
+      hooks:
+          - id: pylint
+            exclude: /static/util\.py$
+            args:
+                - --rcfile=.pylintrc
+
+    - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+      rev: v1.3.0
+      hooks:
+          - id: python-safety-dependencies-check
+
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.5.0
+      hooks:
+          - id: check-added-large-files
+          - id: check-ast
+          - id: check-case-conflict
+          - id: check-executables-have-shebangs
+          - id: check-json
+          - id: check-shebang-scripts-are-executable
+          - id: check-merge-conflict
+          - id: check-symlinks
+          - id: check-xml
+          - id: check-yaml
+          - id: debug-statements
+          - id: destroyed-symlinks
+          - id: detect-private-key
+          - id: end-of-file-fixer
+          - id: fix-byte-order-marker
+          - id: fix-encoding-pragma
+            args:
+                - --remove
+          - id: mixed-line-ending
+            args:
+                - --fix=lf
+          - id: name-tests-test
+            args:
+                - --pytest-test-first
+            exclude: ^tests/(resources|fixtures)/
+          - id: requirements-txt-fixer
+          - id: trailing-whitespace
+          - id: pretty-format-json
+            args:
+                - --autofix
+
+    - repo: https://github.com/codespell-project/codespell
+      rev: v2.1.0
+      hooks:
+          - id: codespell
+            name: codespell (python exceptions)
+            files: sh_upgrade\.py$
+            args:
+                - -L datas,pullrequest
+          - id: codespell
+            name: codespell (jinja)
+            files: \.jinja$
+            args:
+                - -L makro
+          - id: codespell
+            name: codespell (remaining)
+            exclude: ((sh_upgrade|util)\.py|\.jinja)$

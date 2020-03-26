@@ -1,0 +1,38 @@
+name: Feature request
+description: Make a suggestion to improve `odev` or request a new feature.
+labels: [enhancement]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > *Note*
+        >
+        > Before you file an issue:
+        >
+        > - Read the [Contributing guide](https://github.com/odoo-ps/ps-tech-odev/blob/main/CONTRIBUTING.md).
+        > - Check to make sure someone hasn't already opened a similar [issue](https://github.com/odoo-ps/ps-tech-odev/issues).
+
+  - type: textarea
+    attributes:
+      label: What part of Odev is affected?
+      description: Please mention the command or feature that you'd like to see improved, or explain briefly the feature that you would like to see implemented.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: What part(s) of the feature would you like to see updated?
+      description: |
+        - Give as much detail as you can to help us understand the change you want to see.
+        - Why should the feature be changed/added? What use case does it support?
+        - What is the expected outcome?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: Add any other context or screenshots about the feature request here.
+    validations:
+      required: false

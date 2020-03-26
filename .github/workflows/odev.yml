@@ -1,0 +1,124 @@
+name: odev
+
+on:
+  - push
+
+jobs:
+
+  version-bump:
+    name: version-bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Check version bump
+        run: bash .github/workflows/version_check.sh
+
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.0.0
+        with:
+          python-version: '3.10'
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.0
+
+  unit-tests:
+    name: unit-tests-${{ matrix.os }}-python${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu
+          # - macos
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Setup PostgreSQL
+        run: |
+          if [ "${{ matrix.os }}" == "ubuntu" ]; then
+            sudo apt install -y postgresql postgresql-client
+            sudo service postgresql start
+            sudo -u postgres createuser -s $USER
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+
+      - name: Install Python requirements
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Set up expected coverage values
+        id: values
+        run: echo "cov_req=80" >> $GITHUB_OUTPUT
+
+      - name: Run coverage
+        id: coverage
+        env:
+          POSTGRES_HOST: postgres
+          POSTGRES_PORT: 5432
+        run: |
+          coverage run -m pytest ./tests
+
+          COV_POST=`coverage report --precision=2 | awk '$1 == "TOTAL" {print $NF+0}'`
+          COV_BELOW=`echo "$COV_POST" | awk '{print ($1 < ${{ steps.values.outputs.cov_req }})}'`
+
+          git switch -C ${{ github.event.pull_request.base.ref || github.ref_name }} \
+            --track origin/${{ github.event.pull_request.base.ref || github.ref_name }}
+
+          coverage run -m pytest ./tests
+
+          COV_PRE=`coverage report --precision=2 | awk '$1 == "TOTAL" {print $NF+0}'`
+          COV_DECREASE=`echo "$COV_POST $COV_PRE" | awk '{print ($1 < $2)}'`
+
+          echo "cov_post=$COV_POST" >> $GITHUB_OUTPUT
+          echo "cov_pre=$COV_PRE" >> $GITHUB_OUTPUT
+          echo "cov_below=$COV_BELOW" >> $GITHUB_OUTPUT
+          echo "cov_decrease=$COV_DECREASE" >> $GITHUB_OUTPUT
+
+      - name: Check coverage
+        uses: actions/github-script@v7.0.1
+        with:
+          script: |
+            const cov_req = ${{ steps.values.outputs.cov_req }}
+            const cov_post = ${{ steps.coverage.outputs.cov_post }}
+            const cov_pre = ${{ steps.coverage.outputs.cov_pre }}
+            const cov_diff = cov_post - cov_pre
+
+            cov_post >= cov_req
+              ? core.notice(`Current coverage: ${cov_post}%`)
+              : core.warning(`Coverage is below ${cov_req}%, current coverage ${cov_post}%`)
+
+            cov_diff >= 0.0
+              ? core.notice(`Coverage has increased from ${cov_pre}% to ${cov_post}% (+${cov_diff.toFixed(2)}%)`)
+              : core.setFailed(`Coverage has decreased from ${cov_pre}% to ${cov_post}% (${cov_diff.toFixed(2)}%)`)
