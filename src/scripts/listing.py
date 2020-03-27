@@ -15,7 +15,7 @@ class ListingScript(script.Script):
     titles = [
         'Database',
         'Status',
-        'Versions',
+        'Version',
         'PID',
         'Port',
         'URL',
