@@ -181,8 +181,6 @@ class Script():
         Gets the PID of a currently running database.
         """
 
-        self.db_is_valid(database)
-
         command = 'ps aux | grep -E "./odoo-bin\\s-d\\s%s\\s" | awk \'NR==1{print $2}\'' % (database)
         stream = os.popen(command)
         pid = stream.read().strip()
@@ -250,8 +248,6 @@ class Script():
         """
         Returns the absolute path to the filestore of a given database.
         """
-
-        self.db_is_valid(database)
 
         return '%s/.local/share/Odoo/filestore/%s' % (str(Path.home()), database)
     
