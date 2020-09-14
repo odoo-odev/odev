@@ -3,6 +3,7 @@
 import os
 import subprocess
 from git import Repo
+from clint.textui import colored
 
 from . import script
 from .. import utils
@@ -15,7 +16,7 @@ class RunScript(script.Script):
         Runs a local Odoo database.
         """
 
-        self.db_valid(database)
+        self.db_is_valid(database)
 
         if self.db_runs(database):
             raise Exception('Database %s is already running' % (database))
@@ -32,18 +33,38 @@ class RunScript(script.Script):
                 utils.log('info', 'Action canceled')
                 return 0
 
-            os.makedirs(odoodir, 0o777, exist_ok=True)
-            os.chmod(odoodir, 0o777)
+            utils.mkdir(odoodir, 0o777)
 
-            utils.log('info', 'Downloading Odoo Community version %s' % (version))
-            Repo.clone_from('git@github.com:odoo/odoo.git', '%s/odoo' % (odoodir), multi_options=['--branch %s' % (version), '--single-branch'])
-            
-            utils.log('info', 'Downloading Odoo Enterprise version %s' % (version))
-            Repo.clone_from('git@github.com:odoo/enterprise.git', '%s/enterprise' % (odoodir), multi_options=['--branch %s' % (version), '--single-branch'])
-            
-            utils.log('info', 'Downloading Odoo Design Themes version %s' % (version))
-            Repo.clone_from('git@github.com:odoo/design-themes.git', '%s/design-themes' % (odoodir), multi_options=['--branch %s' % (version), '--single-branch'])
+            def clone(title, name):
+                 utils.log('info', 'Downloading Odoo %s version %s' % (title, version))
+                 Repo.clone_from('git@github.com:odoo/%s.git' % (name), '%s/%s' % (odoodir, name), multi_options=['--branch %s' % (version), '--single-branch'])
 
+            clone('Community', 'odoo')
+            clone('Enterprise', 'enterprise')
+            clone('Design Themes', 'design-themes')
+        
+        def pull(title, name):
+            utils.log('info', 'Checking for updates in Odoo %s version %s' % (title, version))
+            repo = Repo('%s/%s' % (odoodir, name))
+            head = repo.head.ref
+            tracking = head.tracking_branch()
+            pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
+        
+            if pending > 0:
+                utils.log('warning', 'You are %s commits behind %s, consider pulling the lastest changes' % (colored.red(pending), tracking))
+                
+                if utils.confirm('Do you want to pull those commits now?'):
+                    utils.log('info', 'Pulling %s commits' % (pending))
+                    repo.remotes.origin.pull()
+                    utils.log('success', 'Up to date!')
+
+            else:
+                utils.log('success', 'Up to date!')
+
+        pull('Community', 'odoo')
+        pull('Enterprise', 'enterprise')
+        pull('Design Themes', 'design-themes')
+        
         addons =  [
             odoodir + '/enterprise',
             odoodir + '/design-themes',

@@ -55,9 +55,9 @@ class RestoreScript(script.Script):
         utils.log('warning', 'This may take a while, please be patient...')
         
         if ext == 'dump':
-            subprocess.run('pgrestore -d %s %s &> /dev/null' % (database, dumpfile), shell=True, check=True)
+            subprocess.run('pgrestore -d %s %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
         if ext == 'sql':
-            subprocess.run('psql %s < %s &> /dev/null' % (database, dumpfile), shell=True, check=True)
+            subprocess.run('psql %s < %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
         if ext == 'zip':
             tempdir = tempfile.TemporaryDirectory()
 
@@ -70,8 +70,23 @@ class RestoreScript(script.Script):
                 if os.path.isdir('%s/filestore' % (tempdir.name)):
                     filestoredir = '%s/.local/share/Odoo/filestore' % (os.path.expanduser('~'))
                     utils.log('info', 'Filestore detected, installing to %s/%s/' % (filestoredir, database))
+                    
+                    if os.path.isdir('%s/%s' % (filestoredir, database)):
+                        shutil.rmtree('%s/%s' % (filestoredir, database))
+
                     shutil.copytree('%s/filestore' % (tempdir.name), '%s/%s' % (filestoredir, database))
 
-                subprocess.run('psql %s < %s/dump.sql &> /dev/null' % (database, tempdir.name), shell=True, check=True)
+                utils.log('info', 'Importing SQL data to database %s' % (database))
+                subprocess.run('psql %s < %s/dump.sql' % (database, tempdir.name), shell=True, check=True, stdout=subprocess.DEVNULL)
+
+        self.dbconfig.add_section(database)
+        self.db_config(database, [
+            ('version_clean', self.db_version_clean(database)),
+            ('version', self.db_version(database)),
+            ('enterprise', 'enterprise' if self.db_enterprise(database) else 'standard'),
+        ])
+
+        with open('/etc/odev/databases.cfg', 'w') as configfile:
+            self.dbconfig.write(configfile)
 
         return 0

@@ -21,10 +21,11 @@ class RemoveScript(script.Script):
 
         utils.log('warning', 'You are about to delete the database %s and its filestore. This action is irreversible.' % (database))
         
-        if not utils.confirm('Delete \'%s\' and its filestore?' % (database)):
+        if not utils.confirm('Delete database \'%s\' and its filestore?' % (database)):
             utils.log('info', 'Action canceled')
             return 0
 
+        filestore = self.db_filestore(database)
         utils.log('info', 'Deleting PSQL database %s' % (database))
         query = 'DROP DATABASE %s;' % (database)
         result = super().run(self.database, query)
@@ -35,12 +36,16 @@ class RemoveScript(script.Script):
         utils.log('info', 'Deleted database')
 
         try:
-            filestore = self.db_filestore(database)
             utils.log('info', 'Attempting to delete filestore in \'%s\'' % (filestore))
             shutil.rmtree(filestore)
         except:
             utils.log('info', 'Filestore not found, no action taken')
         else:
             utils.log('info', 'Deleted filestore from disk')
+
+        self.dbconfig.remove_section(database)
+
+        with open('/etc/odev/databases.cfg', 'w') as configfile:
+            self.dbconfig.write(configfile)
 
         return 0

@@ -12,7 +12,12 @@ class CreateScript(script.Script):
         """
 
         if self.db_exists_all(database):
-            raise Exception('Database %s already exists' % (database))
+            message = 'but is not an Odoo database'
+            
+            if self.db_exists(database):
+                message = 'and is an Odoo database'
+
+            raise Exception('Database %s already exists %s' % (database, message))
 
         utils.log('info', 'Creating database %s' % (database))
         query = 'CREATE DATABASE %s;' % (database)

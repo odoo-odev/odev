@@ -11,7 +11,7 @@ class VersionScript(script.Script):
         Gets the Odoo version of a local database.
         """
 
-        self.db_valid(database)
+        self.db_is_valid(database)
 
         utils.log('info', 'Database \'%s\' runs %s' % (database, self.db_version_full(database)))
 

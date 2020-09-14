@@ -21,16 +21,17 @@ class CleanScript(script.Script):
         Cleans a database and make it suitable for development and testing locally.
         """
 
-        self.db_valid(database)
+        self.ensure_stopped(database)
 
-        if self.db_runs(database):
-            raise Exception('Database %s is running, please shut it down and retry' % (database))
-
-        utils.log('info', 'Preparing database %s' % (database))
+        utils.log('info', 'Cleaning database %s' % (database))
         result = super().run(database, self.queries)
         
         if not result:
             return 1
+
+        self.db_config(database, [('clean', 'True')])
         
-        utils.log('info', 'Prepared database %s' % (database))
+        utils.log('info', 'Cleaned database %s' % (database))
+        utils.log('info', 'Login to the administrator account with the credentials \'admin:admin\'')
+        utils.log('info', 'Login to any other account with their email address and the password \'odoo\'')
         return 0

@@ -22,6 +22,9 @@ class RenameScript(script.Script):
 
         name = utils.sanitize(options[0])
 
+        if self.db_exists_all(name):
+            raise Exception('Database %s already exists' % (database))
+
         utils.log('warning', 'You are about to rename the database %s and its filestore to \'%s\'. This action is irreversible.' % (database, name))
 
         if not utils.confirm('Rename \'%s\' and its filestore?' % (database)):
@@ -44,5 +47,15 @@ class RenameScript(script.Script):
             utils.log('info', 'Filestore not found, no action taken')
         else:
             utils.log('info', 'Renamed filestore')
+
+        items = self.dbconfig.items(database)
+        self.dbconfig.remove_section(database)
+        self.dbconfig.add_section(name)
+
+        for item in items:
+            self.dbconfig.set(name, item[0], item[1])
+
+        with open('/etc/odev/databases.cfg', 'w') as configfile:
+            self.dbconfig.write(configfile)
 
         return 0

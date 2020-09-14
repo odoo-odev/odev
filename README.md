@@ -38,24 +38,19 @@ You may have to rerun the `setup` if you didn't keep your local repository as in
 
 ## Try It!
 
-Run `odev listing` from anywhere in your terminal to get a list of your local Odoo databases:
+Run `odev list` from anywhere in your terminal to get a list of your local Odoo databases:
 
 ```sh
 odev listing
 ```
 
 ```txt
-+----------+----------+-------------------+-----+------+-----+--------------------------------------------------+
-| Database | Status   | Versions          | PID | Port | URL | Filestore                                        |
-+----------+----------+-------------------+-----+------+-----+--------------------------------------------------+
-| test     | inactive | 12.0 (enterprise) |     |      |     | /home/brinkflew/.local/share/Odoo/filestore/test |
-+----------+----------+-------------------+-----+------+-----+--------------------------------------------------+
+[i] Listing local Odoo databases...
+ ⬤  test ..................... (13.0 - enterprise)
 [*] Exiting with code 0
 ```
 
 ---
-
-
 
 ## Docs
 

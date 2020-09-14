@@ -15,7 +15,6 @@ class TestScript(script.Script):
 
         config = configparser.ConfigParser()
         config.read('/etc/odev/odev.cfg')
-        print(config.sections())
 
         result = self.db_list()
         utils.log('info', 'db_list(): %s' % (result))
