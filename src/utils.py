@@ -78,11 +78,10 @@ def password(question: str):
 
     return getpass(prompt='%s %s ' % (quotes['question'], question))
 
-def mkdir(path: str, perm: int):
+def mkdir(path: str, perm: int = 0o777):
     """
     Creates a directory on the filesystem and sets its permissions.
     """
 
-    perm = perm if perm else 0o777
     os.makedirs(path, perm, exist_ok=True)
     os.chmod(path, perm)
