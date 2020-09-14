@@ -55,7 +55,7 @@ class RestoreScript(script.Script):
         utils.log('warning', 'This may take a while, please be patient...')
         
         if ext == 'dump':
-            subprocess.run('pgrestore -d %s %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run('pg_restore -d %s %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
         if ext == 'sql':
             subprocess.run('psql %s < %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
         if ext == 'zip':
