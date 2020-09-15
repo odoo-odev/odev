@@ -36,6 +36,9 @@ def run():
         
         os.symlink('%s/odev.py' % (dirs['odev']), paths['ubin'])
 
+        if not os.path.isdir(paths['conf']):
+            utils.mkdir(paths['conf'])
+
         if not os.path.isfile('%s/odev.cfg' % (paths['conf'])):
             open('%s/odev.cfg' % (paths['conf']), 'a').close()
         
