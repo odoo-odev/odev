@@ -27,8 +27,8 @@ def run():
 
     try:
         paths = {
-            ubin: '/usr/bin/odev',
-            conf: '/etc/odev',
+            'ubin': '/usr/bin/odev',
+            'conf': '/etc/odev',
         }
         
         if os.path.exists(paths['ubin']):
@@ -44,17 +44,17 @@ def run():
 
         with open('%s/odev.cfg' % (paths['conf']), 'w') as odevfile:
             odevconf = configparser.ConfigParser()
-            odevconf['odev'] = {'Path': odevdir}
+            odevconf['odev'] = {'Path': dirs['odev']}
             odevconf['paths'] = {
-                'Odoo': odoodir,
-                'Devs': devdir,
-                'Dumps': dumpdir
+                'Odoo': dirs['odoo'],
+                'Devs': dirs['dev'],
+                'Dumps': dirs['dump']
             }
 
             odevconf.write(odevfile)
 
-        if odevdir != os.getcwd():
-            shutil.copytree(os.getcwd(), odevdir)
+        if dirs['odev'] != os.getcwd():
+            shutil.copytree(os.getcwd(), dirs['odev'])
 
     except Exception as exception:
         utils.log('error', exception)
