@@ -108,12 +108,13 @@ odev clean <database>
 Creates a new, *empty*, local PostgreSQL database, not initialized with Odoo.
 
 ```sh
-odev create <database>
+odev create <database> [<template>]
 ```
 
 | Args     | Description                                                                                          |
 |----------|------------------------------------------------------------------------------------------------------|
 | database | Name of the local database to create; the name is sanitized so that it can be used within PostgreSQL |
+| template | Optional: name of an existing PostgreSQL database to copy                                            |
 
 ### Dump
 

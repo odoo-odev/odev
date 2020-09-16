@@ -21,6 +21,14 @@ class CreateScript(script.Script):
 
         utils.log('info', 'Creating database %s' % (database))
         query = 'CREATE DATABASE %s;' % (database)
+
+        if options[0]:
+            template = utils.sanitize(options[0])
+
+            if self.db_exists_all(template):
+                self.ensure_stopped(template)
+                query = 'CREATE DATABASE %s WITH TEMPLATE %s;' % (database, template)
+
         result = super().run(self.database, query)
 
         if not result or not self.db_exists_all(database):
