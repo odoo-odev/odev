@@ -81,7 +81,7 @@ class InitScript(script.Script):
             odoodir + '/odoo/addons',
         ]
 
-        command = '%s -d %s --addons-path=%s -i base --stop-after-init' % (odoobin, database, ','.join(addons))
+        command = '%s -d %s --addons-path=%s -i base --stop-after-init --without-demo=all' % (odoobin, database, ','.join(addons))
         utils.log('info', 'Running: %s' % (command))
         subprocess.run(command, shell=True, check=True)
 
