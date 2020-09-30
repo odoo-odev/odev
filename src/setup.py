@@ -2,6 +2,7 @@
 
 import configparser
 import os
+from pathlib import Path
 import shutil
 
 from . import utils
@@ -27,8 +28,8 @@ def run():
 
     try:
         paths = {
-            'ubin': '/usr/bin/odev',
-            'conf': '/etc/odev',
+            'ubin': '%s/.local/bin/odev' % (str(Path.home())),
+            'conf': '%s/.config/odev' % (str(Path.home())),
         }
         
         if os.path.exists(paths['ubin']):
