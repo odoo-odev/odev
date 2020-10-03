@@ -19,10 +19,10 @@ class Script():
     database = 'template1'
     options = []
     config = configparser.ConfigParser()
-    config.read('/etc/odev/odev.cfg')
+    config.read('%s/.config/odev/odev.cfg' % (str(Path.home())))
     config.sections()
     dbconfig = configparser.ConfigParser()
-    dbconfig.read('/etc/odev/databases.cfg')
+    dbconfig.read('%s/.config/odev/databases.cfg' % (str(Path.home())))
     dbconfig.sections()
 
     def run(self, database=database, queries=None):
@@ -258,7 +258,7 @@ class Script():
         """
 
         if values:
-            with open('/etc/odev/databases.cfg', 'w') as configfile:
+            with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
 
                 for value in values:
                     if not self.dbconfig.has_section(database):

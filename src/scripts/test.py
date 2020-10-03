@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import configparser
+from pathlib import Path
 
 from . import script
 from .. import utils
@@ -14,7 +15,7 @@ class TestScript(script.Script):
         """
 
         config = configparser.ConfigParser()
-        config.read('/etc/odev/odev.cfg')
+        config.read('%s/.config/odev/odev.cfg' % (str(Path.home())))
 
         result = self.db_list()
         utils.log('info', 'db_list(): %s' % (result))

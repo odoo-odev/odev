@@ -55,7 +55,7 @@ class RenameScript(script.Script):
         for item in items:
             self.dbconfig.set(name, item[0], item[1])
 
-        with open('/etc/odev/databases.cfg', 'w') as configfile:
+        with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
             self.dbconfig.write(configfile)
 
         return 0

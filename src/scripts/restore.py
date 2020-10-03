@@ -86,7 +86,7 @@ class RestoreScript(script.Script):
             ('enterprise', 'enterprise' if self.db_enterprise(database) else 'standard'),
         ])
 
-        with open('/etc/odev/databases.cfg', 'w') as configfile:
+        with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
             self.dbconfig.write(configfile)
 
         return 0

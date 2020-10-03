@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import shutil
+from pathlib import Path
 
 from . import script
 from .. import utils
@@ -45,7 +46,7 @@ class RemoveScript(script.Script):
 
         self.dbconfig.remove_section(database)
 
-        with open('/etc/odev/databases.cfg', 'w') as configfile:
+        with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
             self.dbconfig.write(configfile)
 
         return 0
