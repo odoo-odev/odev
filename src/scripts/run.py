@@ -51,7 +51,7 @@ class RunScript(script.Script):
             pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
 
             if pending > 0:
-                utils.log('warning', 'You are %s commits behind %s, consider pulling the lastest changes' % (colored.red(pending), tracking))
+                utils.log('warning', 'You are %s commits behind %s, consider pulling the latest changes' % (colored.red(pending), tracking))
 
                 if utils.confirm('Do you want to pull those commits now?'):
                     utils.log('info', 'Pulling %s commits' % (pending))
