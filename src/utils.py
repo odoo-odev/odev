@@ -6,12 +6,12 @@ from getpass import getpass
 from clint.textui import puts, colored
 
 quotes = {
-    'info': colored.blue('[i]'),
-    'success': colored.green('[*]'),
-    'warning': colored.yellow('[!]'),
-    'error': colored.red('[-]'),
-    'debug': colored.clean('[#]'),
-    'question': colored.magenta('[?]'),
+    'info': colored.blue('[i]', False, True),
+    'success': colored.green('[*]', False, True),
+    'warning': colored.yellow('[!]', False, True),
+    'error': colored.red('[-]', False, True),
+    'debug': colored.black('[#]', False, True),
+    'question': colored.magenta('[?]', False, True),
 }
 
 re_blanks = re.compile(r'([-\s]+)')
