@@ -18,6 +18,7 @@ re_blanks = re.compile(r'([-\s]+)')
 re_extras = re.compile(r'([^a-z0-9-_\s])')
 re_psql = re.compile(r'^(pg_|[0-9])')
 
+
 def sanitize(name: str):
     """
     Sanitizes the name of a database so that it can be used without creating
@@ -36,6 +37,7 @@ def sanitize(name: str):
 
     return name
 
+
 def require(name: str, value: str):
     """
     Makes sure a value is set, otherwise raise an exception.
@@ -44,12 +46,14 @@ def require(name: str, value: str):
     if not value:
         raise Exception("Value \'%s\' is required; none given" % (name))
 
+
 def log(level: str, text: str):
     """
     Prints a log message to the console.
     """
 
     puts('%s %s' % (quotes[level], text))
+
 
 def confirm(question: str):
     """
@@ -62,7 +66,8 @@ def confirm(question: str):
     
     return answer == 'y'
 
-def ask(question: str, default = False):
+
+def ask(question: str, default=False):
     """
     Asks something to the user.
     """
@@ -71,12 +76,14 @@ def ask(question: str, default = False):
         return input('%s %s [%s] ' % (quotes['question'], question, default)) or default
     return input('%s %s ' % (quotes['question'], question))
 
+
 def password(question: str):
     """
     Asks for a password.
     """
 
     return getpass(prompt='%s %s ' % (quotes['question'], question))
+
 
 def mkdir(path: str, perm: int = 0o777):
     """
