@@ -75,15 +75,6 @@ class RunScript(script.Script):
         if options[0] and not str(options[0][0]) == '-':
             addons += options.pop(0).split(',')
 
-        # Swith python env if available
-        venv = '%s/venv' % (odoodir)
-        if os.path.exists(venv):
-            utils.log('info', 'Switching to Python virtual environment in %s' % (venv))
-            subprocess.run('source %s/bin/activate' % (venv), shell=True, check=True)
-        else:
-            utils.log('No Python virtual environment defined in %s, consider adding one')
-            utils.log('Using default Python executable (currently active virtual environment or system-wide python executable)')
-
         command = '%s -d %s --addons-path=%s %s' % (odoobin, database, ','.join(addons), ' '.join(options.all))
         utils.log('info', 'Running: %s' % (command))
         subprocess.run(command, shell=True, check=True)
