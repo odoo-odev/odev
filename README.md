@@ -118,16 +118,17 @@ odev create <database> [<template>]
 
 ### Dump
 
-Downloads a dump of a SaaS database and saves it to your computer. Lets you choose whether to download the filestore or not.
+Downloads a dump of a SaaS or SH database and saves it to your computer. Lets you choose whether to download the filestore or not.
 
 ```sh
-odev dump <database> <url>
+odev dump <database> <url> <dest>
 ```
 
-| Args     | Description                                                                                                        |
-|----------|--------------------------------------------------------------------------------------------------------------------|
-| database | Name to store in the dumpfile's name                                                                               |
-| url      | URL to the database to dump, in the form of `https://db.odoo.com`. The protocol part (`http/s://`) can be omitted. |
+| Args     | Description                                                                                                                  |
+|----------|------------------------------------------------------------------------------------------------------------------------------|
+| database | Name of the database, this is only used in the name of the downloaded dump file and doesn't have to match an actual database |
+| url      | URL to the database to dump, in the form of `https://db.odoo.com`. The protocol part (`http/s://`) can be omitted.           |
+| dest     | Directory to which the dumped file will be saved once downloaded                                                             |
 
 ### Init
 
@@ -168,17 +169,17 @@ odev list
 This performs the following actions:
 
 - Creates a new, empty database
-- Initializes, dumps and restore or restore an existing dump to the new database
+- Initializes, dumps and restores or restores an existing dump to the new database
 - Cleanses the database so that it can be used for development
 
 ```sh
-odev quickstart <database> <version|dumpfile|url>
+odev quickstart <database> <version|path|url>
 ```
 
-| Args     | Description                                       |
-|----------|---------------------------------------------------|
-| database             | Name of the local database to create  |
-| Version|dumpfile|url | If a version number, calls `odev init`; If a path to a local file, attempts to restore it to the database; If a URL to an Odoo SaaS database, dumps it and restores it |
+| Args               | Description                                       |
+|--------------------|---------------------------------------------------|
+| database           | Name of the local database to create              |
+| version\|path\|url | If a version number, calls `odev init`; If a path to a local file, attempts to restore it to the database (the file must be a valid database dump); If a URL to an Odoo SaaS or SH database, downlaods a dump of it and restores it locally |
 
 ### Remove
 
@@ -320,7 +321,7 @@ $ odev rm testdb
 [*] Exiting with code 0
 ```
 
-### Dump a SaaS database and restores it in a new local database in one command
+### Dump a SaaS database and automatically restore it in a new local database in one command
 
 ```txt
 $ odev quickstart testdb test.odoo.com
@@ -357,13 +358,8 @@ $ odev quickstart testdb test.odoo.com
 ```txt
 $ odev ls
 [i] Listing local Odoo databases...
- ⬤  alsenidi ................. (13.0 - enterprise)
- ⬤  bouygues_data_template ... (12.0 - enterprise)
- ⬤  d4e ...................... (13.0 - enterprise)
- ⬤  msf ...................... (13.0 - enterprise)
- ⬤  pendax ................... (13.0 - enterprise)
+ ⬤  clientdb ................. (12.0 - enterprise)
  ⬤  presales ................. (13.0 - enterprise)
- ⬤  test_pendax .............. (13.0 - enterprise)
  ⬤  testdb ................... (13.0 - enterprise) [http://localhost:8069/web]
 [*] Exiting with code 0
 ```
@@ -388,5 +384,28 @@ $ odev qs freshdb 12.0
 2020-09-14 12:58:17,515 29016 INFO freshdb odoo.modules.loading: Modules loaded.
 2020-09-14 12:58:17,519 29016 INFO freshdb odoo.service.server: Initiating shutdown
 2020-09-14 12:58:17,530 29016 INFO freshdb odoo.service.server: Hit CTRL-C again or send a second signal to force the shutdown.
+[*] Exiting with code 0
+```
+
+### Download a dump of an Odoo SH database without its filestore
+
+***Note:** This also works with SaaS databases.*
+
+```txt
+$ odev dump testsh https://testsh.odoo.com ~/odev/dumps/test/
+[i] Logging you in to https://testsh.odoo.com support console
+[?] Login: avs
+[?] Password: 
+[?] Reason (optional): 
+[*] Successfuly logged-in to https://testsh.odoo.com/_odoo/support?token=585eb245f775907cda8b6c904f2e63f8
+[i] About to download dump file for testsh
+[?] Do you want to include the filestore? [y/n] n
+[i] Downloading dump from eupp5.odoo.com/_long/paas/build/000001/dump.sql.gz?token=585eb245f775907cda8b6c904f2e63f8 to /home/avs/odev/dumps/test//20201010_testsh.dump.sql.gz...
+[!] This may take a while, please be patient...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   169  100   169    0     0   2913      0 --:--:-- --:--:-- --:--:--  2913
+100 2316k    0 2316k    0     0  1150k      0 --:--:--  0:00:02 --:--:-- 1336k
+[*] Successfuly downloaded dump file
 [*] Exiting with code 0
 ```
