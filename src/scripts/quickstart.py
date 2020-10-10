@@ -21,7 +21,7 @@ class QuickStartScript(script.Script):
 
         utils.require('version or dumpfile', options[0])
 
-        def call(method, opts = options):
+        def call(method, opts=options):
             return dispatcher.dispatcher[method].run(database, opts)
 
         result = call('create')
@@ -43,7 +43,7 @@ class QuickStartScript(script.Script):
 
                         if not os.path.isfile('%s%s' % (file, ext)):
                             raise Exception('An error occured while fetching dump file at \'%s%s\'' % (file, ext))
-                        
+
                         result = call('restore', ['%s%s' % (file, ext)])
 
                         if result == 0:

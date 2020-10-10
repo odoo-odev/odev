@@ -15,7 +15,7 @@ class CleanScript(script.Script):
         "DELETE FROM fetchmail_server",
         "DELETE FROM ir_mail_server",
     ]
-    
+
     def run(self, database, options):
         """
         Cleans a database and make it suitable for development and testing locally.
@@ -25,12 +25,12 @@ class CleanScript(script.Script):
 
         utils.log('info', 'Cleaning database %s' % (database))
         result = super().run(database, self.queries)
-        
+
         if not result:
             return 1
 
         self.db_config(database, [('clean', 'True')])
-        
+
         utils.log('info', 'Cleaned database %s' % (database))
         utils.log('info', 'Login to the administrator account with the credentials \'admin:admin\'')
         utils.log('info', 'Login to any other account with their email address and the password \'odoo\'')

@@ -8,9 +8,11 @@ from subprocess import CalledProcessError
 from . import utils
 from .scripts.dispatcher import dispatcher
 
+
 def signal_handler(signum, frame):
     utils.log('warning', 'Received signal (%s), exiting...' % (signum))
     code = signum
+
 
 def cli():
     """
@@ -35,11 +37,12 @@ def cli():
         code = 1
     finally:
         level = 'success'
-        
+
         if code > 0:
             level = 'error'
-        
+
         utils.log(level, 'Exiting with code %s' % (code))
+
 
 def dispatch(command, database, options):
     """
@@ -57,6 +60,7 @@ def dispatch(command, database, options):
         raise Exception('An error occured during the execution of command \'%s\'' % (command))
 
     return result
+
 
 def parse_args(args):
     """

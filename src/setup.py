@@ -7,6 +7,7 @@ import shutil
 
 from . import utils
 
+
 def run():
     """
     Setup wizard for odev
@@ -20,7 +21,7 @@ def run():
     dirs['odoo'] = utils.ask('Where do you want to store Odoo\'s repositories on your machine?', '/odoo/versions')
     dirs['dev']  = utils.ask('Where do you want to store your Odoo custom developments repositories?', '/odoo/dev')
     dirs['dump'] = utils.ask('Where do you want to store Odoo databases\' dump files?', '/odoo/dumps')
-        
+
     utils.mkdir(dirs['odev'])
     utils.mkdir(dirs['odoo'])
     utils.mkdir(dirs['dev'])
@@ -31,10 +32,10 @@ def run():
             'ubin': '%s/.local/bin/odev' % (str(Path.home())),
             'conf': '%s/.config/odev' % (str(Path.home())),
         }
-        
+
         if os.path.exists(paths['ubin']):
             os.remove(paths['ubin'])
-        
+
         os.symlink('%s/odev.py' % (dirs['odev']), paths['ubin'])
 
         if not os.path.isdir(paths['conf']):
@@ -42,7 +43,7 @@ def run():
 
         if not os.path.isfile('%s/odev.cfg' % (paths['conf'])):
             open('%s/odev.cfg' % (paths['conf']), 'a').close()
-        
+
         if not os.path.isfile('%s/databases.cfg' % (paths['conf'])):
             open('%s/databases.cfg' % (paths['conf']), 'a').close()
 

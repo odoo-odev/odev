@@ -26,7 +26,7 @@ class DumpScript(script.Script):
         utils.require('destination', options[1])
 
         url = options[0]
-        
+
         if not re_url.match(url):
             url = 'https://%s' % (url)
 
@@ -66,7 +66,7 @@ class DumpScript(script.Script):
 
         utils.log('success', 'Successfuly logged-in to %s/_odoo/support' % (url))
         utils.log('info', 'About to download dump file for %s' % (url))
-        
+
         ext = 'dump'
 
         if utils.confirm('Do you wish to include the filestore?'):

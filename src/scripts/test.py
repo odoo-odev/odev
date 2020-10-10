@@ -8,7 +8,7 @@ from .. import utils
 
 
 class TestScript(script.Script):
-    
+
     def run(self, database, options):
         """
         Runs all available methods for getting information about a database.
@@ -37,7 +37,7 @@ class TestScript(script.Script):
 
         result = self.db_version_full(database)
         utils.log('info', 'db_version_full(): %s' % (result))
-        
+
         result = self.db_enterprise(database)
         utils.log('info', 'db_enterprise(): %s' % (result))
 

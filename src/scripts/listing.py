@@ -7,7 +7,7 @@ from .. import utils
 
 
 class ListingScript(script.Script):
-    
+
     def run(self, database, options):
         """
         Lists local Odoo databases.
@@ -28,7 +28,7 @@ class ListingScript(script.Script):
 
             if not db['version']:
                 db['version'] = self.db_config(database, [('version_clean', self.db_version_clean(database))])['version_clean']
- 
+
             if not db['enterprise']:
                 db['enterprise'] = self.db_config(database, [('enterprise', 'enterprise' if self.db_enterprise(database) else 'standard')])['enterprise']
 

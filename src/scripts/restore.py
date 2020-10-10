@@ -13,8 +13,9 @@ from .. import utils
 
 re_ext = re.compile(r'\.([a-z]+)$')
 
+
 class RestoreScript(script.Script):
-    
+
     def run(self, database, options):
         """
         Restores a dump file to a local database.
@@ -42,7 +43,7 @@ class RestoreScript(script.Script):
             raise Exception('File %s does not exists' % (dumpfile))
 
         match = re_ext.search(dumpfile)
-        
+
         if not match:
             raise Exception('File \'%s\' has no extension, couldn\'t guess what to do...' % (dumpfile))
 
@@ -50,10 +51,10 @@ class RestoreScript(script.Script):
 
         if not ext in ['dump', 'zip', 'sql']:
             raise Exception('Unrecognized extension \'.%s\' for file %s' % (ext, dumpfile))
-        
+
         utils.log('info', 'Restoring dump file \'%s\' to database %s' % (dumpfile, database))
         utils.log('warning', 'This may take a while, please be patient...')
-        
+
         if ext == 'dump':
             subprocess.run('pg_restore -d %s %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
         if ext == 'sql':
@@ -70,7 +71,7 @@ class RestoreScript(script.Script):
                 if os.path.isdir('%s/filestore' % (tempdir.name)):
                     filestoredir = '%s/.local/share/Odoo/filestore' % (os.path.expanduser('~'))
                     utils.log('info', 'Filestore detected, installing to %s/%s/' % (filestoredir, database))
-                    
+
                     if os.path.isdir('%s/%s' % (filestoredir, database)):
                         shutil.rmtree('%s/%s' % (filestoredir, database))
 

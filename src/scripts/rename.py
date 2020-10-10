@@ -43,7 +43,7 @@ class RenameScript(script.Script):
             filestore = '%s/.local/share/Odoo/filestore/' % (str(Path.home()))
             utils.log('info', 'Attempting to rename filestore in \'%s%s\' to \'%s%s\'' % (filestore, database, filestore, name))
             os.rename(filestore + database, filestore + name)
-        except:
+        except Exception:
             utils.log('info', 'Filestore not found, no action taken')
         else:
             utils.log('info', 'Renamed filestore')

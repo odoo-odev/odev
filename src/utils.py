@@ -63,7 +63,7 @@ def confirm(question: str):
 
     while answer not in ['y', 'n']:
         answer = input('%s %s [y/n] ' % (quotes['question'], question))[0].lower()
-    
+
     return answer == 'y'
 
 

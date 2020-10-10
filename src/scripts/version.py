@@ -5,7 +5,7 @@ from .. import utils
 
 
 class VersionScript(script.Script):
-    
+
     def run(self, database, options):
         """
         Gets the Odoo version of a local database.

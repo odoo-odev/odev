@@ -21,7 +21,7 @@ class RemoveScript(script.Script):
             raise Exception('Database %s is running, please shut it down and retry' % (database))
 
         utils.log('warning', 'You are about to delete the database %s and its filestore. This action is irreversible.' % (database))
-        
+
         if not utils.confirm('Delete database \'%s\' and its filestore?' % (database)):
             utils.log('info', 'Action canceled')
             return 0

@@ -44,7 +44,7 @@ class SQL():
 
         if self.cursor:
             self.cursor.close()
-        
+
         if self.connection:
             self.connection.commit()
             self.connection.close()

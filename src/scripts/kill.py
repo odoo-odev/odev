@@ -7,7 +7,7 @@ from .. import utils
 
 
 class KillScript(script.Script):
-    
+
     def run(self, database, options):
         """
         Kills the process of a running local database.

@@ -5,7 +5,7 @@ from .. import utils
 
 
 class CreateScript(script.Script):
-    
+
     def run(self, database, options):
         """
         Creates a new, empty database locally.
@@ -13,7 +13,7 @@ class CreateScript(script.Script):
 
         if self.db_exists_all(database):
             message = 'but is not an Odoo database'
-            
+
             if self.db_exists(database):
                 message = 'and is an Odoo database'
 

@@ -14,7 +14,7 @@ re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
 
 
 class Script():
-    
+
     psql = sql.SQL()
     database = 'template1'
     options = []
@@ -54,7 +54,7 @@ class Script():
         """
 
         query = 'SELECT datname FROM pg_database WHERE datistemplate = false AND datname != \'postgres\' ORDER by datname;'
-        
+
         self.psql.connect(self.database)
         result = self.psql.query(query)
         self.psql.disconnect()
@@ -152,7 +152,7 @@ class Script():
         """
         Gets the full version of the database.
         """
-    
+
         version = self.db_version_clean(database)
         enterprise = self.db_enterprise(database)
 
@@ -211,9 +211,9 @@ class Script():
 
         if not match:
             return None    
-            
+
         cmd = match.group(0)
-        
+
         return cmd or None
 
     def db_port(self, database):
@@ -250,7 +250,7 @@ class Script():
         """
 
         return '%s/.local/share/Odoo/filestore/%s' % (str(Path.home()), database)
-    
+
     def db_config(self, database, values=None):
         """
         If `values` is set, saves new values to the configuration of a database.
@@ -263,13 +263,13 @@ class Script():
                 for value in values:
                     if not self.dbconfig.has_section(database):
                         self.dbconfig.add_section(database)
-                    
+
                     self.dbconfig.set(database, value[0], value[1])
-                
+
                 self.dbconfig.write(configfile)
 
         if self.dbconfig.has_section(database):
-            return  self.dbconfig[database]
+            return self.dbconfig[database]
 
         return None
 
