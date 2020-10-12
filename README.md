@@ -47,10 +47,10 @@ Clone the [odev repository](https://github.com/brinkflew/odev) to your computer 
 git clone git@github.com:brinkflew/odev.git && cd odev
 ```
 
-Run `setup.py` with root privileges and follow the instructions displayed on screen:
+Run `setup.py` and follow the instructions displayed on screen:
 
 ```sh
-sudo ./setup.py
+./setup.py
 ```
 
 That's it! You are ready to go, use `odev` from anywhere in your terminal to use it.
