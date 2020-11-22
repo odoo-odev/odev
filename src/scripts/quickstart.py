@@ -24,7 +24,7 @@ class QuickStartScript(script.Script):
         def call(method, opts=options):
             return dispatcher.dispatcher[method].run(database, opts)
 
-        result = call('create')
+        result = call('create', [None] if re_version.match(options[0]) or re_url.match(options[0]) else options)
 
         try:
             if result == 0:
