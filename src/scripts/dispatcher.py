@@ -11,6 +11,7 @@ from . import remove
 from . import rename
 from . import restore
 from . import run
+from . import task
 from . import version
 
 dispatcher = {
@@ -29,6 +30,7 @@ dispatcher = {
     'mv': rename.RenameScript(),
     'restore': restore.RestoreScript(),
     'run': run.RunScript(),
+    'task': task.TaskScript(),
     'version': version.VersionScript(),
     'v': version.VersionScript(),
 }
