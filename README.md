@@ -38,7 +38,7 @@ Make sure [Python 3](https://www.python.org/download/releases/3.0/) is installed
 Install the following requirements through `pip3`:
 
 ```sh
-pip3 install --user clint psycopg2 configparser gitpython
+pip3 install --user clint psycopg2 configparser gitpython virtualenv
 ```
 
 Clone the [odev repository](https://github.com/brinkflew/odev) to your computer and navigate to the `odev` folder:
