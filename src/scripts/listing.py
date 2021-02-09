@@ -8,6 +8,13 @@ from .. import utils
 
 class ListingScript(script.Script):
 
+    usage = 'list'
+    alias = ['ls']
+    description = """
+Lists all the local Odoo databases. If a database is defined in PostgreSQL
+but not initialized with Odoo, it will not appear in this list.
+"""
+
     def run(self, database, options):
         """
         Lists local Odoo databases.

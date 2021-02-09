@@ -24,6 +24,17 @@ re_sh_token = re.compile(r'\?token=([^"]+)')
 
 class DumpScript(script.Script):
 
+    usage = 'dump <database> <url> <dest>'
+    args = [
+        ['database', 'Name of the database, this is only used in the name of the downloaded dump file and doesn\'t have to match an actual database'],
+        ['url     ', 'URL to the database to dump, in the form of https://db.odoo.com; The protocol part (http(s)://) can be omitted'],
+        ['dest    ', 'Directory to which the dumped file will be saved once downloaded']
+    ]
+    description = """
+Downloads a dump of a SaaS or SH database and saves it to your computer.
+Lets you choose whether to download the filestore or not.
+"""
+
     def run(self, database, options):
         """
         Dumps a SaaS or SH database.

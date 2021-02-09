@@ -3,6 +3,7 @@
 from . import clean
 from . import create
 from . import dump
+from . import help
 from . import init
 from . import kill
 from . import listing
@@ -11,13 +12,14 @@ from . import remove
 from . import rename
 from . import restore
 from . import run
-from . import task
 from . import version
 
 dispatcher = {
     'clean': clean.CleanScript(),
     'create': create.CreateScript(),
     'dump': dump.DumpScript(),
+    'help': help.HelpScript(),
+    'h': help.HelpScript(),
     'init': init.InitScript(),
     'kill': kill.KillScript(),
     'list': listing.ListingScript(),
@@ -30,7 +32,6 @@ dispatcher = {
     'mv': rename.RenameScript(),
     'restore': restore.RestoreScript(),
     'run': run.RunScript(),
-    'task': task.TaskScript(),
     'version': version.VersionScript(),
     'v': version.VersionScript(),
 }

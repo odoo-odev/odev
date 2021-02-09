@@ -16,6 +16,16 @@ re_ext = re.compile(r'\.([a-z]+)$')
 
 class RestoreScript(script.Script):
 
+    usage = 'restore <database> <dump_file>'
+    args = [
+        ['database ', 'Name of the local database to restore'],
+        ['dump_file', 'Path to the dump file to import to the database']
+    ]
+    description = """
+Restores an Odoo dump file to a local database and imports its filestore
+if present. '.sql', '.dump' and '.zip' files are supported.
+"""
+
     def run(self, database, options):
         """
         Restores a dump file to a local database.

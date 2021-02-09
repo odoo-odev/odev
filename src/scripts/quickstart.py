@@ -14,6 +14,21 @@ re_url = re.compile(r'^(https?://)?([a-zA-Z0-9-_]\.odoo\.com|localhost|127\.0\.0
 
 class QuickStartScript(script.Script):
 
+    usage = 'quickstart <database> <version|path|url>'
+    alias = ['qs']
+    args = [
+        ['database', 'Name of the local database to create'],
+        ['version ', 'Calls odev init and deploys an empty database'],
+        ['path    ', 'Attempts to restore a local file to the new database (the file must be a valid database dump)'],
+        ['url     ', 'Downloads a dump of an Odoo SaaS or SH database and restores it locally']
+    ]
+    description = """
+Quickly and easlily setups a database. This performs the following actions:
+- Creates a new, empty database
+- Initializes, dumps and restores or restores an existing dump to the new database
+- Cleanses the database so that it can be used for development
+"""
+
     def run(self, database, options):
         """
         Creates, initializes or restores and cleanses a local database.

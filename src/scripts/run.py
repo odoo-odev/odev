@@ -10,6 +10,26 @@ from .. import utils
 
 class RunScript(script.Script):
 
+    usage = "run <database> <addons> [<options>]"
+    args = [
+        ['database', 'Name of the local database to run'],
+        ['addons  ', 'List of addon paths to add to the default ones, separated by a coma (,)'],
+        ['options ', 'Optional: additional arguments to pass to odoo-bin']
+    ]
+    description = """
+Runs a local Odoo database, prefilling common addon paths and making
+sure the right version of Odoo is installed and in use.
+
+If the version of Odoo required for the database is not present, downloads it
+and installs it locally. This is done by cloning the Odoo community,
+enterprise and design-themes repositories multiple times (one per version)
+to always keep a copy of each version on the computer. To save storage space,
+only one branch is cloned per version, keeping all other branches out of
+the history. This means that the sum of the sizes of all independant
+local versions should be lower (or roughly equal if all versions are installed)
+than the size of the entire Odoo repositories.
+"""
+
     def run(self, database, options):
         """
         Runs a local Odoo database.

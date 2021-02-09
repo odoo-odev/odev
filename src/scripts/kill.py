@@ -8,6 +8,14 @@ from .. import utils
 
 class KillScript(script.Script):
 
+    usage = 'kill <database>'
+    args = [['database', 'Name of the local database to kill the process of']]
+    description = """
+Kills a running Odoo database. Useful if the process crashed because of
+a forgotten IPDB or if you lost your terminal and don't want to search
+for the process' PID.
+"""
+
     def run(self, database, options):
         """
         Kills the process of a running local database.

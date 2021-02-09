@@ -15,6 +15,12 @@ re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
 
 class Script():
 
+    usage = ''
+    args = []
+    alias = []
+    description = """
+    """
+
     psql = sql.SQL()
     database = 'template1'
     options = []

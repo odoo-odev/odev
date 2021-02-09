@@ -9,6 +9,16 @@ from .. import utils
 
 class RenameScript(script.Script):
 
+    usage = 'rename <database> <new_name>'
+    alias = ['mv']
+    args = [
+        ['database', 'Name of the local database to rename'],
+        ['new_name', 'New name for the database and its filestore']
+    ]
+    description = """
+Renames a database and its filestore.
+"""
+
     def run(self, database, options):
         """
         Renames a local database and its filestore.

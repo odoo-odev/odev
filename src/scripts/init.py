@@ -13,6 +13,16 @@ re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 
 class InitScript(script.Script):
 
+    usage = 'init <database> <version>'
+    args = [
+        ['database', 'Name of the local database to initialize'],
+        ['version ', 'Odoo version to use; must correspond to an Odoo community branch']
+    ]
+    description = """
+Initializes an empty PSQL database with a basic version of Odoo.
+Basically, installs the base module on an empty DB.
+"""
+
     def run(self, database, options):
         """
         Initializes a local Odoo database with the base module then exit

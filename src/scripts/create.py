@@ -6,6 +6,15 @@ from .. import utils
 
 class CreateScript(script.Script):
 
+    usage = 'create <database> [<template>]'
+    args = [
+        ['database', 'Name of the local database to create; the name is sanitized so that it can be used within PostgreSQL'],
+        ['template', 'Optional: name of an existing PostgreSQL database to copy']
+    ]
+    description = """
+Creates a new, empty, local PostgreSQL database, not initialized with Odoo.
+"""
+
     def run(self, database, options):
         """
         Creates a new, empty database locally.

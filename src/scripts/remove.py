@@ -9,6 +9,13 @@ from .. import utils
 
 class RemoveScript(script.Script):
 
+    usage = 'remove <database>'
+    alias = ['rm']
+    args = [['database', 'Name of the local database to remove']]
+    description = """
+Removes a local database from PostgreSQL and deletes its filestore.
+"""
+
     def run(self, database, options):
         """
         Deletes an existing local database and its filestore.

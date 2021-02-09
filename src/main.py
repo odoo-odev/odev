@@ -41,6 +41,7 @@ def cli():
         if code > 0:
             level = 'error'
 
+    if level != 'success':
         utils.log(level, 'Exiting with code %s' % (code))
 
 

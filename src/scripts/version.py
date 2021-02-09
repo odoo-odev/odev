@@ -6,6 +6,13 @@ from .. import utils
 
 class VersionScript(script.Script):
 
+    usage = 'version <database>'
+    alias = ['v']
+    args = [['database', 'Database to get the Odoo version of']]
+    description = """
+Gets the version of a local Odoo database.
+"""
+
     def run(self, database, options):
         """
         Gets the Odoo version of a local database.
