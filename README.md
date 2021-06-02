@@ -44,7 +44,7 @@ pip3 install --user clint psycopg2 configparser gitpython virtualenv
 Clone the [odev repository](https://github.com/brinkflew/odev) to your computer and navigate to the `odev` folder:
 
 ```sh
-git clone git@github.com:brinkflew/odev.git && cd odev
+git clone --single-branch --branch odev git@github.com:odoo-ps/psbe-ps-tech-tools.git odev && cd odev
 ```
 
 Run `setup.py` and follow the instructions displayed on screen:
