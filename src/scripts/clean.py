@@ -28,7 +28,7 @@ Makes a local Odoo database suitable for development:
         "UPDATE ir_cron SET active='False'",
         "DELETE FROM fetchmail_server",
         "DELETE FROM ir_mail_server",
-        # "UPDATE auth_oauth_provider SET enabled = false",
+        "UPDATE auth_oauth_provider SET enabled = false",
     ]
 
     def run(self, database, options):
