@@ -6,8 +6,24 @@ from clint.textui import colored
 
 from . import script
 from .. import utils
+from os.path import join as opj
 
+MANIFEST_NAMES = ('__manifest__.py', '__openerp__.py')
 
+def is_addon_path(path):
+    def clean(name):
+        name = os.path.basename(name)
+        return name
+
+    def is_really_module(name):
+        for mname in MANIFEST_NAMES:
+            if os.path.isfile(opj(path, name, mname)):
+                return True
+    return any([
+        clean(it)
+        for it in os.listdir(path)
+        if is_really_module(it)
+    ])
 class RunScript(script.Script):
 
     usage = "run <database> <addons> [<options>]"
@@ -56,6 +72,9 @@ than the size of the entire Odoo repositories.
 
         if options[0] and not str(options[0][0]) == '-':
             addons += options.pop(0).split(',')
+
+        addons.append(os.getcwd())
+        addons = [path for path in addons if is_addon_path(path)]
 
         command = '%s/venv/bin/python %s -d %s --addons-path=%s %s' % (odoodir, odoobin, database, ','.join(addons), ' '.join(options.all))
         utils.log('info', 'Running: \n%s\n' % (command))
