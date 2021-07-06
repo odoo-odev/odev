@@ -30,6 +30,7 @@ class Script():
     dbconfig = configparser.ConfigParser()
     dbconfig.read('%s/.config/odev/databases.cfg' % (str(Path.home())))
     dbconfig.sections()
+    odoo_databases = []
 
     def run(self, database=database, queries=None):
         """
@@ -58,7 +59,8 @@ class Script():
         """
         Lists names of local Odoo databases.
         """
-
+        if self.odoo_databases:
+            return self.odoo_databases
         query = 'SELECT datname FROM pg_database WHERE datistemplate = false AND datname != \'postgres\' ORDER by datname;'
 
         self.psql.connect(self.database)
@@ -76,7 +78,7 @@ class Script():
                 odoo_databases.append(database[0])
 
             self.psql.disconnect()
-
+        self.odoo_databases = odoo_databases
         return odoo_databases
 
     def db_list_all(self):
