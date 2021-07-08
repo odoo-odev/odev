@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
 
 
-class CleanScript(script.Script):
-
-    usage = 'clean <database>'
-    args = [['database', 'Name of the local database to clean']]
-    description = """
+class CleanScript(LocalDBCommand):
+    command = "clean"
+    help = """
 Makes a local Odoo database suitable for development:
 - Disables automated and scheduled actions
 - Disables mails
@@ -31,22 +29,22 @@ Makes a local Odoo database suitable for development:
         "UPDATE auth_oauth_provider SET enabled = false",
     ]
 
-    def run(self, database, options):
+    def run(self):
         """
         Cleans a database and make it suitable for development and testing locally.
         """
 
-        self.ensure_stopped(database)
+        self.ensure_stopped()
 
-        utils.log('info', 'Cleaning database %s' % (database))
-        result = super().run(database, self.queries)
+        utils.log('info', f'Cleaning database {self.database}')
+        result = self.run_queries(self.queries)
 
         if not result:
             return 1
 
-        self.db_config(database, [('clean', 'True')])
+        self.db_config(clean='True')
 
-        utils.log('info', 'Cleaned database %s' % (database))
+        utils.log('info', f'Cleaned database {self.database}')
         utils.log('info', 'Login to the administrator account with the credentials \'admin:admin\'')
         utils.log('info', 'Login to any other account with their email address and the password \'odoo\'')
         return 0

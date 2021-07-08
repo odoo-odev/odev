@@ -1,47 +1,55 @@
 # -*- coding: utf-8 -*-
+from argparse import ArgumentParser, Namespace
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
 
 
-class CreateScript(script.Script):
-
-    usage = 'create <database> [<template>]'
-    args = [
-        ['database', 'Name of the local database to create; the name is sanitized so that it can be used within PostgreSQL'],
-        ['template', 'Optional: name of an existing PostgreSQL database to copy']
-    ]
-    description = """
+class CreateScript(LocalDBCommand):
+    command = "create"
+    help = """
 Creates a new, empty, local PostgreSQL database, not initialized with Odoo.
+Sanitizes the name of the new database so that it can be used within PostgreSQL.
 """
 
-    def run(self, database, options):
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "template",
+            nargs='?',
+            help="Optional: name of an existing PostgreSQL database to copy",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.template = utils.sanitize(args.template) if args.template else None
+
+    def run(self):
         """
         Creates a new, empty database locally.
         """
 
-        if self.db_exists_all(database):
+        if self.db_exists_all():
             message = 'but is not an Odoo database'
 
-            if self.db_exists(database):
+            if self.db_exists():
                 message = 'and is an Odoo database'
 
-            raise Exception('Database %s already exists %s' % (database, message))
+            raise Exception(f'Database {self.database} already exists {message}')
 
-        utils.log('info', 'Creating database %s' % (database))
-        query = 'CREATE DATABASE %s;' % (database)
+        utils.log('info', f'Creating database {self.database}')
+        query = 'CREATE DATABASE %s;' % self.database
 
-        if options[0]:
-            template = utils.sanitize(options[0])
+        if self.template:
+            if self.db_exists_all(database=self.template):
+                self.ensure_stopped(database=self.template)
+                query = "CREATE DATABASE %s WITH TEMPLATE %s;" % (self.database, self.template)
 
-            if self.db_exists_all(template):
-                self.ensure_stopped(template)
-                query = 'CREATE DATABASE %s WITH TEMPLATE %s;' % (database, template)
+        result = self.run_queries(query, database=self.fallback_database)  # FIXME: ugly
 
-        result = super().run(self.database, query)
-
-        if not result or not self.db_exists_all(database):
+        if not result or not self.db_exists_all(self.database):
             return 1
 
-        utils.log('info', 'Created database %s' % (database))
+        utils.log('info', f'Created database {self.database}')
         return 0

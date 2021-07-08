@@ -2,27 +2,25 @@
 
 import os
 import re
+from abc import ABC
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 import configparser
 
 from .. import sql
 from .. import utils
+from ..cli import CliCommand
+
 
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 re_command = re.compile(r'([/.a-zA-Z0-9_-]+\/odoo-bin.*)$')
 re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
 
 
-class Script():
-
-    usage = ''
-    args = []
-    alias = []
-    description = """
-    """
+class LocalDBCommand(CliCommand, ABC):
 
     psql = sql.SQL()
-    database = 'template1'
+    fallback_database = 'template1',
     options = []
     config = configparser.ConfigParser()
     config.read('%s/.config/odev/odev.cfg' % (str(Path.home())))
@@ -30,12 +28,29 @@ class Script():
     dbconfig = configparser.ConfigParser()
     dbconfig.read('%s/.config/odev/databases.cfg' % (str(Path.home())))
     dbconfig.sections()
+
+    database_required = True
     odoo_databases = []
 
-    def run(self, database=database, queries=None):
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "database",
+            nargs=1 if cls.database_required else '?',
+            help="Name of the local database",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.database = utils.sanitize(args.database) if args.database else None
+
+    def run_queries(self, queries=None, database=None):
         """
         Runs a default subcommand.
         """
+        if database is None:
+            database = self.database
 
         utils.require('database', database)
 
@@ -63,7 +78,7 @@ class Script():
             return self.odoo_databases
         query = 'SELECT datname FROM pg_database WHERE datistemplate = false AND datname != \'postgres\' ORDER by datname;'
 
-        self.psql.connect(self.database)
+        self.psql.connect(self.fallback_database)
         result = self.psql.query(query)
         self.psql.disconnect()
 
@@ -88,7 +103,7 @@ class Script():
 
         query = 'SELECT datname FROM pg_database ORDER by datname;'
 
-        self.psql.connect(self.database)
+        self.psql.connect(self.fallback_database)
         result = self.psql.query(query)
         self.psql.disconnect()
 
@@ -99,29 +114,35 @@ class Script():
 
         return databases
 
-    def db_exists(self, database):
+    def db_exists(self, database=None):
         """
         Checks whether a database with the given name already exists and is an Odoo database.
         """
+        if database is None:
+            database = self.database
 
         utils.require('database', database)
 
         return database in self.db_list()
 
-    def db_exists_all(self, database):
+    def db_exists_all(self, database=None):
         """
         Checks whether a database with the given name already exists, even if it is not
         an Odoo database.
         """
+        if database is None:
+            database = self.database
 
         utils.require('database', database)
 
         return database in self.db_list_all()
 
-    def db_is_valid(self, database):
+    def db_is_valid(self, database=None):
         """
         Checks whether the database both exists and is an Odoo database.
         """
+        if database is None:
+            database = self.database
 
         utils.require('database', database)
 
@@ -130,10 +151,12 @@ class Script():
         elif not self.db_exists(database):
             raise Exception('Database \'%s\' is not an Odoo database' % (database))
 
-    def db_version(self, database):
+    def db_version(self, database=None):
         """
         Gets the version number of a database.
         """
+        if database is None:
+            database = self.database
 
         self.db_is_valid(database)
 
@@ -145,10 +168,12 @@ class Script():
 
         return result
 
-    def db_version_clean(self, database):
+    def db_version_clean(self, database=None):
         """
         Gets the version number of a database.
         """
+        if database is None:
+            database = self.database
 
         version = self.db_version(database)
         match = re_version.match(version)
@@ -156,20 +181,24 @@ class Script():
 
         return version
 
-    def db_version_full(self, database):
+    def db_version_full(self, database=None):
         """
         Gets the full version of the database.
         """
+        if database is None:
+            database = self.database
 
         version = self.db_version_clean(database)
         enterprise = self.db_enterprise(database)
 
         return 'Odoo %s (%s)' % (version, 'enterprise' if enterprise else 'standard')
 
-    def db_enterprise(self, database):
+    def db_enterprise(self, database=None):
         """
         Checks whether a database is running on the enterprise version of Odoo.
         """
+        if database is None:
+            database = self.database
 
         self.db_is_valid(database)
 
@@ -184,10 +213,12 @@ class Script():
         else:
             return True
 
-    def db_pid(self, database):
+    def db_pid(self, database=None):
         """
         Gets the PID of a currently running database.
         """
+        if database is None:
+            database = self.database
 
         command = 'ps aux | grep -E "./odoo-bin\\s-d\\s%s\\s" | awk \'NR==1{print $2}\'' % (database)
         stream = os.popen(command)
@@ -195,17 +226,21 @@ class Script():
 
         return pid or None
 
-    def db_runs(self, database):
+    def db_runs(self, database=None):
         """
         Checks whether the database is currently running.
         """
+        if database is None:
+            database = self.database
 
         return bool(self.db_pid(database))
 
-    def db_command(self, database):
+    def db_command(self, database=None):
         """
         Gets the command which has been used to start the Odoo server for a given database.
         """
+        if database is None:
+            database = self.database
 
         self.db_is_valid(database)
 
@@ -224,10 +259,12 @@ class Script():
 
         return cmd or None
 
-    def db_port(self, database):
+    def db_port(self, database=None):
         """
         Checks on which port the database is currently running.
         """
+        if database is None:
+            database = self.database
 
         port = None
 
@@ -242,37 +279,43 @@ class Script():
 
         return str(port)
 
-    def db_url(self, database):
+    def db_url(self, database=None):
         """
         Returns the local url to the Odoo web application.
         """
+        if database is None:
+            database = self.database
 
         if not self.db_runs(database):
             return None
 
         return 'http://localhost:%s/web' % (self.db_port(database))
 
-    def db_filestore(self, database):
+    def db_filestore(self, database=None):
         """
         Returns the absolute path to the filestore of a given database.
         """
+        if database is None:
+            database = self.database
 
         return '%s/.local/share/Odoo/filestore/%s' % (str(Path.home()), database)
 
-    def db_config(self, database, values=None):
+    def db_config(self, database=None, **values):
         """
         If `values` is set, saves new values to the configuration of a database.
         Otherwise fetches the configuration of a database if it exists.
         """
+        if database is None:
+            database = self.database
 
         if values:
             with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
 
-                for value in values:
+                for key, value in values.items():
                     if not self.dbconfig.has_section(database):
                         self.dbconfig.add_section(database)
 
-                    self.dbconfig.set(database, value[0], value[1])
+                    self.dbconfig.set(database, key, value)
 
                 self.dbconfig.write(configfile)
 
@@ -281,10 +324,13 @@ class Script():
 
         return None
 
-    def db_config_get(self, database, key):
+    def db_config_get(self, database=None, key=None):
         """
         Fetches a single value from a database configuration file.
         """
+        if database is None:
+            database = self.database
+        utils.require('key', key)
 
         self.db_is_valid(database)
 
@@ -293,20 +339,24 @@ class Script():
 
         return None
 
-    def ensure_stopped(self, database):
+    def ensure_stopped(self, database=None):
         """
         Throws an error of the database is running.
         """
+        if database is None:
+            database = self.database
 
         self.db_is_valid(database)
 
         if self.db_runs(database):
             raise Exception('Database %s is running, please shut it down and retry' % (database))
 
-    def ensure_running(self, database):
+    def ensure_running(self, database=None):
         """
         Throws an error of the database is not running.
         """
+        if database is None:
+            database = self.database
 
         self.db_is_valid(database)
 

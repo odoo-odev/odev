@@ -1,25 +1,22 @@
 # -*- coding: utf-8 -*-
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
 
 
-class VersionScript(script.Script):
+class VersionScript(LocalDBCommand):
+    command = "version"
+    aliases = ("v",)
+    help = "Gets the version of a local Odoo database."
 
-    usage = 'version <database>'
-    alias = ['v']
-    args = [['database', 'Database to get the Odoo version of']]
-    description = """
-Gets the version of a local Odoo database.
-"""
-
-    def run(self, database, options):
+    def run(self):
         """
         Gets the Odoo version of a local database.
         """
 
-        self.db_is_valid(database)
+        self.db_is_valid()
 
-        utils.log('info', 'Database \'%s\' runs %s' % (database, self.db_version_full(database)))
+        version = self.db_version_full()
+        utils.log('info', f'Database "{self.database}" runs {version}')
 
         return 0

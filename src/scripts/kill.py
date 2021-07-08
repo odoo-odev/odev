@@ -2,33 +2,31 @@
 
 import os
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
 
 
-class KillScript(script.Script):
-
-    usage = 'kill <database>'
-    args = [['database', 'Name of the local database to kill the process of']]
-    description = """
+class KillScript(LocalDBCommand):
+    command = "kill"
+    help = """
 Kills a running Odoo database. Useful if the process crashed because of
 a forgotten IPDB or if you lost your terminal and don't want to search
 for the process' PID.
 """
 
-    def run(self, database, options):
+    def run(self):
         """
         Kills the process of a running local database.
         """
 
-        self.db_is_valid(database)
-        self.ensure_running(database)
+        self.db_is_valid()
+        self.ensure_running()
 
-        utils.log('info', 'Stopping database %s' % (database))
-        pid = self.db_pid(database)
+        utils.log('info', f'Stopping database {self.database}')
+        pid = self.db_pid()
 
         while pid:
             os.system('kill -9 %s' % (pid))
-            pid = self.db_pid(database)
+            pid = self.db_pid()
 
         return 0

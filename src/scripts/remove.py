@@ -1,59 +1,58 @@
 # -*- coding: utf-8 -*-
-
+import os
 import shutil
 from pathlib import Path
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
 
 
-class RemoveScript(script.Script):
+class RemoveScript(LocalDBCommand):
+    command = "remove"
+    aliases = ("rm",)
+    help = "Removes a local database from PostgreSQL and deletes its filestore."
 
-    usage = 'remove <database>'
-    alias = ['rm']
-    args = [['database', 'Name of the local database to remove']]
-    description = """
-Removes a local database from PostgreSQL and deletes its filestore.
-"""
-
-    def run(self, database, options):
+    def run(self):
         """
         Deletes an existing local database and its filestore.
         """
 
-        if not self.db_exists_all(database):
-            raise Exception('Database %s does not exist' % (database))
+        if not self.db_exists_all():
+            raise Exception(f'Database {self.database} does not exist')
 
-        if self.db_runs(database):
-            raise Exception('Database %s is running, please shut it down and retry' % (database))
+        if self.db_runs():
+            raise Exception(f'Database {self.database} is running, please shut it down and retry')
 
-        utils.log('warning', 'You are about to delete the database %s and its filestore. This action is irreversible.' % (database))
+        utils.log('warning', f'You are about to delete the database {self.database} and its filestore. This action is irreversible.')
 
-        if not utils.confirm('Delete database \'%s\' and its filestore?' % (database)):
+        if not utils.confirm(f'Delete database "{self.database}" and its filestore?'):
             utils.log('info', 'Action canceled')
             return 0
 
-        filestore = self.db_filestore(database)
-        utils.log('info', 'Deleting PSQL database %s' % (database))
-        query = 'DROP DATABASE %s;' % (database)
-        result = super().run(self.database, query)
+        filestore = self.db_filestore()
+        utils.log('info', f'Deleting PSQL database {self.database}')
+        query = 'DROP DATABASE "%s";' % self.database
+        result = self.run_queries(query, database=self.fallback_database)  # FIXME: ugly
 
-        if not result or self.db_exists_all(database):
+        if not result or self.db_exists_all():
             return 1
 
         utils.log('info', 'Deleted database')
 
-        try:
-            utils.log('info', 'Attempting to delete filestore in \'%s\'' % (filestore))
-            shutil.rmtree(filestore)
-        except:
+        if not os.path.exists(filestore):
             utils.log('info', 'Filestore not found, no action taken')
         else:
-            utils.log('info', 'Deleted filestore from disk')
+            try:
+                utils.log('info', f'Attempting to delete filestore in "{filestore}"')
+                shutil.rmtree(filestore)
+            except Exception as exc:
+                utils.log('warning', f'Error while deleting filestore: {exc}')
+            else:
+                utils.log('info', 'Deleted filestore from disk')
 
-        self.dbconfig.remove_section(database)
+        self.dbconfig.remove_section(self.database)
 
-        with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
+        with open(Path.home() / '.config/odev/databases.cfg', 'w') as configfile:
             self.dbconfig.write(configfile)
 
         return 0

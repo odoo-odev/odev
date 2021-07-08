@@ -2,61 +2,80 @@
 
 import os
 import re
+import shlex
 import subprocess
-from clint.textui import colored
+from argparse import ArgumentParser, Namespace
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
+
 
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 
 
-class InitScript(script.Script):
-
-    usage = 'init <database> <version>'
-    args = [
-        ['database', 'Name of the local database to initialize'],
-        ['version ', 'Odoo version to use; must correspond to an Odoo community branch']
-    ]
-    description = """
+class InitScript(LocalDBCommand):
+    command = "init"
+    help = """
 Initializes an empty PSQL database with a basic version of Odoo.
 Basically, installs the base module on an empty DB.
 """
 
-    def run(self, database, options):
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "version",
+            help="Odoo version to use; must correspond to an Odoo community branch",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.version = args.version
+
+    def run(self):
         """
         Initializes a local Odoo database with the base module then exit
         the process.
         """
 
-        if not self.db_exists_all(database):
-            raise Exception('Database %s does not exist' % (database))
+        if not self.db_exists_all():
+            raise Exception(f"Database {self.database} does not exist")
 
-        if self.db_exists(database):
+        if self.db_exists():
             return 0
 
-        utils.require('version', options[0])
-
         try:
-            match = re_version.match(options[0])
+            match = re_version.match(self.version)
             version = match.group(0)
         except Exception:
-            raise Exception('Invalid version number \'%s\'' % (options[0]))
+            raise Exception(f'Invalid version number "{self.version}"')
 
-        odoodir = '%s/%s' % (self.config['paths']['odoo'], version)
-        odoobin = '%s/odoo/odoo-bin' % (odoodir)
+        odoodir = os.path.join(self.config["paths"]["odoo"], version)
+        odoobin = os.path.join(odoodir, "odoo/odoo-bin")
 
         utils.pre_run(odoodir, odoobin, version)
 
-        addons =  [
-            odoodir + '/enterprise',
-            odoodir + '/design-themes',
-            odoodir + '/odoo/odoo/addons',
-            odoodir + '/odoo/addons',
+        addons = [
+            odoodir + "/enterprise",
+            odoodir + "/design-themes",
+            odoodir + "/odoo/odoo/addons",
+            odoodir + "/odoo/addons",
         ]
 
-        command = '%s/venv/bin/python %s -d %s --addons-path=%s -i base --stop-after-init --without-demo=all' % (odoodir, odoobin, database, ','.join(addons))
-        utils.log('info', 'Running: \n%s\n' % (command))
+        python_exec = os.path.join(odoodir, "venv/bin/python")
+        addons_path = ",".join(addons)
+        command = shlex.join(
+            [
+                python_exec,
+                odoobin,
+                *("-d", self.database),
+                f"--addons-path={addons_path}",
+                "-i base",
+                "--stop-after-init",
+                "--without-demo=all",
+            ]
+        )
+        utils.log("info", f"Running:\n{command}\n")
         subprocess.run(command, shell=True, check=True)
 
         return 0

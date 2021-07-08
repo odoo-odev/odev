@@ -1,3 +1,7 @@
-# -*- coding: utf-8 -*-
+"""Package with cli commands modules"""
 
-from . import dispatcher
+from ..utils import import_submodules
+
+
+# Auto-import submodules
+__all__ = import_submodules(__path__, globals(), package=__name__)

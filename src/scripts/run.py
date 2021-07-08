@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 
 import os
+import shlex
 import subprocess
-from clint.textui import colored
+from argparse import ArgumentParser, Namespace
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
-from os.path import join as opj
+from ..cli import CommaSplitArgs
+
 
 MANIFEST_NAMES = ('__manifest__.py', '__openerp__.py')
+
 
 def is_addon_path(path):
     def clean(name):
@@ -17,22 +20,15 @@ def is_addon_path(path):
 
     def is_really_module(name):
         for mname in MANIFEST_NAMES:
-            if os.path.isfile(opj(path, name, mname)):
+            if os.path.isfile(os.path.join(path, name, mname)):
                 return True
-    return any([
-        clean(it)
-        for it in os.listdir(path)
-        if is_really_module(it)
-    ])
-class RunScript(script.Script):
 
-    usage = "run <database> <addons> [<options>]"
-    args = [
-        ['database', 'Name of the local database to run'],
-        ['addons  ', 'List of addon paths to add to the default ones, separated by a coma (,)'],
-        ['options ', 'Optional: additional arguments to pass to odoo-bin']
-    ]
-    description = """
+    return any(clean(name) for name in os.listdir(path) if is_really_module(name))
+
+
+class RunScript(LocalDBCommand):
+    command = "run"
+    help = """
 Runs a local Odoo database, prefilling common addon paths and making
 sure the right version of Odoo is installed and in use.
 
@@ -46,38 +42,63 @@ local versions should be lower (or roughly equal if all versions are installed)
 than the size of the entire Odoo repositories.
 """
 
-    def run(self, database, options):
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "addons",
+            action=CommaSplitArgs,
+            help="comma-separated list of addon paths to add to the default ones",
+        )
+        parser.add_argument(
+            "args",
+            nargs="*",
+            help="Optional: additional arguments to pass to odoo-bin",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.addons = args.addons
+        self.additional_args = args.args
+
+    def run(self):
         """
         Runs a local Odoo database.
         """
 
-        self.db_is_valid(database)
+        self.db_is_valid()
 
-        if self.db_runs(database):
-            raise Exception('Database %s is already running' % (database))
+        if self.db_runs():
+            raise Exception(f'Database {self.database} is already running')
 
-        version = self.db_version_clean(database)
+        version = self.db_version_clean()
 
-        odoodir = '%s/%s' % (self.config['paths']['odoo'], version)
-        odoobin = '%s/odoo/odoo-bin' % (odoodir)
+        odoodir = os.path.join(self.config["paths"]["odoo"], version)
+        odoobin = os.path.join(odoodir, "odoo/odoo-bin")
 
         utils.pre_run(odoodir, odoobin, version)
 
-        addons =  [
-            odoodir + '/enterprise',
-            odoodir + '/design-themes',
-            odoodir + '/odoo/odoo/addons',
-            odoodir + '/odoo/addons',
+        addons = [
+            odoodir + "/enterprise",
+            odoodir + "/design-themes",
+            odoodir + "/odoo/odoo/addons",
+            odoodir + "/odoo/addons",
         ]
-
-        if options[0] and not str(options[0][0]) == '-':
-            addons += options.pop(0).split(',')
-
         addons.append(os.getcwd())
-        addons = [path for path in addons if is_addon_path(path)]
+        addons += [path for path in self.addons if is_addon_path(path)]
 
-        command = '%s/venv/bin/python %s -d %s --addons-path=%s %s' % (odoodir, odoobin, database, ','.join(addons), ' '.join(options.all))
-        utils.log('info', 'Running: \n%s\n' % (command))
+        python_exec = os.path.join(odoodir, "venv/bin/python")
+        addons_path = ",".join(addons)
+        command = shlex.join(
+            [
+                python_exec,
+                odoobin,
+                *("-d", self.database),
+                f"--addons-path={addons_path}",
+                *self.additional_args,
+            ]
+        )
+        utils.log("info", f"Running:\n{command}\n")
         subprocess.run(command, shell=True, check=True)
 
         return 0

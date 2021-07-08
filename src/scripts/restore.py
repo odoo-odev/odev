@@ -2,102 +2,117 @@
 
 import os
 import re
-import tempfile
-import zipfile
 import shutil
 import subprocess
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from zipfile import ZipFile
 
-from . import script
+from .database import LocalDBCommand
 from .. import utils
+
 
 re_ext = re.compile(r'\.([a-z]+)$')
 
 
-class RestoreScript(script.Script):
-
-    usage = 'restore <database> <dump_file>'
-    args = [
-        ['database ', 'Name of the local database to restore'],
-        ['dump_file', 'Path to the dump file to import to the database']
-    ]
-    description = """
+class RestoreScript(LocalDBCommand):
+    command = "restore"
+    help = """
 Restores an Odoo dump file to a local database and imports its filestore
 if present. '.sql', '.dump' and '.zip' files are supported.
 """
 
-    def run(self, database, options):
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "dump",
+            metavar="PATH",
+            help="Path to the dump file to import to the database",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.dump_path = args.dump
+
+    def run(self):
         """
         Restores a dump file to a local database.
         """
 
-        if not self.db_exists_all(database):
-            raise Exception('Database %s does not exist' % (database))
+        if not self.db_exists_all():
+            raise Exception(f'Database {self.database} does not exist')
 
-        if self.db_exists(database) and self.db_runs(database):
-            raise Exception('Database %s is running, please shut it down and retry' % (database))
+        if self.db_exists() and self.db_runs():
+            raise Exception(f'Database {self.database} is running, please shut it down and retry')
 
-        if self.db_exists(database):
-            utils.log('warning', 'Database %s is already an Odoo database' % (database))
+        if self.db_exists():
+            utils.log('warning', f'Database {self.database} is already an Odoo database')
 
             if not utils.confirm('Do you want to overwrite its content?'):
                 utils.log('info', 'Action canceled')
                 return 0
 
-        dumpfile = options[0]
+        if not os.path.isfile(self.dump_path):
+            raise Exception(f'File {self.dump_path} does not exists')
 
-        if not dumpfile:
-            raise Exception('No dump file specified')
-
-        if not os.path.isfile(dumpfile):
-            raise Exception('File %s does not exists' % (dumpfile))
-
-        match = re_ext.search(dumpfile)
+        match = re_ext.search(self.dump_path)
 
         if not match:
-            raise Exception('File \'%s\' has no extension, couldn\'t guess what to do...' % (dumpfile))
+            raise Exception(f'File "{self.dump_path}" has no extension, couldn\'t guess what to do...')
 
         ext = match.group(1)
 
-        if not ext in ['dump', 'zip', 'sql']:
-            raise Exception('Unrecognized extension \'.%s\' for file %s' % (ext, dumpfile))
+        if ext not in ('dump', 'zip', 'sql'):
+            raise Exception(f'Unrecognized extension "{ext}" for file {self.dump_path}')
 
-        utils.log('info', 'Restoring dump file \'%s\' to database %s' % (dumpfile, database))
+        utils.log('info', f'Restoring dump file "{self.dump_path}" to database {self.database}')
         utils.log('warning', 'This may take a while, please be patient...')
 
-        if ext == 'dump':
-            subprocess.run('pg_restore -d %s %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
-        if ext == 'sql':
-            subprocess.run('psql %s < %s' % (database, dumpfile), shell=True, check=True, stdout=subprocess.DEVNULL)
-        if ext == 'zip':
-            tempdir = tempfile.TemporaryDirectory()
+        if ext == "dump":
+            commandline = ["pg_restore", *("-d", self.database), self.dump_path]
 
-            with zipfile.ZipFile(dumpfile, 'r') as zipref:
-                zipref.extractall(tempdir.name)
+        else:
+            if ext == "sql":
+                sql_path = self.dump_path
 
-                if not os.path.isfile('%s/dump.sql' % (tempdir.name)):
-                    raise Exception('Could not extract \'dump.sql\' from %s' % (dumpfile))
+            elif ext == 'zip':
+                with TemporaryDirectory() as tempdir, ZipFile(self.dump_path, 'r') as zipref:
+                    zipref.extractall(tempdir.name)
 
-                if os.path.isdir('%s/filestore' % (tempdir.name)):
-                    filestoredir = '%s/.local/share/Odoo/filestore' % (os.path.expanduser('~'))
-                    utils.log('info', 'Filestore detected, installing to %s/%s/' % (filestoredir, database))
+                    tmp_sql_path = os.path.join(tempdir.name, "dump.sql")
+                    if not os.path.isfile(tmp_sql_path):
+                        raise Exception(f'Could not extract "dump.sql" from {self.dump_path}')
 
-                    if os.path.isdir('%s/%s' % (filestoredir, database)):
-                        shutil.rmtree('%s/%s' % (filestoredir, database))
+                    tmp_filestore_path = os.path.join(tempdir.name, "filestore")
+                    if os.path.isdir(tmp_filestore_path):
+                        filestores_root = Path.home() / '.local/share/Odoo/filestore'
+                        filestore_path = str(filestores_root / self.database)
+                        utils.log('info', f'Filestore detected, installing to {filestore_path}')
 
-                    shutil.copytree('%s/filestore' % (tempdir.name), '%s/%s' % (filestoredir, database))
+                        if os.path.isdir(filestore_path):
+                            # TODO: Maybe ask for confirmation
+                            utils.log('warning', f'Deleting existing filestore directory')
+                            shutil.rmtree(filestore_path)
 
-                utils.log('info', 'Importing SQL data to database %s' % (database))
-                subprocess.run('psql %s < %s/dump.sql' % (database, tempdir.name), shell=True, check=True, stdout=subprocess.DEVNULL)
+                        shutil.copytree(tmp_filestore_path, filestore_path)
 
-        self.dbconfig.add_section(database)
-        self.db_config(database, [
-            ('version_clean', self.db_version_clean(database)),
-            ('version', self.db_version(database)),
-            ('enterprise', 'enterprise' if self.db_enterprise(database) else 'standard'),
-        ])
+                    sql_path = tmp_sql_path
 
-        with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
+            commandline = f'psql "{self.database}" < "{sql_path}"'
+
+        utils.log('info', f'Importing SQL data to database {self.database}')
+        subprocess.run(commandline, shell=True, check=True, stdout=subprocess.DEVNULL)
+
+        self.dbconfig.add_section(self.database)
+        self.db_config(
+            version_clean=self.db_version_clean(self.database),
+            version=self.db_version(self.database),
+            enterprise='enterprise' if self.db_enterprise(self.database) else 'standard',
+        )
+
+        with open(Path.home() / '.config/odev/databases.cfg', 'w') as configfile:
             self.dbconfig.write(configfile)
 
         return 0

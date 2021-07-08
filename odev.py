@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import src.main as odev
+import src.__main__ as odev
+
 
 if __name__ == "__main__":
-    odev.cli()
+    odev.main()

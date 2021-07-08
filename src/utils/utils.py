@@ -1,11 +1,39 @@
-# -*- coding: utf-8 -*-
+"""Generic utilities"""
 
-import re
 import os
+import pkgutil
+import re
 import subprocess
 from getpass import getpass
+from importlib import import_module
+from types import ModuleType
+from typing import MutableMapping, Any, Optional, Iterable, Tuple, Protocol, List, Dict
+
 from clint.textui import puts, colored
 from git import Repo
+
+
+__all__ = [
+    "quotes",
+    "re_blanks",
+    "re_extras",
+    "re_psql",
+    "sanitize",
+    "require",
+    "log",
+    "confirm",
+    "ask",
+    "password",
+    "mkdir",
+    "get_python_version",
+    "git_clone",
+    "git_pull",
+    "pre_run",
+    "curl",
+    "ImportHook",
+    "import_submodules"
+]
+
 
 quotes = {
     'info': colored.blue('[i]', False, True),
@@ -175,3 +203,56 @@ def pre_run(odoodir, odoobin, version):
     command = '%s/venv/bin/python -m pip install -r %s/odoo/requirements.txt > /dev/null' % (odoodir, odoodir)
     log('info', 'Checking for missing dependencies in requirements.txt')
     subprocess.run(command, shell=True, check=True)
+
+
+def curl(url, *args, with_headers=True, follow_redirects=True, silent=True):
+    options = ["-k"]
+    if with_headers:
+        options.append("-i")
+    if follow_redirects:
+        options.append("-L")
+    if silent:
+        options.append("-s")
+    compiled_args = ' '.join(options + list(args))
+    cmdline = f'''curl {compiled_args} "{url}"'''
+    stream = os.popen(cmdline)
+    return stream.read().strip()
+
+
+class ImportHook(Protocol):
+    """Typing protocol for import hook callables"""
+    def __call__(self, module: ModuleType) -> Optional[Iterable[Tuple[str, Any]]]:
+        ...
+
+
+def import_submodules(
+    base_path: str,
+    globals_: MutableMapping[str, Any],
+    package: Optional[str] = None,
+    on_import: Optional[ImportHook] = None,
+) -> List[str]:
+    """
+    Dynamically import all submodules (non-recursively) into the given dict.
+
+    :param base_path: the base path where to look for submodules.
+    :param globals_: a dict where the imported modules will be stored.
+    :param package: optional package name required to enable relative imports.
+    :param on_import: optional hook that will be called with the imported module
+        as sole argument to do custom additional processing and can insert more
+        attributes and values into the package namespace.
+    :return: the list of imported module names.
+    """
+    imported_names: List[str] = []
+    module_name: str
+    for _, module_name, _ in pkgutil.iter_modules(base_path):  # type: ignore
+        imported_module: ModuleType = import_module("." + module_name, package=package)
+        added_attributes: Dict[str, Any] = {module_name: imported_module}
+        if on_import is not None:
+            hook_additions: Optional[Iterable[Tuple[str, Any]]]
+            hook_additions = on_import(imported_module)
+            if hook_additions is not None:
+                added_attributes.update(hook_additions)
+        for attr_name, attr_value in added_attributes.items():
+            globals_[attr_name] = attr_value
+            imported_names.append(attr_name)
+    return imported_names

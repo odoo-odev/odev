@@ -2,13 +2,15 @@
 
 import re
 import os
+from argparse import ArgumentParser, Namespace
 from datetime import datetime
-from urllib.parse import unquote
 import gzip
 import shutil
 
-from . import script
 from .. import utils
+from ..cli import CliCommand
+from ..utils import curl
+
 
 re_url = re.compile(r'^https?://')
 re_session = re.compile(r'session_id=([^;]+)')
@@ -22,171 +24,170 @@ re_sh_dump = re.compile(r'href="//([a-z0-9]+.odoo.com/_long/paas/build/[0-9]+/du
 re_sh_token = re.compile(r'\?token=([^"]+)')
 
 
-class DumpScript(script.Script):
-
-    usage = 'dump <database> <url> <dest>'
-    args = [
-        ['database', 'Name of the database, this is only used in the name of the downloaded dump file and doesn\'t have to match an actual database'],
-        ['url     ', 'URL to the database to dump, in the form of https://db.odoo.com; The protocol part (http(s)://) can be omitted'],
-        ['dest    ', 'Directory to which the dumped file will be saved once downloaded']
-    ]
-    description = """
+class DumpScript(CliCommand):
+    command = "dump"
+    help = """
 Downloads a dump of a SaaS or SH database and saves it to your computer.
 Lets you choose whether to download the filestore or not.
 """
 
-    def run(self, database, options):
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "url",
+            help="URL to the database to dump, in the form of https://db.odoo.com. "
+            "The protocol part (http(s)://) can be omitted.",
+        )
+        parser.add_argument(
+            "destination",
+            metavar="DEST",
+            help="Directory to which the dumped file will be saved once downloaded.",
+        )
+        parser.add_argument(
+            "database",
+            nargs='?',
+            help="Name of the database used in the downloaded dump filename. "
+                 "Doesn't have to match an actual database.",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.url = ("https://" if not re_url.match(args.url) else "") + args.url
+        self.destination = args.destination
+        if not re_directory.match(self.destination):
+            self.destination = self.destination + "/"
+        self.database = args.database
+
+    def run(self):
         """
         Dumps a SaaS or SH database.
         """
-
-        utils.require('url', options[0])
-        utils.require('destination', options[1])
-
-        url = options[0]
-
-        if not re_url.match(url):
-            url = 'https://%s' % (url)
-
-        base_url = url
-        destination = options[1]
 
         # ---------------------------------------------------------------------
         # Find out on which platform the database is running (SaaS or SH)
         # ---------------------------------------------------------------------
 
-        utils.log('info', 'Logging you in to %s support console' % (url))
+        utils.log('info', f'Logging you in to {self.url} support console')
 
-        curl = 'curl -iksL %s/_odoo/support/login' % (url)
-        stream = os.popen(curl)
-        res = stream.read().strip()
+        support_url = f"{self.url}/_odoo/support"
+        support_login_url = f"{support_url}/login"
 
+        res = curl(support_login_url)
         platform = 'saas'
-
         if re_error.match(res):
             # Retry for without '/login' as the support page on odoo.sh is not database-dependant
-            curl = 'curl -iksL %s/_odoo/support' % (url)
-            stream = os.popen(curl)
-            res = stream.read().strip()
-
+            res = curl(support_url)
             if re_error.match(res):
                 raise Exception('Error fetching webpage, check the URL and try again')
-
             platform = 'sh'
+
+        assert platform in ('saas', 'sh')
 
         # ---------------------------------------------------------------------
         # Login to the support page
         # ---------------------------------------------------------------------
 
-        match = re_session.findall(res)
-        session = match[-1]
-
-        match = re_csrf.findall(res)
-        csrf = match[-1]
-
+        session = re_session.findall(res)[-1]
+        csrf = re_csrf.findall(res)[-1]
         login = utils.ask('Login:')
         passwd = utils.password('Password:')
         reason = utils.ask('Reason (optional):')
 
         if platform == 'saas':
-            url = '%s/_odoo/support/login' % (url)
+            login_url = support_login_url
         elif platform == 'sh':
-            match = re_location.findall(res)
-            url = match[-1]
+            login_url = re_location.findall(res)[-1]
 
-        curl = 'curl -iks -X POST "%s" -d "login=%s&password=%s&reason=%s&csrf_token=%s" -H "Cookie: session_id=%s"' % (url, login, passwd, reason, csrf, session)
-
-        stream = os.popen(curl)
-        res = stream.read().strip()
-
+        res = curl(
+            login_url,
+            "-X POST",
+            f'-d "login={login}&password={passwd}&reason={reason}&csrf_token={csrf}"',
+            f'-H "Cookie: session_id={session}"',
+            follow_redirects=False,
+        )
         if re_error.match(res):
             raise Exception('Error logging you in, check your credentials and try again')
 
-        match = re_session.search(res)
-        session = match[1]
-
+        session = re_session.search(res)[1]
         if not session:
             raise Exception('Invalid session id, check your credentials and try again')
 
         if platform == 'sh':
-            match = re_redirect.search(res)
-            redirect = match[1]
-
-            curl = 'curl -iksL "https://www.odoo.sh%s" -H "Cookie: session_id=%s"' % (
-                redirect, session)
-            stream = os.popen(curl)
-            res = stream.read().strip()
-
-            match = re_session.findall(res)
-            session = match[-1]
-
-            match = re_location.findall(res)
-            url = match[-1]
+            redirect = re_redirect.search(res)[1]
+            res = curl(f"https://www.odoo.sh{redirect}", f'-H "Cookie: session_id={session}"')
+            session = re_session.findall(res)[-1]
+            login_url = re_location.findall(res)[-1]
         elif platform == 'saas':
-            url = '%s/_odoo/support' % (base_url)
+            login_url = support_url
 
-        utils.log('success', 'Successfuly logged-in to %s' % (url))
+        utils.log('success', f'Successfuly logged-in to {login_url}')
 
         # ---------------------------------------------------------------------
         # Get the link the the dump file and download it
         # ---------------------------------------------------------------------
 
-        utils.log('info', 'About to download dump file for %s' % (database))
+        database_name = self.database
+        if not database_name:
+            database_name = re_database.search(login_url)[1]
+
+        utils.log('info', f'About to download dump file for {database_name}')
 
         ext = 'dump' if platform == 'saas' else 'sql.gz'
-
         if utils.confirm('Do you want to include the filestore?'):
             ext = 'zip'
 
-        if not os.path.isdir(destination):
-            utils.mkdir(destination)
-
-        if not database:
-            match = re_database.search(url)
-            database = match[1]
-
-        if not re_directory.match(destination):
-            destination = '%s/' % (destination)
+        if not os.path.isdir(self.destination):
+            utils.mkdir(self.destination)
+        if not re_directory.match(self.destination):
+            self.destination += "/"
 
         timestamp = datetime.now().strftime('%Y%m%d')
-
-        destfile = '%s%s_%s.dump.%s' % (destination, timestamp, database, ext)
+        base_dump_filename = f'{self.destination}{timestamp}_{database_name}.dump'
+        destfile = f'{base_dump_filename}.{ext}'
 
         if os.path.isfile(destfile):
-            utils.log('warning', 'The file %s already exists, indicating that you most probably already dumped this database today' % (destfile))
-            overwrite = utils.confirm('Do you wish to overwrite this file?')
-
+            utils.log(
+                "warning",
+                f"The file {destfile} already exists, "
+                f"indicating that you most probably already dumped this database today",
+            )
+            overwrite = utils.confirm("Do you wish to overwrite this file?")
             if not overwrite:
                 utils.log('info', 'Action canceled')
                 return 0
 
         if platform == 'sh':
-            match = re_sh_token.search(url)
-            token = match[1]
-
-            match = re_sh_dump.search(res)
-            url = match[1]
-
-            url = '%s.%s?token=%s' % (url, ext, token)
+            token = re_sh_token.search(login_url)[1]
+            matched_url = re_sh_dump.search(login_url)
+            dump_url = f'{matched_url}.{ext}?token={token}'
         elif platform == 'saas':
-            url = '%s/saas_worker/dump.%s' % (base_url, ext)
+            dump_url = f'{self.url}/saas_worker/dump.{ext}'
 
-        utils.log('info', 'Downloading dump from %s to %s...' % (url, destfile))
+        utils.log('info', f'Downloading dump from {dump_url} to {destfile}...')
         utils.log('warning', 'This may take a while, please be patient...')
 
-        curl = 'curl -kL %s -o %s -H "Cookie: session_id=%s"' % (url, destfile, session)
-        stream = os.popen(curl)
-        res = stream.read().strip()
+        res = curl(
+            dump_url,
+            f'-o "{destfile}"',
+            f'-H "Cookie: session_id={session}"',
+            with_headers=False,
+            silent=False,
+        )
 
         if re_error.match(res):
-            raise Exception('Error downloading dump from %s\nMaybe the database is too big to be dumped, in which case please contact the SaaS support team and ask them for a dump of the database' % (url))
-
+            raise Exception(
+                f"Error downloading dump from {dump_url}\n"
+                "Maybe the database is too big to be dumped, "
+                "in which case please contact the SaaS support team "
+                "and ask them for a dump of the database"
+            )
         if not os.path.isfile(destfile):
             raise Exception('Error while saving dump file to disk')
 
         if ext == 'sql.gz':
             with gzip.open(destfile, 'rb') as f_in:
-                with open('%s%s_%s.dump.sql' % (destination, timestamp, database), 'wb') as f_out:
+                with open(f"{base_dump_filename}.sql", "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
 
         utils.log('success', 'Successfuly downloaded dump file')
