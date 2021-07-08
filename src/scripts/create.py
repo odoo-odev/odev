@@ -39,12 +39,15 @@ Sanitizes the name of the new database so that it can be used within PostgreSQL.
             raise Exception(f'Database {self.database} already exists {message}')
 
         utils.log('info', f'Creating database {self.database}')
-        query = 'CREATE DATABASE %s;' % self.database
+        query = 'CREATE DATABASE "%s";' % self.database
 
         if self.template:
             if self.db_exists_all(database=self.template):
                 self.ensure_stopped(database=self.template)
-                query = "CREATE DATABASE %s WITH TEMPLATE %s;" % (self.database, self.template)
+                query = 'CREATE DATABASE "%s" WITH TEMPLATE "%s";' % (
+                    self.database,
+                    self.template,
+                )
 
         result = self.run_queries(query, database=self.fallback_database)  # FIXME: ugly
 

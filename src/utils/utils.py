@@ -44,7 +44,7 @@ quotes = {
     'question': colored.magenta('[?]', False, True),
 }
 
-re_blanks = re.compile(r'([-\s]+)')
+re_blanks = re.compile(r'([\s]+)')
 re_extras = re.compile(r'([^a-z0-9-_\s])')
 re_psql = re.compile(r'^(pg_|[0-9])')
 

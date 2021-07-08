@@ -52,7 +52,7 @@ class RenameScript(LocalDBCommand):
             return 0
 
         utils.log('info', f'Renaming database "{name_old}" to "{name_new}"')
-        query = 'ALTER DATABASE %s RENAME TO %s;' % (name_old, name_new)
+        query = 'ALTER DATABASE "%s" RENAME TO "%s";' % (name_old, name_new)
         result = self.run_queries(query)
         utils.log('info', 'Renamed database')
 

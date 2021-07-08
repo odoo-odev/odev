@@ -43,6 +43,7 @@ class LocalDBCommand(CliCommand, ABC):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
+        # TODO: depending on the action sanitize should fail instead
         self.database = utils.sanitize(args.database) if args.database else None
 
     def run_queries(self, queries=None, database=None):
