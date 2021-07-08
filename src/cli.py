@@ -7,7 +7,17 @@ from argparse import ArgumentParser, Namespace, Action
 from typing import ClassVar, MutableMapping, Type, Optional, Any, Union, Sequence
 
 
-__all__ = ["CommaSplitArgs", "ROOT", "CommandType", "CommandsRegistry", "CliCommand"]
+__all__ = [
+    "CommaSplitArgs",
+    "ROOT",
+    "CommandType",
+    "CommandsAttributeTypes",
+    "CliCommand",
+    "CommandsRegistryType",
+    "CliCommandsSubRoot",
+    "CliCommandsRoot",
+    "main",
+]
 
 
 logger = logging.getLogger(__name__)
@@ -17,6 +27,7 @@ class CommaSplitArgs(Action):
     """
     Converter for command line arguments passed as comma-separated lists of values
     """
+
     def __call__(
         self,
         parser: ArgumentParser,
@@ -36,17 +47,17 @@ ROOT = _ROOT()
 
 
 CommandType = Union[str, _ROOT]
-CommandsRegistry = MutableMapping[CommandType, Type["CliCommand"]]
+CommandsAttributeTypes = Optional[Union[CommandType, Sequence[CommandType]]]
 
 
 class CliCommand(ABC):
     """
     Base class for command line commands.
     """
-    _commands_registry: ClassVar[CommandsRegistry] = {}
-    """Internal registry of command subclasses"""
 
-    command: ClassVar[Optional[CommandType]] = None
+    parent: ClassVar[Optional["CliCommandsSubRoot"]] = None
+    """Parent command class. If not specified, defaults to the root parser."""
+    command: ClassVar[CommandsAttributeTypes] = None
     """The name of the command associated with the class, or ROOT. Must be unique."""
     help: ClassVar[Optional[str]] = None
     """Optional help information on what the command does."""
@@ -59,22 +70,12 @@ class CliCommand(ABC):
         # TODO: consider lifting this restriction, and just skip registering
         if not inspect.isabstract(cls) and cls.command is None:
             raise ValueError('No "command" specified on the class')
+        if cls.parent is None:
+            cls.parent = CliCommandsRoot
         if cls.command is not None:
-            pre_existing_cls: Optional[Type] = cls._commands_registry.get(cls.command)
-            if pre_existing_cls is not None:
-                raise NameError(
-                    f'{repr(cls)} has the same command "{cls.command}" '
-                    f"of already registered {repr(pre_existing_cls)}"
-                )
-            cls._commands_registry[cls.command] = cls
+            cls.parent.register_command(cls)
         if cls.help is not None:
             cls.help = cls.help.strip()
-
-    @classmethod
-    def get_commands_registry(cls) -> CommandsRegistry:
-        """Returns the internal command registry"""
-        # TODO: do we need this? What about a read only view instead, like .items()
-        return cls._commands_registry
 
     @classmethod
     @abstractmethod
@@ -87,20 +88,61 @@ class CliCommand(ABC):
         :return: a sequence of :class:`ArgumentParser` objects.
         """
 
-    @classmethod
-    def _setup_global_arguments(cls, parser: ArgumentParser) -> None:
+    def __init__(self, args: Namespace):
         """
-        Setup global arguments to be used in the main runtime argument parser.
+        Initialize the command runner.
 
-        :param parser: the main runtime :class:`ArgumentParser` instance.
+        :param args: the parsed arguments as an instance of :class:`Namespace`
         """
-        parser.add_argument(
-            "-v",
-            "--log-level",
-            choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
-            default="INFO",
-            help="logging verbosity",
-        )
+        self.args: Namespace = args
+
+    @abstractmethod
+    def run(self) -> None:
+        """Run the command"""
+
+
+CommandsRegistryType = MutableMapping[CommandType, Type["CliCommand"]]
+
+
+class CliCommandsSubRoot(CliCommand, ABC):
+    _subcommands: ClassVar[CommandsRegistryType] = {}
+    """Internal registry of command subclasses"""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        cls._subcommands = {}
+
+    @classmethod
+    def register_command(cls, command_cls: Type[CliCommand]):
+        commands: CommandsAttributeTypes = command_cls.command
+        if isinstance(commands, (str, _ROOT)):
+            commands = [commands]
+        conflicts: MutableMapping[str, Type[CliCommand]] = {
+            name: cls._subcommands[name]
+            for name in commands
+            if name in cls._subcommands
+        }
+        if conflicts:
+            raise NameError(
+                f'{repr(command_cls)} command(s) conflict with the following one(s):\n"'
+                + "\n".join(
+                    f' - "{name}": {repr(conflict_cls)}'
+                    for name, conflict_cls in conflicts.items()
+                )
+            )
+        for command in commands:
+            cls._subcommands[command] = command_cls
+
+    @classmethod
+    def get_command_cls(cls, command: str) -> Type[CliCommand]:
+        """Returns the command class for the given command name"""
+        try:
+            return cls._subcommands.get(command)
+        except KeyError:
+            raise NotImplementedError(f'Got unhandled command "{command}"')
+
+    @classmethod
+    def prepare_parsers(cls) -> Sequence[ArgumentParser]:
+        return []
 
     @classmethod
     def prepare_main_parser(cls) -> ArgumentParser:
@@ -110,24 +152,15 @@ class CliCommand(ABC):
 
         :return: the prepared :class:`ArgumentParser` instance.
         """
-        # TODO: consider attaching root_parser to parents= and instead initialize
-        #       a main ArgumentParser here that only does subcommands, so that
-        #       we don't have to worry about the order of args in the commandline
-        root_parser: ArgumentParser
-        root_command_cls: Optional[Type[CliCommand]] = cls._commands_registry.get(ROOT)
-        if root_command_cls is not None:
-            [root_parser] = root_command_cls.prepare_parsers()
-        else:
-            root_parser = ArgumentParser()
-        cls._setup_global_arguments(root_parser)
-
+        main_parser: ArgumentParser = ArgumentParser()
+        common_parsers: Sequence[ArgumentParser] = cls.prepare_parsers()
         subcommands: Sequence[Type[CliCommand]] = [
             command_cls
-            for command, command_cls in cls._commands_registry.items()
+            for command, command_cls in cls._subcommands.items()
             if command not in (None, ROOT)
         ]
         if subcommands:
-            subparsers = root_parser.add_subparsers(
+            subparsers = main_parser.add_subparsers(
                 title="command",
                 dest="command",
                 required=True,
@@ -138,10 +171,40 @@ class CliCommand(ABC):
                 parsers: Sequence[ArgumentParser] = command_cls.prepare_parsers()
                 assert isinstance(command_cls.command, str)
                 subparsers.add_parser(
-                    command_cls.command, help=command_cls.help, parents=parsers
+                    command_cls.command,
+                    help=command_cls.help,
+                    parents=[*common_parsers, *parsers],
                 )
+        return main_parser
 
-        return root_parser
+    def __init__(self, args: Namespace):
+        command_cls: Type[CliCommand] = self.get_command_cls(args.command)
+        self.chosen_command: [CliCommand] = command_cls(args)
+        super().__init__(args)
+
+    def run(self) -> None:
+        logger.info(
+            f'Running command "{self.chosen_command}" with parsed arguments: {self.args}'
+        )
+        self.chosen_command.run()
+
+
+# TODO: Maybe make this ABC, so that the common arguments are defined in a concrete
+#       subclass in user code
+class CliCommandsRoot(CliCommandsSubRoot):
+    command = ROOT
+
+    @classmethod
+    def prepare_parsers(cls) -> Sequence[ArgumentParser]:
+        parser: ArgumentParser = ArgumentParser()
+        parser.add_argument(
+            "-v",
+            "--log-level",
+            choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
+            default="INFO",
+            help="logging verbosity",
+        )
+        return [*super().prepare_parsers(), parser]
 
     @classmethod
     def main(cls, argv: Optional[Sequence[str]] = None) -> None:
@@ -151,32 +214,9 @@ class CliCommand(ABC):
         :param argv: a list of command line arguments.
             If omitted `sys.argv` will be used instead.
         """
-        # TODO: consider renaming or moving this method outside of this class
         parser: ArgumentParser = cls.prepare_main_parser()
         args: Namespace = parser.parse_args(argv)
-
-        logging.getLogger().setLevel(args.log_level)
-
-        command_cls: Optional[Type[CliCommand]] = cls._commands_registry.get(
-            args.command
-        )
-        if command_cls is None:
-            raise NotImplementedError(f'Got unhandled command "{args.command}"')
-
-        logger.info(f'Running command "{args.command}" with parsed arguments: {args}')
-        command_cls(args).run()
-
-    @abstractmethod
-    def __init__(self, args: Namespace):
-        """
-        Initialize the command runner.
-
-        :param args: the parsed arguments as an instance of :class:`Namespace`
-        """
-
-    @abstractmethod
-    def run(self) -> None:
-        """Run the command"""
+        cls(args).run()
 
 
-run = CliCommand.main
+main = CliCommandsRoot.main
