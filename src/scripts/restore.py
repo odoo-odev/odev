@@ -70,40 +70,43 @@ class RestoreScript(LocalDBCommand):
         utils.log('info', f'Restoring dump file "{self.dump_path}" to database {self.database}')
         utils.log('warning', 'This may take a while, please be patient...')
 
+        def pg_subprocess(commandline):
+            nonlocal self
+            utils.log('info', f'Importing SQL data to database {self.database}')
+            subprocess.run(commandline, shell=True, check=True, stdout=subprocess.DEVNULL)
+
+        def pg_restore(database, dump_path):
+            pg_subprocess(["pg_restore", *("-d", database), dump_path])
+
+        def psql_load(database, sql_file):
+            pg_subprocess(f'psql "{database}" < "{sql_file}"')
+
         if ext == "dump":
-            commandline = ["pg_restore", *("-d", self.database), self.dump_path]
+            pg_restore(self.database, self.dump_path)
+        elif ext == "sql":
+            psql_load(self.database, self.dump_path)
+        elif ext == 'zip':
+            with TemporaryDirectory() as tempdir, ZipFile(self.dump_path, 'r') as zipref:
+                zipref.extractall(tempdir)
 
-        else:
-            if ext == "sql":
-                sql_path = self.dump_path
+                tmp_sql_path = os.path.join(tempdir, "dump.sql")
+                if not os.path.isfile(tmp_sql_path):
+                    raise Exception(f'Could not extract "dump.sql" from {self.dump_path}')
 
-            elif ext == 'zip':
-                with TemporaryDirectory() as tempdir, ZipFile(self.dump_path, 'r') as zipref:
-                    zipref.extractall(tempdir.name)
+                tmp_filestore_path = os.path.join(tempdir, "filestore")
+                if os.path.isdir(tmp_filestore_path):
+                    filestores_root = Path.home() / '.local/share/Odoo/filestore'
+                    filestore_path = str(filestores_root / self.database)
+                    utils.log('info', f'Filestore detected, installing to {filestore_path}')
 
-                    tmp_sql_path = os.path.join(tempdir.name, "dump.sql")
-                    if not os.path.isfile(tmp_sql_path):
-                        raise Exception(f'Could not extract "dump.sql" from {self.dump_path}')
+                    if os.path.isdir(filestore_path):
+                        # TODO: Maybe ask for confirmation
+                        utils.log('warning', f'Deleting existing filestore directory')
+                        shutil.rmtree(filestore_path)
 
-                    tmp_filestore_path = os.path.join(tempdir.name, "filestore")
-                    if os.path.isdir(tmp_filestore_path):
-                        filestores_root = Path.home() / '.local/share/Odoo/filestore'
-                        filestore_path = str(filestores_root / self.database)
-                        utils.log('info', f'Filestore detected, installing to {filestore_path}')
+                    shutil.copytree(tmp_filestore_path, filestore_path)
 
-                        if os.path.isdir(filestore_path):
-                            # TODO: Maybe ask for confirmation
-                            utils.log('warning', f'Deleting existing filestore directory')
-                            shutil.rmtree(filestore_path)
-
-                        shutil.copytree(tmp_filestore_path, filestore_path)
-
-                    sql_path = tmp_sql_path
-
-            commandline = f'psql "{self.database}" < "{sql_path}"'
-
-        utils.log('info', f'Importing SQL data to database {self.database}')
-        subprocess.run(commandline, shell=True, check=True, stdout=subprocess.DEVNULL)
+                psql_load(self.database, tmp_sql_path)
 
         self.dbconfig.add_section(self.database)
         self.db_config(
