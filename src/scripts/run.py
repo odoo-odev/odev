@@ -29,18 +29,17 @@ def is_addon_path(path):
 class RunScript(LocalDBCommand):
     command = "run"
     help = """
-Runs a local Odoo database, prefilling common addon paths and making
-sure the right version of Odoo is installed and in use.
-
-If the version of Odoo required for the database is not present, downloads it
-and installs it locally. This is done by cloning the Odoo community,
-enterprise and design-themes repositories multiple times (one per version)
-to always keep a copy of each version on the computer. To save storage space,
-only one branch is cloned per version, keeping all other branches out of
-the history. This means that the sum of the sizes of all independant
-local versions should be lower (or roughly equal if all versions are installed)
-than the size of the entire Odoo repositories.
-"""
+        Runs a local Odoo database, prefilling common addon paths and making
+        sure the right version of Odoo is installed and in use.
+        If the version of Odoo required for the database is not present, downloads it
+        and installs it locally. This is done by cloning the Odoo community,
+        enterprise and design-themes repositories multiple times (one per version)
+        to always keep a copy of each version on the computer. To save storage space,
+        only one branch is cloned per version, keeping all other branches out of
+        the history. This means that the sum of the sizes of all independant
+        local versions should be lower (or roughly equal if all versions are installed)
+        than the size of the entire Odoo repositories.
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

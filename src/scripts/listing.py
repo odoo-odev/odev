@@ -10,9 +10,9 @@ class ListingScript(LocalDBCommand):
     command = "list"
     aliases = ("ls",)
     help = """
-Lists all the local Odoo databases. If a database is defined in PostgreSQL
-but not initialized with Odoo, it will not appear in this list.
-"""
+        Lists all the local Odoo databases. If a database is defined in PostgreSQL
+        but not initialized with Odoo, it will not appear in this list.
+    """
     database_required = False
 
     def run(self):

@@ -19,9 +19,9 @@ re_ext = re.compile(r'\.([a-z]+)$')
 class RestoreScript(LocalDBCommand):
     command = "restore"
     help = """
-Restores an Odoo dump file to a local database and imports its filestore
-if present. '.sql', '.dump' and '.zip' files are supported.
-"""
+        Restores an Odoo dump file to a local database and imports its filestore
+        if present. '.sql', '.dump' and '.zip' files are supported.
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

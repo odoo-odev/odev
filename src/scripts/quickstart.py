@@ -24,11 +24,11 @@ class QuickStartScript(LocalDBCommand):
     command = "quickstart"
     aliases = ("qs",)
     help = """
-Quickly and easlily setups a database. This performs the following actions:
-- Creates a new, empty database
-- Initializes, dumps and restores or restores an existing dump to the new database
-- Cleanses the database so that it can be used for development
-"""
+        Quickly and easlily setups a database. This performs the following actions:
+        - Creates a new, empty database
+        - Initializes, dumps and restores or restores an existing dump to the new database
+        - Cleanses the database so that it can be used for development
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

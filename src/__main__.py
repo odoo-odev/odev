@@ -30,7 +30,7 @@ def main():
     except CalledProcessError as proc_exception:
         code = proc_exception.returncode
     except Exception as exception:
-        raise
+        raise  # FIXME: for testing
         utils.log('error', str(exception))
         code = 1
     finally:

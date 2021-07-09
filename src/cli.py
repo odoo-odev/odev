@@ -3,15 +3,11 @@
 import inspect
 import logging
 import sys
+import textwrap
 from abc import ABC, abstractmethod
-from argparse import (
-    ArgumentParser,
-    Namespace,
-    Action,
-    RawTextHelpFormatter,
-    RawDescriptionHelpFormatter,
-)
+from argparse import ArgumentParser, Namespace, Action, RawTextHelpFormatter
 from typing import ClassVar, MutableMapping, Type, Optional, Any, Union, Sequence, List
+
 
 __all__ = [
     "CommaSplitArgs",
@@ -85,7 +81,7 @@ class CliCommand(ABC):
         if cls.command is not None:
             cls.parent.register_command(cls)
         if cls.help is not None:
-            cls.help = cls.help.strip()
+            cls.help = textwrap.dedent(cls.help).strip()
 
     @classmethod
     @abstractmethod
@@ -104,7 +100,7 @@ class CliCommand(ABC):
         parser: ArgumentParser = ArgumentParser(
             description=cls.help,
             add_help=False,
-            formatter_class=RawDescriptionHelpFormatter,
+            formatter_class=RawTextHelpFormatter,
         )
         cls.prepare_arguments(parser)
         # FIXME: Maybe redundant?
@@ -141,7 +137,7 @@ class CliCommand(ABC):
         """
         parser: ArgumentParser = ArgumentParser(
             parents=cls._prepare_parsers(),
-            formatter_class=RawDescriptionHelpFormatter,
+            formatter_class=RawTextHelpFormatter,
         )
         args: Namespace = parser.parse_args(argv)
         command: CliCommand = cls(args)
@@ -202,11 +198,13 @@ class CliCommandsSubRoot(CliCommand, ABC):
         main_parser: ArgumentParser
         main_parser = ArgumentParser(
             description=cls.help,
-            formatter_class=RawDescriptionHelpFormatter,
+            formatter_class=RawTextHelpFormatter,
             add_help=False,
             parents=super_parsers,
         )
-        common_parser: ArgumentParser = ArgumentParser(add_help=False)
+        common_parser: ArgumentParser = ArgumentParser(
+            formatter_class=RawTextHelpFormatter, add_help=False
+        )
         cls.prepare_arguments(common_parser)
         # Get all subcommands, filtering out aliases and root
         subcommands: Sequence[Type[CliCommand]] = [
@@ -216,10 +214,9 @@ class CliCommandsSubRoot(CliCommand, ABC):
         ]
         if subcommands:
             subparsers = main_parser.add_subparsers(
-                title="command",
+                title="Available commands",
                 dest="command",
                 required=True,
-                help="Pick one of these subcommands",
             )
             command_cls: Type[CliCommand]
             for command_cls in subcommands:
@@ -230,6 +227,7 @@ class CliCommandsSubRoot(CliCommand, ABC):
                     aliases=command_cls.aliases or [],
                     parents=[common_parser, *parsers],
                     help=command_cls.help,
+                    description=command_cls.help,
                     formatter_class=RawTextHelpFormatter,
                 )
         return main_parser

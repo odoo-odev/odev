@@ -27,9 +27,9 @@ re_sh_token = re.compile(r'\?token=([^"]+)')
 class DumpScript(CliCommand):
     command = "dump"
     help = """
-Downloads a dump of a SaaS or SH database and saves it to your computer.
-Lets you choose whether to download the filestore or not.
-"""
+        Downloads a dump of a SaaS or SH database and saves it to your computer.
+        Lets you choose whether to download the filestore or not.
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

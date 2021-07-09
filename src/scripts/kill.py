@@ -9,10 +9,10 @@ from .. import utils
 class KillScript(LocalDBCommand):
     command = "kill"
     help = """
-Kills a running Odoo database. Useful if the process crashed because of
-a forgotten IPDB or if you lost your terminal and don't want to search
-for the process' PID.
-"""
+        Kills a running Odoo database. Useful if the process crashed because of
+        a forgotten IPDB or if you lost your terminal and don't want to search
+        for the process' PID.
+    """
 
     def run(self):
         """

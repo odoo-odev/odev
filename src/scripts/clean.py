@@ -7,14 +7,14 @@ from .. import utils
 class CleanScript(LocalDBCommand):
     command = "clean"
     help = """
-Makes a local Odoo database suitable for development:
-- Disables automated and scheduled actions
-- Disables mails
-- Set credentials for Administrator user to admin:admin
-- Set password for first 50 users to odoo
-- Extend database validity to December 2050 and remove enterprise code
-- Set report.url and web.base.url to http://localhost:8069
-"""
+        Makes a local Odoo database suitable for development:
+        - Disables automated and scheduled actions
+        - Disables mails
+        - Set credentials for Administrator user to admin:admin
+        - Set password for first 50 users to odoo
+        - Extend database validity to December 2050 and remove enterprise code
+        - Set report.url and web.base.url to http://localhost:8069
+    """
 
     queries = [
         "UPDATE res_users SET login='admin',password='admin' WHERE id IN (SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 1)",

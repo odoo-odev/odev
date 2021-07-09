@@ -16,9 +16,9 @@ re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 class InitScript(LocalDBCommand):
     command = "init"
     help = """
-Initializes an empty PSQL database with a basic version of Odoo.
-Basically, installs the base module on an empty DB.
-"""
+        Initializes an empty PSQL database with a basic version of Odoo.
+        Basically, installs the base module on an empty DB.
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

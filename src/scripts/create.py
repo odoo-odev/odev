@@ -8,9 +8,9 @@ from .. import utils
 class CreateScript(LocalDBCommand):
     command = "create"
     help = """
-Creates a new, empty, local PostgreSQL database, not initialized with Odoo.
-Sanitizes the name of the new database so that it can be used within PostgreSQL.
-"""
+        Creates a new, empty, local PostgreSQL database, not initialized with Odoo.
+        Sanitizes the name of the new database so that it can be used within PostgreSQL.
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
