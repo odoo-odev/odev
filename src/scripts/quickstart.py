@@ -17,7 +17,7 @@ from .. import utils
 
 
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
-re_url = re.compile(r'^(https?://)?([a-zA-Z0-9-_]\.odoo\.com|localhost|127\.0\.0\.[0-9]+)?')
+re_url = re.compile(r'^(https?://)?([a-zA-Z0-9-_]\.odoo\.com|localhost|127\.0\.0\.[0-9]+)')
 
 
 class QuickStartScript(LocalDBCommand):
@@ -58,36 +58,37 @@ class QuickStartScript(LocalDBCommand):
         else:
             mode = "file"
 
-        assert self.argv
-
-        if mode in ("version", "url"):
-            result = CreateScript.run_with(database=self.database)
-            if result != 0:
-                return result
+        result = CreateScript.run_with(database=self.database, template=None)
+        if result != 0:
+            return result
 
         try:
             if mode == "version":
-                result = InitScript.run_with(version=self.subarg)
+                result = InitScript.run_with(database=self.database, version=self.subarg)
             else:
                 if mode == "url":
                     dest_dir = '/tmp/odev'
 
-                    result = DumpScript.run_with(url=self.subarg, destination=dest_dir)
+                    result = DumpScript.run_with(
+                        url=self.subarg,
+                        destination=dest_dir,
+                        database=self.database,
+                    )
                     if result != 0:
                         return result
 
                     timestamp = datetime.now().strftime('%Y%m%d')
                     basename = f"{timestamp}_{self.database}.dump"
 
-                    possible_ext = ('zip', 'dump')
+                    possible_ext = ('zip', 'dump', 'sql')
                     for ext in possible_ext:
                         filename = os.path.extsep.join((basename, ext))
                         filepath = os.path.join(dest_dir, filename)
-                        if os.path.isfile(filepath + ext):
+                        if os.path.isfile(filepath):
                             break
                     else:  # no break
                         raise Exception(
-                            f"An error occured while fetching dump file at {basename} "
+                            f"An error occured while fetching dump file at {basename}.<ext> "
                             f"(tried {possible_ext} extensions)"
                         )
 
