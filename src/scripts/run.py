@@ -84,7 +84,8 @@ class RunScript(LocalDBCommand):
             odoodir + "/odoo/addons",
         ]
         addons.append(os.getcwd())
-        addons += [path for path in self.addons if is_addon_path(path)]
+        addons += self.addons
+        addons = [path for path in addons if is_addon_path(path)]
 
         python_exec = os.path.join(odoodir, "venv/bin/python")
         addons_path = ",".join(addons)

@@ -12,6 +12,13 @@ from .. import utils
 from ..cli import CliCommand
 
 
+class _NO_DB:
+    """Sentinel object for root, using a class for better repr"""
+
+
+NO_DB = _NO_DB()
+
+
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 re_command = re.compile(r'([/.a-zA-Z0-9_-]+\/odoo-bin.*)$')
 re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
@@ -46,14 +53,18 @@ class LocalDBCommand(CliCommand, ABC):
         # TODO: depending on the action sanitize should fail instead
         self.database = utils.sanitize(args.database) if args.database else None
 
+    def _get_database(self, database=None):
+        if database is None:
+            database = self.database
+        if database is None or database is NO_DB:
+            database = self.fallback_database
+        return database
+
     def run_queries(self, queries=None, database=None):
         """
         Runs a default subcommand.
         """
-        if database is None:
-            database = self.database
-
-        utils.require('database', database)
+        database = self._get_database(database)
 
         result = None
 
@@ -119,11 +130,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Checks whether a database with the given name already exists and is an Odoo database.
         """
-        if database is None:
-            database = self.database
-
-        utils.require('database', database)
-
+        database = self._get_database(database)
         return database in self.db_list()
 
     def db_exists_all(self, database=None):
@@ -131,22 +138,14 @@ class LocalDBCommand(CliCommand, ABC):
         Checks whether a database with the given name already exists, even if it is not
         an Odoo database.
         """
-        if database is None:
-            database = self.database
-
-        utils.require('database', database)
-
+        database = self._get_database(database)
         return database in self.db_list_all()
 
     def db_is_valid(self, database=None):
         """
         Checks whether the database both exists and is an Odoo database.
         """
-        if database is None:
-            database = self.database
-
-        utils.require('database', database)
-
+        database = self._get_database(database)
         if not self.db_exists_all(database):
             raise Exception('Database \'%s\' does not exists' % (database))
         elif not self.db_exists(database):
@@ -156,8 +155,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Gets the version number of a database.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         self.db_is_valid(database)
 
@@ -173,8 +171,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Gets the version number of a database.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         version = self.db_version(database)
         match = re_version.match(version)
@@ -186,8 +183,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Gets the full version of the database.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         version = self.db_version_clean(database)
         enterprise = self.db_enterprise(database)
@@ -198,8 +194,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Checks whether a database is running on the enterprise version of Odoo.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         self.db_is_valid(database)
 
@@ -218,8 +213,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Gets the PID of a currently running database.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         command = 'ps aux | grep -E "./odoo-bin\\s-d\\s%s\\s" | awk \'NR==1{print $2}\'' % (database)
         stream = os.popen(command)
@@ -231,8 +225,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Checks whether the database is currently running.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         return bool(self.db_pid(database))
 
@@ -240,8 +233,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Gets the command which has been used to start the Odoo server for a given database.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         self.db_is_valid(database)
 
@@ -264,8 +256,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Checks on which port the database is currently running.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         port = None
 
@@ -284,8 +275,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Returns the local url to the Odoo web application.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         if not self.db_runs(database):
             return None
@@ -296,9 +286,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Returns the absolute path to the filestore of a given database.
         """
-        if database is None:
-            database = self.database
-
+        database = self._get_database(database)
         return '%s/.local/share/Odoo/filestore/%s' % (str(Path.home()), database)
 
     def db_config(self, database=None, **values):
@@ -306,8 +294,7 @@ class LocalDBCommand(CliCommand, ABC):
         If `values` is set, saves new values to the configuration of a database.
         Otherwise fetches the configuration of a database if it exists.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         if values:
             with open('%s/.config/odev/databases.cfg' % (str(Path.home())), 'w') as configfile:
@@ -329,8 +316,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Fetches a single value from a database configuration file.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
         utils.require('key', key)
 
         self.db_is_valid(database)
@@ -344,8 +330,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Throws an error of the database is running.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         self.db_is_valid(database)
 
@@ -356,8 +341,7 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Throws an error of the database is not running.
         """
-        if database is None:
-            database = self.database
+        database = self._get_database(database)
 
         self.db_is_valid(database)
 

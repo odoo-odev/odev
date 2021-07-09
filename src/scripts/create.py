@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from argparse import ArgumentParser, Namespace
 
-from .database import LocalDBCommand
+from .database import LocalDBCommand, NO_DB
 from .. import utils
 
 
@@ -49,7 +49,7 @@ class CreateScript(LocalDBCommand):
                     self.template,
                 )
 
-        result = self.run_queries(query, database=self.fallback_database)  # FIXME: ugly
+        result = self.run_queries(query, database=NO_DB)
 
         if not result or not self.db_exists_all(self.database):
             return 1

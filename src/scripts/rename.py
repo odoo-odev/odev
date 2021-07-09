@@ -4,7 +4,7 @@ import os
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
-from .database import LocalDBCommand
+from .database import LocalDBCommand, NO_DB
 from .. import utils
 
 
@@ -45,7 +45,7 @@ class RenameScript(LocalDBCommand):
             raise Exception(f'Database with name {name_new} already exists')
         # TODO: Maybe check also if filestore with dest name exists (left over)?
 
-        utils.log('warning', f'You are about to rename the database "{name_old}" and its filestore to "{name_old}". This action is irreversible.')
+        utils.log('warning', f'You are about to rename the database "{name_old}" and its filestore to "{name_new}". This action is irreversible.')
 
         if not utils.confirm(f'Rename "{name_old} and its filestore?'):
             utils.log('info', 'Action canceled')
@@ -53,7 +53,7 @@ class RenameScript(LocalDBCommand):
 
         utils.log('info', f'Renaming database "{name_old}" to "{name_new}"')
         query = 'ALTER DATABASE "%s" RENAME TO "%s";' % (name_old, name_new)
-        result = self.run_queries(query)
+        result = self.run_queries(query, database=NO_DB)
         utils.log('info', 'Renamed database')
 
         if not result or self.db_exists_all(name_old) or not self.db_exists_all(name_new):

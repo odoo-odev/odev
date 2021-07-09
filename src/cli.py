@@ -125,6 +125,7 @@ class CliCommand(ABC):
     @classmethod
     def run_with(cls, *args, **kwargs) -> Any:
         """Runs the command directly with the provided arguments, bypassing parsers"""
+        # TODO: automatically fill missing args with None?
         return cls(Namespace(**dict(*args, **kwargs))).run()
 
     @classmethod

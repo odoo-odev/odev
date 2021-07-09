@@ -36,26 +36,26 @@ class DumpScript(CliCommand):
         super().prepare_arguments(parser)
         parser.add_argument(
             "url",
-            help="URL to the database to dump, in the form of https://db.odoo.com. "
+            help="URL to the database to dump, in the form of https://db.odoo.com.\n"
             "The protocol part (http(s)://) can be omitted.",
         )
         parser.add_argument(
             "destination",
-            metavar="DEST",
+            metavar="dest",
             help="Directory to which the dumped file will be saved once downloaded.",
         )
         parser.add_argument(
             "database",
-            nargs='?',
-            help="Name of the database used in the downloaded dump filename. "
-                 "Doesn't have to match an actual database.",
+            nargs="?",
+            help="Optional. Name of the database used in the downloaded dump filename.\n"
+            "Doesn't have to match an actual database.",
         )
 
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.url = ("https://" if not re_url.match(args.url) else "") + args.url
         self.destination = args.destination
-        if not re_directory.match(self.destination):
+        if not re_directory.search(self.destination):
             self.destination = self.destination + "/"
         self.database = args.database
 
@@ -139,8 +139,6 @@ class DumpScript(CliCommand):
 
         if not os.path.isdir(self.destination):
             utils.mkdir(self.destination)
-        if not re_directory.match(self.destination):
-            self.destination += "/"
 
         timestamp = datetime.now().strftime('%Y%m%d')
         base_dump_filename = f'{self.destination}{timestamp}_{database_name}.dump'
@@ -159,7 +157,7 @@ class DumpScript(CliCommand):
 
         if platform == 'sh':
             token = re_sh_token.search(login_url)[1]
-            matched_url = re_sh_dump.search(login_url)
+            matched_url = re_sh_dump.search(res)[1]
             dump_url = f'{matched_url}.{ext}?token={token}'
         elif platform == 'saas':
             dump_url = f'{self.url}/saas_worker/dump.{ext}'
@@ -186,6 +184,7 @@ class DumpScript(CliCommand):
             raise Exception('Error while saving dump file to disk')
 
         if ext == 'sql.gz':
+            utils.log('info', f'Extracting "{base_dump_filename}.sql"')
             with gzip.open(destfile, 'rb') as f_in:
                 with open(f"{base_dump_filename}.sql", "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
