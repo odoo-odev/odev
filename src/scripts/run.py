@@ -47,7 +47,8 @@ class RunScript(LocalDBCommand):
         parser.add_argument(
             "addons",
             action=CommaSplitArgs,
-            help="comma-separated list of addon paths to add to the default ones",
+            nargs="?",
+            help="Optional: comma-separated list of additional addon paths",
         )
         parser.add_argument(
             "args",
@@ -57,7 +58,7 @@ class RunScript(LocalDBCommand):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.addons = args.addons
+        self.addons = args.addons or []
         self.additional_args = args.args
 
     def run(self):
@@ -69,6 +70,13 @@ class RunScript(LocalDBCommand):
 
         if self.db_runs():
             raise Exception(f'Database {self.database} is already running')
+
+        if not self.addons:
+            utils.log(
+                "warning",
+                "No additional addons specified. "
+                "Will try adding the current directory, otherwise will run as enterprise",
+            )
 
         version = self.db_version_clean()
 
