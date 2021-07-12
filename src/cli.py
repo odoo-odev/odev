@@ -75,14 +75,13 @@ class CliCommand(ABC):
         """
         # TODO: consider lifting this restriction, and just skip registering
         is_abstract: bool = inspect.isabstract(cls) or ABC in cls.__bases__
-        if is_abstract:
-            return
-        if cls.command is None:
-            raise ValueError(f'No "command" specified on the class {cls}')
-        if cls.parent is None:
-            cls.parent = CliCommandsRoot
-        if cls.command is not None:
-            cls.parent.register_command(cls)
+        if not is_abstract:
+            if cls.command is None:
+                raise ValueError(f'No "command" specified on the class {cls}')
+            if cls.parent is None:
+                cls.parent = CliCommandsRoot if cls.command is not ROOT else cls
+            if cls.command is not None:
+                cls.parent.register_command(cls)
         if cls.help is not None:
             cls.help = textwrap.dedent(cls.help).strip()
         if cls.help_short is None:
@@ -145,6 +144,7 @@ class CliCommand(ABC):
         """
         parser: ArgumentParser = ArgumentParser(
             parents=cls._prepare_parsers(),
+            description=cls.help,
             formatter_class=RawTextHelpFormatter,
         )
         args: Namespace = parser.parse_args(argv)
@@ -162,6 +162,7 @@ class CliCommandsSubRoot(CliCommand, ABC):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._subcommands = {}
+        super().__init_subclass__(**kwargs)
 
     @classmethod
     def register_command(cls, command_cls: Type[CliCommand]):
