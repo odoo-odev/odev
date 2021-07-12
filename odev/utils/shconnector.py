@@ -1,16 +1,15 @@
-import requests
-import json
-from bs4 import BeautifulSoup
 import logging
-import sys
+import shlex
 import subprocess
+import sys
 
-logging.basicConfig(
-    format="%(asctime)s | %(message)s",
-    datefmt="%d-%b-%y %H:%M:%S",
-    stream=sys.stdout,
-    level=logging.INFO,
-)
+import requests
+from bs4 import BeautifulSoup
+
+
+__all__ = ["ShConnector"]
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,11 +149,71 @@ class ShConnector(object):
             vals = vals[0]["last_build_id"]
             return "%s@%s.dev.odoo.com" % (vals[0], vals[1])
 
-    def ssh_command_last_build(self, repo, branch, command, logfile=sys.stdout):
-        ssh = self.get_last_build_ssh(repo, branch)
-        sub = subprocess.Popen(
-            ["ssh", ssh, "-o", "StrictHostKeyChecking=no", command],
-            stdout=logfile,
-            stderr=logfile,
+    @staticmethod
+    def ssh_command(
+        ssh_url,
+        command=None,
+        script=None,
+        script_shell="bash -s",
+        check=True,
+        logfile=sys.stdout,
+        **kwargs,
+    ):
+        """
+        Runs an command or script through SSH in the specified SH branch.
+
+        :param ssh_url: the ssh url of the odoo.sh branch.
+            Must be omitted if ``repo`` and ``branch`` are provided.
+        :param command: the command to run through SSH. Can be a string or a
+            list of strings that will be assembled in a single command line.
+            Must be omitted if using ``script`` instead.
+        :param script: a script to run through SSH.
+            Must be omitted if using ``command`` instead.
+        :param script_shell: the shell command to use to pass the ``script`` to.
+            Defaults to `bash -s`.
+        :param check: check the returncode of the SSH subprocess. Defaults to `True`.
+        :param logfile: a buffer to use for the SSH subprocess stderr/stdout.
+            Defaults to `sys.stdout`.
+        :param kwargs: additional keyword arguments for :func:`subprocess.run()`
+        :return: a :class:`subprocess.CompletedProcess` object.
+        """
+        if not command and not script:
+            raise AttributeError('Must provide at least one of "command" or "script"')
+        elif command and script:
+            raise AttributeError('Must provide only one of "command" or "script"')
+        if script:
+            command = script_shell
+            stdin_data = script
+        else:
+            stdin_data = None
+        if isinstance(command, (list, tuple)):
+            command = shlex.join(command)
+        kwargs.setdefault("stdout", logfile)
+        kwargs.setdefault("stderr", logfile)
+        if stdin_data is None:
+            logger.debug(f"Running ssh command on SH build {ssh_url}: {command}")
+        else:
+            logger.debug(
+                f"Running {command.split(' ')[0]} script through ssh on SH build {ssh_url}"
+            )
+        return subprocess.run(
+            ["ssh", ssh_url, "-o", "StrictHostKeyChecking=no", command],
+            input=stdin_data,
+            check=check,
+            **kwargs,
         )
-        return sub.communicate()
+
+    def ssh_command_last_build(self, repo, branch, *args, **kwargs):
+        """
+        Runs an command or script through SSH in the latest build of a SH branch.
+
+        :param repo: the name of the repo / odoo.sh project.
+            Include with ``branch`` if not passing a ``ssh_url``.
+        :param branch: the name of the branch in the odoo.sh project.
+            Include with ``repo`` if not passing a ``ssh_url``.
+        :param args: additional positional arguments for :func:`ssh_command`
+        :param kwargs: additional keyword arguments for :func:`ssh_command`
+        :return: whatever the :func:`ssh_command` call returns
+        """
+        ssh_url = self.get_last_build_ssh(repo, branch)
+        return self.ssh_command(ssh_url, *args, **kwargs)

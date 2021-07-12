@@ -59,7 +59,7 @@ class CliCommand(ABC):
     Base class for command line commands.
     """
 
-    parent: ClassVar[Optional["CliCommandsSubRoot"]] = None
+    parent: ClassVar[Optional[Type["CliCommandsSubRoot"]]] = None
     """Parent command class. If not specified, defaults to the root parser."""
     command: ClassVar[CommandType] = None
     """The name of the command associated with the class, or ROOT. Must be unique."""
@@ -164,9 +164,13 @@ CommandsRegistryType = MutableMapping[CommandType, Type["CliCommand"]]
 class CliCommandsSubRoot(CliCommand, ABC):
     _subcommands: ClassVar[CommandsRegistryType] = {}
     """Internal registry of command subclasses"""
+    _command_arg: ClassVar[str] = "command"
+    """Namespace attribute name for the command argument"""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._subcommands = {}
+        if cls.command is not ROOT:
+            cls._command_arg = f"{cls.command}_command"
         super().__init_subclass__(**kwargs)
 
     @classmethod
@@ -229,7 +233,7 @@ class CliCommandsSubRoot(CliCommand, ABC):
         if subcommands:
             subparsers = main_parser.add_subparsers(
                 title="Available commands",
-                dest="command",
+                dest=cls._command_arg,
                 required=True,
             )
             command_cls: Type[CliCommand]
@@ -247,7 +251,8 @@ class CliCommandsSubRoot(CliCommand, ABC):
         return main_parser
 
     def __init__(self, args: Namespace):
-        command_cls: Type[CliCommand] = self.get_command_cls(args.command)
+        command_name: str = getattr(args, self._command_arg)
+        command_cls: Type[CliCommand] = self.get_command_cls(command_name)
         self.chosen_command: [CliCommand] = command_cls(args)
         super().__init__(args)
 

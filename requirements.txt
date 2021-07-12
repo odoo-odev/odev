@@ -1,4 +1,7 @@
 psycopg2>=2,<3
 GitPython>=3,<4
 virtualenv>=20,<21
+requests>=2,<3
+BeautifulSoup4>=4,<5
+html5lib>=1,<2
 blessed>=1,<2

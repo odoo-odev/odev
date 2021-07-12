@@ -52,7 +52,7 @@ def main():
     finally:
         level = "SUCCESS"
 
-        if code > 0:
+        if code not in (None, 0):
             level = "ERROR"
 
     if code != 0:
