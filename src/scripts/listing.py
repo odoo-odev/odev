@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Lists all the local Odoo databases in PostgreSQL."""
 
 from clint.textui import puts, colored
 

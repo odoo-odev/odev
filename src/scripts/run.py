@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Runs a local Odoo database."""
 
 import os
 import shlex

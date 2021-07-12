@@ -64,6 +64,9 @@ class CliCommand(ABC):
     """Additional aliases for the command. These too must be unique."""
     help: ClassVar[Optional[str]] = None
     """Optional help information on what the command does."""
+    help_short: ClassVar[Optional[str]] = None
+    """Optional short help information on what the command does.
+    If omitted, the class or source module docstring will be used instead."""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """
@@ -82,6 +85,10 @@ class CliCommand(ABC):
             cls.parent.register_command(cls)
         if cls.help is not None:
             cls.help = textwrap.dedent(cls.help).strip()
+        if cls.help_short is None:
+            cls.help_short = cls.__doc__ or sys.modules[cls.__module__].__doc__ or None
+        if cls.help_short is not None:
+            cls.help_short = textwrap.dedent(cls.help_short).strip()
 
     @classmethod
     @abstractmethod
@@ -227,7 +234,7 @@ class CliCommandsSubRoot(CliCommand, ABC):
                     command_cls.command,
                     aliases=command_cls.aliases or [],
                     parents=[common_parser, *parsers],
-                    help=command_cls.help,
+                    help=command_cls.help_short or command_cls.help,
                     description=command_cls.help,
                     formatter_class=RawTextHelpFormatter,
                 )
@@ -250,9 +257,9 @@ class CliCommandsSubRoot(CliCommand, ABC):
 class CliCommandsRoot(CliCommandsSubRoot):
     command = ROOT
     help = """
-Automates common tasks relative to working with Odoo development databases.
-Check the complete help with examples on https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev#docs.
-"""
+        Automates common tasks relative to working with Odoo development databases.
+        Check the complete help with examples on https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev#docs.
+    """
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

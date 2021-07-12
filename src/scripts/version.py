@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Gets the version of a local Odoo database."""
 
 from .database import LocalDBCommand
 from .. import utils

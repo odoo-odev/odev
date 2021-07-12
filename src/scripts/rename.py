@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Renames a database and its filestore."""
 
 import os
 from argparse import ArgumentParser, Namespace

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Quickly and easlily setups a database from a version no., dump or url."""
 
 import re
 import os

@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+"""Creates a new empty PostgreSQL database (not Odoo-initialized)."""
+
 from argparse import ArgumentParser, Namespace
 
 from .database import LocalDBCommand, NO_DB

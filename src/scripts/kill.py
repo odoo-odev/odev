@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Kills a running Odoo database."""
 
 import os
 

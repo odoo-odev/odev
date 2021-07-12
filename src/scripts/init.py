@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Initializes an empty PostgreSQL database for a specific Odoo version."""
 
 import os
 import re

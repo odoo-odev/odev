@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Restores an Odoo dump file to a local database with its filestore."""
 
 import os
 import re

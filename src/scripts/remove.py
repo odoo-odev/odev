@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+"""Removes a local database from PostgreSQL and deletes its filestore."""
+
 import os
 import shutil
 from pathlib import Path

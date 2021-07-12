@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Makes a local Odoo database suitable for development."""
 
 from .database import LocalDBCommand
 from .. import utils

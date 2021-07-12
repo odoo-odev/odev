@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+"""Downloads a dump from a SaaS or SH database."""
 
 import re
 import os
