@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import configparser
@@ -40,7 +41,7 @@ def run():
         if os.path.exists(paths['ubin']):
             os.remove(paths['ubin'])
 
-        os.symlink('%s/odev.py' % (dirs['odev']), paths['ubin'])
+        os.symlink('%s/odev/__main__.py' % (dirs['odev']), paths['ubin'])
 
         if not os.path.isdir(paths['conf']):
             utils.mkdir(paths['conf'])
@@ -68,3 +69,7 @@ def run():
     except Exception as exception:
         _logger.error(exception)
         exit(1)
+
+
+if __name__ == "__main__":
+    run()
