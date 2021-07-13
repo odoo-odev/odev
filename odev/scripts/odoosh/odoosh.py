@@ -5,16 +5,15 @@ import os.path
 import subprocess
 from abc import ABC
 from argparse import ArgumentParser, Namespace
-from getpass import getpass
-from typing import ClassVar, List, Sequence, Optional
+from typing import ClassVar, List, Optional
 
 from github import Github
 
 from ...cli import CliCommand, CommandType, CliCommandsSubRoot
-from ...utils.shconnector import ShConnector
+from ...utils import ShConnector, get_sh_connector, get_github
 
 
-__all__ = ["OdooSHBase", "OdooSHBranch", "OdooSHSubRoot"]
+__all__ = ["CliGithubMixin", "OdooSHBase", "OdooSHBranch", "OdooSHSubRoot"]
 
 
 logger = logging.getLogger(__name__)
@@ -28,10 +27,7 @@ class CliGithubMixin(CliCommand, ABC):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        token: str = args.token
-        if not token:
-            token = getpass("Github token: ")
-        self.github: Github = Github(token)
+        self.github: Github = get_github(args.token)
 
 
 class OdooSHBase(CliCommand, ABC):
@@ -54,15 +50,8 @@ class OdooSHBase(CliCommand, ABC):
         :param args: the parsed parameters as a :class:`Namespace` object.
         :return: the initialized :class:`ShConnector` instance.
         """
-        login: str = args.login
-        if not login:
-            login = input("Github / odoo.sh login: ")
-        password: str = args.password
-        if not password:
-            password = getpass("Github / odoo.sh password: ")
-
         logger.info("Setting up SH session")
-        return ShConnector(login, password)
+        return get_sh_connector(args.login, args.password)
 
     def __init__(self, args: Namespace):
         super().__init__(args)
@@ -100,7 +89,7 @@ class OdooSHBranch(OdooSHBase, ABC):
         self.ssh_url: str = self.sh_connector.get_last_build_ssh(
             self.sh_project, self.sh_branch
         )
-        self.copied_paths: List[str] = []
+        self.paths_to_cleanup: List[str] = []
 
     def ssh_run(self, *args, **kwargs) -> subprocess.CompletedProcess:
         """
@@ -116,7 +105,7 @@ class OdooSHBranch(OdooSHBase, ABC):
         """
         logger.debug(f"Testing SSH connectivity to SH branch {self.ssh_url}")
         result: subprocess.CompletedProcess = self.ssh_run(
-            "uname",
+            ["uname", "-a"],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -155,11 +144,11 @@ class OdooSHBranch(OdooSHBase, ABC):
         if to_cleanup:
             # Let's set this before, so we can also clean up partial transfers
             if dest_as_dir:
-                self.copied_paths += [
+                self.paths_to_cleanup += [
                     os.path.join(dest, os.path.basename(s)) for s in sources
                 ]
             else:
-                self.copied_paths.append(dest.rstrip("/"))
+                self.paths_to_cleanup.append(dest.rstrip("/"))
         full_dest: str = f"{self.ssh_url}:{dest}"
         sources_info: str = ", ".join(f'"{s}"' for s in sources)
         logger.debug(f'Copying {sources_info} to "{full_dest}"')
@@ -177,8 +166,8 @@ class OdooSHBranch(OdooSHBase, ABC):
     def cleanup_copied_files(self) -> None:
         """Runs cleanup of copied files previously registered for cleanup"""
         logger.debug("Cleaning up copied paths")
-        if self.copied_paths:
-            self.ssh_run(["rm", "-rf", *self.copied_paths])
+        if self.paths_to_cleanup:
+            self.ssh_run(["rm", "-rf", *reversed(self.paths_to_cleanup)])
 
 
 class OdooSHSubRoot(CliCommandsSubRoot):

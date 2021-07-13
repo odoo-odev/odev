@@ -43,7 +43,6 @@ def main():
     except CalledProcessError as proc_exception:
         code = proc_exception.returncode
     except Exception as exception:
-        raise  # FIXME: for testing
         _logger.error(str(exception))
         code = 1
         # FIXME: implement custom exceptions to catch expected errors and graceful exit.
