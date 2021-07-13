@@ -253,14 +253,12 @@ class CliCommandsSubRoot(CliCommand, ABC):
     def __init__(self, args: Namespace):
         command_name: str = getattr(args, self._command_arg)
         command_cls: Type[CliCommand] = self.get_command_cls(command_name)
+        if not issubclass(command_cls, CliCommandsSubRoot):
+            logger.info(f'Running command "{command_cls}" with parsed arguments: {args}')
         self.chosen_command: [CliCommand] = command_cls(args)
         super().__init__(args)
 
     def run(self) -> Any:
-        if not isinstance(self.chosen_command, CliCommandsSubRoot):
-            logger.info(
-                f'Running command "{self.chosen_command}" with parsed arguments: {self.args}'
-            )
         return self.chosen_command.run()
 
 
