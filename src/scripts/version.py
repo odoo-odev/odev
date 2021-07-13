@@ -1,7 +1,11 @@
 """Gets the version of a local Odoo database."""
 
+import logging
+
 from .database import LocalDBCommand
-from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 class VersionScript(LocalDBCommand):
@@ -17,6 +21,6 @@ class VersionScript(LocalDBCommand):
         self.db_is_valid()
 
         version = self.db_version_full()
-        utils.log('info', f'Database "{self.database}" runs {version}')
+        _logger.info(f'Database "{self.database}" runs {version}')
 
         return 0

@@ -1,5 +1,5 @@
 """Generic utilities"""
-
+import logging
 import os
 import pkgutil
 import re
@@ -7,20 +7,21 @@ import subprocess
 from getpass import getpass
 from importlib import import_module
 from types import ModuleType
-from typing import MutableMapping, Any, Optional, Iterable, Tuple, Protocol, List, Dict
+from typing import MutableMapping, Any, Optional, Iterable, Tuple, Protocol, List, Dict, Union, Sequence
 
-from clint.textui import puts, colored
 from git import Repo
 
 
+from ..logging import term
+
+
 __all__ = [
-    "quotes",
     "re_blanks",
     "re_extras",
     "re_dbname",
     "dbname_validate",
     "require",
-    "log",
+    "format_question",
     "confirm",
     "ask",
     "password",
@@ -35,14 +36,8 @@ __all__ = [
 ]
 
 
-quotes = {
-    'info': colored.blue('[i]', False, True),
-    'success': colored.green('[*]', False, True),
-    'warning': colored.yellow('[!]', False, True),
-    'error': colored.red('[-]', False, True),
-    'debug': colored.black('[#]', False, True),
-    'question': colored.magenta('[?]', False, True),
-}
+_logger = logging.getLogger(__name__)
+
 
 re_blanks = re.compile(r'([\s]+)')
 re_extras = re.compile(r'([^a-z0-9-_\s])')
@@ -69,42 +64,43 @@ def require(name: str, value: str):
         raise Exception("Value \'%s\' is required; none given" % (name))
 
 
-def log(level: str, text: str):
-    """
-    Prints a log message to the console.
-    """
+def format_question(question: str, choices: Optional[Union[str, Sequence[str]]] = None, default: Optional[str] = None, trailing: str = " ", choices_sep: str = "/") -> str:
+    text_parts: List[str] = [term.bright_magenta('[?]'), question]
+    if isinstance(choices, (list, tuple)):
+        choices = choices_sep.join(choices)
+    if choices:
+        text_parts.append(f"[{choices}]")
+    if default:
+        text_parts.append(f"({default})")
+    return " ".join(text_parts) + trailing
 
-    puts('%s %s' % (quotes[level], text))
 
-
-def confirm(question: str):
+def confirm(question: str) -> bool:
     """
     Asks the user to enter Y or N (case-insensitive).
     """
-    answer = ''
+    choices = ["y", "n"]
+    answer: str = ""
+    while answer not in choices:
+        answer = input(format_question(question, choices=choices))[0].lower()
+    return answer == "y"
 
-    while answer not in ['y', 'n']:
-        answer = input('%s %s [y/n] ' % (quotes['question'], question))[0].lower()
 
-    return answer == 'y'
-
-
-def ask(question: str, default=False):
+def ask(question: str, default: Optional[str] = None) -> str:
     """
     Asks something to the user.
     """
-
-    if default:
-        return input('%s %s [%s] ' % (quotes['question'], question, default)) or default
-    return input('%s %s ' % (quotes['question'], question))
+    answer: str = input(format_question(question, default=default))
+    if default and not answer:
+        return default
+    return answer
 
 
 def password(question: str):
     """
     Asks for a password.
     """
-
-    return getpass(prompt='%s %s ' % (quotes['question'], question))
+    return getpass(format_question(question))
 
 
 def mkdir(path: str, perm: int = 0o777):
@@ -133,7 +129,7 @@ def git_clone(title, odoodir, name, branch):
     Clones a repository from GitHub.
     """
 
-    log('info', 'Downloading %s on branch %s' % (title, branch))
+    _logger.info('Downloading %s on branch %s' % (title, branch))
     Repo.clone_from('git@github.com:odoo/%s.git' % (name), '%s/%s' % (odoodir, name), multi_options=['--branch %s' % (branch), '--single-branch'])
 
 
@@ -142,19 +138,19 @@ def git_pull(title, odoodir, name, branch):
     Pulls modifications from a GitHub repository.
     """
 
-    log('info', 'Checking for updates in %s on branch %s' % (title, branch))
+    _logger.info('Checking for updates in %s on branch %s' % (title, branch))
     repo = Repo('%s/%s' % (odoodir, name))
     head = repo.head.ref
     tracking = head.tracking_branch()
     pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
 
     if pending > 0:
-        log('warning', 'You are %s commits behind %s, consider pulling the lastest changes' % (colored.red(pending), tracking))
+        _logger.warning('You are %s commits behind %s, consider pulling the lastest changes' % (term.bright_red(pending), tracking))
 
         if confirm('Do you want to pull those commits now?'):
-            log('info', 'Pulling %s commits' % (pending))
+            _logger.info('Pulling %s commits' % (pending))
             repo.remotes.origin.pull()
-            log('success', 'Up to date!')
+            _logger.success('Up to date!')
 
 
 def pre_run(odoodir, odoobin, version):
@@ -165,10 +161,10 @@ def pre_run(odoodir, odoobin, version):
     """
 
     if not os.path.isfile(odoobin):
-        log('warning', 'Missing files for Odoo version %s' % (version))
+        _logger.warning('Missing files for Odoo version %s' % (version))
 
         if not confirm('Do you want to download them now?'):
-            log('info', 'Action canceled')
+            _logger.info('Action canceled')
             return 0
 
         mkdir(odoodir, 0o777)
@@ -186,14 +182,14 @@ def pre_run(odoodir, odoobin, version):
         try:
             python_version = get_python_version(version)
             command = 'cd %s && virtualenv --python=%s venv > /dev/null' % (odoodir, python_version)
-            log('info', 'Creating virtual environment: Odoo %s + Python %s ' % (version, python_version))
+            _logger.info('Creating virtual environment: Odoo %s + Python %s ' % (version, python_version))
             subprocess.run(command, shell=True, check=True)
         except Exception:
-            log('error', 'Error creating virtual environment for Python %s' % (python_version))
-            log('error', 'Please check the correct version of Python is installed on your computer:\n    sudo add-apt-repository ppa:deadsnakes/ppa\n    sudo apt install -y python%s python%s-dev' % (python_version, python_version))
+            _logger.error('Error creating virtual environment for Python %s' % (python_version))
+            _logger.error('Please check the correct version of Python is installed on your computer:\n    sudo add-apt-repository ppa:deadsnakes/ppa\n    sudo apt install -y python%s python%s-dev' % (python_version, python_version))
 
     command = '%s/venv/bin/python -m pip install -r %s/odoo/requirements.txt > /dev/null' % (odoodir, odoodir)
-    log('info', 'Checking for missing dependencies in requirements.txt')
+    _logger.info('Checking for missing dependencies in requirements.txt')
     subprocess.run(command, shell=True, check=True)
 
 

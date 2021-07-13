@@ -1,5 +1,6 @@
 """Initializes an empty PostgreSQL database for a specific Odoo version."""
 
+import logging
 import os
 import re
 import shlex
@@ -8,6 +9,9 @@ from argparse import ArgumentParser, Namespace
 
 from .database import LocalDBCommand
 from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
@@ -77,7 +81,7 @@ class InitScript(LocalDBCommand):
                 "--without-demo=all",
             ]
         )
-        utils.log("info", f"Running:\n{command}\n")
+        _logger.info(f"Running:\n{command}\n")
         subprocess.run(command, shell=True, check=True)
 
         self.clear_db_cache()

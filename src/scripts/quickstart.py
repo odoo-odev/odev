@@ -1,19 +1,22 @@
 """Quickly and easily setups a database from a version no., dump or url."""
 
-import re
+import logging
 import os
+import re
+import shutil
 from argparse import ArgumentParser, Namespace
 from datetime import datetime
-import shutil
 
 from .clean import CleanScript
 from .create import CreateScript
+from .database import LocalDBCommand
 from .dump import DumpScript
 from .init import InitScript
-from .database import LocalDBCommand
 from .remove import RemoveScript
 from .restore import RestoreScript
-from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 re_version = re.compile(r"^([a-z~0-9]+\.[0-9]+)")
@@ -104,8 +107,8 @@ class QuickStartScript(LocalDBCommand):
                 result = CleanScript.run_with(database=self.database)
 
         except Exception as exception:
-            utils.log("error", "An error occured, cleaning up files and removing database:")
-            utils.log("error", str(exception))
+            _logger.error('An error occured, cleaning up files and removing database:')
+            _logger.error(str(exception))
             RemoveScript.run_with(database=self.database)
             result = 1
 

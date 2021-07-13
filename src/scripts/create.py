@@ -1,9 +1,13 @@
 """Creates a new empty PostgreSQL database (not Odoo-initialized)."""
 
+import logging
 from argparse import ArgumentParser, Namespace
 
 from .database import LocalDBCommand
 from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 class CreateScript(LocalDBCommand):
@@ -44,13 +48,13 @@ class CreateScript(LocalDBCommand):
         if self.template and self.db_exists_all(database=self.template):
             self.ensure_stopped(database=self.template)
 
-        utils.log('info', f'Creating database {self.database}')
+        _logger.info(f'Creating database {self.database}')
         result = self.db_create(template=self.template)
 
         if not result or not self.db_exists_all(self.database):
             return 1
 
-        utils.log('info', f'Created database {self.database}')
+        _logger.info(f'Created database {self.database}')
 
         self.clear_db_cache()
 

@@ -1,5 +1,6 @@
 """Runs a local Odoo database."""
 
+import logging
 import os
 import shlex
 import subprocess
@@ -8,6 +9,9 @@ from argparse import ArgumentParser, Namespace, REMAINDER
 from .database import LocalDBCommand
 from .. import utils
 from ..cli import CommaSplitArgs
+
+
+_logger = logging.getLogger(__name__)
 
 
 MANIFEST_NAMES = ('__manifest__.py', '__openerp__.py')
@@ -72,8 +76,7 @@ class RunScript(LocalDBCommand):
             raise Exception(f'Database {self.database} is already running')
 
         if not self.addons:
-            utils.log(
-                "warning",
+            _logger.warning(
                 "No additional addons specified. "
                 "Will try adding the current directory, otherwise will run as enterprise",
             )
@@ -108,7 +111,7 @@ class RunScript(LocalDBCommand):
                 *self.additional_args,
             ]
         )
-        utils.log("info", f"Running:\n{command}\n")
+        _logger.info(f"Running:\n{command}\n")
         subprocess.run(command, shell=True, check=True)
 
         return 0

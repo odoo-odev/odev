@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import configparser
+import logging
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 from . import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 def run():
@@ -13,7 +17,7 @@ def run():
     Setup wizard for odev
     """
 
-    utils.log('warning', 'This script is about to write to different files accross your system and might need root permissions')
+    _logger.warning('This script is about to write to different files accross your system and might need root permissions')
 
     dirs = {}
 
@@ -62,5 +66,5 @@ def run():
             shutil.copytree(os.getcwd(), dirs['odev'])
 
     except Exception as exception:
-        utils.log('error', exception)
+        _logger.error(exception)
         exit(1)

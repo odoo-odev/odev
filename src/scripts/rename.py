@@ -1,11 +1,15 @@
 """Renames a database and its filestore."""
 
+import logging
 import os
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 from .database import LocalDBCommand
 from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 class RenameScript(LocalDBCommand):
@@ -45,28 +49,28 @@ class RenameScript(LocalDBCommand):
             raise Exception(f'Database with name {name_new} already exists')
         # TODO: Maybe check also if filestore with dest name exists (left over)?
 
-        utils.log('warning', f'You are about to rename the database "{name_old}" and its filestore to "{name_new}". This action is irreversible.')
+        _logger.warning(f'You are about to rename the database "{name_old}" and its filestore to "{name_new}". This action is irreversible.')
 
         if not utils.confirm(f'Rename "{name_old} and its filestore?'):
-            utils.log('info', 'Action canceled')
+            _logger.info('Action canceled')
             return 0
 
-        utils.log('info', f'Renaming database "{name_old}" to "{name_new}"')
+        _logger.info(f'Renaming database "{name_old}" to "{name_new}"')
         result = self.db_rename(name_new)
-        utils.log('info', 'Renamed database')
+        _logger.info('Renamed database')
 
         if not result or self.db_exists_all(name_old) or not self.db_exists_all(name_new):
             return 1
 
         try:
-            utils.log('info', f'Attempting to rename filestore in "{filestore_old}" to "{filestore_new}"')
+            _logger.info(f'Attempting to rename filestore in "{filestore_old}" to "{filestore_new}"')
             os.rename(filestore_old, filestore_new)
         except FileNotFoundError:
-            utils.log('info', 'Filestore not found, no action taken')
+            _logger.info('Filestore not found, no action taken')
         except Exception as exc:
-            utils.log('warning', f'Error while renaming filestore: {exc}')
+            _logger.warning(f'Error while renaming filestore: {exc}')
         else:
-            utils.log('info', 'Renamed filestore')
+            _logger.info('Renamed filestore')
 
         self.clear_db_cache()
 

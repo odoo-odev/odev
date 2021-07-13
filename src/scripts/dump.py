@@ -1,15 +1,19 @@
 """Downloads a dump from a SaaS or SH database."""
 
-import re
+import gzip
+import logging
 import os
+import re
+import shutil
 from argparse import ArgumentParser, Namespace
 from datetime import datetime
-import gzip
-import shutil
 
 from .. import utils
 from ..cli import CliCommand
 from ..utils import curl
+
+
+_logger = logging.getLogger(__name__)
 
 
 re_url = re.compile(r'^https?://')
@@ -68,7 +72,7 @@ class DumpScript(CliCommand):
         # Find out on which platform the database is running (SaaS or SH)
         # ---------------------------------------------------------------------
 
-        utils.log('info', f'Logging you in to {self.url} support console')
+        _logger.info(f'Logging you in to {self.url} support console')
 
         support_url = f"{self.url}/_odoo/support"
         support_login_url = f"{support_url}/login"
@@ -121,7 +125,7 @@ class DumpScript(CliCommand):
         elif platform == 'saas':
             login_url = support_url
 
-        utils.log('success', f'Successfuly logged-in to {login_url}')
+        _logger.success(f'Successfuly logged-in to {login_url}')
 
         # ---------------------------------------------------------------------
         # Get the link the the dump file and download it
@@ -131,7 +135,7 @@ class DumpScript(CliCommand):
         if not database_name:
             database_name = re_database.search(login_url)[1]
 
-        utils.log('info', f'About to download dump file for {database_name}')
+        _logger.info(f'About to download dump file for {database_name}')
 
         ext = 'dump' if platform == 'saas' else 'sql.gz'
         if utils.confirm('Do you want to include the filestore?'):
@@ -145,14 +149,13 @@ class DumpScript(CliCommand):
         destfile = f'{base_dump_filename}.{ext}'
 
         if os.path.isfile(destfile):
-            utils.log(
-                "warning",
+            _logger.warning(
                 f"The file {destfile} already exists, "
                 f"indicating that you most probably already dumped this database today",
             )
             overwrite = utils.confirm("Do you wish to overwrite this file?")
             if not overwrite:
-                utils.log('info', 'Action canceled')
+                _logger.info('Action canceled')
                 return 0
 
         if platform == 'sh':
@@ -162,8 +165,8 @@ class DumpScript(CliCommand):
         elif platform == 'saas':
             dump_url = f'{self.url}/saas_worker/dump.{ext}'
 
-        utils.log('info', f'Downloading dump from {dump_url} to {destfile}...')
-        utils.log('warning', 'This may take a while, please be patient...')
+        _logger.info(f'Downloading dump from {dump_url} to {destfile}...')
+        _logger.warning('This may take a while, please be patient...')
 
         res = curl(
             dump_url,
@@ -184,11 +187,11 @@ class DumpScript(CliCommand):
             raise Exception('Error while saving dump file to disk')
 
         if ext == 'sql.gz':
-            utils.log('info', f'Extracting "{base_dump_filename}.sql"')
+            _logger.info(f'Extracting "{base_dump_filename}.sql"')
             with gzip.open(destfile, 'rb') as f_in:
                 with open(f"{base_dump_filename}.sql", "wb") as f_out:
                     shutil.copyfileobj(f_in, f_out)
 
-        utils.log('success', 'Successfuly downloaded dump file')
+        _logger.success('Successfuly downloaded dump file')
 
         return 0

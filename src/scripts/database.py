@@ -15,7 +15,7 @@ from ..psql import PSQL
 
 
 class _NO_DB:
-    """Sentinel object for root, using a class for better repr"""
+    """Sentinel object for fallback db selection, using a class for better repr"""
 
 
 NO_DB = _NO_DB()

@@ -8,10 +8,14 @@ if not __package__:
     sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
     __package__ = os.path.basename(package_dir)
 
+import logging
 from signal import signal, SIGINT, SIGTERM
 from subprocess import CalledProcessError
 
-from . import utils, cli
+from . import cli
+
+
+_logger = logging.getLogger(__name__)
 
 
 code = 0
@@ -19,7 +23,7 @@ code = 0
 
 def signal_handler(signum, frame):
     global code
-    utils.log('warning', 'Received signal (%s), exiting...' % (signum))
+    _logger.warning('Received signal (%s), exiting...' % (signum))
     code = signum
 
 
@@ -38,19 +42,20 @@ def main():
     except CalledProcessError as proc_exception:
         code = proc_exception.returncode
     except Exception as exception:
-        utils.log('error', str(exception))
+        raise  # FIXME: for testing
+        _logger.error(str(exception))
         code = 1
         # FIXME: implement custom exceptions to catch expected errors and graceful exit.
         #        Keep raising on unexpected ones (that require code fix).
         raise
     finally:
-        level = 'success'
+        level = "SUCCESS"
 
         if code > 0:
-            level = 'error'
+            level = "ERROR"
 
     if code != 0:
-        utils.log(level, 'Exiting with code %s' % (code))
+        _logger.log(logging.getLevelName(level), f"Exiting with code {code}")
 
 
 if __name__ == "__main__":

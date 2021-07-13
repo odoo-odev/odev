@@ -9,6 +9,9 @@ from argparse import ArgumentParser, Namespace, Action, RawTextHelpFormatter
 from typing import ClassVar, MutableMapping, Type, Optional, Any, Union, Sequence, List
 
 
+from .logging import set_log_level
+
+
 __all__ = [
     "CommaSplitArgs",
     "ROOT",
@@ -152,6 +155,8 @@ class CliCommand(ABC):
         command.argv = argv or sys.argv[1:]
         return command.run()
 
+    # TODO: repr
+
 
 CommandsRegistryType = MutableMapping[CommandType, Type["CliCommand"]]
 
@@ -247,9 +252,10 @@ class CliCommandsSubRoot(CliCommand, ABC):
         super().__init__(args)
 
     def run(self) -> Any:
-        logger.info(
-            f'Running command "{self.chosen_command}" with parsed arguments: {self.args}'
-        )
+        if not isinstance(self.chosen_command, CliCommandsSubRoot):
+            logger.info(
+                f'Running command "{self.chosen_command}" with parsed arguments: {self.args}'
+            )
         return self.chosen_command.run()
 
 
@@ -272,6 +278,10 @@ class CliCommandsRoot(CliCommandsSubRoot):
             default="INFO",
             help="logging verbosity",
         )
+
+    def __init__(self, args: Namespace):
+        set_log_level(args.log_level)
+        super().__init__(args)
 
 
 main = CliCommandsRoot.main

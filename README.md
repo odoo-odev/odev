@@ -35,10 +35,10 @@ developments.
 ## Install
 
 Make sure [Python 3](https://www.python.org/download/releases/3.0/) is installed and available in your path.
-Install the following requirements through `pip3`:
+Install the requirements through `pip3`:
 
 ```sh
-pip3 install --user clint psycopg2 configparser gitpython virtualenv
+pip3 install --user -r requirements.txt
 ```
 
 Clone the [odev repository](https://github.com/brinkflew/odev) to your computer and navigate to the `odev` folder:

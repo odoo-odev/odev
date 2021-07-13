@@ -1,7 +1,11 @@
 """Makes a local Odoo database suitable for development."""
 
+import logging
+
 from .database import LocalDBCommand
-from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 class CleanScript(LocalDBCommand):
@@ -36,7 +40,7 @@ class CleanScript(LocalDBCommand):
 
         self.ensure_stopped()
 
-        utils.log('info', f'Cleaning database {self.database}')
+        _logger.info(f'Cleaning database {self.database}')
         result = self.run_queries(self.queries)
 
         if not result:
@@ -44,7 +48,7 @@ class CleanScript(LocalDBCommand):
 
         self.db_config(clean='True')
 
-        utils.log('info', f'Cleaned database {self.database}')
-        utils.log('info', 'Login to the administrator account with the credentials \'admin:admin\'')
-        utils.log('info', 'Login to any other account with their email address and the password \'odoo\'')
+        _logger.info(f'Cleaned database {self.database}')
+        _logger.info('Login to the administrator account with the credentials \'admin:admin\'')
+        _logger.info('Login to any other account with their email address and the password \'odoo\'')
         return 0

@@ -1,5 +1,6 @@
 """Restores an Odoo dump file to a local database with its filestore."""
 
+import logging
 import os
 import re
 import shutil
@@ -11,6 +12,9 @@ from zipfile import ZipFile
 
 from .database import LocalDBCommand
 from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 re_ext = re.compile(r'\.([a-z]+)$')
@@ -48,10 +52,10 @@ class RestoreScript(LocalDBCommand):
             raise Exception(f'Database {self.database} is running, please shut it down and retry')
 
         if self.db_exists():
-            utils.log('warning', f'Database {self.database} is already an Odoo database')
+            _logger.warning(f'Database {self.database} is already an Odoo database')
 
             if not utils.confirm('Do you want to overwrite its content?'):
-                utils.log('info', 'Action canceled')
+                _logger.info('Action canceled')
                 return 0
 
         if not os.path.isfile(self.dump_path):
@@ -67,12 +71,12 @@ class RestoreScript(LocalDBCommand):
         if ext not in ('dump', 'zip', 'sql'):
             raise Exception(f'Unrecognized extension "{ext}" for file {self.dump_path}')
 
-        utils.log('info', f'Restoring dump file "{self.dump_path}" to database {self.database}')
-        utils.log('warning', 'This may take a while, please be patient...')
+        _logger.info(f'Restoring dump file "{self.dump_path}" to database {self.database}')
+        _logger.warning('This may take a while, please be patient...')
 
         def pg_subprocess(commandline):
             nonlocal self
-            utils.log('info', f'Importing SQL data to database {self.database}')
+            _logger.info(f'Importing SQL data to database {self.database}')
             subprocess.run(commandline, shell=True, check=True, stdout=subprocess.DEVNULL)
 
         def pg_restore(database, dump_path):
@@ -97,11 +101,11 @@ class RestoreScript(LocalDBCommand):
                 if os.path.isdir(tmp_filestore_path):
                     filestores_root = Path.home() / '.local/share/Odoo/filestore'
                     filestore_path = str(filestores_root / self.database)
-                    utils.log('info', f'Filestore detected, installing to {filestore_path}')
+                    _logger.info(f'Filestore detected, installing to {filestore_path}')
 
                     if os.path.isdir(filestore_path):
                         # TODO: Maybe ask for confirmation
-                        utils.log('warning', f'Deleting existing filestore directory')
+                        _logger.warning(f'Deleting existing filestore directory')
                         shutil.rmtree(filestore_path)
 
                     shutil.copytree(tmp_filestore_path, filestore_path)

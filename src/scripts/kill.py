@@ -1,9 +1,12 @@
 """Kills a running Odoo database."""
 
+import logging
 import os
 
 from .database import LocalDBCommand
-from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 class KillScript(LocalDBCommand):
@@ -22,7 +25,7 @@ class KillScript(LocalDBCommand):
         self.db_is_valid()
         self.ensure_running()
 
-        utils.log('info', f'Stopping database {self.database}')
+        _logger.info(f'Stopping database {self.database}')
         pid = self.db_pid()
 
         while pid:

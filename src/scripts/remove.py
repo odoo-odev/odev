@@ -1,11 +1,15 @@
 """Removes a local database from PostgreSQL and deletes its filestore."""
 
+import logging
 import os
 import shutil
 from pathlib import Path
 
 from .database import LocalDBCommand
 from .. import utils
+
+
+_logger = logging.getLogger(__name__)
 
 
 class RemoveScript(LocalDBCommand):
@@ -24,31 +28,31 @@ class RemoveScript(LocalDBCommand):
         if self.db_runs():
             raise Exception(f'Database {self.database} is running, please shut it down and retry')
 
-        utils.log('warning', f'You are about to delete the database {self.database} and its filestore. This action is irreversible.')
+        _logger.warning(f'You are about to delete the database {self.database} and its filestore. This action is irreversible.')
 
         if not utils.confirm(f'Delete database "{self.database}" and its filestore?'):
-            utils.log('info', 'Action canceled')
+            _logger.info('Action canceled')
             return 0
 
         filestore = self.db_filestore()
-        utils.log('info', f'Deleting PSQL database {self.database}')
+        _logger.info(f'Deleting PSQL database {self.database}')
         result = self.db_drop()
 
         if not result or self.db_exists_all():
             return 1
 
-        utils.log('info', 'Deleted database')
+        _logger.info('Deleted database')
 
         if not os.path.exists(filestore):
-            utils.log('info', 'Filestore not found, no action taken')
+            _logger.info('Filestore not found, no action taken')
         else:
             try:
-                utils.log('info', f'Attempting to delete filestore in "{filestore}"')
+                _logger.info(f'Attempting to delete filestore in "{filestore}"')
                 shutil.rmtree(filestore)
             except Exception as exc:
-                utils.log('warning', f'Error while deleting filestore: {exc}')
+                _logger.warning(f'Error while deleting filestore: {exc}')
             else:
-                utils.log('info', 'Deleted filestore from disk')
+                _logger.info('Deleted filestore from disk')
 
         self.clear_db_cache()
 
