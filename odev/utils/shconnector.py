@@ -2,20 +2,35 @@ import logging
 import shlex
 import subprocess
 import sys
+from contextlib import nullcontext
+from typing import Optional, ContextManager
 
 import requests
 from bs4 import BeautifulSoup
 
+from .secrets import secret_storage, StoreSecret
+from .utils import ask, password
 
-__all__ = ["ShConnector"]
+
+__all__ = ["ShConnector", "get_sh_connector"]
 
 
 logger = logging.getLogger(__name__)
 
 
 class ShConnector(object):
-    def __init__(self, login, password):
-        self.session = self.create_session(login, password)
+    def __init__(self, login, password, session_id=None):
+        got_login = bool(login and password)
+        login_valid = bool(login) and bool(password)
+        if got_login == bool(session_id) or (got_login and not login_valid):
+            raise AttributeError('Must provide either "login" and "password" or a "session_id"')
+        if got_login:
+            self.session = self.create_session(login, password)
+            if not self.session_id:
+                raise ValueError("Failed authentication to odoo.sh")
+        else:
+            self.session = requests.Session()
+            self.session.cookies.set("session_id", session_id, domain="www.odoo.sh")
 
     def create_session(self, login, password):
         headers = {
@@ -46,29 +61,41 @@ class ShConnector(object):
 
         return session
 
-    def post(self, model, method, args, kwargs={}, retry=True):
-        url = "https://www.odoo.sh/web/dataset/call_kw/%s/%s" % (model, method)
+    @property
+    def session_id(self):
+        return self.session.cookies.get("session_id", domain="www.odoo.sh")
+
+    def jsonrpc(self, url, params=None, method="call", version="2.0", retry=False):
+        if params is None:
+            params = {}
         data = {
-            "jsonrpc": "2.0",
-            "method": "call",
-            "params": {
-                "model": model,
-                "method": method,
-                "args": args,
-                "kwargs": kwargs,
-            },
+            "jsonrpc": version,
+            "method": method,
+            "params": params,
         }
-        resp = False
+        resp = None
         try:
             resp = self.session.post(url=url, json=data)
             return resp.json()["result"]
-        except Exception:
+        except Exception:  # FIXME: too broad?
             # probably too hardcore
             if retry:
-                self.post(model, method, args, kwargs={}, retry=False)
+                self.jsonrpc(url, params, method=method, version=version, retry=retry)
             logger.error(data)
             if resp:
                 logger.error(resp.text)
+
+    def post(self, model, method, args, kwargs=None, retry=False):
+        if kwargs is None:
+            kwargs = {}
+        url = "https://www.odoo.sh/web/dataset/call_kw/%s/%s" % (model, method)
+        params = {
+            "model": model,
+            "method": method,
+            "args": args,
+            "kwargs": kwargs,
+        }
+        return self.jsonrpc(url, params=params, retry=retry)
 
     def _get_branch_id(self, repo, branch):
         branch_id = self.post(
@@ -137,6 +164,16 @@ class ShConnector(object):
             ],
         )
 
+    def get_project_info(self, repo):
+        return self.post(
+            "paas.repository",
+            "search_read",
+            [
+                [["name", "=", repo]],
+                [],
+            ],
+        )
+
     def get_last_build_ssh(self, repo, branch):
         """
         Returns ssh
@@ -153,6 +190,7 @@ class ShConnector(object):
     def ssh_command(
         ssh_url,
         command=None,
+        stdin_data=None,
         script=None,
         script_shell="bash -s",
         check=True,
@@ -167,6 +205,7 @@ class ShConnector(object):
         :param command: the command to run through SSH. Can be a string or a
             list of strings that will be assembled in a single command line.
             Must be omitted if using ``script`` instead.
+        :param stdin_data: data to pass as stdin to the command over ssh.
         :param script: a script to run through SSH.
             Must be omitted if using ``command`` instead.
         :param script_shell: the shell command to use to pass the ``script`` to.
@@ -181,16 +220,16 @@ class ShConnector(object):
             raise AttributeError('Must provide at least one of "command" or "script"')
         elif command and script:
             raise AttributeError('Must provide only one of "command" or "script"')
+        if script and stdin_data:
+            raise AttributeError('Cannot use both "script" and "stdin_data"')
         if script:
             command = script_shell
             stdin_data = script
-        else:
-            stdin_data = None
         if isinstance(command, (list, tuple)):
             command = shlex.join(command)
         kwargs.setdefault("stdout", logfile)
         kwargs.setdefault("stderr", logfile)
-        if stdin_data is None:
+        if script is None:
             logger.debug(f"Running ssh command on SH build {ssh_url}: {command}")
         else:
             logger.debug(
@@ -217,3 +256,27 @@ class ShConnector(object):
         """
         ssh_url = self.get_last_build_ssh(repo, branch)
         return self.ssh_command(ssh_url, *args, **kwargs)
+
+
+def get_sh_connector(
+    login: Optional[str] = None,
+    passwd: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> ShConnector:
+    save: bool = False
+    storage_context: ContextManager[Optional[str]] = nullcontext(session_id)
+    if session_id is None:
+        storage_context = secret_storage("odoosh_session_id")
+    try:
+        with storage_context as session_id:
+            if session_id is None:
+                login = ask("Github / odoo.sh login:")
+                passwd = password("Github / odoo.sh password:")
+                save = True
+            sh_connector: ShConnector = ShConnector(login, passwd, session_id)
+            session_id = sh_connector.session_id
+            if save:
+                raise StoreSecret(session_id)
+    finally:
+        pass
+    return sh_connector

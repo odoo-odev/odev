@@ -11,7 +11,6 @@ from typing import MutableMapping, Any, Optional, Iterable, Tuple, Protocol, Lis
 
 from git import Repo
 
-
 from ..logging import term
 
 
