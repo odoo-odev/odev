@@ -14,11 +14,16 @@ from typing import (
     Type,
     Mapping,
     Tuple,
+    Any,
     Set,
+    MutableMapping,
 )
 
+import time
+from github import Repository, PullRequest, PullRequestMergeStatus
+
 from ...cli import CommandType, CommaSplitArgs, CliCommandsSubRoot
-from .odoosh import OdooSHBranch, OdooSHSubRoot
+from .odoosh import OdooSHBranch, OdooSHSubRoot, CliGithubMixin
 
 
 __all__ = ["OdooSHUpgradeBase", "OdooSHUpgradeManual"]
@@ -30,7 +35,7 @@ logger = logging.getLogger(__name__)
 # TODO: do proper config
 REMOTE_ODOO_HOME: str = "/home/odoo"
 REMOTE_ODOO_CONFIG: str = os.path.join(REMOTE_ODOO_HOME, ".config/odoo/odoo.conf")
-REMOTE_UPGRADE_DIR: str = os.path.join(REMOTE_ODOO_HOME, "odev-upgrade")
+REMOTE_UPGRADE_DIR: str = os.path.join(REMOTE_ODOO_HOME, "odev_upgrade_temp")
 
 UPGRADE_UTIL_RELPATH: str = "migrations/util"
 PSBE_MIGRATIONS_RELPATH: str = "migrations"
@@ -134,7 +139,7 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
         dest_noslash: str = dest
         if dest_noslash.endswith(("/", "\\")):
             dest_noslash = dest_noslash[:-1]
-        logger.info(f'Preparing "{os.path.basename(dest_noslash)}" repo to SH branch')
+        logger.info(f'Preparing "{os.path.basename(dest_noslash)}" upgrade files on SH')
         self.copy_to_sh_branch(*sources, dest=dest, **copy_kwargs)
         self._prepared_upgrade_paths.add(dest_noslash)
 
@@ -143,14 +148,12 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
         self.ssh_run(["mkdir", "-p", self.remote_upgrade_dir])
         self.paths_to_cleanup.append(self.remote_upgrade_dir)
 
-        logger.info('Copying "util" modules to SH branch')
         self._prepare_upgrade_path_files(
             os.path.join(self.upgrade_repo_path, UPGRADE_UTIL_RELPATH),
             os.path.join(self.psbe_upgrade_repo_path, PSBE_UPGRADE_BASE_RELPATH),
             dest=self.remote_util_path,
             dest_as_dir=True,
         )
-        logger.info('Copying "psbe-custom-upgrade" repo to SH branch')
         self._prepare_upgrade_path_files(
             os.path.join(self.psbe_upgrade_repo_path, PSBE_MIGRATIONS_RELPATH),
             dest=self.remote_psbe_upgrade_path,
@@ -266,3 +269,170 @@ class OdooSHUpgradeManual(OdooSHUpgradeBase):
 
         logger.info(f"Restarting SH server")
         self.ssh_run("odoosh-restart")
+
+
+class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
+    command: ClassVar[CommandType] = "upgrade-merge"
+    help: ClassVar[Optional[str]] = """
+        Prepares the SH branch to run automatic upgrades with `util` support for
+        merging a PR / pushing commits, and cleans up after it's done.
+        Directly handles the PR merge or git push.
+    """
+    help_short: ClassVar[Optional[str]] = help
+
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "pull_request",
+            type=int,
+            help="the PR number from the github repo",
+        )
+        parser.add_argument(
+            "merge_method",
+            choices=("merge", "squash", "rebase"),
+            help="the method used to merge the pull request",
+        )
+        parser.add_argument(
+            "-c",
+            "--commit-title",
+            help="title to use for the commit instead of the automatic one",
+        )
+        parser.add_argument(
+            "-m",
+            "--commit-message",
+            help="extra message appended to the commit",
+        )
+        parser.add_argument(
+            "-i",
+            "--install",
+            action=CommaSplitArgs,
+            help="""
+                comma-separated list of new modules to install. 
+                They will be "fake-installed" and upgraded, 
+                so that eventual migration scripts are run.
+            """,
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+
+        project_info: Mapping[str, Any]
+        [project_info] = self.sh_connector.get_project_info(self.sh_project)
+        self.repo: Repository = self.github.get_repo(project_info["full_name"])
+        self.pull_request: PullRequest = self.repo.get_pull(args.pull_request)
+        if self.pull_request.merged or not self.pull_request.mergeable:
+            raise RuntimeError(
+                f"Pull request {self.repo.full_name} "
+                f"#{self.pull_request.number} is not mergeable!"
+            )
+        pr_dest_branch: str = self.pull_request.base.ref
+        if pr_dest_branch != self.sh_branch:
+            raise RuntimeError(
+                f"Pull request {self.repo.full_name} #{self.pull_request.number} "
+                f"destination branch ({pr_dest_branch}) "
+                f"is different than the SH one ({self.sh_branch})"
+            )
+
+        self.merge_method: str = args.merge_method
+        self.commit_title: str = args.commit_title
+        self.commit_message: str = args.commit_message
+
+        self.install_modules: Sequence[str] = args.install or []
+
+        self.previous_build_ssh_url: Optional[str] = None
+
+    def _run_upgrade(self) -> None:
+        build_info: Optional[Mapping[str, Any]]
+        build_info = self.sh_connector.build_info(self.sh_project, self.sh_branch)
+        if not build_info:
+            raise RuntimeError(f"Couldn't get last build for branch {self.sh_branch}")
+        previous_build_commit_id: str = build_info["head_commit_id"][1]
+
+        self.copy_upgrade_path_files()
+
+        if self.install_modules:
+            self.prepare_fake_install(self.install_modules)
+
+        logger.info(f'Setting odoo config "upgrade_path"')
+        self.set_config_upgrade_path(self.prepared_upgrade_path)
+
+        logger.info(
+            f"Merging ({self.merge_method}) "
+            f"pull request {self.repo.full_name} #{self.pull_request.number}"
+        )
+        # PyGithub considers None args as intended values, so we need to remove them
+        merge_kwargs: MutableMapping[str, Any] = dict(
+            merge_method=self.merge_method,
+            commit_title=self.commit_title,
+            commit_message=self.commit_message,
+            sha=self.pull_request.head.sha,
+        )
+        merge_kwargs = {k: v for k, v in merge_kwargs.items() if v is not None}
+        result: PullRequestMergeStatus = self.pull_request.merge(**merge_kwargs)
+        if not result.merged:
+            raise RuntimeError(
+                f"Pull request {self.repo.full_name} #{self.pull_request.number} "
+                f"did not merge: {result.message}"
+            )
+        merge_commit_sha: str = result.sha
+
+        logger.info(f"Waiting for SH to build on new commit {merge_commit_sha[:7]}")
+        while True:
+            time.sleep(2.5)
+            build_info = self.sh_connector.build_info(
+                self.sh_project, self.sh_branch, commit=merge_commit_sha
+            )
+            if not build_info:
+                # TODO: Track build disappearing somehow? lookup by its id?
+                continue
+            build_status: str = build_info["status"]
+            build_id: int = int(build_info["id"])
+            if build_status == "updating":
+                logger.debug(f"SH is building {build_id} on {self.sh_branch}")
+                continue
+
+            if build_status == "done":
+                # set own ssh_url to new build
+                self.ssh_url = self.sh_connector.get_build_ssh(
+                    self.sh_project, self.sh_branch, build_id=build_id
+                )
+
+                # N.B. the previous build container gets a new id, let's use commit
+                previous_build_info: Optional[Mapping[str, Any]]
+                previous_build_info = self.sh_connector.build_info(
+                    self.sh_project, self.sh_branch, commit=previous_build_commit_id
+                )
+                if previous_build_info and previous_build_info["status"] != "dropped":
+                    self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
+                        self.sh_project,
+                        self.sh_branch,
+                        build_id=previous_build_info["id"],
+                    )
+                else:
+                    logger.info(
+                        f"Previous build on {previous_build_commit_id[:7]} unavailable, "
+                        f"no need to cleanup"
+                    )
+
+                build_result: Optional[str] = build_info["result"] or None
+                if build_result == "success":
+                    logger.info(f"Built {build_id} on {self.sh_branch} successfully")
+                    break
+                else:
+                    raise RuntimeError(
+                        f"Build {build_id} on {self.sh_branch} "
+                        f"not successful: {build_result}"
+                    )
+
+        logger.success(f"Upgrade on {self.sh_branch} was successful")
+
+    def _cleanup(self):
+        for ssh_url in (self.ssh_url, self.previous_build_ssh_url):
+            if ssh_url is None:
+                continue
+            self.ssh_url = ssh_url  # FIXME: kinda hacky
+            logger.info(f"Cleaning up on {ssh_url}")
+            super()._cleanup()
+            logger.info(f'Removing "upgrade_path" config setting')
+            self.set_config_upgrade_path(None)

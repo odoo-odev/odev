@@ -42,6 +42,7 @@ def main():
         code = cli.main()
     except CalledProcessError as proc_exception:
         code = proc_exception.returncode
+    # FIXME: too broad, intercept only a custom exception, let the others raise
     except Exception as exception:
         _logger.error(str(exception))
         code = 1

@@ -85,7 +85,7 @@ class ShConnector(object):
             if resp:
                 logger.error(resp.text)
 
-    def post(self, model, method, args, kwargs=None, retry=False):
+    def call_kw(self, model, method, args, kwargs=None, retry=False):
         if kwargs is None:
             kwargs = {}
         url = "https://www.odoo.sh/web/dataset/call_kw/%s/%s" % (model, method)
@@ -98,7 +98,7 @@ class ShConnector(object):
         return self.jsonrpc(url, params=params, retry=retry)
 
     def _get_branch_id(self, repo, branch):
-        branch_id = self.post(
+        branch_id = self.call_kw(
             "paas.branch",
             "search",
             [[["name", "=", "%s" % branch], ["repository_id.name", "=", "%s" % repo]]],
@@ -106,6 +106,16 @@ class ShConnector(object):
         if not branch_id:
             raise ValueError("Branch %s not found on repo %s" % (branch, repo))
         return branch_id
+
+    def _get_last_build_id_name(self, repo, branch):
+        branch_id = self._get_branch_id(repo, branch)
+        vals = self.call_kw(
+            "paas.branch", "search_read", [[("id", "=", branch_id)], ["last_build_id"]]
+        )
+        if vals:
+            build_id, build_name = vals[0]["last_build_id"]
+            return build_id, build_name
+        return None
 
     def change_branch_state(self, repo, branch, state):
         """
@@ -115,31 +125,48 @@ class ShConnector(object):
             raise ValueError("You must choose dev or staging")
 
         branch_id = self._get_branch_id(repo, branch)
-        self.post("paas.branch", "write", [branch_id, {"stage": state}])
+        self.call_kw("paas.branch", "write", [branch_id, {"stage": state}])
         logger.info("%s: %s -> %s" % (repo, branch, state))
 
-    def build_status(self, repo, branch, commit=False):
+    def build_info(self, repo, branch, build_id=None, commit=None):
         """
         Returns status, hash and creation date of last build on given branch
         (but you can force status search of a specific commit if you need to time travel)
         """
-        branch_id = self._get_branch_id(repo, branch)
-        domain = [["branch_id", "=", branch_id]]
-        if commit:
-            domain += [["head_commit_id.identifier", "=", "%s" % commit]]
-        res = self.post(
+        if build_id and commit:
+            raise AttributeError('Only one of "build_id" or "commit" can be specified')
+        domain = []
+        if build_id or commit:
+            branch_id = self._get_branch_id(repo, branch)
+            domain += [["branch_id", "=", branch_id]]
+            if commit:
+                domain += [["head_commit_id.identifier", "=", str(commit)]]
+            else:
+                domain += [["id", "=", int(build_id)]]
+        else:
+            result = self._get_last_build_id_name(repo, branch)
+            if not result:
+                return None
+            last_build_id, _ = result
+            domain += [["id", "=", last_build_id]]
+        res = self.call_kw(
             "paas.build",
             "search_read",
-            [domain, ["result", "status", "head_commit_id", "create_date"]],
-            {"limit": 1},
+            [
+                domain,
+                ["id", "name", "result", "status", "head_commit_id", "create_date"],
+            ],
+            dict(limit=1, order="start_datetime desc"),
         )
         return res and res[0]
+
+    build_status = build_info
 
     def get_stagings(self, repo):
         """
         Returns staging branches name
         """
-        return self.post(
+        return self.call_kw(
             "paas.branch",
             "search_read",
             [
@@ -152,7 +179,7 @@ class ShConnector(object):
         """
         Returns prod branch
         """
-        return self.post(
+        return self.call_kw(
             "paas.branch",
             "search_read",
             [
@@ -165,7 +192,7 @@ class ShConnector(object):
         )
 
     def get_project_info(self, repo):
-        return self.post(
+        return self.call_kw(
             "paas.repository",
             "search_read",
             [
@@ -174,17 +201,31 @@ class ShConnector(object):
             ],
         )
 
+    def get_build_ssh(self, repo, branch, build_id=None, commit=None):
+        """
+        Returns ssh
+        """
+        if build_id or commit:
+            build_info = self.build_info(repo, branch, build_id=build_id, commit=commit)
+            if not build_info:
+                if build_id:
+                    msgpart = build_id
+                else:
+                    msgpart = f"on commit {commit}"
+                raise ValueError(f"Couldn't get info for build {msgpart} on {branch}")
+            build_id, build_name = build_info["id"], build_info["name"]
+        else:
+            result = self._get_last_build_id_name(repo, branch)
+            if not result:
+                return None
+            build_id, build_name = result
+        return f"{build_id}@{build_name}.dev.odoo.com"
+
     def get_last_build_ssh(self, repo, branch):
         """
         Returns ssh
         """
-        branch_id = self._get_branch_id(repo, branch)
-        vals = self.post(
-            "paas.branch", "search_read", [[("id", "=", branch_id)], ["last_build_id"]]
-        )
-        if vals:
-            vals = vals[0]["last_build_id"]
-            return "%s@%s.dev.odoo.com" % (vals[0], vals[1])
+        return self.get_build_ssh(repo, branch)
 
     @staticmethod
     def ssh_command(
