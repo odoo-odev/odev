@@ -135,6 +135,24 @@ class ShConnector(object):
             raise ValueError(f'Got more than 1 result for repo "{repo}":\n{results}')
         return results[0]
 
+    def branch_info(self, repo: str, branch: str) -> Optional[MutableMapping[str, Any]]:
+        """
+        Return information about an odoo.sh branch, or None.
+        """
+        results: List[MutableMapping[str, Any]] = self.call_kw(
+            "paas.branch",
+            "search_read",
+            [
+                [["repository_id.name", "=", repo], ["name", "=", branch]],
+                [],
+            ],
+        )
+        if not results:
+            return None
+        if len(results) > 1:
+            raise ValueError(f'Got more than 1 result for branch "{branch}":\n{results}')
+        return results[0]
+
     def change_branch_state(self, repo, branch, state):
         """
         Switch a branch from staging to dev or the other way around
@@ -145,6 +163,14 @@ class ShConnector(object):
         branch_id = self._get_branch_id(repo, branch)
         self.call_kw("paas.branch", "write", [branch_id, {"stage": state}])
         logger.info("%s: %s -> %s" % (repo, branch, state))
+
+    def branch_rebuild(self, repo, branch):
+        """
+        Rebuild a branch.
+        """
+        project_info = self.project_info(repo)
+        project_url: str = project_info["project_url"]
+        return self.jsonrpc(f"{project_url}/branch/rebuild", params={"branch": branch})
 
     def build_info(self, repo, branch, build_id=None, commit=None):
         """
