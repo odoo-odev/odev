@@ -3,7 +3,7 @@ import shlex
 import subprocess
 import sys
 from contextlib import nullcontext
-from typing import Optional, ContextManager
+from typing import Optional, ContextManager, List, MutableMapping, Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -117,6 +117,24 @@ class ShConnector(object):
             return build_id, build_name
         return None
 
+    def project_info(self, repo: str) -> Optional[MutableMapping[str, Any]]:
+        """
+        Return information about an odoo.sh project (repository), or None.
+        """
+        results: List[MutableMapping[str, Any]] = self.call_kw(
+            "paas.repository",
+            "search_read",
+            [
+                [["name", "=", repo]],
+                [],
+            ],
+        )
+        if not results:
+            return None
+        if len(results) > 1:
+            raise ValueError(f'Got more than 1 result for repo "{repo}":\n{results}')
+        return results[0]
+
     def change_branch_state(self, repo, branch, state):
         """
         Switch a branch from staging to dev or the other way around
@@ -154,7 +172,15 @@ class ShConnector(object):
             "search_read",
             [
                 domain,
-                ["id", "name", "result", "status", "head_commit_id", "create_date"],
+                [
+                    "id",
+                    "name",
+                    "stage",
+                    "result",
+                    "status",
+                    "head_commit_id",
+                    "create_date",
+                ],
             ],
             dict(limit=1, order="start_datetime desc"),
         )
