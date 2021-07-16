@@ -140,6 +140,7 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
         if dest_noslash.endswith(("/", "\\")):
             dest_noslash = dest_noslash[:-1]
         logger.info(f'Preparing "{os.path.basename(dest_noslash)}" upgrade files on SH')
+        copy_kwargs.setdefault('to_cleanup', True)
         self.copy_to_sh_branch(*sources, dest=dest, **copy_kwargs)
         self._prepared_upgrade_paths.add(dest_noslash)
 
