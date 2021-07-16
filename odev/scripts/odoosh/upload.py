@@ -49,11 +49,11 @@ class OdooSHUpload(OdooSHBranch):
         self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
 
         build_info: Optional[Mapping[str, Any]]
-        build_info = self.sh_connector.build_info(self.sh_project, self.sh_branch)
+        build_info = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
         build_id: int = int(build_info["id"])
         build_stage: str = build_info["stage"]
         project_info: Optional[Mapping[str, Any]]
-        project_info = self.sh_connector.project_info(self.sh_project)
+        project_info = self.sh_connector.project_info(self.sh_repo)
         project_url: str = project_info["project_url"]
         is_production: bool = build_stage == "production"
 
@@ -91,4 +91,6 @@ class OdooSHUpload(OdooSHBranch):
         # TODO: make sure it's the right build, and doesn't get swapped
         self.wait_for_build(check_success=True)
 
-        logger.success(f"Database upload to {self.sh_project} / {self.sh_branch} successful")
+        logger.success(
+            f'Database upload to "{self.sh_repo}" / "{self.sh_branch}" successful'
+        )

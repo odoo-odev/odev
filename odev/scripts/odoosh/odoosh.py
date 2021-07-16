@@ -73,8 +73,8 @@ class OdooSHBranch(OdooSHBase, ABC):
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
         super().prepare_arguments(parser)
         parser.add_argument(
-            "project",
-            metavar="PROJECT",
+            "repo",
+            metavar="REPO",
             help="the name of the SH project / github repo, " "eg. psbe-client",
         )
         parser.add_argument(
@@ -84,9 +84,9 @@ class OdooSHBranch(OdooSHBase, ABC):
         )
 
     def __init__(self, args: Namespace):
-        if not args.project:
+        if not args.repo:
             raise ValueError("Invalid SH project / repo")
-        self.sh_project: str = args.project
+        self.sh_repo: str = args.repo
         if not args.branch:
             raise ValueError("Invalid SH branch")
         self.sh_branch: str = args.branch
@@ -94,7 +94,7 @@ class OdooSHBranch(OdooSHBase, ABC):
         super().__init__(args)
 
         self.ssh_url: str = self.sh_connector.get_last_build_ssh(
-            self.sh_project, self.sh_branch
+            self.sh_repo, self.sh_branch
         )
         self.paths_to_cleanup: List[str] = []
 
