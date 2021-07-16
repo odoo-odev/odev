@@ -19,12 +19,10 @@ from typing import (
     MutableMapping,
 )
 
-import time
 from github import Repository, PullRequest, PullRequestMergeStatus
 
 from ...cli import CommandType, CommaSplitArgs, CliCommandsSubRoot
-from .odoosh import OdooSHBranch, OdooSHSubRoot, CliGithubMixin
-
+from .odoosh import OdooSHBranch, OdooSHSubRoot, CliGithubMixin, OdooSHBuildFail
 
 __all__ = ["OdooSHUpgradeBase", "OdooSHUpgradeManual"]
 
@@ -205,7 +203,7 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
         """Run the upgrade"""
 
     def run(self) -> None:
-        self.test_ssh()
+        self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
         try:
             self._run_upgrade()
         except Exception as exc:
@@ -378,53 +376,36 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
             )
         merge_commit_sha: str = result.sha
 
+        build_info_kwargs: MutableMapping[str, Any] = dict(commit=merge_commit_sha)
         logger.info(f"Waiting for SH to build on new commit {merge_commit_sha[:7]}")
-        while True:
-            time.sleep(2.5)
-            build_info = self.sh_connector.build_info(
-                self.sh_project, self.sh_branch, commit=merge_commit_sha
-            )
-            if not build_info:
-                # TODO: Track build disappearing somehow? lookup by its id?
-                continue
-            build_status: str = build_info["status"]
+        try:
+            build_info = self.wait_for_build(check_success=True, **build_info_kwargs)
+        except OdooSHBuildFail as fail_exc:
+            build_info = fail_exc.build_info  # get the new failed build for cleanup
+            raise
+        finally:
             build_id: int = int(build_info["id"])
-            if build_status == "updating":
-                logger.debug(f"SH is building {build_id} on {self.sh_branch}")
-                continue
+            # set own ssh_url to new build, even if failed
+            self.ssh_url = self.sh_connector.get_build_ssh(
+                self.sh_project, self.sh_branch, build_id=build_id
+            )
 
-            if build_status == "done":
-                # set own ssh_url to new build
-                self.ssh_url = self.sh_connector.get_build_ssh(
-                    self.sh_project, self.sh_branch, build_id=build_id
+            # N.B. the previous build container gets a new id, let's use commit
+            previous_build_info: Optional[Mapping[str, Any]]
+            previous_build_info = self.sh_connector.build_info(
+                self.sh_project, self.sh_branch, commit=previous_build_commit_id
+            )
+            if previous_build_info and previous_build_info["status"] != "dropped":
+                self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
+                    self.sh_project,
+                    self.sh_branch,
+                    build_id=previous_build_info["id"],
                 )
-
-                # N.B. the previous build container gets a new id, let's use commit
-                previous_build_info: Optional[Mapping[str, Any]]
-                previous_build_info = self.sh_connector.build_info(
-                    self.sh_project, self.sh_branch, commit=previous_build_commit_id
+            else:
+                logger.info(
+                    f"Previous build on {previous_build_commit_id[:7]} unavailable, "
+                    f"no need to cleanup"
                 )
-                if previous_build_info and previous_build_info["status"] != "dropped":
-                    self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
-                        self.sh_project,
-                        self.sh_branch,
-                        build_id=previous_build_info["id"],
-                    )
-                else:
-                    logger.info(
-                        f"Previous build on {previous_build_commit_id[:7]} unavailable, "
-                        f"no need to cleanup"
-                    )
-
-                build_result: Optional[str] = build_info["result"] or None
-                if build_result == "success":
-                    logger.info(f"Built {build_id} on {self.sh_branch} successfully")
-                    break
-                else:
-                    raise RuntimeError(
-                        f"Build {build_id} on {self.sh_branch} "
-                        f"not successful: {build_result}"
-                    )
 
         logger.success(f"Upgrade on {self.sh_branch} was successful")
 

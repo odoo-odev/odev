@@ -5,8 +5,9 @@ import os.path
 import subprocess
 from abc import ABC
 from argparse import ArgumentParser, Namespace
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Mapping, Any
 
+import time
 from github import Github
 
 from ...cli import CliCommand, CommandType, CliCommandsSubRoot
@@ -56,6 +57,12 @@ class OdooSHBase(CliCommand, ABC):
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.sh_connector: ShConnector = self.get_sh_connector_from_args(args)
+
+
+class OdooSHBuildFail(RuntimeError):  # TODO: Replace with custom exc classes
+    def __init__(self, *args, build_info: Mapping[str, Any], **kwargs):
+        super().__init__(*args, **kwargs)
+        self.build_info: Mapping[str, Any] = build_info
 
 
 class OdooSHBranch(OdooSHBase, ABC):
@@ -162,6 +169,33 @@ class OdooSHBranch(OdooSHBase, ABC):
             ],
             check=True,
         )
+
+    def wait_for_build(self, check_success: bool = False, **build_info_kwargs):
+        # TODO: implement some kind of timeout?
+        while True:
+            time.sleep(2.5)
+            build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(
+                self.sh_project, self.sh_branch, **build_info_kwargs
+            )
+            if not build_info:
+                # TODO: Track build disappearing somehow? lookup by its id?
+                continue
+            build_status: str = build_info["status"]
+            build_id: int = int(build_info["id"])
+            if build_status == "updating":
+                logger.debug(f"SH is building {build_id} on {self.sh_branch}")
+                continue
+            if build_status == "done":
+                logger.info(f"Built {build_id} on {self.sh_branch} successfully")
+                if check_success:
+                    build_result: Optional[str] = build_info["result"] or None
+                    if build_result != "success":
+                        raise OdooSHBuildFail(
+                            f"Build {build_id} on {self.sh_branch} "
+                            f"not successful: {build_result}",
+                            build_info=build_info,
+                        )
+                return build_info
 
     def cleanup_copied_files(self) -> None:
         """Runs cleanup of copied files previously registered for cleanup"""
