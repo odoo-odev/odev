@@ -2,7 +2,9 @@ import logging
 from typing import ClassVar, Optional, Type, Any, Mapping
 
 from .odoosh import OdooSHBranch, OdooSHSubRoot
+from ... import utils
 from ...cli import CliCommandsSubRoot, CommandType
+from ...logging import term
 
 
 __all__ = ["OdooSHRebuild"]
@@ -30,6 +32,16 @@ class OdooSHRebuild(OdooSHBranch):
                 f'Branch "{self.sh_branch}" of "{self.sh_repo}" is production '
                 f"and cannot be rebuilt"
             )
+        if branch_info["stage"] == "staging":
+            # TODO: force doing a backup, unless explicitly disabled from cmdline?
+            if not utils.confirm(
+                term.orangered(
+                    f'You are about to rebuild a staging branch "{self.sh_branch}". '
+                    f"The current database will be replaced with a copy of production's.\n"
+                )
+                + term.gold("Are you sure you want to continue?")
+            ):
+                raise RuntimeError("Aborted")  # They weren't sure
 
         logger.info(f'Rebuilding SH project "{self.sh_repo}" branch "{self.sh_branch}"')
         result: Any = self.sh_connector.branch_rebuild(self.sh_repo, self.sh_branch)
