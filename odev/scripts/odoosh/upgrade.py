@@ -3,6 +3,7 @@ import configparser
 import logging
 import os
 import subprocess
+import time
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
 from io import StringIO
@@ -376,8 +377,13 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
             )
         merge_commit_sha: str = result.sha
 
+        # FIXME: matching builds on commits fails if we're rebuilding (empty commit)
+        #        or redelivering the hook (not supported anyways atm).
+        #        Check if we have some "container_id" or something else to track,
+        #        since SH likes to change build ids and swap them around.
         build_info_kwargs: MutableMapping[str, Any] = dict(commit=merge_commit_sha)
         logger.info(f"Waiting for SH to build on new commit {merge_commit_sha[:7]}")
+        time.sleep(2.5)  # wait for build to appear
         try:
             build_info = self.wait_for_build(check_success=True, **build_info_kwargs)
         except OdooSHBuildFail as fail_exc:
