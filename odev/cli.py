@@ -254,7 +254,7 @@ class CliCommandsSubRoot(CliCommand, ABC):
         command_name: str = getattr(args, self._command_arg)
         command_cls: Type[CliCommand] = self.get_command_cls(command_name)
         if not issubclass(command_cls, CliCommandsSubRoot):
-            logger.info(f'Running command "{command_cls}" with parsed arguments: {args}')
+            logger.debug(f'Running command "{command_cls}" with parsed arguments: {args}')
         self.chosen_command: [CliCommand] = command_cls(args)
         super().__init__(args)
 
