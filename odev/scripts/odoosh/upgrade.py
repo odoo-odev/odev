@@ -142,7 +142,7 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
         if dest_noslash.endswith(("/", "\\")):
             dest_noslash = dest_noslash[:-1]
         logger.info(f'Preparing "{os.path.basename(dest_noslash)}" upgrade files on SH')
-        copy_kwargs.setdefault('to_cleanup', True)
+        copy_kwargs.setdefault("to_cleanup", True)
         self.copy_to_sh_branch(*sources, dest=dest, **copy_kwargs)
         self._prepared_upgrade_paths.add(dest_noslash)
 
@@ -213,10 +213,14 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
         except Exception as exc:
             logger.error(f"Got an exception: {repr(exc)}")
             raise
+        else:
+            logger.success(f"Upgrade on {self.sh_branch} was successful")
         finally:
             self._cleanup()
 
     def _cleanup(self):
+        if not self.paths_to_cleanup:
+            return
         logger.info(f"Cleaning up copied temporary files")
         self.cleanup_copied_files()
 
@@ -343,6 +347,7 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
 
         self.install_modules: Sequence[str] = args.install or []
 
+        self.upgrade_path_config_set: bool = False
         self.previous_build_ssh_url: Optional[str] = None
 
     def _run_upgrade(self) -> None:
@@ -383,6 +388,7 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
 
         logger.info(f'Setting odoo config "upgrade_path"')
         self.set_config_upgrade_path(self.prepared_upgrade_path)
+        self.upgrade_path_config_set = True  # TODO: do in the method?
 
         logger.info(
             f"Merging ({self.merge_method}) "
@@ -440,14 +446,20 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
                     f"no need to cleanup"
                 )
 
-        logger.success(f"Upgrade on {self.sh_branch} was successful")
-
     def _cleanup(self):
+        if not self.paths_to_cleanup and not self.upgrade_path_config_set:
+            return
         for ssh_url in (self.ssh_url, self.previous_build_ssh_url):
             if ssh_url is None:
                 continue
             self.ssh_url = ssh_url  # FIXME: kinda hacky
             logger.info(f"Cleaning up on {ssh_url}")
             super()._cleanup()
-            logger.info(f'Removing "upgrade_path" config setting')
-            self.set_config_upgrade_path(None)
+            if self.upgrade_path_config_set:
+                logger.info(f'Removing "upgrade_path" config setting')
+                self.set_config_upgrade_path(None)
+
+
+# TODO: implement variations:
+#       upgrade-push      (git push)
+#       upgrade-redeliver (redeliver webhook)

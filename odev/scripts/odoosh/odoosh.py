@@ -199,8 +199,8 @@ class OdooSHBranch(OdooSHBase, ABC):
 
     def cleanup_copied_files(self) -> None:
         """Runs cleanup of copied files previously registered for cleanup"""
-        logger.debug("Cleaning up copied paths")
         if self.paths_to_cleanup:
+            logger.debug("Cleaning up copied paths")
             self.ssh_run(["rm", "-rf", *reversed(self.paths_to_cleanup)])
 
 
