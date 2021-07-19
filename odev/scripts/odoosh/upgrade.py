@@ -22,8 +22,11 @@ from typing import (
 
 from github import Repository, PullRequest, PullRequestMergeStatus
 
+from ... import utils
 from ...cli import CommandType, CommaSplitArgs, CliCommandsSubRoot
+from ...logging import term
 from .odoosh import OdooSHBranch, OdooSHSubRoot, CliGithubMixin, OdooSHBuildFail
+
 
 __all__ = ["OdooSHUpgradeBase", "OdooSHUpgradeManual"]
 
@@ -335,8 +338,8 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
             )
 
         self.merge_method: str = args.merge_method
-        self.commit_title: str = args.commit_title
-        self.commit_message: str = args.commit_message
+        self.commit_title: Optional[str] = args.commit_title
+        self.commit_message: Optional[str] = args.commit_message
 
         self.install_modules: Sequence[str] = args.install or []
 
@@ -348,6 +351,30 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
         if not build_info:
             raise RuntimeError(f"Couldn't get last build for branch {self.sh_branch}")
         previous_build_commit_id: str = build_info["head_commit_id"][1]
+
+        infomsg: str = term.orangered(
+            f'Will be merging "{self.repo.full_name}" '
+            f'PR #{self.pull_request.number} "{self.pull_request.title}" '
+            f"and running automatic modules upgrades on the SH branch.\n"
+            f'- branches: merging "{self.pull_request.head.ref}" '
+            f'into "{self.pull_request.base.ref}"\n'
+            f"- merge method: {self.merge_method}\n"
+            f'- merge commit title: {self.commit_title or "(automatic)"}\n'
+            f'- merge commit message: {self.commit_message or "(automatic)"}\n'
+            f'- new modules to (fake-)install: '
+            f'{", ".join(self.install_modules) if self.install_modules else "(none)"}'
+        )
+        logger.info(infomsg)
+        confirm_msg: str = term.gold(
+            "THE PR MERGE CANNOT BE UNDONE! "
+            "Check that all the above information is correct.\n"
+            "Proceed?"
+        )
+        if not utils.confirm(confirm_msg):
+            raise RuntimeError("Aborted")  # They weren't sure
+
+        # TODO: Add a confirmation dialog as PR merge cannot be undone, list all
+        #       provided arguments to double check
 
         self.copy_upgrade_path_files()
 
