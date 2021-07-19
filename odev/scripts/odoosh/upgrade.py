@@ -154,7 +154,7 @@ class OdooSHUpgradeBase(OdooSHBranch, ABC):
             dest_as_dir=True,
         )
         self._prepare_upgrade_path_files(
-            os.path.join(self.psbe_upgrade_repo_path, PSBE_MIGRATIONS_RELPATH),
+            os.path.join(self.psbe_upgrade_repo_path, PSBE_MIGRATIONS_RELPATH) + "/",
             dest=self.remote_psbe_upgrade_path,
             dest_as_dir=True,
         )
