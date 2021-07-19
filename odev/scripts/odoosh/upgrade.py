@@ -366,16 +366,17 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
             f"- merge method: {self.merge_method}\n"
             f'- merge commit title: {self.commit_title or "(automatic)"}\n'
             f'- merge commit message: {self.commit_message or "(automatic)"}\n'
-            f'- new modules to (fake-)install: '
+            f"- new modules to (fake-)install: "
             f'{", ".join(self.install_modules) if self.install_modules else "(none)"}'
         )
-        logger.info(infomsg)
+        # TODO: log only infomsg when we'll have a -y --no-confirm switch
+        # logger.info(infomsg)
         confirm_msg: str = term.gold(
             "THE PR MERGE CANNOT BE UNDONE! "
             "Check that all the above information is correct.\n"
             "Proceed?"
         )
-        if not utils.confirm(confirm_msg):
+        if not utils.confirm(infomsg + "\n" + confirm_msg):
             raise RuntimeError("Aborted")  # They weren't sure
 
         # TODO: Add a confirmation dialog as PR merge cannot be undone, list all

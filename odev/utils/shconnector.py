@@ -198,15 +198,7 @@ class ShConnector(object):
             "search_read",
             [
                 domain,
-                [
-                    "id",
-                    "name",
-                    "stage",
-                    "result",
-                    "status",
-                    "head_commit_id",
-                    "create_date",
-                ],
+                [],
             ],
             dict(limit=1, order="start_datetime desc"),
         )

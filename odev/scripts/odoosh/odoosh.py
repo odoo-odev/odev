@@ -5,17 +5,25 @@ import os.path
 import subprocess
 from abc import ABC
 from argparse import ArgumentParser, Namespace
-from typing import ClassVar, List, Optional, Mapping, Any
+from contextlib import nullcontext
+from typing import (
+    ClassVar,
+    List,
+    Optional,
+    Mapping,
+    Any,
+    ContextManager,
+    Union,
+    Iterator,
+)
 
-import time
 from github import Github
 
 from ...cli import CliCommand, CommandType, CliCommandsSubRoot
-from ...utils import ShConnector, get_sh_connector, get_github
+from ...utils import ShConnector, get_sh_connector, get_github, SpinnerBar, poll_loop
 
 
 __all__ = ["CliGithubMixin", "OdooSHBase", "OdooSHBranch", "OdooSHSubRoot"]
-
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +43,7 @@ class OdooSHBase(CliCommand, ABC):
     """
     Base class with common functionality for commands running on odoo.sh
     """
+
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
         super().prepare_arguments(parser)
@@ -51,7 +60,7 @@ class OdooSHBase(CliCommand, ABC):
         :param args: the parsed parameters as a :class:`Namespace` object.
         :return: the initialized :class:`ShConnector` instance.
         """
-        logger.info("Setting up SH session")
+        logger.info("Connecting to odoo.sh")
         return get_sh_connector(args.login, args.password)
 
     def __init__(self, args: Namespace):
@@ -69,6 +78,7 @@ class OdooSHBranch(OdooSHBase, ABC):
     """
     Base class with common functionality for commands running on a odoo.sh branch
     """
+
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
         super().prepare_arguments(parser)
@@ -170,32 +180,53 @@ class OdooSHBranch(OdooSHBase, ABC):
             check=True,
         )
 
-    def wait_for_build(self, check_success: bool = False, **build_info_kwargs):
+    def wait_for_build(
+        self,
+        check_success: bool = False,
+        print_progress: bool = True,
+        **build_info_kwargs,
+    ):
         # TODO: implement some kind of timeout?
-        while True:
-            time.sleep(2.5)
-            build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(
-                self.sh_project, self.sh_branch, **build_info_kwargs
-            )
-            if not build_info:
-                # TODO: Track build disappearing somehow? lookup by its id?
-                continue
-            build_status: str = build_info["status"]
-            build_id: int = int(build_info["id"])
-            if build_status == "updating":
-                logger.debug(f"SH is building {build_id} on {self.sh_branch}")
-                continue
-            if build_status == "done":
-                logger.info(f"Built {build_id} on {self.sh_branch} successfully")
-                if check_success:
-                    build_result: Optional[str] = build_info["result"] or None
-                    if build_result != "success":
-                        raise OdooSHBuildFail(
-                            f"Build {build_id} on {self.sh_branch} "
-                            f"not successful: {build_result}",
-                            build_info=build_info,
-                        )
-                return build_info
+        last_message: str = "Build queued..."
+        poll_interval: float = 2.5
+        pbar: Optional[SpinnerBar]
+        pbar_context: Union[ContextManager, SpinnerBar]
+        loop: Iterator
+        if print_progress:
+            pbar = SpinnerBar(last_message)
+            pbar_context = pbar
+            loop = pbar.loop(poll_interval)
+        else:
+            pbar = None
+            pbar_context = nullcontext()
+            loop = poll_loop(poll_interval)
+        with pbar_context:
+            for _ in loop:
+                build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(
+                    self.sh_repo, self.sh_branch, **build_info_kwargs
+                )
+                last_message = build_info.get("status_info") or last_message
+                if pbar is not None:
+                    pbar.message = last_message
+                if not build_info:
+                    # TODO: Track build disappearing somehow? lookup by its id?
+                    continue
+                build_status: str = build_info["status"]
+                build_id: int = int(build_info["id"])
+                if build_status == "updating":
+                    logger.debug(f"SH is building {build_id} on {self.sh_branch}")
+                    continue
+                if build_status == "done":
+                    logger.info(f"Built {build_id} on {self.sh_branch} successfully")
+                    if check_success:
+                        build_result: Optional[str] = build_info["result"] or None
+                        if build_result != "success":
+                            raise OdooSHBuildFail(
+                                f"Build {build_id} on {self.sh_branch} "
+                                f"not successful: {build_result}",
+                                build_info=build_info,
+                            )
+                    return build_info
 
     def cleanup_copied_files(self) -> None:
         """Runs cleanup of copied files previously registered for cleanup"""
@@ -208,6 +239,7 @@ class OdooSHSubRoot(CliCommandsSubRoot):
     """
     SubRoot command class that prepares the argument parser for the runtime main.
     """
+
     command: ClassVar[CommandType] = "sh"
     help: ClassVar[Optional[str]] = "Odoo.sh subcommands"
     help_short: ClassVar[Optional[str]] = help
