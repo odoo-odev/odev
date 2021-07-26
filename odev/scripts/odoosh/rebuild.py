@@ -4,7 +4,7 @@ from typing import ClassVar, Optional, Type, Any, Mapping
 from .odoosh import OdooSHBranch, OdooSHSubRoot
 from ... import utils
 from ...cli import CliCommandsSubRoot, CommandType
-from ...logging import term
+from ...log import term
 
 
 __all__ = ["OdooSHRebuild"]

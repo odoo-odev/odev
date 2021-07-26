@@ -24,7 +24,7 @@ from github import Repository, PullRequest, PullRequestMergeStatus
 
 from ... import utils
 from ...cli import CommandType, CommaSplitArgs, CliCommandsSubRoot
-from ...logging import term
+from ...log import term
 from .odoosh import OdooSHBranch, OdooSHSubRoot, CliGithubMixin, OdooSHBuildFail
 
 

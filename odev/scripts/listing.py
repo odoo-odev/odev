@@ -3,7 +3,7 @@
 import logging
 
 from .database import LocalDBCommand
-from ..logging import term
+from ..log import term
 
 
 _logger = logging.getLogger(__name__)

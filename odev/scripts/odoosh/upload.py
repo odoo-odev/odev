@@ -6,7 +6,7 @@ from typing import ClassVar, Optional, Type, Any, Mapping
 
 from .odoosh import OdooSHBranch, OdooSHSubRoot
 from ...cli import CliCommandsSubRoot, CommandType
-from ...logging import term
+from ...log import term
 from ...utils import utils
 
 

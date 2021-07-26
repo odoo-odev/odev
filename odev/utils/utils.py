@@ -29,7 +29,7 @@ from typing import (
 import enlighten
 from git import Repo
 
-from ..logging import term
+from ..log import term
 
 
 __all__ = [

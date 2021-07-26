@@ -9,7 +9,7 @@ from argparse import ArgumentParser, Namespace, Action, RawTextHelpFormatter
 from typing import ClassVar, MutableMapping, Type, Optional, Any, Union, Sequence, List
 
 
-from .logging import set_log_level
+from .log import set_log_level
 
 
 __all__ = [
