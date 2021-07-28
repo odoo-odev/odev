@@ -27,6 +27,5 @@ class KillScript(LocalDBCommand):
 
         while pid:
             os.system('kill -9 %s' % (pid))
-            pid = self.db_pid()
 
         return 0
