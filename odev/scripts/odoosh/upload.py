@@ -60,7 +60,7 @@ class OdooSHUpload(OdooSHBranch):
         if is_production:
             # TODO: force doing a backup, unless explicitly disabled from cmdline?
             if not utils.confirm(
-                term.orangered("You are uploading a dump on production. ")
+                term.orangered("You are uploading a dump to production. ")
                 + term.gold("Are you sure of what you're doing?")
             ):
                 raise RuntimeError("Aborted")  # They weren't sure
@@ -69,7 +69,11 @@ class OdooSHUpload(OdooSHBranch):
             f'Uploading dump "{os.path.basename(self.dump_path)}" '
             f'to SH "{self.sh_repo}" / "{self.sh_branch}"'
         )
-        self.copy_to_sh_branch(self.dump_path, dest=REMOTE_IMPORT_DUMP_PATH)
+        self.copy_to_sh_branch(
+            self.dump_path,
+            dest=REMOTE_IMPORT_DUMP_PATH,
+            show_progress=True,
+        )
 
         neutralize: bool = not is_production
         logger.info(

@@ -143,6 +143,7 @@ class OdooSHBranch(OdooSHBase, ABC):
         dest: str,
         dest_as_dir: bool = False,
         to_cleanup: bool = False,
+        show_progress: bool = False,
     ) -> None:
         """
         Copy files with rsync to the SH branch.
@@ -173,6 +174,7 @@ class OdooSHBranch(OdooSHBase, ABC):
             [
                 "rsync",
                 "-a",
+                *(["--info=progress2"] if show_progress else []),
                 "--exclude=__pycache__",
                 *sources,
                 full_dest,
@@ -217,7 +219,8 @@ class OdooSHBranch(OdooSHBase, ABC):
                     logger.debug(f"SH is building {build_id} on {self.sh_branch}")
                     continue
                 if build_status == "done":
-                    logger.info(f"Built {build_id} on {self.sh_branch} successfully")
+                    logger.info(f"Finished building {build_id} on {self.sh_branch}")
+                    # TODO: Differentiate between fail and warning
                     if check_success:
                         build_result: Optional[str] = build_info["result"] or None
                         if build_result != "success":
