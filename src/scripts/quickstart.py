@@ -16,8 +16,10 @@ from .restore import RestoreScript
 from .. import utils
 
 
-re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
-re_url = re.compile(r'^(https?://)?([a-zA-Z0-9-_]\.odoo\.com|localhost|127\.0\.0\.[0-9]+)')
+re_version = re.compile(r"^([a-z~0-9]+\.[0-9]+)")
+re_url = re.compile(
+    r"^https?://|(?:[a-zA-Z0-9-_](?:\.dev)?\.odoo\.com|localhost|127\.0\.0\.[0-9]+)"
+)
 
 
 class QuickStartScript(LocalDBCommand):
@@ -67,7 +69,7 @@ class QuickStartScript(LocalDBCommand):
                 result = InitScript.run_with(database=self.database, version=self.subarg)
             else:
                 if mode == "url":
-                    dest_dir = '/tmp/odev'
+                    dest_dir = "/tmp/odev"
 
                     result = DumpScript.run_with(
                         url=self.subarg,
@@ -77,10 +79,10 @@ class QuickStartScript(LocalDBCommand):
                     if result != 0:
                         return result
 
-                    timestamp = datetime.now().strftime('%Y%m%d')
+                    timestamp = datetime.now().strftime("%Y%m%d")
                     basename = f"{timestamp}_{self.database}.dump"
 
-                    possible_ext = ('zip', 'dump', 'sql')
+                    possible_ext = ("zip", "dump", "sql")
                     for ext in possible_ext:
                         filename = os.path.extsep.join((basename, ext))
                         filepath = os.path.join(dest_dir, filename)
@@ -102,13 +104,13 @@ class QuickStartScript(LocalDBCommand):
                 result = CleanScript.run_with(database=self.database)
 
         except Exception as exception:
-            utils.log('error', 'An error occured, cleaning up files and removing database:')
-            utils.log('error', str(exception))
+            utils.log("error", "An error occured, cleaning up files and removing database:")
+            utils.log("error", str(exception))
             RemoveScript.run_with(database=self.database)
             result = 1
 
         finally:
-            if os.path.isdir('/tmp/odev'):
-                shutil.rmtree('/tmp/odev')
+            if os.path.isdir("/tmp/odev"):
+                shutil.rmtree("/tmp/odev")
 
         return result
