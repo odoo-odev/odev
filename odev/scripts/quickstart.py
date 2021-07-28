@@ -107,7 +107,7 @@ class QuickStartScript(LocalDBCommand):
                 result = CleanScript.run_with(database=self.database)
 
         except Exception as exception:
-            _logger.error('An error occured, cleaning up files and removing database:')
+            _logger.error("An error occured, cleaning up files and removing database:")
             _logger.error(str(exception))
             RemoveScript.run_with(database=self.database)
             result = 1
