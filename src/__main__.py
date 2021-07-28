@@ -38,16 +38,18 @@ def main():
     except CalledProcessError as proc_exception:
         code = proc_exception.returncode
     except Exception as exception:
-        raise  # FIXME: for testing
         utils.log('error', str(exception))
         code = 1
+        # FIXME: implement custom exceptions to catch expected errors and graceful exit.
+        #        Keep raising on unexpected ones (that require code fix).
+        raise
     finally:
         level = 'success'
 
         if code > 0:
             level = 'error'
 
-    if level != 'success':
+    if code != 0:
         utils.log(level, 'Exiting with code %s' % (code))
 
 
