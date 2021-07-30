@@ -61,6 +61,10 @@ class StoreSecret(Exception):
         self.secret: str = secret
 
 
+class DeleteSecret(Exception):
+    """Signal exception that indicates the secret should be deleted"""
+
+
 @contextmanager
 def secret_storage(name: str) -> Iterator[Optional[str]]:
     # TODO: DRY
@@ -68,12 +72,13 @@ def secret_storage(name: str) -> Iterator[Optional[str]]:
     config = configparser.ConfigParser()
     config.read(odev_config_path)
 
+    secret_encrypted: Optional[str]
     secret: Optional[str] = None
     if "secrets" in config:
-        github_token_encrypted = config["secrets"].get(name)
-        if github_token_encrypted is not None:
+        secret_encrypted = config["secrets"].get(name)
+        if secret_encrypted is not None:
             try:
-                secret = ssh_agent_decrypt(github_token_encrypted)
+                secret = ssh_agent_decrypt(secret_encrypted)
             except AgentCryptException:
                 _logger.warning(
                     f'Failed decrypting stored "{name}" secret. '
@@ -87,12 +92,18 @@ def secret_storage(name: str) -> Iterator[Optional[str]]:
     except StoreSecret as store:
         secret = store.secret
         try:
-            github_token_encrypted = ssh_agent_encrypt(secret)
+            secret_encrypted = ssh_agent_encrypt(secret)
         except AgentCryptException:
             _logger.warning(f'Failed encrypting "{name}" secret. Is ssh-agent running?')
         else:
             if "secrets" not in config:
                 config.add_section("secrets")
-            config.set("secrets", name, github_token_encrypted)
-            with open(odev_config_path, "w") as fp:
+            config.set("secrets", name, secret_encrypted)
+            with open(odev_config_path, "w") as fp:  #TODO: DRY
+                config.write(fp)
+
+    except DeleteSecret:
+        if "secrets" in config:
+            config.remove_option("secrets", name)
+            with open(odev_config_path, "w") as fp:  #TODO: DRY
                 config.write(fp)
