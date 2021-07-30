@@ -8,7 +8,7 @@ from typing import Optional, ContextManager, List, MutableMapping, Any
 import requests
 from bs4 import BeautifulSoup
 
-from .secrets import secret_storage, StoreSecret
+from .secrets import secret_storage, StoreSecret, DeleteSecret
 from .utils import ask, password
 
 
@@ -16,6 +16,14 @@ __all__ = ["ShConnector", "get_sh_connector"]
 
 
 logger = logging.getLogger(__name__)
+
+
+class ShError(Exception):
+    """Base class for SH errors"""
+
+
+class ShSessionError(ShError):
+    """Session-related SH errors (es. expired cookie)"""
 
 
 class ShConnector(object):
@@ -31,6 +39,8 @@ class ShConnector(object):
         else:
             self.session = requests.Session()
             self.session.cookies.set("session_id", session_id, domain="www.odoo.sh")
+
+        self.test_session()
 
     def create_session(self, login, password):
         headers = {
@@ -76,14 +86,27 @@ class ShConnector(object):
         resp = None
         try:
             resp = self.session.post(url=url, json=data)
-            return resp.json()["result"]
+            resp_data = resp.json()
         except Exception:  # FIXME: too broad?
             # probably too hardcore
             if retry:
-                self.jsonrpc(url, params, method=method, version=version, retry=retry)
-            logger.error(data)
-            if resp:
-                logger.error(resp.text)
+                return self.jsonrpc(url, params, method=method, version=version, retry=retry)
+            else:
+                logger.exception(data)
+                if resp:
+                    logger.error(resp.text)
+                raise
+
+        if not resp_data.get("result"):
+            error = resp_data.get("error")
+            if error:
+                error_message = error.get("message")
+                if "Session Expired" in error_message:
+                    raise ShSessionError("Odoo.sh Session Expired")
+                raise ShError(error_message)
+            raise ShError(f"Bad response from SH: {resp_data}")
+
+        return resp_data["result"]
 
     def call_kw(self, model, method, args, kwargs=None, retry=False):
         if kwargs is None:
@@ -96,6 +119,12 @@ class ShConnector(object):
             "kwargs": kwargs,
         }
         return self.jsonrpc(url, params=params, retry=retry)
+
+    def test_session(self):
+        result = self.jsonrpc("https://www.odoo.sh/project/json/user/profile")
+        if result.get("errors"):
+            raise ShSessionError("Failed getting user profile while testing session")
+        logger.debug("SH session okay")
 
     def _get_branch_id(self, repo, branch):
         branch_id = self.call_kw(
@@ -348,6 +377,8 @@ def get_sh_connector(
     passwd: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> ShConnector:
+    got_explicit_credentials: bool = bool(login or passwd)
+    retry: bool = False
     save: bool = False
     storage_context: ContextManager[Optional[str]] = nullcontext(session_id)
     if session_id is None:
@@ -358,10 +389,19 @@ def get_sh_connector(
                 login = ask("Github / odoo.sh login:")
                 passwd = password("Github / odoo.sh password:")
                 save = True
-            sh_connector: ShConnector = ShConnector(login, passwd, session_id)
+            try:
+                sh_connector: ShConnector = ShConnector(login, passwd, session_id)
+            except ShSessionError:
+                if not got_explicit_credentials and session_id:
+                    logger.info("SH session expired, new login required")
+                    retry = True
+                    raise DeleteSecret
+                raise
             session_id = sh_connector.session_id
             if save:
                 raise StoreSecret(session_id)
     finally:
-        pass
+        if retry:  # TODO: test, feels broken somehow
+            return get_sh_connector(login, passwd, session_id)
+
     return sh_connector
