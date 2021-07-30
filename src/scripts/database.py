@@ -12,13 +12,6 @@ from .. import utils
 from ..cli import CliCommand
 
 
-class _NO_DB:
-    """Sentinel object for root, using a class for better repr"""
-
-
-NO_DB = _NO_DB()
-
-
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 re_command = re.compile(r'([/.a-zA-Z0-9_-]+\/odoo-bin.*)$')
 re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
@@ -26,8 +19,8 @@ re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
 
 class LocalDBCommand(CliCommand, ABC):
 
+    _fallback_database = 'template1'
     psql = sql.SQL()
-    fallback_database = 'template1',
     options = []
     config = configparser.ConfigParser()
     config.read('%s/.config/odev/odev.cfg' % (str(Path.home())))
@@ -54,11 +47,7 @@ class LocalDBCommand(CliCommand, ABC):
         self.database = utils.sanitize(args.database) if args.database else None
 
     def _get_database(self, database=None):
-        if database is None:
-            database = self.database
-        if database is None or database is NO_DB:
-            database = self.fallback_database
-        return database
+        return database or self.database or self._fallback_database
 
     def run_queries(self, queries=None, database=None):
         """
@@ -90,7 +79,7 @@ class LocalDBCommand(CliCommand, ABC):
             return self.odoo_databases
         query = 'SELECT datname FROM pg_database WHERE datistemplate = false AND datname != \'postgres\' ORDER by datname;'
 
-        self.psql.connect(self.fallback_database)
+        self.psql.connect(self._fallback_database)
         result = self.psql.query(query)
         self.psql.disconnect()
 
@@ -115,7 +104,7 @@ class LocalDBCommand(CliCommand, ABC):
 
         query = 'SELECT datname FROM pg_database ORDER by datname;'
 
-        self.psql.connect(self.fallback_database)
+        self.psql.connect(self._fallback_database)
         result = self.psql.query(query)
         self.psql.disconnect()
 
@@ -140,6 +129,34 @@ class LocalDBCommand(CliCommand, ABC):
         """
         database = self._get_database(database)
         return database in self.db_list_all()
+
+    def db_create(self, database=None, template=None):
+        """
+        Creates a new database in PostgreSQL, optionally using a template database
+        """
+        database = self._get_database(database)
+        assert database != self._fallback_database, "Cannot create fallback database"
+        query = f'CREATE DATABASE "{database}"'
+        if template:
+            query += f' WITH TEMPLATE "{template}"'
+        query += ';'
+        return self.run_queries(query, database=self._fallback_database)
+
+    def db_drop(self, database=None):
+        """
+        Drops an existing PostgreSQL database
+        """
+        database = self._get_database(database)
+        query = 'DROP DATABASE "%s";' % database
+        return self.run_queries(query, database=self._fallback_database)
+
+    def db_rename(self, new_name, database=None):
+        """
+        Drops an existing PostgreSQL database
+        """
+        database = self._get_database(database)
+        query = 'ALTER DATABASE "%s" RENAME TO "%s";' % (database, new_name)
+        return self.run_queries(query, database=self._fallback_database)
 
     def db_is_valid(self, database=None):
         """

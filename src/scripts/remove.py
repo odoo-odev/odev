@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from .database import LocalDBCommand, NO_DB
+from .database import LocalDBCommand
 from .. import utils
 
 
@@ -32,8 +32,7 @@ class RemoveScript(LocalDBCommand):
 
         filestore = self.db_filestore()
         utils.log('info', f'Deleting PSQL database {self.database}')
-        query = 'DROP DATABASE "%s";' % self.database
-        result = self.run_queries(query, database=NO_DB)
+        result = self.db_drop()
 
         if not result or self.db_exists_all():
             return 1

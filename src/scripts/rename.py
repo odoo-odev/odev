@@ -4,7 +4,7 @@ import os
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
-from .database import LocalDBCommand, NO_DB
+from .database import LocalDBCommand
 from .. import utils
 
 
@@ -52,8 +52,7 @@ class RenameScript(LocalDBCommand):
             return 0
 
         utils.log('info', f'Renaming database "{name_old}" to "{name_new}"')
-        query = 'ALTER DATABASE "%s" RENAME TO "%s";' % (name_old, name_new)
-        result = self.run_queries(query, database=NO_DB)
+        result = self.db_rename(name_new)
         utils.log('info', 'Renamed database')
 
         if not result or self.db_exists_all(name_old) or not self.db_exists_all(name_new):

@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser, Namespace
 
-from .database import LocalDBCommand, NO_DB
+from .database import LocalDBCommand
 from .. import utils
 
 
@@ -39,18 +39,11 @@ class CreateScript(LocalDBCommand):
 
             raise Exception(f'Database {self.database} already exists {message}')
 
+        if self.template and self.db_exists_all(database=self.template):
+            self.ensure_stopped(database=self.template)
+
         utils.log('info', f'Creating database {self.database}')
-        query = 'CREATE DATABASE "%s";' % self.database
-
-        if self.template:
-            if self.db_exists_all(database=self.template):
-                self.ensure_stopped(database=self.template)
-                query = 'CREATE DATABASE "%s" WITH TEMPLATE "%s";' % (
-                    self.database,
-                    self.template,
-                )
-
-        result = self.run_queries(query, database=NO_DB)
+        result = self.db_create(template=self.template)
 
         if not result or not self.db_exists_all(self.database):
             return 1
