@@ -142,8 +142,10 @@ class ShConnector(object):
             "paas.branch", "search_read", [[("id", "=", branch_id)], ["last_build_id"]]
         )
         if vals:
-            build_id, build_name = vals[0]["last_build_id"]
-            return build_id, build_name
+            last_build_id = vals[0].get("last_build_id")
+            if last_build_id:
+                build_id, build_name = vals[0]["last_build_id"]
+                return build_id, build_name
         return None
 
     def project_info(self, repo: str) -> Optional[MutableMapping[str, Any]]:

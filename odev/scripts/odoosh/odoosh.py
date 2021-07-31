@@ -3,6 +3,7 @@
 import logging
 import os.path
 import subprocess
+import time
 from abc import ABC
 from argparse import ArgumentParser, Namespace
 from contextlib import nullcontext
@@ -120,6 +121,8 @@ class OdooSHBranch(OdooSHBase, ABC):
         """
         Tests ssh connectivity for the odoo.sh branch
         """
+        if not self.ssh_url:
+            raise ValueError(f"SSH url unavailable for {self.sh_repo} / {self.sh_branch}")
         logger.debug(f"Testing SSH connectivity to SH branch {self.ssh_url}")
         result: subprocess.CompletedProcess = self.ssh_run(
             ["uname", "-a"],
@@ -186,9 +189,12 @@ class OdooSHBranch(OdooSHBase, ABC):
         self,
         check_success: bool = False,
         print_progress: bool = True,
+        build_info_timeout: Optional[float] = 30.0,
         **build_info_kwargs,
     ):
         # TODO: implement some kind of timeout?
+        start_time: float = time.monotonic()
+        build_seen_time: Optional[float] = None
         last_message: str = "Build queued..."
         poll_interval: float = 2.5
         pbar: Optional[SpinnerBar]
@@ -204,15 +210,25 @@ class OdooSHBranch(OdooSHBase, ABC):
             loop = poll_loop(poll_interval)
         with pbar_context:
             for _ in loop:
+                tick: float = time.monotonic()
                 build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(
                     self.sh_repo, self.sh_branch, **build_info_kwargs
                 )
-                last_message = build_info.get("status_info") or last_message
+                last_message = (
+                    build_info and build_info.get("status_info")
+                ) or last_message
                 if pbar is not None:
                     pbar.message = last_message
+                # TODO: More edge cases
                 if not build_info:
-                    # TODO: Track build disappearing somehow? lookup by its id?
+                    if build_info_timeout and (
+                        tick - (build_seen_time or start_time) > build_info_timeout
+                    ):
+                        raise TimeoutError(
+                            f"Build did not appear within {build_info_timeout}s"
+                        )
                     continue
+                build_seen_time = tick
                 build_status: str = build_info["status"]
                 build_id: int = int(build_info["id"])
                 if build_status == "updating":
