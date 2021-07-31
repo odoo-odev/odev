@@ -1,4 +1,4 @@
-"""Quickly and easlily setups a database from a version no., dump or url."""
+"""Quickly and easily setups a database from a version no., dump or url."""
 
 import re
 import os
@@ -88,7 +88,7 @@ class QuickStartScript(LocalDBCommand):
                         filepath = os.path.join(dest_dir, filename)
                         if os.path.isfile(filepath):
                             break
-                    else:  # no break
+                    else:
                         raise Exception(
                             f"An error occured while fetching dump file at {basename}.<ext> "
                             f"(tried {possible_ext} extensions)"

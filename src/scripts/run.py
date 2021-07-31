@@ -3,7 +3,7 @@
 import os
 import shlex
 import subprocess
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, REMAINDER
 
 from .database import LocalDBCommand
 from .. import utils
@@ -52,7 +52,7 @@ class RunScript(LocalDBCommand):
         )
         parser.add_argument(
             "args",
-            nargs="*",
+            nargs=REMAINDER,
             help="Optional: additional arguments to pass to odoo-bin",
         )
 
@@ -80,11 +80,13 @@ class RunScript(LocalDBCommand):
 
         version = self.db_version_clean()
 
+        # TODO: DRY with code in init.py
         odoodir = os.path.join(self.config["paths"]["odoo"], version)
         odoobin = os.path.join(odoodir, "odoo/odoo-bin")
 
         utils.pre_run(odoodir, odoobin, version)
 
+        # FIXME: Do not add enterprise addons if community db
         addons = [
             odoodir + "/enterprise",
             odoodir + "/design-themes",

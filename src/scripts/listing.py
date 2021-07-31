@@ -39,6 +39,7 @@ class ListingScript(LocalDBCommand):
                     version_clean=self.db_version_clean(database),
                 )["version_clean"]
 
+            # TODO: replace "standard" with "community"
             if not db["enterprise"]:
                 db["enterprise"] = self.db_config(
                     database,

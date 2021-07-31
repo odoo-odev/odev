@@ -50,11 +50,13 @@ class InitScript(LocalDBCommand):
         except Exception:
             raise Exception(f'Invalid version number "{self.version}"')
 
+        # TODO: DRY with code in run.py
         odoodir = os.path.join(self.config["paths"]["odoo"], version)
         odoobin = os.path.join(odoodir, "odoo/odoo-bin")
 
         utils.pre_run(odoodir, odoobin, version)
 
+        # FIXME: Do not add enterprise addons if community db
         addons = [
             odoodir + "/enterprise",
             odoodir + "/design-themes",

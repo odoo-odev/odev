@@ -35,7 +35,7 @@ class RenameScript(LocalDBCommand):
         filestore_old = str(filestores_root / name_old)
         filestore_new = str(filestores_root / name_new)
 
-        if not self.db_exists_all():
+        if not self.db_exists_all():  # FIXME: Make sure it's an odoo db
             raise Exception(f'Database {name_old} does not exist')
 
         if self.db_runs():
@@ -58,11 +58,11 @@ class RenameScript(LocalDBCommand):
         if not result or self.db_exists_all(name_old) or not self.db_exists_all(name_new):
             return 1
 
-        if not os.path.exists(filestore_old):
-            utils.log('info', 'Filestore not found, no action taken')
         try:
             utils.log('info', f'Attempting to rename filestore in "{filestore_old}" to "{filestore_new}"')
             os.rename(filestore_old, filestore_new)
+        except FileNotFoundError:
+            utils.log('info', 'Filestore not found, no action taken')
         except Exception as exc:
             utils.log('warning', f'Error while renaming filestore: {exc}')
         else:
@@ -75,6 +75,7 @@ class RenameScript(LocalDBCommand):
         for item in items:
             self.dbconfig.set(name_new, item[0], item[1])
 
+        # TODO: DRY paths into a centralized place/cfg
         with open(Path.home() / '.config/odev/databases.cfg', 'w') as configfile:
             self.dbconfig.write(configfile)
 
