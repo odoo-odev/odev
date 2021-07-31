@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from . import sql
+from . import psql
 from . import scripts
 from . import utils

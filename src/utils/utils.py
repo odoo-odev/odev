@@ -17,8 +17,8 @@ __all__ = [
     "quotes",
     "re_blanks",
     "re_extras",
-    "re_psql",
-    "sanitize",
+    "re_dbname",
+    "dbname_validate",
     "require",
     "log",
     "confirm",
@@ -46,26 +46,18 @@ quotes = {
 
 re_blanks = re.compile(r'([\s]+)')
 re_extras = re.compile(r'([^a-z0-9-_\s])')
-re_psql = re.compile(r'^(pg_|[0-9])')
+re_dbname = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]+$')
 
 
-def sanitize(name: str):
+def dbname_validate(name: str):
     """
-    Sanitizes the name of a database so that it can be used without creating
-    any conflict in PostgreSQL due to improper formatting or forbidden
-    characters.
+    Raise if the provided database name is not valid for odoo.
     """
-
-    require('name', name)
-
-    name = str(name).lower()
-    name = re_extras.sub('', name)
-    name = re_blanks.sub('_', name)
-
-    if re_psql.search(name):
-        raise ValueError(name)
-
-    return name
+    if not (re_dbname.match(name)):
+        raise ValueError(
+            f'"{name}" is not a valid odoo database name. '
+            f'Only alphanumerical characters, underscore, hyphen and dot are allowed.'
+        )
 
 
 def require(name: str, value: str):

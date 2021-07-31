@@ -7,9 +7,18 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 import configparser
 
-from .. import sql
+from psycopg2 import sql
+
 from .. import utils
 from ..cli import CliCommand
+from ..psql import PSQL
+
+
+class _NO_DB:
+    """Sentinel object for root, using a class for better repr"""
+
+
+NO_DB = _NO_DB()
 
 
 re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
@@ -19,8 +28,6 @@ re_port = re.compile(r'(-p\s|--http-port=)([0-9]{1,5})')
 
 class LocalDBCommand(CliCommand, ABC):
 
-    _fallback_database = 'template1'
-    psql = sql.SQL()
     options = []
     config = configparser.ConfigParser()
     config.read('%s/.config/odev/odev.cfg' % (str(Path.home())))
@@ -37,39 +44,42 @@ class LocalDBCommand(CliCommand, ABC):
         super().prepare_arguments(parser)
         parser.add_argument(
             "database",
-            nargs=1 if cls.database_required else '?',
+            nargs=None if cls.database_required else '?',
             help="Name of the local database",
         )
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        # TODO: depending on the action sanitize should fail instead
-        self.database = utils.sanitize(args.database) if args.database else None
+        if args.database:
+            utils.dbname_validate(args.database)
+        self.database = args.database
 
     def _get_database(self, database=None):
-        return database or self.database or self._fallback_database
+        return database or self.database
 
     def run_queries(self, queries=None, database=None):
         """
         Runs a default subcommand.
         """
-        database = self._get_database(database)
-
-        result = None
+        database = self._get_database(database) if database is not NO_DB else None
 
         if queries:
-
             if not isinstance(queries, list):
                 queries = [queries]
 
-            self.psql.connect(database)
-            result = self.psql.query('; '.join(queries))
-            self.psql.disconnect()
+            with PSQL(database) as psql:
+                result = psql.query(queries)
 
-        if any(query.lower().startswith('select') for query in queries):
-            return result
-        else:
-            return True
+            last_query = queries[-1]
+            if last_query:
+                if isinstance(last_query, sql.Composed):
+                    [last_query] = last_query.seq[:1]
+                if isinstance(last_query, sql.SQL):
+                    last_query = last_query.string
+                if last_query.lower().strip().startswith("select"):
+                    return result
+
+        return True
 
     def db_list(self):
         """
@@ -77,23 +87,20 @@ class LocalDBCommand(CliCommand, ABC):
         """
         if self.odoo_databases:
             return self.odoo_databases
-        query = 'SELECT datname FROM pg_database WHERE datistemplate = false AND datname != \'postgres\' ORDER by datname;'
 
-        self.psql.connect(self._fallback_database)
-        result = self.psql.query(query)
-        self.psql.disconnect()
+        with PSQL() as psql:
+            result = psql.query(
+                """
+                SELECT datname FROM pg_database
+                WHERE datistemplate = false AND datname != 'postgres'
+                ORDER BY datname
+                """
+            )
 
-        odoo_databases = []
-        query = 'SELECT id FROM ir_module_module WHERE name = \'base\';'
-
-        for database in result:
-            self.psql.connect(database[0])
-            result = self.psql.query(query)
-
-            if result:
-                odoo_databases.append(database[0])
-
-            self.psql.disconnect()
+        query = """SELECT id FROM ir_module_module WHERE name = 'base'"""
+        odoo_databases = [
+            database for [database] in result if self.run_queries(query, database=database)
+        ]
         self.odoo_databases = odoo_databases
         return odoo_databases
 
@@ -101,19 +108,9 @@ class LocalDBCommand(CliCommand, ABC):
         """
         Lists names of all local databases.
         """
-
-        query = 'SELECT datname FROM pg_database ORDER by datname;'
-
-        self.psql.connect(self._fallback_database)
-        result = self.psql.query(query)
-        self.psql.disconnect()
-
-        databases = []
-
-        for database in result:
-            databases.append(database[0])
-
-        return databases
+        with PSQL() as psql:
+            result = psql.query("SELECT datname FROM pg_database ORDER by datname")
+        return [database for [database] in result]
 
     def db_exists(self, database=None):
         """
@@ -135,28 +132,35 @@ class LocalDBCommand(CliCommand, ABC):
         Creates a new database in PostgreSQL, optionally using a template database
         """
         database = self._get_database(database)
-        assert database != self._fallback_database, "Cannot create fallback database"
-        query = f'CREATE DATABASE "{database}"'
+
+        query = 'CREATE DATABASE {database}'
+        query_kwargs = dict(database=sql.Identifier(database))
+
         if template:
-            query += f' WITH TEMPLATE "{template}"'
-        query += ';'
-        return self.run_queries(query, database=self._fallback_database)
+            query += ' WITH TEMPLATE {template}'
+            query_kwargs.update(template=sql.Identifier(template))
+
+        query = sql.SQL(query).format(**query_kwargs)
+
+        return self.run_queries(query, database=NO_DB)
 
     def db_drop(self, database=None):
         """
         Drops an existing PostgreSQL database
         """
         database = self._get_database(database)
-        query = 'DROP DATABASE "%s";' % database
-        return self.run_queries(query, database=self._fallback_database)
+        query = sql.SQL('DROP DATABASE {}').format(sql.Identifier(database))
+        return self.run_queries(query, database=NO_DB)
 
     def db_rename(self, new_name, database=None):
         """
         Drops an existing PostgreSQL database
         """
         database = self._get_database(database)
-        query = 'ALTER DATABASE "%s" RENAME TO "%s";' % (database, new_name)
-        return self.run_queries(query, database=self._fallback_database)
+        query = sql.SQL("ALTER DATABASE {} RENAME TO {}").format(
+            sql.Identifier(database), sql.Identifier(new_name)
+        )
+        return self.run_queries(query, database=NO_DB)
 
     def db_is_valid(self, database=None):
         """
@@ -176,11 +180,12 @@ class LocalDBCommand(CliCommand, ABC):
 
         self.db_is_valid(database)
 
-        query = 'SELECT latest_version FROM ir_module_module WHERE name = \'base\';'
-
-        self.psql.connect(database)
-        result = self.psql.query(query)[0][0]
-        self.psql.disconnect()
+        with PSQL(database) as psql:
+            [[result]] = psql.query(
+                """
+                SELECT latest_version FROM ir_module_module WHERE name = 'base'
+                """
+            )
 
         return result
 
@@ -215,16 +220,15 @@ class LocalDBCommand(CliCommand, ABC):
 
         self.db_is_valid(database)
 
-        query = 'SELECT TRUE FROM ir_module_module WHERE name LIKE \'%enterprise\' LIMIT 1;'
+        with PSQL(database) as psql:
+            result = psql.query(
+                """
+                SELECT TRUE FROM ir_module_module
+                WHERE name LIKE '%enterprise' LIMIT 1
+                """
+            )
 
-        self.psql.connect(database)
-        result = self.psql.query(query)
-        self.psql.disconnect()
-
-        if not result:
-            return False
-        else:
-            return True
+        return bool(result)
 
     def db_pid(self, database=None):
         """
@@ -243,7 +247,6 @@ class LocalDBCommand(CliCommand, ABC):
         Checks whether the database is currently running.
         """
         database = self._get_database(database)
-
         return bool(self.db_pid(database))
 
     def db_command(self, database=None):
@@ -263,7 +266,7 @@ class LocalDBCommand(CliCommand, ABC):
         match = re_command.search(cmd)
 
         if not match:
-            return None    
+            return None
 
         cmd = match.group(0)
 
