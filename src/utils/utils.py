@@ -197,9 +197,10 @@ def pre_run(odoodir, odoobin, version):
     subprocess.run(command, shell=True, check=True)
 
 
-def curl(url, *args, with_headers=True, follow_redirects=True, silent=True):
+# TODO: move to requests library
+def curl(url, *args, include_response_headers=True, follow_redirects=True, silent=True):
     options = ["-k"]
-    if with_headers:
+    if include_response_headers:
         options.append("-i")
     if follow_redirects:
         options.append("-L")

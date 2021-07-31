@@ -169,7 +169,7 @@ class DumpScript(CliCommand):
             dump_url,
             f'-o "{destfile}"',
             f'-H "Cookie: session_id={session}"',
-            with_headers=False,
+            include_response_headers=False,
             silent=False,
         )
 
