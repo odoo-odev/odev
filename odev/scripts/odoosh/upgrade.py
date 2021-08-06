@@ -25,7 +25,13 @@ from github import Repository, PullRequest, PullRequestMergeStatus
 from ... import utils
 from ...cli import CommandType, CommaSplitArgs, CliCommandsSubRoot
 from ...log import term
-from .odoosh import OdooSHBranch, OdooSHSubRoot, CliGithubMixin, OdooSHBuildFail
+from .odoosh import (
+    OdooSHBranch,
+    OdooSHSubRoot,
+    CliGithubMixin,
+    BuildCompleteException,
+    BuildWarning,
+)
 
 
 __all__ = ["OdooSHUpgradeBase", "OdooSHUpgradeManual"]
@@ -418,17 +424,30 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
         build_info_kwargs: MutableMapping[str, Any] = dict(commit=merge_commit_sha)
         logger.info(f"Waiting for SH to build on new commit {merge_commit_sha[:7]}")
         time.sleep(2.5)  # wait for build to appear
+        new_build_info: Optional[Mapping[str, Any]] = None
         try:
-            build_info = self.wait_for_build(check_success=True, **build_info_kwargs)
-        except OdooSHBuildFail as fail_exc:
-            build_info = fail_exc.build_info  # get the new failed build for cleanup
-            raise
-        finally:
-            build_id: int = int(build_info["id"])
-            # set own ssh_url to new build, even if failed
-            self.ssh_url = self.sh_connector.get_build_ssh(
-                self.sh_repo, self.sh_branch, build_id=build_id
+            new_build_info = self.wait_for_build(
+                check_success=True, **build_info_kwargs
             )
+        except BuildCompleteException as build_exc:
+            # get the new failed build for either warning logging or cleanup
+            new_build_info = build_exc.build_info
+            status_info: Optional[str] = new_build_info.get("status_info")
+            if isinstance(build_exc, BuildWarning):
+                logger.warning(
+                    "SH built completed with warnings"
+                    + (f": {status_info}" if status_info else "")
+                )
+            else:
+                raise
+        finally:
+            if new_build_info:
+                # set own ssh_url to new build, even if failed
+                self.ssh_url = self.sh_connector.get_build_ssh(
+                    self.sh_repo, self.sh_branch, build_id=int(new_build_info["id"])
+                )
+            else:
+                self.ssh_url = None
 
             # N.B. the previous build container gets a new id, let's use commit
             previous_build_info: Optional[Mapping[str, Any]]

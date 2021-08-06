@@ -16,6 +16,7 @@ from typing import (
     ContextManager,
     Union,
     Iterator,
+    Type,
 )
 
 from github import Github
@@ -24,7 +25,18 @@ from ...cli import CliCommand, CommandType, CliCommandsSubRoot
 from ...utils import ShConnector, get_sh_connector, get_github, SpinnerBar, poll_loop
 
 
-__all__ = ["CliGithubMixin", "OdooSHBase", "OdooSHBranch", "OdooSHSubRoot"]
+__all__ = [
+    "CliGithubMixin",
+    "OdooSHBase",
+    "BuildException",
+    "BuildTimeout",
+    "BuildCompleteException",
+    "BuildFail",
+    "BuildWarning",
+    "OdooSHBranch",
+    "OdooSHSubRoot",
+]
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +81,26 @@ class OdooSHBase(CliCommand, ABC):
         self.sh_connector: ShConnector = self.get_sh_connector_from_args(args)
 
 
-class OdooSHBuildFail(RuntimeError):  # TODO: Replace with custom exc classes
+class BuildException(RuntimeError):  # TODO: Replace with custom exc classes
+    pass
+
+
+class BuildTimeout(BuildException, TimeoutError):
+    pass
+
+
+class BuildCompleteException(BuildException):
     def __init__(self, *args, build_info: Mapping[str, Any], **kwargs):
         super().__init__(*args, **kwargs)
         self.build_info: Mapping[str, Any] = build_info
+
+
+class BuildFail(BuildCompleteException):
+    pass
+
+
+class BuildWarning(BuildCompleteException):
+    pass
 
 
 class OdooSHBranch(OdooSHBase, ABC):
@@ -122,7 +150,9 @@ class OdooSHBranch(OdooSHBase, ABC):
         Tests ssh connectivity for the odoo.sh branch
         """
         if not self.ssh_url:
-            raise ValueError(f"SSH url unavailable for {self.sh_repo} / {self.sh_branch}")
+            raise ValueError(
+                f"SSH url unavailable for {self.sh_repo} / {self.sh_branch}"
+            )
         logger.debug(f"Testing SSH connectivity to SH branch {self.ssh_url}")
         result: subprocess.CompletedProcess = self.ssh_run(
             ["uname", "-a"],
@@ -211,12 +241,13 @@ class OdooSHBranch(OdooSHBase, ABC):
         with pbar_context:
             for _ in loop:
                 tick: float = time.monotonic()
-                build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(
+                build_info: Optional[Mapping[str, Any]]
+                build_info = self.sh_connector.build_info(
                     self.sh_repo, self.sh_branch, **build_info_kwargs
                 )
-                last_message = (
-                    build_info and build_info.get("status_info")
-                ) or last_message
+                status_info: Optional[str]
+                status_info = build_info and build_info.get("status_info")
+                last_message = status_info or last_message
                 if pbar is not None:
                     pbar.message = last_message
                 # TODO: More edge cases
@@ -224,7 +255,7 @@ class OdooSHBranch(OdooSHBase, ABC):
                     if build_info_timeout and (
                         tick - (build_seen_time or start_time) > build_info_timeout
                     ):
-                        raise TimeoutError(
+                        raise BuildTimeout(
                             f"Build did not appear within {build_info_timeout}s"
                         )
                     continue
@@ -240,9 +271,12 @@ class OdooSHBranch(OdooSHBase, ABC):
                     if check_success:
                         build_result: Optional[str] = build_info["result"] or None
                         if build_result != "success":
-                            raise OdooSHBuildFail(
+                            exc_class: Type[BuildCompleteException] = BuildFail
+                            if build_result == "warning":
+                                exc_class = BuildWarning
+                            raise exc_class(
                                 f"Build {build_id} on {self.sh_branch} "
-                                f"not successful: {build_result}",
+                                f"not successful ({build_result}): {status_info}",
                                 build_info=build_info,
                             )
                     return build_info

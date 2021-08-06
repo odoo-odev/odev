@@ -1,10 +1,10 @@
 import logging
 from typing import ClassVar, Optional, Type, Any, Mapping
 
-from .odoosh import OdooSHBranch, OdooSHSubRoot
 from ... import utils
 from ...cli import CliCommandsSubRoot, CommandType
 from ...log import term
+from .odoosh import OdooSHBranch, OdooSHSubRoot, BuildWarning
 
 
 __all__ = ["OdooSHRebuild"]
@@ -56,8 +56,16 @@ class OdooSHRebuild(OdooSHBranch):
 
         logger.info(f"Waiting for SH rebuild to complete")
         # TODO: make sure it's the right build, and doesn't get swapped
-        self.wait_for_build(check_success=True)
-
-        logger.success(
-            f'Branch "{self.sh_branch}" of "{self.sh_repo}" rebuilt successfully'
-        )
+        try:
+            self.wait_for_build(check_success=True)
+        except BuildWarning as build_exc:
+            new_build_info: Optional[Mapping[str, Any]] = build_exc.build_info
+            status_info: Optional[str] = new_build_info.get("status_info")
+            logger.warning(
+                "SH built completed with warnings"
+                + (f": {status_info}" if status_info else "")
+            )
+        else:
+            logger.success(
+                f'Branch "{self.sh_branch}" of "{self.sh_repo}" rebuilt successfully'
+            )
