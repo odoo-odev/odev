@@ -50,6 +50,8 @@ class RemoveScript(LocalDBCommand):
             else:
                 utils.log('info', 'Deleted filestore from disk')
 
+        self.clear_db_cache()
+
         self.dbconfig.remove_section(self.database)
 
         with open(Path.home() / '.config/odev/databases.cfg', 'w') as configfile:

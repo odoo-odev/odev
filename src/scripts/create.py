@@ -49,4 +49,7 @@ class CreateScript(LocalDBCommand):
             return 1
 
         utils.log('info', f'Created database {self.database}')
+
+        self.clear_db_cache()
+
         return 0

@@ -68,6 +68,8 @@ class RenameScript(LocalDBCommand):
         else:
             utils.log('info', 'Renamed filestore')
 
+        self.clear_db_cache()
+
         items = self.dbconfig.items(name_old)
         self.dbconfig.remove_section(name_old)
         self.dbconfig.add_section(name_new)

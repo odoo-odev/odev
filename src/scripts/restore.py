@@ -108,6 +108,8 @@ class RestoreScript(LocalDBCommand):
 
                 psql_load(self.database, tmp_sql_path)
 
+        self.clear_db_cache()
+
         self.dbconfig.add_section(self.database)
         self.db_config(
             version_clean=self.db_version_clean(self.database),

@@ -80,4 +80,6 @@ class InitScript(LocalDBCommand):
         utils.log("info", f"Running:\n{command}\n")
         subprocess.run(command, shell=True, check=True)
 
+        self.clear_db_cache()
+
         return 0

@@ -81,12 +81,16 @@ class LocalDBCommand(CliCommand, ABC):
 
         return True
 
+    @classmethod
+    def clear_db_cache(cls):
+        cls.odoo_databases = []
+
     def db_list(self):
         """
         Lists names of local Odoo databases.
         """
-        if self.odoo_databases:
-            return self.odoo_databases
+        if self.__class__.odoo_databases:
+            return self.__class__.odoo_databases
 
         with PSQL() as psql:
             result = psql.query(
@@ -101,7 +105,7 @@ class LocalDBCommand(CliCommand, ABC):
         odoo_databases = [
             database for [database] in result if self.run_queries(query, database=database)
         ]
-        self.odoo_databases = odoo_databases
+        self.__class__.odoo_databases = odoo_databases
         return odoo_databases
 
     def db_list_all(self):
