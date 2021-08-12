@@ -10,7 +10,7 @@ class CreateScript(LocalDBCommand):
     command = "create"
     help = """
         Creates a new, empty, local PostgreSQL database, not initialized with Odoo.
-        Sanitizes the name of the new database so that it can be used within PostgreSQL.
+        Optionally using a template to copy the new database from.
     """
 
     @classmethod
@@ -24,7 +24,9 @@ class CreateScript(LocalDBCommand):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.template = utils.sanitize(args.template) if args.template else None
+        if args.template:
+            utils.dbname_validate(args.template)
+        self.template = args.template
 
     def run(self):
         """
