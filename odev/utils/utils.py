@@ -9,7 +9,6 @@ import subprocess
 import time
 from collections import defaultdict
 from contextlib import ExitStack
-from getpass import getpass
 from importlib import import_module
 from types import ModuleType
 from typing import (
@@ -21,8 +20,6 @@ from typing import (
     Protocol,
     List,
     Dict,
-    Union,
-    Sequence,
     Mapping,
 )
 
@@ -30,6 +27,7 @@ import enlighten
 from git import Repo
 
 from ..log import term
+from .prompt import confirm
 
 
 __all__ = [
@@ -38,10 +36,6 @@ __all__ = [
     "re_dbname",
     "dbname_validate",
     "require",
-    "format_question",
-    "confirm",
-    "ask",
-    "password",
     "mkdir",
     "get_python_version",
     "git_clone",
@@ -81,45 +75,6 @@ def require(name: str, value: str):
 
     if not value:
         raise Exception("Value \'%s\' is required; none given" % (name))
-
-
-def format_question(question: str, choices: Optional[Union[str, Sequence[str]]] = None, default: Optional[str] = None, trailing: str = " ", choices_sep: str = "/") -> str:
-    text_parts: List[str] = [term.bright_magenta('[?]'), question]
-    if isinstance(choices, (list, tuple)):
-        choices = choices_sep.join(choices)
-    if choices:
-        text_parts.append(f"[{choices}]")
-    if default:
-        text_parts.append(f"({default})")
-    return " ".join(text_parts) + trailing
-
-
-def confirm(question: str) -> bool:
-    """
-    Asks the user to enter Y or N (case-insensitive).
-    """
-    choices = ["y", "n"]
-    answer: str = ""
-    while answer not in choices:
-        answer = input(format_question(question, choices=choices))[0].lower()
-    return answer == "y"
-
-
-def ask(question: str, default: Optional[str] = None) -> str:
-    """
-    Asks something to the user.
-    """
-    answer: str = input(format_question(question, default=default))
-    if default and not answer:
-        return default
-    return answer
-
-
-def password(question: str):
-    """
-    Asks for a password.
-    """
-    return getpass(format_question(question))
 
 
 def mkdir(path: str, perm: int = 0o777):

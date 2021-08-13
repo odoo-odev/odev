@@ -3,7 +3,7 @@ from typing import Optional, ContextManager
 
 from github import Github
 
-from .utils import password
+from .prompt import password
 from .secrets import secret_storage, StoreSecret
 
 
@@ -18,6 +18,7 @@ def get_github(token: Optional[str] = None) -> Github:
     try:
         with storage_context as token:
             if token is None:
+                # TODO: provide cmdline args somewhere for running non-interactively
                 token = password("Github token:")
                 save = True
             github: Github = Github(token)

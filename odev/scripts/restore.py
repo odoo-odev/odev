@@ -54,6 +54,7 @@ class RestoreScript(LocalDBCommand):
         if self.db_exists():
             _logger.warning(f'Database {self.database} is already an Odoo database')
 
+            # TODO: provide cmdline args for keeping the option non-interactively
             if not utils.confirm('Do you want to overwrite its content?'):
                 _logger.info('Action canceled')
                 return 0

@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .secrets import secret_storage, StoreSecret, DeleteSecret
-from .utils import ask, password
+from .prompt import ask, password
 
 
 __all__ = ["ShConnector", "get_sh_connector"]
@@ -395,6 +395,7 @@ def get_sh_connector(
     try:
         with storage_context as session_id:
             if session_id is None:
+                # TODO: provide cmdline args somewhere for running non-interactively
                 login = ask("Github / odoo.sh login:")
                 passwd = password("Github / odoo.sh password:")
                 save = True

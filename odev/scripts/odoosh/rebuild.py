@@ -34,6 +34,7 @@ class OdooSHRebuild(OdooSHBranch):
             )
         if branch_info["stage"] == "staging":
             # TODO: force doing a backup, unless explicitly disabled from cmdline?
+            # TODO: preserve some parts of the message in non-interactive mode
             if not utils.confirm(
                 term.orangered(
                     f'You are about to rebuild a staging branch "{self.sh_branch}". '

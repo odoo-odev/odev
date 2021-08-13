@@ -10,6 +10,7 @@ from typing import ClassVar, MutableMapping, Type, Optional, Any, Union, Sequenc
 
 
 from .log import set_log_level
+from .utils import prompt
 
 
 __all__ = [
@@ -254,7 +255,7 @@ class CliCommandsSubRoot(CliCommand, ABC):
         command_name: str = getattr(args, self._command_arg)
         command_cls: Type[CliCommand] = self.get_command_cls(command_name)
         if not issubclass(command_cls, CliCommandsSubRoot):
-            logger.debug(f'Running command "{command_cls}" with parsed arguments: {args}')
+            logger.debug(f'Running command "{command_cls}" with arguments: {args}')
         self.chosen_command: [CliCommand] = command_cls(args)
         super().__init__(args)
 
@@ -275,6 +276,14 @@ class CliCommandsRoot(CliCommandsSubRoot):
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
         super().prepare_arguments(parser)
         parser.add_argument(
+            "-y",
+            "--yes",
+            "--noconfirm",
+            dest="noconfirm",
+            action="store_true",
+            help='assume "yes" as answer to all prompts and run non-interactively',
+        )
+        parser.add_argument(
             "-v",
             "--log-level",
             choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
@@ -283,6 +292,7 @@ class CliCommandsRoot(CliCommandsSubRoot):
         )
 
     def __init__(self, args: Namespace):
+        prompt.interactive = not args.noconfirm
         set_log_level(args.log_level)
         super().__init__(args)
 

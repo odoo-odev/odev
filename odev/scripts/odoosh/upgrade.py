@@ -477,6 +477,7 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBuild):
             "Check that all the above information is correct.\n"
             "Proceed?"
         )
+        # TODO: preserve some parts of the message in non-interactive mode
         if not utils.confirm(infomsg + "\n" + confirm_msg):
             raise RuntimeError("Aborted")  # They weren't sure
 

@@ -59,6 +59,7 @@ class OdooSHUpload(OdooSHBranch):
 
         if is_production:
             # TODO: force doing a backup, unless explicitly disabled from cmdline?
+            # TODO: preserve some parts of the message in non-interactive mode
             if not utils.confirm(
                 term.orangered("You are uploading a dump to production. ")
                 + term.gold("Are you sure of what you're doing?")

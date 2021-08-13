@@ -94,6 +94,7 @@ class DumpScript(CliCommand):
 
         session = re_session.findall(res)[-1]
         csrf = re_csrf.findall(res)[-1]
+        # TODO: provide cmdline args for running non-interactively
         login = utils.ask('Login:')
         passwd = utils.password('Password:')
         reason = utils.ask('Reason (optional):')
@@ -138,6 +139,7 @@ class DumpScript(CliCommand):
         _logger.info(f'About to download dump file for {database_name}')
 
         ext = 'dump' if platform == 'saas' else 'sql.gz'
+        # TODO: provide cmdline args for keeping the option non-interactively
         if utils.confirm('Do you want to include the filestore?'):
             ext = 'zip'
 
@@ -153,6 +155,7 @@ class DumpScript(CliCommand):
                 f"The file {destfile} already exists, "
                 f"indicating that you most probably already dumped this database today",
             )
+            # TODO: provide cmdline args for keeping the option non-interactively
             overwrite = utils.confirm("Do you wish to overwrite this file?")
             if not overwrite:
                 _logger.info('Action canceled')
