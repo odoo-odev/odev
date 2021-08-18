@@ -43,6 +43,9 @@ class ShConnector(object):
         self.test_session()
 
     def create_session(self, login, password):
+        # TODO: Lately github asks for additional confirmation if the user agent
+        #       is significantly different from the usual one (eg. used in browser)
+        #       breaking this login code. Rethink approach somehow.
         headers = {
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36"
         }
@@ -75,7 +78,9 @@ class ShConnector(object):
     def session_id(self):
         return self.session.cookies.get("session_id", domain="www.odoo.sh")
 
-    def jsonrpc(self, url, params=None, method="call", version="2.0", retry=False):
+    def jsonrpc(
+        self, url, params=None, method="call", version="2.0", allow_empty=True, retry=False
+    ):
         if params is None:
             params = {}
         data = {
@@ -97,7 +102,7 @@ class ShConnector(object):
                     logger.error(resp.text)
                 raise
 
-        if not resp_data.get("result"):
+        if not ("result" in resp_data if allow_empty else resp_data.get("result")):
             error = resp_data.get("error")
             if error:
                 error_message = error.get("message")
@@ -203,7 +208,7 @@ class ShConnector(object):
         project_url: str = project_info["project_url"]
         return self.jsonrpc(f"{project_url}/branch/rebuild", params={"branch": branch})
 
-    def build_info(self, repo, branch, build_id=None, commit=None):
+    def build_info(self, repo, branch, build_id=None, commit=None, custom_domain=None):
         """
         Returns status, hash and creation date of last build on given branch
         (but you can force status search of a specific commit if you need to time travel)
@@ -218,12 +223,14 @@ class ShConnector(object):
                 domain += [["head_commit_id.identifier", "=", str(commit)]]
             else:
                 domain += [["id", "=", int(build_id)]]
-        else:
+        elif not custom_domain:
             result = self._get_last_build_id_name(repo, branch)
             if not result:
                 return None
             last_build_id, _ = result
             domain += [["id", "=", last_build_id]]
+        if custom_domain:
+            domain += custom_domain
         res = self.call_kw(
             "paas.build",
             "search_read",

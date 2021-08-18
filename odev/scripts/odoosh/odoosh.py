@@ -220,12 +220,13 @@ class OdooSHBranch(OdooSHBase, ABC):
         check_success: bool = False,
         print_progress: bool = True,
         build_info_timeout: Optional[float] = 30.0,
+        initial_message: str = "Build queued...",
         **build_info_kwargs,
     ):
         # TODO: implement some kind of timeout?
         start_time: float = time.monotonic()
         build_seen_time: Optional[float] = None
-        last_message: str = "Build queued..."
+        last_message: str = initial_message
         poll_interval: float = 2.5
         pbar: Optional[SpinnerBar]
         pbar_context: Union[ContextManager, SpinnerBar]

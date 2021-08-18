@@ -6,6 +6,7 @@ import subprocess
 import time
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace
+from dataclasses import dataclass
 from io import StringIO
 from typing import (
     ClassVar,
@@ -18,8 +19,10 @@ from typing import (
     Any,
     Set,
     MutableMapping,
+    Iterator,
 )
 
+from decorator import contextmanager
 from github import Repository, PullRequest, PullRequestMergeStatus
 
 from ... import utils
@@ -284,38 +287,17 @@ class OdooSHUpgradeManual(OdooSHUpgradeBase):
         self.ssh_run("odoosh-restart")
 
 
-class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
-    command: ClassVar[CommandType] = "upgrade-merge"
-    help: ClassVar[Optional[str]] = """
-        Prepares the SH branch to run automatic upgrades with `util` support for
-        merging a PR / pushing commits, and cleans up after it's done.
-        Directly handles the PR merge or git push.
-    """
-    help_short: ClassVar[Optional[str]] = help
+@dataclass
+class UpgradeBuildContext:
+    previous_build_info: Optional[Mapping[str, Any]] = None
+    initial_delay: float = 2.5
+    wait_for_build_kwargs: Optional[Mapping[str, Any]] = None
 
+
+class OdooSHUpgradeBuild(OdooSHUpgradeBase, ABC):
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
         super().prepare_arguments(parser)
-        parser.add_argument(
-            "pull_request",
-            type=int,
-            help="the PR number from the github repo",
-        )
-        parser.add_argument(
-            "merge_method",
-            choices=("merge", "squash", "rebase"),
-            help="the method used to merge the pull request",
-        )
-        parser.add_argument(
-            "-c",
-            "--commit-title",
-            help="title to use for the commit instead of the automatic one",
-        )
-        parser.add_argument(
-            "-m",
-            "--commit-message",
-            help="extra message appended to the commit",
-        )
         parser.add_argument(
             "-i",
             "--install",
@@ -329,64 +311,18 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-
-        project_info: Mapping[str, Any]
-        [project_info] = self.sh_connector.get_project_info(self.sh_repo)
-        self.repo: Repository = self.github.get_repo(project_info["full_name"])
-        self.pull_request: PullRequest = self.repo.get_pull(args.pull_request)
-        if self.pull_request.merged or not self.pull_request.mergeable:
-            raise RuntimeError(
-                f"Pull request {self.repo.full_name} "
-                f"#{self.pull_request.number} is not mergeable!"
-            )
-        pr_dest_branch: str = self.pull_request.base.ref
-        if pr_dest_branch != self.sh_branch:
-            raise RuntimeError(
-                f"Pull request {self.repo.full_name} #{self.pull_request.number} "
-                f"destination branch ({pr_dest_branch}) "
-                f"is different than the SH one ({self.sh_branch})"
-            )
-
-        self.merge_method: str = args.merge_method
-        self.commit_title: Optional[str] = args.commit_title
-        self.commit_message: Optional[str] = args.commit_message
-
         self.install_modules: Sequence[str] = args.install or []
 
         self.upgrade_path_config_set: bool = False
         self.previous_build_ssh_url: Optional[str] = None
 
-    def _run_upgrade(self) -> None:
+    @contextmanager
+    def upgrade_build_context(self) -> Iterator[UpgradeBuildContext]:
         build_info: Optional[Mapping[str, Any]]
         build_info = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
         if not build_info:
             raise RuntimeError(f"Couldn't get last build for branch {self.sh_branch}")
         previous_build_commit_id: str = build_info["head_commit_id"][1]
-
-        infomsg: str = term.orangered(
-            f'Will be merging "{self.repo.full_name}" '
-            f'PR #{self.pull_request.number} "{self.pull_request.title}" '
-            f"and running automatic modules upgrades on the SH branch.\n"
-            f'- branches: merging "{self.pull_request.head.ref}" '
-            f'into "{self.pull_request.base.ref}"\n'
-            f"- merge method: {self.merge_method}\n"
-            f'- merge commit title: {self.commit_title or "(automatic)"}\n'
-            f'- merge commit message: {self.commit_message or "(automatic)"}\n'
-            f"- new modules to (fake-)install: "
-            f'{", ".join(self.install_modules) if self.install_modules else "(none)"}'
-        )
-        # TODO: log only infomsg when we'll have a -y --no-confirm switch
-        # logger.info(infomsg)
-        confirm_msg: str = term.gold(
-            "THE PR MERGE CANNOT BE UNDONE! "
-            "Check that all the above information is correct.\n"
-            "Proceed?"
-        )
-        if not utils.confirm(infomsg + "\n" + confirm_msg):
-            raise RuntimeError("Aborted")  # They weren't sure
-
-        # TODO: Add a confirmation dialog as PR merge cannot be undone, list all
-        #       provided arguments to double check
 
         self.copy_upgrade_path_files()
 
@@ -397,37 +333,21 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
         self.set_config_upgrade_path(self.prepared_upgrade_path)
         self.upgrade_path_config_set = True  # TODO: do in the method?
 
-        logger.info(
-            f"Merging ({self.merge_method}) "
-            f"pull request {self.repo.full_name} #{self.pull_request.number}"
+        upgrade_context: UpgradeBuildContext = UpgradeBuildContext(
+            previous_build_info=build_info
         )
-        # PyGithub considers None args as intended values, so we need to remove them
-        merge_kwargs: MutableMapping[str, Any] = dict(
-            merge_method=self.merge_method,
-            commit_title=self.commit_title,
-            commit_message=self.commit_message,
-            sha=self.pull_request.head.sha,
-        )
-        merge_kwargs = {k: v for k, v in merge_kwargs.items() if v is not None}
-        result: PullRequestMergeStatus = self.pull_request.merge(**merge_kwargs)
-        if not result.merged:
-            raise RuntimeError(
-                f"Pull request {self.repo.full_name} #{self.pull_request.number} "
-                f"did not merge: {result.message}"
-            )
-        merge_commit_sha: str = result.sha
+        yield upgrade_context
 
         # FIXME: matching builds on commits fails if we're rebuilding (empty commit)
         #        or redelivering the hook (not supported anyways atm).
         #        Check if we have some "container_id" or something else to track,
         #        since SH likes to change build ids and swap them around.
-        build_info_kwargs: MutableMapping[str, Any] = dict(commit=merge_commit_sha)
-        logger.info(f"Waiting for SH to build on new commit {merge_commit_sha[:7]}")
-        time.sleep(2.5)  # wait for build to appear
+        logger.info(f"Waiting for SH to build on new commit")
+        time.sleep(upgrade_context.initial_delay)  # wait for build to appear
         new_build_info: Optional[Mapping[str, Any]] = None
         try:
             new_build_info = self.wait_for_build(
-                check_success=True, **build_info_kwargs
+                check_success=True, **(upgrade_context.wait_for_build_kwargs or {})
             )
         except BuildCompleteException as build_exc:
             # get the new failed build for either warning logging or cleanup
@@ -478,6 +398,133 @@ class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBase):
             if self.upgrade_path_config_set:
                 logger.info(f'Removing "upgrade_path" config setting')
                 self.set_config_upgrade_path(None)
+
+
+class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBuild):
+    command: ClassVar[CommandType] = "upgrade-merge"
+    help: ClassVar[Optional[str]] = """
+        Prepares the SH branch to run automatic upgrades with `util` support for
+        merging a PR / pushing commits, and cleans up after it's done.
+        Directly handles the PR merge.
+    """
+    help_short: ClassVar[Optional[str]] = help
+
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        super().prepare_arguments(parser)
+        parser.add_argument(
+            "pull_request",
+            type=int,
+            help="the PR number from the github repo",
+        )
+        parser.add_argument(
+            "merge_method",
+            choices=("merge", "squash", "rebase"),
+            help="the method used to merge the pull request",
+        )
+        parser.add_argument(
+            "-c",
+            "--commit-title",
+            help="title to use for the commit instead of the automatic one",
+        )
+        parser.add_argument(
+            "-m",
+            "--commit-message",
+            help="extra message appended to the commit",
+        )
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+
+        project_info: Mapping[str, Any]
+        [project_info] = self.sh_connector.get_project_info(self.sh_repo)
+        self.repo: Repository = self.github.get_repo(project_info["full_name"])
+        self.pull_request: PullRequest = self.repo.get_pull(args.pull_request)
+        if self.pull_request.merged or not self.pull_request.mergeable:
+            raise RuntimeError(
+                f"Pull request {self.repo.full_name} "
+                f"#{self.pull_request.number} is not mergeable!"
+            )
+        pr_dest_branch: str = self.pull_request.base.ref
+        if pr_dest_branch != self.sh_branch:
+            raise RuntimeError(
+                f"Pull request {self.repo.full_name} #{self.pull_request.number} "
+                f"destination branch ({pr_dest_branch}) "
+                f"is different than the SH one ({self.sh_branch})"
+            )
+
+        self.merge_method: str = args.merge_method
+        self.commit_title: Optional[str] = args.commit_title
+        self.commit_message: Optional[str] = args.commit_message
+
+    def _run_upgrade(self) -> None:
+        infomsg: str = term.orangered(
+            f'Will be merging "{self.repo.full_name}" '
+            f'PR #{self.pull_request.number} "{self.pull_request.title}" '
+            f"and running automatic modules upgrades on the SH branch.\n"
+            f'- branches: merging "{self.pull_request.head.ref}" '
+            f'into "{self.pull_request.base.ref}"\n'
+            f"- merge method: {self.merge_method}\n"
+            f'- merge commit title: {self.commit_title or "(automatic)"}\n'
+            f'- merge commit message: {self.commit_message or "(automatic)"}\n'
+            f"- new modules to (fake-)install: "
+            f'{", ".join(self.install_modules) if self.install_modules else "(none)"}'
+        )
+        # TODO: log only infomsg when we'll have a -y --no-confirm switch
+        # logger.info(infomsg)
+        confirm_msg: str = term.gold(
+            "THE PR MERGE CANNOT BE UNDONE! "
+            "Check that all the above information is correct.\n"
+            "Proceed?"
+        )
+        if not utils.confirm(infomsg + "\n" + confirm_msg):
+            raise RuntimeError("Aborted")  # They weren't sure
+
+        upgrade_context: UpgradeBuildContext
+        with self.upgrade_build_context() as upgrade_context:
+            logger.info(
+                f"Merging ({self.merge_method}) "
+                f"pull request {self.repo.full_name} #{self.pull_request.number}"
+            )
+            # PyGithub considers None args as intended values, so we need to remove them
+            merge_kwargs: MutableMapping[str, Any] = dict(
+                merge_method=self.merge_method,
+                commit_title=self.commit_title,
+                commit_message=self.commit_message,
+                sha=self.pull_request.head.sha,
+            )
+            merge_kwargs = {k: v for k, v in merge_kwargs.items() if v is not None}
+            result: PullRequestMergeStatus = self.pull_request.merge(**merge_kwargs)
+            if not result.merged:
+                raise RuntimeError(
+                    f"Pull request {self.repo.full_name} #{self.pull_request.number} "
+                    f"did not merge: {result.message}"
+                )
+            merge_commit_sha: str = result.sha
+            upgrade_context.wait_for_build_kwargs = dict(commit=merge_commit_sha)
+
+
+class OdooSHUpgradeWait(OdooSHUpgradeBuild):
+    command: ClassVar[CommandType] = "upgrade-wait"
+    help: ClassVar[Optional[str]] = """
+        Prepares the SH branch to run automatic upgrades with `util` support for
+        and waits for a new SH build to complete, then cleans up when it's done.
+        Useful for handling all other build cases (webhook redeliver, generic push).
+    """
+    help_short: ClassVar[Optional[str]] = help
+
+    def _run_upgrade(self) -> None:
+        context: UpgradeBuildContext
+        with self.upgrade_build_context() as context:
+            logger.info(f"Waiting for new SH build")
+            # We don't know if the new build is on a different commit, a redeliver,
+            # or what else, so we can only compare from the previous build datetime.
+            previous_build_start: str = context.previous_build_info["start_datetime"]
+            context.wait_for_build_kwargs = dict(
+                initial_message="Waiting for SH build...",
+                custom_domain=[["start_datetime", ">", previous_build_start]],
+            )
+            context.initial_delay = 0
 
 
 # TODO: implement variations:
