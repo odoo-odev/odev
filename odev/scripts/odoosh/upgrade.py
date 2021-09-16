@@ -516,11 +516,11 @@ class OdooSHUpgradeWait(OdooSHUpgradeBuild):
     def _run_upgrade(self) -> None:
         context: UpgradeBuildContext
         with self.upgrade_build_context() as context:
-            logger.info(f"Waiting for new SH build")
             # We don't know if the new build is on a different commit, a redeliver,
             # or what else, so we can only compare from the previous build datetime.
             previous_build_start: str = context.previous_build_info["start_datetime"]
             context.wait_for_build_kwargs = dict(
+                build_info_timeout=600.0,
                 initial_message="Waiting for SH build...",
                 custom_domain=[["start_datetime", ">", previous_build_start]],
             )
