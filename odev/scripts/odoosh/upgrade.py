@@ -394,10 +394,10 @@ class OdooSHUpgradeBuild(OdooSHUpgradeBase, ABC):
                 continue
             self.ssh_url = ssh_url  # FIXME: kinda hacky
             logger.info(f"Cleaning up on {ssh_url}")
-            super()._cleanup()
             if self.upgrade_path_config_set:
                 logger.info(f'Removing "upgrade_path" config setting')
                 self.set_config_upgrade_path(None)
+            super()._cleanup()
 
 
 class OdooSHUpgradeMerge(CliGithubMixin, OdooSHUpgradeBuild):
