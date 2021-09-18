@@ -409,6 +409,7 @@ def get_sh_connector(
     passwd: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> ShConnector:
+    given_args: Tuple[Any] = login, passwd, session_id
     got_explicit_credentials: bool = bool(login or passwd)
     retry: bool = False
     save: bool = False
@@ -440,6 +441,6 @@ def get_sh_connector(
                 raise StoreSecret(session_id)
     finally:
         if retry:  # TODO: test, feels broken somehow
-            return get_sh_connector(login, passwd, session_id)
+            return get_sh_connector(*given_args)
 
     return sh_connector
