@@ -300,15 +300,15 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
         build_info: Optional[Mapping[str, Any]]
         build_info = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
         if not build_info:
-            raise RuntimeError(f'Couldn\'t get last build for branch {self.sh_branch}')
-        previous_build_commit_id: str = build_info['head_commit_id'][1]
+            raise RuntimeError(f"Couldn't get last build for branch {self.sh_branch}")
+        previous_build_commit_id: str = build_info["head_commit_id"][1]
 
         self.copy_upgrade_path_files()
 
         if self.install_modules:
             self.prepare_fake_install(self.install_modules)
 
-        logger.info(f'Setting odoo config `upgrade_path`')
+        logger.info(f'Setting odoo config "upgrade_path"')
         self.set_config_upgrade_path(self.prepared_upgrade_path)
         self.upgrade_path_config_set = True  # TODO: do in the method?
 
@@ -317,7 +317,7 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
         )
         yield upgrade_context
 
-        logger.info(f'Waiting for SH to build on new commit')
+        logger.info(f"Waiting for SH to build on new commit")
         new_build_info: Optional[Mapping[str, Any]] = None
         try:
             # TODO: refactor call as callable of the context, wrap yield instead,
@@ -329,26 +329,26 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
         except BuildCompleteException as build_exc:
             # get the new failed build for either warning logging or cleanup
             new_build_info = build_exc.build_info
-            status_info: Optional[str] = new_build_info.get('status_info')
+            status_info: Optional[str] = new_build_info.get("status_info")
             if isinstance(build_exc, BuildWarning):
                 logger.warning(
-                    'SH build completed with warnings'
-                    + (f': {status_info}' if status_info else '')
+                    "SH build completed with warnings"
+                    + (f": {status_info}" if status_info else "")
                 )
             else:
                 raise
         finally:
             if new_build_info:
                 expected_sha: Optional[str] = upgrade_context.expected_commit_sha
-                new_build_sha: str = new_build_info['head_commit_id'][1]
+                new_build_sha: str = new_build_info["head_commit_id"][1]
                 if expected_sha and new_build_sha != expected_sha:
                     logger.warning(
-                        f'New build has a different commit SHA '
-                        f'({new_build_sha}) than expected ({expected_sha})'
+                        f"New build has a different commit SHA "
+                        f"({new_build_sha}) than expected ({expected_sha})"
                     )
                 # set own ssh_url to new build, even if failed
                 self.ssh_url = self.sh_connector.get_build_ssh(
-                    self.sh_repo, self.sh_branch, build_id=int(new_build_info['id'])
+                    self.sh_repo, self.sh_branch, build_id=int(new_build_info["id"])
                 )
             else:
                 self.ssh_url = None
@@ -358,16 +358,16 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
             previous_build_info = self.sh_connector.build_info(
                 self.sh_repo, self.sh_branch, commit=previous_build_commit_id
             )
-            if previous_build_info and previous_build_info['status'] != 'dropped':
+            if previous_build_info and previous_build_info["status"] != "dropped":
                 self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
                     self.sh_repo,
                     self.sh_branch,
-                    build_id=previous_build_info['id'],
+                    build_id=previous_build_info["id"],
                 )
             else:
                 logger.info(
-                    f'Previous build on {previous_build_commit_id[:7]} unavailable, '
-                    f'no need to cleanup'
+                    f"Previous build on {previous_build_commit_id[:7]} unavailable, "
+                    f"no need to cleanup"
                 )
 
     def _cleanup(self):

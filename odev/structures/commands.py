@@ -757,17 +757,19 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
         last_tracking_id: Optional[int] = None,
     ):
         if last_tracking_id is None:
-            branch_history_before = self.sh_connector.branch_history(self.sh_repository, self.sh_branch)
-            last_tracking_id = branch_history_before[0]['id'] if branch_history_before else 0
-
+            branch_history_before = self.sh_connector.branch_history(
+                self.sh_repo, self.sh_branch
+            )
+            last_tracking_id = (
+                branch_history_before[0]["id"] if branch_history_before else 0
+            )
         start_time: float = time.monotonic()
-        tracking_id: Optional[int] = None
-        last_message: str = 'Waiting for SH build to appear...'
-        poll_interval: float = 2.0
+        build_id: Optional[int] = None
+        last_message: str = "Waiting for SH build to appear..."
+        poll_interval: float = 2.5
         pbar: Optional[SpinnerBar]
         pbar_context: Union[ContextManager, SpinnerBar]
         loop: Iterator
-
         if print_progress:
             pbar = SpinnerBar(last_message)
             pbar_context = pbar
@@ -781,25 +783,16 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                 tick: float = time.monotonic()
 
                 # wait for build to appear
-                # N.B. SH likes to swap build ids around, so the only good way to follow
-                # one is to get it from the tracking record (ie. branch history)
-                new_branch_history: Optional[List[Mapping[str, Any]]]
-                branch_history_domain: List[List]
-                if not tracking_id:  # still have to discover last tracking
-                    branch_history_domain = [['id', '>', last_tracking_id]]
-                else:  # following the build tracking
-                    branch_history_domain = [['id', '=', tracking_id]]
-                new_branch_history = self.sh_connector.branch_history(
-                    self.sh_repository,
-                    self.sh_branch,
-                    custom_domain=branch_history_domain,
-                )
-                build_id: Optional[int] = None
-                if new_branch_history:
-                    if not tracking_id:
-                        last_message: str = 'Build queued...'
-                    tracking_id = new_branch_history[0]['id']
-                    build_id = new_branch_history[0]['build_id'][0]
+                if not build_id:
+                    new_branch_history: Optional[List[Mapping[str, Any]]]
+                    new_branch_history = self.sh_connector.branch_history(
+                        self.sh_repo,
+                        self.sh_branch,
+                        custom_domain=[["id", ">", last_tracking_id]],
+                    )
+                    if new_branch_history:
+                        build_id = new_branch_history[0]["build_id"][0]
+                        last_message: str = "Build queued..."
 
                 # fail if timed out
                 # TODO: More edge cases, like build disappears?
@@ -808,52 +801,37 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                         tick - start_time > build_appear_timeout
                     ):
                         raise BuildTimeout(
-                            f'Build did not appear within {build_appear_timeout}s'
+                            f"Build did not appear within {build_appear_timeout}s"
                         )
                     continue
 
                 # get build info (no sanity check)
-                build_info: Optional[Union[Mapping[str, Any], int]]
+                build_info: Optional[Mapping[str, Any]]
                 build_info = build_id and self.sh_connector.build_info(
-                    self.sh_repo,
-                    self.sh_branch,
-                    build_id=build_id,
+                    self.sh_repo, self.sh_branch, build_id=build_id
                 )
-
-                if not build_info or isinstance(build_info, int):
-                    raise ValueError('Received non-parsable build info value from Odoo Sh')
-
                 status_info: Optional[str]
-                status_info = build_info.get('status_info')
+                status_info = build_info.get("status_info")
                 last_message = status_info or last_message
-
                 if pbar is not None:
                     pbar.message = last_message
-
-                build_status = build_info.get('status')
-
-                if build_status == 'updating':
-                    logger.debug(f'SH is building {build_id} on {self.sh_branch}')
+                build_status: str = build_info["status"]
+                if build_status == "updating":
+                    logger.debug(f"SH is building {build_id} on {self.sh_branch}")
                     continue
-
-                if build_status == 'done':
-                    logger.info(f'Finished building {build_id} on {self.sh_branch}')
-
+                if build_status == "done":
+                    logger.info(f"Finished building {build_id} on {self.sh_branch}")
                     if check_success:
-                        build_result: Optional[str] = build_info.get('result')
-
-                        if build_result != 'success':
+                        build_result: Optional[str] = build_info["result"] or None
+                        if build_result != "success":
                             exc_class: Type[BuildCompleteException] = BuildFail
-
-                            if build_result == 'warning':
+                            if build_result == "warning":
                                 exc_class = BuildWarning
-
                             raise exc_class(
-                                f'Build {build_id} on {self.sh_branch} '
-                                f'not successful ({build_result}): {status_info}',
+                                f"Build {build_id} on {self.sh_branch} "
+                                f"not successful ({build_result}): {status_info}",
                                 build_info=build_info,
                             )
-
                     return build_info
 
     def cleanup_copied_files(self) -> None:

@@ -2,7 +2,7 @@ import shlex
 import subprocess
 import sys
 from contextlib import nullcontext
-from typing import Mapping, Optional, ContextManager, List, MutableMapping, Any
+from typing import Optional, ContextManager, List, MutableMapping, Any, Tuple
 
 import requests
 from bs4 import BeautifulSoup
@@ -189,25 +189,19 @@ class ShConnector(object):
             raise ValueError(f'Got more than 1 result for branch `{branch}`:\n{results}')
         return results[0]
 
-    def branch_history(
-        self,
-        repo: str,
-        branch: str,
-        custom_domain: Optional[List] = None
-    ) -> Optional[List[Mapping[str, Any]]]:
-        '''
+    def branch_history(self, repo: str, branch: str, custom_domain: Optional[List] = None) -> Optional[List[MutableMapping[str, Any]]]:
+        """
         Return history tracking info of an odoo.sh branch, or None.
-        '''
-        domain = [['repository_id.name', '=', repo], ['branch_id.name', '=', branch]]
+        """
+        domain = [["repository_id.name", "=", repo], ["branch_id.name", "=", branch]]
         domain += custom_domain or []
-        results: List[Mapping[str, Any]] = self.call_kw(
-            'paas.tracking',
-            'search_read',
+        results: List[MutableMapping[str, Any]] = self.call_kw(
+            "paas.tracking",
+            "search_read",
             [
                 domain,
                 [],
             ],
-            # dict(order='start_datetime desc'),  # TODO: Check correct order
         )
         return results or None
 
