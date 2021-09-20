@@ -764,9 +764,9 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                 branch_history_before[0]["id"] if branch_history_before else 0
             )
         start_time: float = time.monotonic()
-        build_id: Optional[int] = None
+        tracking_id: Optional[int] = None
         last_message: str = "Waiting for SH build to appear..."
-        poll_interval: float = 2.5
+        poll_interval: float = 2.0
         pbar: Optional[SpinnerBar]
         pbar_context: Union[ContextManager, SpinnerBar]
         loop: Iterator
@@ -783,16 +783,25 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                 tick: float = time.monotonic()
 
                 # wait for build to appear
-                if not build_id:
-                    new_branch_history: Optional[List[Mapping[str, Any]]]
-                    new_branch_history = self.sh_connector.branch_history(
-                        self.sh_repo,
-                        self.sh_branch,
-                        custom_domain=[["id", ">", last_tracking_id]],
-                    )
-                    if new_branch_history:
-                        build_id = new_branch_history[0]["build_id"][0]
+                # N.B. SH likes to swap build ids around, so the only good way to follow
+                # one is to get it from the tracking record (ie. branch history)
+                new_branch_history: Optional[List[Mapping[str, Any]]]
+                branch_history_domain: List[List]
+                if not tracking_id:  # still have to discover last tracking
+                    branch_history_domain = [["id", ">", last_tracking_id]]
+                else:  # following the build tracking
+                    branch_history_domain = [["id", "=", tracking_id]]
+                new_branch_history = self.sh_connector.branch_history(
+                    self.sh_repo,
+                    self.sh_branch,
+                    custom_domain=branch_history_domain,
+                )
+                build_id: Optional[int] = None
+                if new_branch_history:
+                    if not tracking_id:
                         last_message: str = "Build queued..."
+                    tracking_id = new_branch_history[0]["id"]
+                    build_id = new_branch_history[0]["build_id"][0]
 
                 # fail if timed out
                 # TODO: More edge cases, like build disappears?
