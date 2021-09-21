@@ -73,8 +73,12 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
 
         # grab last tracking id  # TODO: DRY across commands
         branch_history_before: Optional[List[Mapping[str, Any]]]
-        branch_history_before = self.sh_connector.branch_history(self.sh_repo, self.sh_branch)
-        last_tracking_id: int = branch_history_before[0]['id'] if branch_history_before else 0
+        branch_history_before = self.sh_connector.branch_history(
+            self.sh_repo, self.sh_branch
+        )
+        last_tracking_id: int = (
+            branch_history_before[0]["id"] if branch_history_before else 0
+        )
 
         neutralize: bool = not is_production
         logger.info(f'''Starting{' neutralized ' if neutralize else ' '}database import''')
@@ -88,15 +92,17 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
         )
         # TODO: Check response
 
-        logger.info(f'Waiting for SH to build with new database')
+        logger.info(f"Waiting for SH to build with new database")
         try:  # TODO: DRY try-except block across commands
             self.wait_for_build(check_success=True, last_tracking_id=last_tracking_id)
         except BuildWarning as build_exc:
             new_build_info: Optional[Mapping[str, Any]] = build_exc.build_info
-            status_info: Optional[str] = new_build_info.get('status_info')
+            status_info: Optional[str] = new_build_info.get("status_info")
             logger.warning(
-                'SH build completed with warnings'
-                + (f': {status_info}' if status_info else '')
+                "SH build completed with warnings"
+                + (f": {status_info}" if status_info else "")
             )
         else:
-            logger.success(f'Database upload to {self.sh_repo}/{self.sh_branch} successful')
+            logger.success(
+                f'Database upload to "{self.sh_repo}" / "{self.sh_branch}" successful'
+            )

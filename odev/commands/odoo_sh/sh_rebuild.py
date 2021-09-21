@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from typing import Optional, Any, Mapping, List
 
 from odev.structures import commands
@@ -38,15 +36,16 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
             if not logger.confirm('Are you sure you want to continue?'):
                 raise CommandAborted()
 
-        # grab last tracking id
-        # TODO: DRY across commands
-        branch_history_before: Optional[List[Mapping[str, Any]]] = self.sh_connector.branch_history(
-            self.sh_repo,
-            self.sh_branch,
+        # grab last tracking id  # TODO: DRY across commands
+        branch_history_before: Optional[List[Mapping[str, Any]]]
+        branch_history_before = self.sh_connector.branch_history(
+            self.sh_repo, self.sh_branch
         )
-        last_tracking_id: int = branch_history_before[0]['id'] if branch_history_before else 0
+        last_tracking_id: int = (
+            branch_history_before[0]["id"] if branch_history_before else 0
+        )
 
-        logger.info(f'Rebuilding SH project `{self.sh_repo}` branch `{self.sh_branch}`')
+        logger.info(f'Rebuilding SH project "{self.sh_repo}" branch "{self.sh_branch}"')
         result: Any = self.sh_connector.branch_rebuild(self.sh_repo, self.sh_branch)
 
         if not isinstance(result, bool) or not result:
@@ -67,8 +66,8 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
             new_build_info: Optional[Mapping[str, Any]] = build_exc.build_info
             status_info: Optional[str] = new_build_info.get('status_info')
             logger.warning(
-                'SH build completed with warnings'
-                f': {status_info}' if status_info else ''
+                "SH build completed with warnings"
+                + (f": {status_info}" if status_info else "")
             )
         else:
             logger.success(f'Branch {self.sh_repo}/{self.sh_branch} rebuilt successfully')
