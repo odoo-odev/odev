@@ -16,9 +16,9 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
 
     name = 'rebuild'
 
-    def run(self):
-        branch_info = self.sh_connector.branch_info(self.sh_repo, self.sh_branch)
-        assert branch_info
+    def run(self) -> Any:
+        branch_info: Optional[Mapping[str, Any]]
+        branch_info = self.sh_connector.branch_info(self.sh_branch)
 
         if branch_info['stage'] == 'production':
             raise InvalidBranch(
@@ -38,16 +38,13 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
 
         # grab last tracking id  # TODO: DRY across commands
         branch_history_before: Optional[List[Mapping[str, Any]]]
-        branch_history_before = self.sh_connector.branch_history(
-            self.sh_repo, self.sh_branch
-        )
+        branch_history_before = self.sh_connector.branch_history(self.sh_branch)
         last_tracking_id: int = (
             branch_history_before[0]["id"] if branch_history_before else 0
         )
 
         logger.info(f'Rebuilding SH project "{self.sh_repo}" branch "{self.sh_branch}"')
-        result: Any = self.sh_connector.branch_rebuild(self.sh_repo, self.sh_branch)
-
+        result: Any = self.sh_connector.branch_rebuild(self.sh_branch)
         if not isinstance(result, bool) or not result:
             result_info: str = str(result)
             if isinstance(result, dict) and 'error' in result:

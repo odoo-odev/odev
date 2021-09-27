@@ -42,14 +42,14 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
     def run(self) -> Any:
         self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
 
-        build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
-        assert build_info
-        build_id = int(build_info['id'])
-        build_stage: str = build_info['stage']
-        project_info: Optional[Mapping[str, Any]] = self.sh_connector.project_info(self.sh_repo)
-        assert project_info
-        project_url: str = project_info['project_url']
-        is_production: bool = build_stage == 'production'
+        build_info: Optional[Mapping[str, Any]]
+        build_info = self.sh_connector.build_info(self.sh_branch)
+        build_id: int = int(build_info["id"])
+        build_stage: str = build_info["stage"]
+        project_info: Optional[Mapping[str, Any]]
+        project_info = self.sh_connector.project_info()
+        project_url: str = project_info["project_url"]
+        is_production: bool = build_stage == "production"
 
         if is_production:
             logger.warning(
@@ -73,9 +73,7 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
 
         # grab last tracking id  # TODO: DRY across commands
         branch_history_before: Optional[List[Mapping[str, Any]]]
-        branch_history_before = self.sh_connector.branch_history(
-            self.sh_repo, self.sh_branch
-        )
+        branch_history_before = self.sh_connector.branch_history(self.sh_branch)
         last_tracking_id: int = (
             branch_history_before[0]["id"] if branch_history_before else 0
         )

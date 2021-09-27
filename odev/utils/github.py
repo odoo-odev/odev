@@ -1,36 +1,21 @@
-from contextlib import nullcontext
-from typing import Optional, ContextManager
+from typing import Optional
 
 from git import Repo
 from github import Github
 
 from odev.utils import logging
-from odev.utils.secrets import secret_storage, StoreSecret
+from odev.utils.credentials import CredentialsHelper
 from odev.utils.config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
 
-__all__ = ['get_github']
-
-
 def get_github(token: Optional[str] = None) -> Github:
-    save: bool = False
-    storage_context: ContextManager[Optional[str]] = nullcontext(token)
-    if token is None:
-        storage_context = secret_storage('github_token')
-
-    with storage_context as token:
-        if token is None:
-            # TODO: provide cmdline args somewhere for running non-interactively
-            token = logger.password('Github token:')
-            save = True
+    with CredentialsHelper() as creds:
+        token = creds.secret("github.token", "Github token:", token)
         github: Github = Github(token)
         _ = github.get_user().login  # will raise with bad credentials
-        if save:  # save only after we've verified validity
-            raise StoreSecret(token)
-
-    return github
+        return github
 
 
 def git_clone(title, odoodir, name, branch):

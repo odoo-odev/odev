@@ -3,7 +3,7 @@
 import atexit
 import io
 import logging
-from typing import Any, Dict, Union, Optional, Sequence, List
+from typing import Any, Dict, Union, Optional, Sequence, List, Protocol
 from getpass import getpass
 
 from odev.utils.config import ConfigManager
@@ -26,6 +26,10 @@ class LogRecord(logging.LogRecord):
     def __init__(self, name, level, pathname, lineno, msg, args, exc_info, func=None, sinfo=None, **kwargs):
         super().__init__(name, level, pathname, lineno, msg, args, exc_info, func=func, sinfo=sinfo, **kwargs)
         self.symbol = SYMBOLS.get(self.levelname, ' ')
+
+
+class PromptFn(Protocol):
+    def __call__(self, question: str, default: Optional[str] = None) -> Optional[str]: ...
 
 
 class Logger(logging.getLoggerClass()):
@@ -89,7 +93,7 @@ class Logger(logging.getLoggerClass()):
             answer = input(message)[0].lower()
         return answer == 'y'
 
-    def ask(self, question: str, default: Optional[str] = None) -> str:
+    def ask(self, question: str, default: Optional[str] = None) -> Optional[str]:
         '''
         Asks something to the user.
         '''
@@ -99,12 +103,16 @@ class Logger(logging.getLoggerClass()):
             return default
         return answer
 
-    def password(self, question: str):
+    def password(self, question: str, default: Optional[str] = None) -> Optional[str]:
         '''
         Asks for a password.
         '''
-        message = self.format_question(question)
-        return getpass(message)
+        answer: str = getpass(
+            self.format_question(question, default="unchanged" if default else None)
+        )
+        if default and not answer:
+            return default
+        return answer
 
 
 logging.setLoggerClass(Logger)

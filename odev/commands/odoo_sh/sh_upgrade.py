@@ -5,7 +5,7 @@ from odev.exceptions.commands import CommandAborted
 import os
 import subprocess
 from decorator import contextmanager
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from argparse import Namespace
 from dataclasses import dataclass
 from io import StringIO
@@ -298,7 +298,7 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
     @contextmanager
     def upgrade_build_context(self) -> Iterator[UpgradeBuildContext]:
         build_info: Optional[Mapping[str, Any]]
-        build_info = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
+        build_info = self.sh_connector.build_info(self.sh_branch)
         if not build_info:
             raise RuntimeError(f"Couldn't get last build for branch {self.sh_branch}")
         previous_build_commit_id: str = build_info["head_commit_id"][1]
@@ -347,23 +347,16 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
                         f"({new_build_sha}) than expected ({expected_sha})"
                     )
                 # set own ssh_url to new build, even if failed
-                self.ssh_url = self.sh_connector.get_build_ssh(
-                    self.sh_repo, self.sh_branch, build_id=int(new_build_info["id"])
-                )
+                self.ssh_url = self.sh_connector.get_build_ssh(self.sh_branch, build_id=int(new_build_info["id"]))
             else:
                 self.ssh_url = None
 
             # N.B. the previous build container gets a new id, let's use commit
             previous_build_info: Optional[Mapping[str, Any]]
-            previous_build_info = self.sh_connector.build_info(
-                self.sh_repo, self.sh_branch, commit=previous_build_commit_id
-            )
+            previous_build_info = self.sh_connector.build_info(self.sh_branch, commit=previous_build_commit_id)
             if previous_build_info and previous_build_info["status"] != "dropped":
-                self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
-                    self.sh_repo,
-                    self.sh_branch,
-                    build_id=previous_build_info["id"],
-                )
+                self.previous_build_ssh_url = self.sh_connector.get_build_ssh(self.sh_branch,
+                                                                              build_id=previous_build_info["id"])
             else:
                 logger.info(
                     f"Previous build on {previous_build_commit_id[:7]} unavailable, "
@@ -417,10 +410,9 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
         super().__init__(args)
 
         project_info: Mapping[str, Any]
-        [project_info] = self.sh_connector.get_project_info(self.sh_repo)
-        self.repository: Repository.Repository = self.github.get_repo(project_info['full_name'])
-        self.pull_request: PullRequest.PullRequest = self.repository.get_pull(args.pull_request)
-
+        [project_info] = self.sh_connector.get_project_info()
+        self.repo: Repository = self.github.get_repo(project_info["full_name"])
+        self.pull_request: PullRequest = self.repo.get_pull(args.pull_request)
         if self.pull_request.merged or not self.pull_request.mergeable:
             raise RuntimeError(
                 f'Pull request {self.repo.full_name} '

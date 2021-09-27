@@ -585,15 +585,11 @@ class GitHubCommand(Command, ABC):
         self.github: Github = get_github(args.token)
 
 
-class OdooSHDatabaseCommand(Command, ABC):
-    '''
-    Base class with common functionality for commands running on odoo.sh.
-    '''
-
-    sh_connector: ShConnector
-    '''
-    Connector to Odoo SH
-    '''
+# TODO: reuse this mixin for all commands that use odoo.com creds (dump... uhh... just dump)
+class OdooComCliMixin(Command, ABC):
+    """
+    Base class with common functionality for commands running on odoo.sh
+    """
 
     arguments = [
         dict(
@@ -606,21 +602,47 @@ class OdooSHDatabaseCommand(Command, ABC):
         ),
     ]
 
-    @staticmethod
-    def get_sh_connector_from_args(args: Namespace) -> ShConnector:
-        '''
-        Creates an :class:`ShConnector` instance from the given parsed arguments.
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.login: Optional[str] = args.login
+        self.password: Optional[str] = args.password
 
-        :param args: the parsed parameters as a :class:`Namespace` object.
-        :return: the initialized :class:`ShConnector` instance.
-        '''
 
-        logger.info('Connecting to odoo.sh')
-        return get_sh_connector(args.login, args.password)
+class OdooSHDatabaseCommand(OdooComCliMixin, Command, ABC):
+    """
+    Base class with common functionality for commands running on odoo.sh
+    """
+
+    sh_connector: ShConnector
+    '''
+    Connector to Odoo SH
+    '''
+
+    arguments = [
+        dict(
+            aliases=['repo'],
+            metavar="REPO",
+            help='the name of the SH project / github repo, eg. psbe-client',
+        ),
+        dict(
+            aliases=['-gu', '--github-user'],
+            help='username of the github user for odoo.sh login',
+        ),
+    ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.sh_connector: ShConnector = self.get_sh_connector_from_args(args)
+
+        if not args.repo:
+            raise ValueError("Invalid SH project / repo")
+        self.sh_repo: str = args.repo
+
+        self.github_user: str = args.github_user
+
+        logger.info("Connecting to odoo.sh")
+        self.sh_connector: ShConnector = get_sh_connector(
+            self.login, self.password, self.sh_repo, self.github_user
+        )
 
 
 class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
@@ -640,31 +662,22 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
 
     arguments = [
         dict(
-            name='repository',
-            dest='repo',
-            metavar='REPOSITORY',
-            help='Name of the Odoo SH or GitHub repository to target (e.g. psbe-client)',
-        ),
-        dict(
             name='branch',
             metavar='BRANCH',
-            help='Name pof the Odoo SH or GitHub branch to target',
+            help='Name of the Odoo SH or GitHub branch to target',
         ),
     ]
 
     def __init__(self, args: Namespace):
-        if not args.repo:
-            raise InvalidArgument('Invalid SH project / repository')
-
         if not args.branch:
-            raise InvalidArgument('Invalid git branch')
+            raise InvalidArgument('Invalid SH / GitHub branch')
 
-        self.sh_repo = args.repo
         self.sh_branch = args.branch
 
         super().__init__(args)
 
-        self.ssh_url = self.sh_connector.get_last_build_ssh(self.sh_repo, self.sh_branch)
+        self.ssh_url: str = self.sh_connector.get_last_build_ssh(self.sh_branch)
+        self.paths_to_cleanup: List[str] = []
 
     def ssh_run(self, *args, **kwargs) -> subprocess.CompletedProcess:
         '''
@@ -757,9 +770,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
         last_tracking_id: Optional[int] = None,
     ):
         if last_tracking_id is None:
-            branch_history_before = self.sh_connector.branch_history(
-                self.sh_repo, self.sh_branch
-            )
+            branch_history_before = self.sh_connector.branch_history(self.sh_branch)
             last_tracking_id = (
                 branch_history_before[0]["id"] if branch_history_before else 0
             )
@@ -792,9 +803,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                 else:  # following the build tracking
                     branch_history_domain = [["id", "=", tracking_id]]
                 new_branch_history = self.sh_connector.branch_history(
-                    self.sh_repo,
-                    self.sh_branch,
-                    custom_domain=branch_history_domain,
+                    self.sh_branch, custom_domain=branch_history_domain
                 )
                 build_id: Optional[int] = None
                 if new_branch_history:
@@ -817,7 +826,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                 # get build info (no sanity check)
                 build_info: Optional[Mapping[str, Any]]
                 build_info = build_id and self.sh_connector.build_info(
-                    self.sh_repo, self.sh_branch, build_id=build_id
+                    self.sh_branch, build_id=build_id
                 )
                 status_info: Optional[str]
                 status_info = build_info.get("status_info")
