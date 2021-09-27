@@ -3,6 +3,7 @@
 from . import config
 from . import curl
 from . import github
+from . import logging
 from . import odoo
 from . import os
 from . import psql
