@@ -67,3 +67,30 @@ def git_pull(title, odoodir, name, branch):
             logger.info(f'Pulling {pending} commits')
             repo.remotes.origin.pull()
             logger.success('Up to date!')
+
+
+def self_update() -> bool:
+    '''
+    Check for updates in the odev repository and download them if necessary.
+
+    :return: True if updates were pulled, False otherwise
+    '''
+
+    config = ConfigManager('odev')
+    odev_path = config.get('paths', 'odev')
+    repo = Repo(odev_path)
+    head = repo.head.ref
+    tracking = head.tracking_branch()
+
+    if not tracking:
+        logger.debug('No remote branch set, running in development mode')
+        return False
+
+    pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
+
+    if pending > 0 and logger.confirm('An update is available for odev, do you want to download it now?'):
+        repo.remotes.origin.pull()
+        logger.success('Up to date!')
+        return True
+
+    return False

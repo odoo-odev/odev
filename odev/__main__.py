@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
+import os
+
 # Explicitly initialize relative imports if run directly
 if not __package__:
-    import sys
-    import os
     package_dir = os.path.dirname(os.path.realpath(__file__))
     sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
     __package__ = os.path.basename(package_dir)
 
-import logging
 from signal import signal, SIGINT, SIGTERM
 from subprocess import CalledProcessError
 
@@ -20,7 +20,6 @@ from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgu
 from odev.exceptions.odoo import InvalidDatabase, InvalidOdooDatabase, RunningOdooDatabase
 
 _logger = logging.getLogger(__name__)
-
 
 code = 0
 
@@ -44,6 +43,10 @@ def main():
     signal(SIGTERM, signal_handler)
 
     try:
+        if self_update():
+            # Restart the process with updated code
+            os.execv(sys.argv.pop(0), sys.argv)
+
         registry = CommandRegistry().load_commands()
         code = registry.handle()
     except CommandAborted as e:
@@ -75,11 +78,7 @@ def main():
     except Exception as e:
         _logger.error(str(e))
         code = 1
-        # FIXME: implement custom exceptions to catch expected errors and graceful exit.
-        #        Keep raising on unexpected ones (that require code fix).
         raise
     finally:
-        level = "SUCCESS"
-
         if code not in (None, 0):
             _logger.error(f'Exiting with code {code}')
