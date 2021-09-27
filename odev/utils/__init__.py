@@ -1,6 +1,6 @@
-"""Utility modules and code"""
+# -*- coding: utf-8 -*-
 
-from . import utils
+from . import config
 from . import secrets
 from . import shconnector
 from . import github
