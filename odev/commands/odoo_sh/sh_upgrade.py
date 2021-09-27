@@ -4,7 +4,7 @@ import configparser
 from odev.exceptions.commands import CommandAborted
 import os
 import subprocess
-from decorator import contextmanager
+from contextlib import contextmanager
 from abc import ABC, abstractmethod
 from argparse import Namespace
 from dataclasses import dataclass
