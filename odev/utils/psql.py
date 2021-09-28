@@ -6,6 +6,7 @@ import psycopg2
 from psycopg2 import sql
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
+from odev.exceptions.commands import InvalidQuery
 
 class PSQL():
 
@@ -45,9 +46,14 @@ class PSQL():
                 assert self.cursor
                 assert isinstance(query, str)
                 self.cursor.execute(dedent(query).strip())
-            result = self.cursor.fetchall()
-        except Exception:  # FIXME: Too broad and non-descriptive
-            result = False
+
+            if any(str(query).lower().startswith('select') for query in queries):
+                result = self.cursor.fetchall()
+            else:
+                result = True
+        except Exception as e:  # FIXME: Too broad and non-descriptive
+            description = str(e).split('\n')[0]
+            raise InvalidQuery(f'''Error while running SQL query: {description}''')
 
         return result
 

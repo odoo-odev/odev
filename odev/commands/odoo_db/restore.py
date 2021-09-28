@@ -90,7 +90,7 @@ class RestoreCommand(commands.LocalDatabaseCommand):
             pg_subprocess(['pg_restore', *('-d', database), dump_path])
 
         def psql_load(database, sql_file):
-            pg_subprocess(f'psql "{database}"" < "{sql_file}"')
+            pg_subprocess(f'psql "{database}" < "{sql_file}"')
 
         if ext == 'dump':
             pg_restore(self.database, self.dump_path)

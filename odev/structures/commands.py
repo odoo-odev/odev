@@ -313,10 +313,10 @@ class LocalDatabaseCommand(Command, ABC):
                         raise InvalidQuery(e)
                     return None
 
-        if any(query.lower().startswith('select') for query in queries):
-            return result
-        else:
-            return True
+            if any(query.lower().startswith('select') for query in queries):
+                return result
+            else:
+                return True
 
     def db_list(self):
         '''

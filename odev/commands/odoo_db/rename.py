@@ -61,7 +61,7 @@ class RenameCommand(commands.LocalDatabaseCommand):
             raise CommandAborted()
 
         _logger.info(f'Renaming database `{name_old}` to `{name_new}`')
-        query = f'''ALTER DATABASE '{name_old}' RENAME TO '{name_new}';'''
+        query = f'''ALTER DATABASE "{name_old}" RENAME TO "{name_new}";'''
         result = self.run_queries(query, database=DEFAULT_DATABASE)
         _logger.info('Renamed database')
 

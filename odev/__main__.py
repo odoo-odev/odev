@@ -16,7 +16,7 @@ from subprocess import CalledProcessError
 from odev.utils import logging
 from odev.utils.github import self_update
 from odev.structures.registry import CommandRegistry
-from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgument
+from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgument, InvalidQuery
 from odev.exceptions.odoo import InvalidDatabase, InvalidOdooDatabase, RunningOdooDatabase
 
 _logger = logging.getLogger(__name__)
@@ -69,6 +69,9 @@ def main():
     except RunningOdooDatabase as e:
         _logger.error(str(e))
         code = 203
+    except InvalidQuery as e:
+        _logger.error(str(e))
+        code = 204
 
     # ============================================================================== #
     # FIXME: implement custom exceptions to catch expected errors and graceful exit. #

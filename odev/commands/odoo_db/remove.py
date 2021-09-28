@@ -41,7 +41,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
 
         filestore = self.db_filestore()
         _logger.info(f'Deleting PSQL database {self.database}')
-        query = f'''DROP DATABASE '{self.database}';'''
+        query = f'''DROP DATABASE "{self.database}";'''
         result = self.run_queries(query, database=DEFAULT_DATABASE)
 
         if not result or self.db_exists_all():
