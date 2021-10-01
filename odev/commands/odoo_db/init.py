@@ -8,6 +8,7 @@ from argparse import Namespace
 
 from odev.structures import commands
 from odev.utils import logging, odoo
+from odev.utils.signal import capture_signals
 
 
 _logger = logging.getLogger(__name__)
@@ -78,8 +79,10 @@ class InitCommand(commands.LocalDatabaseCommand):
                 '--without-demo=all',
             ]
         )
-        _logger.info(f'Running:\n{command}\n')
-        subprocess.run(command, shell=True, check=True)
+        _logger.info(f'Running: {command}')
+
+        with capture_signals():
+            subprocess.run(command, shell=True, check=True)
 
         self.config['databases'].set(self.database, 'version_clean', version)
 

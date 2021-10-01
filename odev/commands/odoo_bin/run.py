@@ -8,6 +8,7 @@ from datetime import datetime
 
 from odev.structures import commands, actions
 from odev.utils import logging, odoo
+from odev.utils.signal import capture_signals
 from odev.exceptions.odoo import RunningOdooDatabase
 from odev.constants import ODOO_ADDON_PATHS
 
@@ -103,7 +104,9 @@ class RunCommand(commands.LocalDatabaseCommand):
         )
 
         command = shlex.join(command_args)
-        logger.info(f'Running:\n{command}\n')
-        subprocess.run(command, shell=True, check=True)
+        logger.info(f'Running: {command}')
+
+        with capture_signals():
+            subprocess.run(command, shell=True, check=True)
 
         return 0

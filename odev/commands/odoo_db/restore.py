@@ -12,6 +12,7 @@ from zipfile import ZipFile
 from odev.structures import commands
 from odev.commands.odoo_db import remove, create, clean
 from odev.utils import logging
+from odev.utils.signal import capture_signals
 from odev.exceptions import RunningOdooDatabase, CommandAborted
 
 
@@ -84,7 +85,9 @@ class RestoreCommand(commands.LocalDatabaseCommand):
         def pg_subprocess(commandline):
             nonlocal self
             _logger.info(f'Importing SQL data to database {self.database}')
-            subprocess.run(commandline, shell=True, check=True, stdout=subprocess.DEVNULL)
+
+            with capture_signals():
+                subprocess.run(commandline, shell=True, check=True, stdout=subprocess.DEVNULL)
 
         def pg_restore(database, dump_path):
             pg_subprocess(['pg_restore', *('-d', database), dump_path])

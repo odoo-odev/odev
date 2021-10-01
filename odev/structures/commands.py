@@ -29,6 +29,7 @@ from typing import (
 
 from odev.utils import logging
 from odev.utils.github import get_github
+from odev.utils.signal import capture_signals
 from odev.utils.spinner import SpinnerBar, poll_loop
 from odev.utils.shconnector import get_sh_connector, ShConnector
 from odev.utils.config import ConfigManager
@@ -722,17 +723,19 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
         full_dest: str = f'{self.ssh_url}:{dest}'
         sources_info: str = ', '.join(f'`{s}`' for s in sources)
         logger.debug(f'Copying {sources_info} to `{full_dest}`')
-        subprocess.run(
-            [
-                'rsync',
-                '-a',
-                *(['--info=progress2'] if show_progress else []),
-                '--exclude=__pycache__',
-                *sources,
-                full_dest,
-            ],
-            check=True,
-        )
+
+        with capture_signals():
+            subprocess.run(
+                [
+                    'rsync',
+                    '-a',
+                    *(['--info=progress2'] if show_progress else []),
+                    '--exclude=__pycache__',
+                    *sources,
+                    full_dest,
+                ],
+                check=True,
+            )
 
     def wait_for_build(
         self,

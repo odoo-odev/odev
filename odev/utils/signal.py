@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import signal
-from signal import Signals
+from signal import Signals, SIGINT, SIGTERM
 from contextlib import contextmanager
 from types import FrameType
 from typing import (
@@ -27,9 +27,12 @@ def warn_signal_handler(signum: Signals, frame: FrameType) -> None:
 
 @contextmanager
 def capture_signals(
-    signals: Union[Signals, Collection[Signals]],
+    signals: Optional[Union[Signals, Collection[Signals]]] = None,
     handler: Optional[SignalHandler] = None,
 ) -> ContextManager:
+    if signals is None:
+        signals = [SIGINT, SIGTERM]
+
     if handler is None:
         handler = warn_signal_handler
 

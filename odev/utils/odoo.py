@@ -8,6 +8,7 @@ from odev.exceptions import InvalidOdooDatabase
 from odev.utils import logging
 from odev.utils.os import mkdir
 from odev.utils.github import git_clone, git_pull
+from odev.utils.signal import capture_signals
 from odev.exceptions import CommandAborted
 
 
@@ -85,7 +86,9 @@ def pre_run(odoodir, odoobin, version):
         try:
             command = 'cd %s && virtualenv --python=%s venv > /dev/null' % (odoodir, python_version)
             logger.info('Creating virtual environment: Odoo %s + Python %s ' % (version, python_version))
-            subprocess.run(command, shell=True, check=True)
+
+            with capture_signals():
+                subprocess.run(command, shell=True, check=True)
         except Exception:
             logger.error('Error creating virtual environment for Python %s' % (python_version))
             logger.error(
@@ -97,4 +100,6 @@ def pre_run(odoodir, odoobin, version):
 
     command = '%s/venv/bin/python -m pip install -r %s/odoo/requirements.txt > /dev/null' % (odoodir, odoodir)
     logger.info('Checking for missing dependencies in requirements.txt')
-    subprocess.run(command, shell=True, check=True)
+
+    with capture_signals():
+        subprocess.run(command, shell=True, check=True)
