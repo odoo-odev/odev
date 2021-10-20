@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+import zipfile
+import re
 from argparse import Namespace
 from typing import Optional, Any, Mapping, List
 
@@ -39,11 +41,43 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.dump_path: str = args.dump
+        self.keep_filestore: bool = args.keep_filestore
 
         if not os.path.exists(self.dump_path) or not os.path.isfile(self.dump_path):
             raise InvalidArgument(f'The specified dump is not a file: {self.dump_path}')
-        # TODO: additional checks for .zip file with correct dump.sql/filestore fmt
-        self.keep_filestore: bool = args.keep_filestore
+
+        self._validate_dump_file(self.dump_path)
+
+    @classmethod
+    def _validate_dump_file(self, dump_file_path: str):
+        """
+        Check dump file is in the correct format for SH upload
+        :param dump_file_path: the dump file path
+        """
+        path, ext = os.path.splitext(dump_file_path)
+        if ext == ".zip":  # TODO: what if it's not a zip file?
+            # regex to match filestore paths in zipfile
+            fs_regex = re.compile(r"(filestore/)(?:checklist/)?(?:[a-z\d]{2}/[a-z\d]{40})?")
+            # mandatory
+            required_zipfile_content = {
+                "filestore/",
+                "dump.sql"
+            }
+            with zipfile.ZipFile(dump_file_path) as dump_zipfile:
+                for member in dump_zipfile.namelist():
+                    m = fs_regex.match(member)  # filestore path
+                    if m:
+                        if m.group(1) in required_zipfile_content:
+                            required_zipfile_content.remove(m.group(1))
+                        else:
+                            continue
+                    else:  # dump.sql
+                        try:
+                            required_zipfile_content.remove(member)
+                        except KeyError:
+                            raise RuntimeError(f"Unknown file in zipped dump: {member}")
+                if required_zipfile_content:
+                    raise RuntimeError(f"Zipped dump does not contain mandatory member(s): {required_zipfile_content}")
 
     def run(self) -> Any:
         self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
