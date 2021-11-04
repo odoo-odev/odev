@@ -46,7 +46,7 @@ def run():
     ]
 
     try:
-        ubin = os.path.join(Path.home(), '.local', 'bin', 'odev')
+        ubin = os.path.join('/usr', 'local', 'bin', 'odev')
 
         if os.path.exists(ubin) or os.path.islink(ubin):
             os.remove(ubin)
