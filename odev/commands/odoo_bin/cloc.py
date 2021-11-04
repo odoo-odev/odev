@@ -84,5 +84,5 @@ class ClocCommand(run.RunCommand):
         table_text_split = table_text.replace(table_separator, term.snow4(table_separator)).split('\n')
         table_text_split.insert(len(table_text_split) - 1, term.snow4(table_separator.replace('=', '-')))
 
-        print(indent('\n'.join(table_text_split), ' ' * 2), end='')
+        print('\n' + indent('\n'.join(table_text_split), ' ' * 2), end='')
         return 0
