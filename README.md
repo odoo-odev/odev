@@ -1,38 +1,35 @@
 # ODEV
 
-Odoo development framework for automating common tasks related to Odoo custom
-developments.
+Automate common tasks relative to working with Odoo development databases.
 
 <!-- TOC depthFrom:2 -->
 
-- [Install](#install)
-- [Update](#update)
+- [About](#about)
+- [Contributing](#contributing)
+- [Installation](#installation)
+- [Updates](#updates)
 - [Try It!](#try-it)
-- [Docs](#docs)
-  - [Clean](#clean)
-  - [Create](#create)
-  - [Dump](#dump)
-  - [Init](#init)
-  - [Kill](#kill)
-  - [List](#list)
-  - [Quickstart](#quickstart)
-  - [Remove](#remove)
-  - [Rename](#rename)
-  - [Restore](#restore)
-  - [Run](#run)
-  - [Version](#version)
-- [Examples](#examples)
-  - [Restore an existing dump to a new local database](#restore-an-existing-dump-to-a-new-local-database)
-  - [Launch a local database](#launch-a-local-database)
-  - [Kill a running database](#kill-a-running-database)
-  - [Delete a local database to save disk space](#delete-a-local-database-to-save-disk-space)
-  - [Dump a SaaS database and restores it in a new local database in one command](#dump-a-saas-database-and-restores-it-in-a-new-local-database-in-one-command)
-  - [List local databases and display their version and status](#list-local-databases-and-display-their-version-and-status)
-  - [Create a fresh, empty database in Odoo 12.0](#create-a-fresh-empty-database-in-odoo-120)
+- [Commands](#commands)
 
 <!-- /TOC -->
 
-## Install
+## About
+
+Odev is a multi-purpose tool destined at making the life of PS-Tech developers easier.
+
+It provides wrapper scripts around common tasks, speeding up the whole process of working with databases and allowing shortcuts to otherwise lengthy commands.
+
+## Contributing
+
+### Want to improve Odev?
+
+Create your own branch from `psbe-ps-tech-tools/odev` then submit a pull request to merge your development to the `odev` branch. After review and proper testing, your feature will be made available to all.
+
+### Found a bug?
+
+Either fix it in a new branch and create a pull request, or submit an issue on GitHub explaining what happened, how to reproduce it and what was the expected result.
+
+## Installation
 
 Make sure [Python 3](https://www.python.org/download/releases/3.0/) is installed and available in your path.
 Install the requirements through `pip3`:
@@ -41,7 +38,7 @@ Install the requirements through `pip3`:
 pip3 install --user -r requirements.txt
 ```
 
-Clone the [odev repository](https://github.com/brinkflew/odev) to your computer and navigate to the `odev` folder:
+Clone the [odev repository](https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev) to your computer and navigate to the `odev` folder:
 
 ```sh
 git clone --single-branch --branch odev git@github.com:odoo-ps/psbe-ps-tech-tools.git odev && cd odev
@@ -57,9 +54,11 @@ That's it! You are ready to go, use `odev` from anywhere in your terminal to use
 
 ---
 
-## Update
+## Updates
 
-Simply `git fetch && git pull` the repository again to update to the latest version.
+Odev will automatically check for updates and ask whether you want to install them at each run.
+
+If you want to manually fetch updates, simply `git fetch && git pull` the repository to update to the latest version.
 
 You may have to rerun the `setup` if you didn't keep your local repository as install path, otherwise you are good to go!
 
@@ -70,342 +69,153 @@ You may have to rerun the `setup` if you didn't keep your local repository as in
 Run `odev list` from anywhere in your terminal to get a list of your local Odoo databases:
 
 ```sh
-odev list
+odev list --all
 ```
 
 ```txt
-[i] Listing local Odoo databases...
- ⬤  test ..................... (13.0 - enterprise)
-[*] Exiting with code 0
+       Name         Version             URL
+  =========================================
+   ⬤   odev_test    14.0 - enterprise
+   ⬤   my_odoo_db   15.0 - enterprise
 ```
 
 ---
 
-## Docs
+## Commands
 
-Arguments in square brackets (`[<arg>]`) are optional and can be omitted, arguments in angular brackets (`<arg>`) are required.
+**Usage:** `odev <command> <args>`
 
-### Clean
+Arguments in square brackets ([arg]) are optional and can be omitted,
+arguments in curvy brackets ({arg}) are options to choose from,
+arguments without brackets (arg) are required.
 
-Makes a local Odoo database suitable for development:
+To get help on a specific command and its usage, use `odev help <command>`
 
-- Disables automated and scheduled actions
-- Disables mails
-- Set credentials for Administrator user  to **admin**:**admin**
-- Set password for all other users to **odoo**
-- Extend database validity to December 2050
+Odev provides the following commands:
 
-```sh
-odev clean <database>
-```
+### `clean`
 
-| Args     | Description                         |
-|----------|-------------------------------------|
-| database | Name of the local database to clean |
+Render a local Odoo database suitable for development:
+  - Disable automated and scheduled actions
+  - Disable mails
+  - Set credentials for the Administrator user to `admin`:`admin`
+  - Set password for the first 50 users to `odoo`
+  - Extend database validity to December 2050 and remove enterprise code
+  - Set report.url and web.base.url to `http://localhost:8069`
+  - Disable Oauth providers
 
-### Create
+### `cloc`
 
-Creates a new, *empty*, local PostgreSQL database, not initialized with Odoo.
+Count the lines of code in custom modules.
 
-```sh
-odev create <database> [<template>]
-```
+### `create`
 
-| Args     | Description                                                                                          |
-|----------|------------------------------------------------------------------------------------------------------|
-| database | Name of the local database to create; the name is sanitized so that it can be used within PostgreSQL |
-| template | Optional: name of an existing PostgreSQL database to copy                                            |
+Create a new empty local PostgreSQL database without initializing it with Odoo.
+Effectively a wrapper around `pg_create` with extra checks.
 
-### Dump
+### `dump`
 
-Downloads a dump of a SaaS or SH database and saves it to your computer. Lets you choose whether to download the filestore or not.
+Download a dump of a SaaS or SH database and save it locally.
+You can choose whether to download the filestore or not.
 
-```sh
-odev dump <database> <url> <dest>
-```
+### `get`
 
-| Args     | Description                                                                                                                  |
-|----------|------------------------------------------------------------------------------------------------------------------------------|
-| database | Name of the database, this is only used in the name of the downloaded dump file and doesn't have to match an actual database |
-| url      | URL to the database to dump, in the form of `https://db.odoo.com`. The protocol part (`http/s://`) can be omitted.           |
-| dest     | Directory to which the dumped file will be saved once downloaded                                                             |
+Get a config parameter as used within odev.
 
-### Init
+### `help`
 
-Initializes an empty PSQL database with a basic version of Odoo. Basically, installs the base module on an empty DB.
+Display extensive help about the selected command or a generic help message lightly covering all available commands.
 
-```sh
-odev init <database> <version>
-```
+### `init`
 
-| Args     | Description                                                      |
-|----------|------------------------------------------------------------------|
-| database | Name of the local database to initialize                         |
-| version  | Odoo version to use; must correspond to an Odoo community branch |
+Initialize an empty PSQL database with the base version of Odoo for a given major version.
 
-### Kill
+### `kill`
 
-Kills a running Odoo database. Useful if the process crashed because of a forgotten IPDB or if you lost your terminal and don't want to search for the process' PID.
+Kill a running Odoo database. Useful if the process crashed because of a forgotten IPDB or if you lost your terminal and don't want to search for the process' PID.
 
-```sh
-odev kill <database>
-```
+### `list`
 
-| Args     | Description                                       |
-|----------|---------------------------------------------------|
-| database | Name of the local database to kill the process of |
+List all Odoo databases on this computer. If a database is defined in PostgreSQL but not initialized with Odoo, it will not be listed here.
 
-### List
+A pattern can optionally be provided to filter databases based on their name.
 
-Lists all the local Odoo databases. If a database is defined in PostgreSQL but not initialized with Odoo, it will not appear in this list.
+### `quickstart`
 
-```sh
-odev list
-```
+Quickly setup a local database and start working with it directly.
 
-### Quickstart
+This command performs the following actions:
+  - Create a new, empty database
+  - Initialize, dump and restore or restore an existing dump
+  - Clean the database so that it can be used for development
 
-~~Summons a quickstart consultant.~~ Quickly and easlily setups a database.
-This performs the following actions:
+### `rebuild`
 
-- Creates a new, empty database
-- Initializes, dumps and restores or restores an existing dump to the new database
-- Cleanses the database so that it can be used for development
+Launch a rebuild of a branch on Odoo SH.
 
-```sh
-odev quickstart <database> <version|path|url>
-```
+### `remove`
 
-| Args               | Description                                       |
-|--------------------|---------------------------------------------------|
-| database           | Name of the local database to create              |
-| version\|path\|url | If a version number, calls `odev init`; If a path to a local file, attempts to restore it to the database (the file must be a valid database dump); If a URL to an Odoo SaaS or SH database, downlaods a dump of it and restores it locally |
+Drop a local database in PostgreSQL and delete its Odoo filestore on disk.
 
-### Remove
+### `rename`
 
-Removes a local database from PostgreSQL and deletes its filestore.
+Rename a local database and move its filestore to the corresponding path.
 
-```sh
-odev remove <database>
-```
+### `restore`
 
-| Args     | Description                          |
-|----------|--------------------------------------|
-| database | Name of the local database to remove |
+Restore an Odoo dump file to a local database and import its filestore if present. '.sql', '.dump' and '.zip' files are supported.
 
-### Rename
+### `run`
 
-Renames a database and its filestore.
+Run a local Odoo database, prefilling common addon paths and making sure the right version of Odoo is installed and in use.
 
-```sh
-odev rename <database> <new_name>
-```
+If the version of Odoo required for the database is not present, download and install it locally.
+This is done by cloning the Odoo community, enterprise and design-themes repositories
+multiple times (once per version) to always keep a copy of each version on the computer.
+To save storage space, only one branch is cloned per version, keeping all other branches out of the history.
 
-| Args     | Description                                 |
-|----------|---------------------------------------------|
-| database | Name of the local database to rename        |
-| new_name | New name for the database and its filestore |
+### `set`
 
-### Restore
+Set a config parameter to use within odev.
 
-Restores an Odoo dump file to a local database and imports its filestore if present.
-`.sql`, `.dump` and `.zip` files are supported.
+Valid key-value pairs are defined as follows:
+  - logger.theme: Theme to use for Odev's logger (minimal|extended)
+  - path.odoo: Local path to where odoo files are stored
+  - path.dump: Local path to where dump files are stored when downloaded through Odev
+  - path.dev: Local path to where custom development repositories are located
 
-```sh
-odev restore <database> <dump_file>
-```
+### `shell`
 
-| Args      | Description                                     |
-|-----------|-------------------------------------------------|
-| database  | Name of the local database to restore           |
-| dump_file | Path to the dump file to import to the database |
-
-### Run
+Open the Odoo shell for a local database.
 
-Runs a local Odoo database, prefilling common addon paths and making sure the right version of Odoo is installed and in use.
+### `test`
 
-If the version of Odoo required for the database is not present, downloads it and installs it locally. This is done by cloning the Odoo community, enterprise and design-themes repository multiple times to always keep a copy of each version on the computer. To save storage space, only one branch is cloned per version, keeping all other branches out of the history. This means that the sum of the sizes of all independant local versions should be lower (or roughly equal if all versions are installed) than the size of the entire Odoo repositories.
+Run tests on a local Odoo database.
 
-```sh
-odev run <database> <addons> [<options>]
-```
-
-| Args     | Description                                                               |
-|----------|---------------------------------------------------------------------------|
-| database | Name of the local database to restore                                     |
-| addons   | List of addon paths to add to the default ones, separated by a coma (`,`) |
-| options  | Optional: additional arguments to pass to `odoo-bin`                      |
-
-### Version
-
-Gets the version of a local Odoo database.
-
-```sh
-odev version <database>
-```
-
-| Args     | Description                    |
-|----------|--------------------------------|
-| database | Database to get the version of |
-
-## Examples
-
-Here are a few 'common' examples of what you can do using `odev`.
-
-### Restore an existing dump to a new local database
-
-```txt
-$ odev create testdb
-[i] Creating database testdb
-[i] Created database testdb
-[*] Exiting with code 0
-
-$ odev restore testdb /odoo/dumps/testdb/testdb.dump.zip
-[i] Restoring dump file '/odoo/dumps/testdb/testdb.dump.zip' to database testdb
-[!] This may take a while, please be patient...
-[i] Filestore detected, installing to /home/brinkflew/.local/share/Odoo/filestore/testdb/
-[i] Importing SQL data to database testdb
-[*] Exiting with code 0
-
-$ odev clean testdb
-[i] Cleaning database testdb
-[i] Cleaned database testdb
-[i] Login to the administrator account with the credentials 'admin:admin'      
-[i] Login to any other account with their email address and the password 'odoo'
-[*] Exiting with code 0
-```
-
-### Launch a local database
-
-```txt
-$ odev run testdb /odoo/dev/psbe-testdb -u testmodule --dev=xml
-[i] Checking for updates in Odoo Community version 13.0
-[*] Up to date!
-[i] Checking for updates in Odoo Enterprise version 13.0
-[*] Up to date!
-[i] Checking for updates in Odoo Design Themes version 13.0
-[*] Up to date!
-[i] Running: /odoo/versions/13.0/odoo/odoo-bin -d testdb --addons-path=/odoo/versions/13.0/enterprise,/odoo/versions/13.0/design-themes,/odoo/versions/13.0/odoo/odoo/addons,/odoo/versions/13.0/odoo/addons,/odoo/dev/psbe-testdb -u testmodule --dev=xml
-2020-09-14 12:29:23,186 25776 INFO ? odoo: Odoo version 13.0
-[...]
-```
-
-### Kill a running database
-
-```txt
-$ odev kill testdb
-[i] Stopping database testdb
-[*] Exiting with code 0
-```
-
-*In the terminal in which the database was running:*
-
-```txt
-[...]
-2020-09-14 12:40:21,278 26655 INFO testdb odoo.modules.loading: loading 216 modules...
-2020-09-14 12:40:24,943 26655 INFO testdb odoo.modules.loading: 216 modules loaded in 3.66s, 0 queries
-2020-09-14 12:40:26,447 26655 INFO testdb odoo.modules.loading: Modules loaded.
-[*] Exiting with code -9
-```
-
-### Delete a local database to save disk space
-
-```txt
-$ odev rm testdb
-[!] You are about to delete the database testdb and its filestore. This action is irreversible.
-[?] Delete database 'testdb' and its filestore? [y/n] y
-[i] Deleting PSQL database testdb
-[i] Deleted database
-[i] Attempting to delete filestore in '/home/brinkflew/.local/share/Odoo/filestore/testdb'
-[i] Deleted filestore from disk
-[*] Exiting with code 0
-```
-
-### Dump a SaaS database and automatically restore it in a new local database in one command
-
-```txt
-$ odev quickstart testdb test.odoo.com
-[i] Creating database testdb
-[i] Created database testdb
-[i] Logging you in to https://test.odoo.com support console
-[?] Login: avs
-[?] Password:
-[?] Reason (optional):
-[*] Successfuly logged-in to https://test.odoo.com/_odoo/support
-[i] About to download dump file for https://test.odoo.com
-[?] Do you wish to include the filestore? [y/n] y
-[i] Downloading dump from https://test.odoo.com/saas_worker/dump.zip to /tmp/odev/20200912_testdb.dump.zip...
-[!] This may take a while, please be patient...
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100  574M  100  574M    0     0  2545k      0  0:03:51  0:03:51 --:--:-- 4120k
-[*] Successfuly downloaded dump file
-[i] Restoring dump file '/tmp/odev/20200912_testdb.dump.zip' to database testdb
-[!] This may take a while, please be patient...
-[i] Filestore detected, installing to /home/brinkflew/.local/share/Odoo/filestore/testdb/
-[i] Importing SQL data to database testdb
-[i] Cleaning database testdb
-[i] Cleaned database testdb
-[i] Login to the administrator account with the credentials 'admin:admin'
-[i] Login to any other account with their email address and the password 'odoo'
-[*] Exiting with code 0
-```
-
-### List local databases and display their version and status
-
-***Note:** Circles will be colored in your terminal. With `testdb` being the only database currently running, its circle will be displayed in green. Other databases are stopped and will be shown in red.*
-
-```txt
-$ odev ls
-[i] Listing local Odoo databases...
- ⬤  clientdb ................. (12.0 - enterprise)
- ⬤  presales ................. (13.0 - enterprise)
- ⬤  testdb ................... (13.0 - enterprise) [http://localhost:8069/web]
-[*] Exiting with code 0
-```
-
-### Create a fresh, empty database in Odoo 12.0
-
-```txt
-$ odev qs freshdb 12.0
-[i] Creating database freshdb
-[i] Created database freshdb
-[i] Checking for updates in Odoo Community version 12.0
-[*] Up to date!
-[i] Checking for updates in Odoo Enterprise version 12.0
-[*] Up to date!
-[i] Checking for updates in Odoo Design Themes version 12.0
-[*] Up to date!
-[i] Running: /odoo/versions/12.0/odoo/odoo-bin -d freshdb --addons-path=/odoo/versions/12.0/enterprise,/odoo/versions/12.0/design-themes,/odoo/versions/12.0/odoo/odoo/addons,/odoo/versions/12.0/odoo/addons -i base --stop-after-init
-2020-09-14 12:57:50,445 29016 INFO ? odoo: Odoo version 12.0
-2020-09-14 12:57:50,447 29016 INFO ? odoo: addons paths: ['/home/brinkflew/.local/share/Odoo/addons/12.0', '/odoo/versions/12.0/enterprise', '/odoo/versions/12.0/design-themes', '/odoo/versions/12.0/odoo/odoo/addons', '/odoo/versions/12.0/odoo/addons']
-[...]
-2020-09-14 12:58:17,360 29016 INFO freshdb odoo.modules.loading: 15 modules loaded in 9.31s, 0 queries
-2020-09-14 12:58:17,515 29016 INFO freshdb odoo.modules.loading: Modules loaded.
-2020-09-14 12:58:17,519 29016 INFO freshdb odoo.service.server: Initiating shutdown
-2020-09-14 12:58:17,530 29016 INFO freshdb odoo.service.server: Hit CTRL-C again or send a second signal to force the shutdown.
-[*] Exiting with code 0
-```
-
-### Download a dump of an Odoo SH database without its filestore
-
-***Note:** This also works with SaaS databases.*
-
-```txt
-$ odev dump testsh https://testsh.odoo.com ~/odev/dumps/test/
-[i] Logging you in to https://testsh.odoo.com support console
-[?] Login: avs
-[?] Password: 
-[?] Reason (optional): 
-[*] Successfuly logged-in to https://testsh.odoo.com/_odoo/support?token=585eb245f775907cda8b6c904f2e63f8
-[i] About to download dump file for testsh
-[?] Do you want to include the filestore? [y/n] n
-[i] Downloading dump from eupp5.odoo.com/_long/paas/build/000001/dump.sql.gz?token=585eb245f775907cda8b6c904f2e63f8 to /home/avs/odev/dumps/test//20201010_testsh.dump.sql.gz...
-[!] This may take a while, please be patient...
-  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
-                                 Dload  Upload   Total   Spent    Left  Speed
-100   169  100   169    0     0   2913      0 --:--:-- --:--:-- --:--:--  2913
-100 2316k    0 2316k    0     0  1150k      0 --:--:--  0:00:02 --:--:-- 1336k
-[*] Successfuly downloaded dump file
-[*] Exiting with code 0
-```
+### `upgrade-build`
+
+TODO: Missing command description
+
+### `upgrade-manual`
+
+Manually run 'odoo-bin' on SH to install / upgrade the specified modules, copying the required 'util' files beforehand.
+Useful to run migrations right after having uploaded a dump on the branch.
+
+### `upgrade-merge`
+
+Prepares the SH branch to run automatic upgrades with `util` support for merging a PR / pushing commits, and cleans up after it's done.
+Directly handles the PR merge.
+
+### `upgrade-wait`
+
+Prepares the SH branch to run automatic upgrades with `util` support and waits for a new SH build to complete, then cleans up when it's done.
+Useful for handling all other build cases (webhook redeliver, generic push).
+
+### `upload`
+
+Command class for uploading and importing a database dump on a Odoo SH branch.
+Uploads a .zip database dump to an Odoo SH branch.
+
+### `version`
+
+Get the Odoo version on which a local database is running.

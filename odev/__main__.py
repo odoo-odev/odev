@@ -7,7 +7,7 @@ import os
 # Explicitly initialize relative imports if run directly
 if not __package__:
     package_dir = os.path.dirname(os.path.realpath(__file__))
-    sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
+    sys.path.append(os.path.normpath(os.path.join(package_dir, '..')))
     __package__ = os.path.basename(package_dir)
 
 from signal import signal, SIGINT, SIGTERM
