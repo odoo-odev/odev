@@ -22,16 +22,6 @@ class ClocCommand(run.RunCommand):
 
     name = 'cloc'
     odoobin_subcommand = 'cloc'
-    arguments = [
-        dict(
-            name='args',
-            help='''
-            Additional arguments to pass to odoo-bin; Check the documentation at
-            https://www.odoo.com/documentation/14.0/fr/developer/misc/other/cmdline.html#cloc
-            for the list of available arguments
-            ''',
-        ),
-    ]
 
     def run(self):
         self.check_database()
