@@ -1,4 +1,4 @@
-psycopg2>=2,<3
+psycopg2-binary>=2,<3
 GitPython>=3,<4
 virtualenv>=20,<21
 requests>=2,<3
