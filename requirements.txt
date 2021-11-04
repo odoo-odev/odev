@@ -9,3 +9,4 @@ enlighten>=1,<2
 PyGithub>=1,<2
 agentcrypt<1
 texttable>=1.6.4
+decorator>=5.1.0
