@@ -3,9 +3,11 @@
 
 import os
 import stat
-from pathlib import Path
 from typing import List, Tuple
 from signal import signal, SIGINT, SIGTERM
+import subprocess
+from subprocess import CalledProcessError, DEVNULL
+import shlex
 
 from odev.utils import logging
 from odev.utils.os import mkdir
@@ -21,6 +23,19 @@ def signal_handler(signum, frame):
     exit(signum)
 
 
+def sudo_exec(command, password):
+    try:
+        command = ' '.join([
+            'echo',
+            shlex.quote(password),
+            *('|', 'sudo', '-S', '-k', '-s'),
+            command,
+        ])
+        subprocess.run(command, shell=True, check=True, stderr=DEVNULL, stdout=DEVNULL)
+    except (PermissionError, CalledProcessError):
+        raise PermissionError('Incorrect password, permission denied')
+
+
 def run():
     '''
     Setup wizard for odev
@@ -28,12 +43,6 @@ def run():
 
     signal(SIGINT, signal_handler)
     signal(SIGTERM, signal_handler)
-
-    _logger.warning(
-        'This script is about to write to different files accross your '
-        'system and might need root permissions if you try to write to files '
-        'that are out of your user scope ' + logging.term.bold_underline('(not recommended)')
-    )
 
     # User input is needed for locations in which data is stored
     # We use a list of tuples to create missing directories
@@ -47,13 +56,29 @@ def run():
 
     try:
         ubin = os.path.join('/usr', 'local', 'bin', 'odev')
-
-        if os.path.exists(ubin) or os.path.islink(ubin):
-            os.remove(ubin)
-
         cwd = os.getcwd()
         main = os.path.join(cwd, 'main.py')
-        os.symlink(main, ubin)
+
+        _logger.info('Creating symlink for odev, this might require additional permissions')
+        rm_command = shlex.join(['rm', '-f', ubin])
+        ln_command = shlex.join(['ln', '-s', main, ubin])
+        password = None
+
+        def get_password():
+            return _logger.password('Password:')
+
+        try:
+            subprocess.run(rm_command, shell=True, check=True, stderr=DEVNULL)
+        except (PermissionError, CalledProcessError):
+            password = get_password()
+            sudo_exec(rm_command, password)
+
+        try:
+            subprocess.run(ln_command, shell=True, check=True, stderr=DEVNULL)
+        except (PermissionError, CalledProcessError):
+            password = password or get_password()
+            sudo_exec(ln_command, password)
+
         os.chmod(main, os.stat(main).st_mode | stat.S_IEXEC)
 
         ConfigManager('databases')
@@ -69,6 +94,8 @@ def run():
             mkdir(path)
 
         odev_config.save()
+
+        _logger.success('All set, enjoy!')
 
     except Exception as exception:
         _logger.error(exception)
