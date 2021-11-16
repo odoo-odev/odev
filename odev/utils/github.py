@@ -79,6 +79,7 @@ def self_update() -> bool:
     config = ConfigManager('odev')
     odev_path = config.get('paths', 'odev')
     repo = Repo(odev_path)
+    repo.remotes.origin.fetch()
     head = repo.head.ref
     tracking = head.tracking_branch()
 
