@@ -45,7 +45,7 @@ def main():
     try:
         if self_update():
             # Restart the process with updated code
-            os.execv(sys.argv.pop(0), sys.argv)
+            os.execv(sys.argv[0], sys.argv)
 
         registry = CommandRegistry().load_commands()
         code = registry.handle()
