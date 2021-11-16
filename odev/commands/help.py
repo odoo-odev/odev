@@ -103,7 +103,7 @@ class HelpCommand(commands.Command):
             {term.bold(titles[0])} - {term.italic(titles[1])}
             {term.snow4('=' * (len(titles[0] + titles[1]) + 3))}
 
-            Check the complete help with examples on https://github.com/odoo-ps/odev#docs.
+            Check the complete help on https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev#readme.
 
             {term.bold('Usage:')} {sys.argv[0]} <command> <args>
 

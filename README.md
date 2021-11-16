@@ -69,7 +69,7 @@ You may have to rerun the `setup` if you didn't keep your local repository as in
 Run `odev list` from anywhere in your terminal to get a list of your local Odoo databases:
 
 ```sh
-odev list --all
+odev list
 ```
 
 ```txt
