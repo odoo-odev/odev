@@ -11,7 +11,7 @@ from odev.structures import commands
 from odev.utils import logging
 from odev.utils.os import mkdir
 from odev.utils.curl import curl
-from odev.exceptions import CommandAborted
+from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarge
 
 
 _logger = logging.getLogger(__name__)
@@ -20,13 +20,13 @@ _logger = logging.getLogger(__name__)
 re_url = re.compile(r'^https?://')
 re_session = re.compile(r'session_id=([^;]+)')
 re_location = re.compile(r'Location:\s([^\s\n]+)')
-re_redirect = re.compile(r'href=\'([^\']+)')
-re_csrf = re.compile(r'name=\'csrf_token\'\svalue=\'([a-z0-9]+)\'')
+re_redirect = re.compile(r'href="([^"]+)')
+re_csrf = re.compile(r'name="csrf_token"\svalue="([a-z0-9]+)"')
 re_error = re.compile(r'^HTTP/.{3}\s[^23].{2}')
-re_database = re.compile(r'^https?://([a-zA-Z0-9_-]+)\.')
+re_database = re.compile(r'<h2>Current database: <a[^>]+>([^<]+)')
 re_directory = re.compile(r'(/|\\)$')
-re_sh_dump = re.compile(r'href=\'//([a-z0-9]+.odoo.com/_long/paas/build/[0-9]+/dump)[a-z.]+\?token')
-re_sh_token = re.compile(r'\?token=([^\']+)')
+re_sh_dump = re.compile(r'href="//([a-z0-9]+.odoo.com/_long/paas/build/[0-9]+/dump)[a-z.]+\?token')
+re_sh_token = re.compile(r'\?token=([^"]+)')
 
 
 class DumpCommand(commands.LocalDatabaseCommand):
@@ -77,7 +77,7 @@ class DumpCommand(commands.LocalDatabaseCommand):
             # Retry for without '/login' as the support page on odoo.sh is not database-dependant
             res = curl(support_url)
             if re_error.match(res):
-                raise Exception('Error fetching webpage, check the URL and try again')
+                raise SHConnectionError('Error fetching webpage, check the URL and try again')
             platform = 'sh'
 
         assert platform in ('saas', 'sh')
@@ -86,8 +86,19 @@ class DumpCommand(commands.LocalDatabaseCommand):
         # Login to the support page
         # ---------------------------------------------------------------------
 
-        session = re_session.findall(res)[-1]
-        csrf = re_csrf.findall(res)[-1]
+        def get_response_data(re, token_name='data'):
+            match = re.findall(res)
+
+            if not match:
+                raise SHConnectionError(
+                    f'Error fetching {token_name} in {support_login_url if platform == "saas" else support_url}'
+                )
+
+            return match[~0]
+
+        session = get_response_data(re_session, 'session token')
+        csrf = get_response_data(re_csrf, 'CSRF token')
+
         login = _logger.ask('Login:')
         passwd = _logger.password('Password:')
         reason = _logger.ask('Reason (optional):')
@@ -104,18 +115,16 @@ class DumpCommand(commands.LocalDatabaseCommand):
         if re_error.match(res):
             raise Exception('Error logging you in, check your credentials and try again')
 
-        match = re_session.search(res)
-        session = match and match[1]
+        session = get_response_data(re_session, 'session token')
 
         if not session:
             raise Exception('Invalid session id, check your credentials and try again')
 
         if platform == 'sh':
-            match = re_redirect.search(res)
-            redirect = match and match[1]
+            redirect = get_response_data(re_redirect, 'redirect path')
             res = curl(f'https://www.odoo.sh{redirect}', f'-H "Cookie: session_id={session}"')
-            session = re_session.findall(res)[-1]
-            login_url = re_location.findall(res)[-1]
+            session = get_response_data(re_session, 'session token')
+            login_url = get_response_data(re_location, 'login URL')
         elif platform == 'saas':
             login_url = support_url
 
@@ -127,8 +136,7 @@ class DumpCommand(commands.LocalDatabaseCommand):
 
         database_name = self.database
         if not database_name:
-            match = re_database.search(login_url)
-            database_name = match and match[1]
+            database_name = get_response_data(re_database, 'database name')
 
         _logger.info(f'About to download dump file for {database_name}')
 
@@ -155,11 +163,12 @@ class DumpCommand(commands.LocalDatabaseCommand):
         dump_url = ''
 
         if platform == 'sh':
-            match = re_sh_token.search(login_url)
-            token = match and match[1]
-            match = re_sh_dump.search(res)
-            matched_url = match and match[1]
-            dump_url = f'{matched_url}.{ext}?token={token}'
+            token = get_response_data(re_sh_token, 'Odoo SH token')
+            try:
+                dump_url = get_response_data(re_sh_dump, 'dump URL')
+                dump_url = f'{dump_url}.{ext}?token={token}'
+            except SHConnectionError as e:
+                raise SHDatabaseTooLarge(f'The database {database_name} is likely too large and cannot be downloaded')
         elif platform == 'saas':
             dump_url = f'{self.url}/saas_worker/dump.{ext}'
 

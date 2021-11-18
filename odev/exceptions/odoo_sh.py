@@ -42,6 +42,20 @@ class BuildWarning(BuildCompleteException):
 
 class InvalidBranch(Exception):
     '''
-    Raise when the targeted branch is not a git branch or not known from Odoo SH.
+    Raised when the targeted branch is not a git branch or not known from Odoo SH.
+    '''
+    pass
+
+
+class SHConnectionError(Exception):
+    '''
+    Raised when an error ocurred while trying to fetch an Odoo SH webpage.
+    '''
+    pass
+
+
+class SHDatabaseTooLarge(Exception):
+    '''
+    Raised when an Odoo SH database cannot be downloaded because its size exceed the limit.
     '''
     pass
