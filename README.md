@@ -32,16 +32,17 @@ Either fix it in a new branch and create a pull request, or submit an issue on G
 ## Installation
 
 Make sure [Python 3](https://www.python.org/download/releases/3.0/) is installed and available in your path.
-Install the requirements through `pip3`:
-
-```sh
-pip3 install --user -r requirements.txt
-```
 
 Clone the [odev repository](https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev) to your computer and navigate to the `odev` folder:
 
 ```sh
 git clone --single-branch --branch odev git@github.com:odoo-ps/psbe-ps-tech-tools.git odev && cd odev
+```
+
+Install the requirements through `pip3`:
+
+```sh
+pip3 install --user -r requirements.txt
 ```
 
 Run `setup.py` and follow the instructions displayed on screen:
