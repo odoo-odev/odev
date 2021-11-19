@@ -3,6 +3,7 @@
 
 import sys
 import os
+import re
 
 # Explicitly initialize relative imports if run directly
 if not __package__:
@@ -12,6 +13,7 @@ if not __package__:
 
 from signal import signal, SIGINT, SIGTERM
 from subprocess import CalledProcessError
+from git.exc import GitCommandError
 
 from odev.utils import logging
 from odev.utils.github import self_update
@@ -50,17 +52,33 @@ def main():
 
         registry = CommandRegistry().load_commands()
         code = registry.handle()
+
+    # Process
+
     except CommandAborted as e:
         _logger.info(e)
         code = 0
     except CalledProcessError as e:
         code = e.returncode
+
+    # Git
+
+    except GitCommandError as e:
+        message = re.sub(r'((\n\s{0,}|\')(stderr|error):|\.?\'$)', '', e.stderr).strip()
+        _logger.error(f'Git error, {message}')
+        code = e.status
+
+    # Commands registry
+
     except CommandMissing as e:
         _logger.error(str(e))
         code = 101
     except InvalidArgument as e:
         _logger.error(str(e))
         code = 102
+
+    # Commands
+
     except InvalidDatabase as e:
         _logger.error(str(e))
         code = 201
@@ -73,6 +91,9 @@ def main():
     except InvalidQuery as e:
         _logger.error(str(e))
         code = 204
+
+    # Odoo SH
+
     except SHConnectionError as e:
         _logger.error(str(e))
         code = 301
