@@ -31,6 +31,12 @@ class RunCommand(commands.LocalDatabaseCommand):
     name = 'run'
     arguments = [
         dict(
+            aliases=['-s', '--save'],
+            dest='save',
+            action='store_true',
+            help='Save the current arguments for next calls',
+        ),
+        dict(
             aliases=['addons'],
             action=actions.CommaSplitAction,
             nargs='?',
@@ -52,10 +58,36 @@ class RunCommand(commands.LocalDatabaseCommand):
     Optional subcommand to pass to `odoo-bin` at execution time.
     '''
 
+    force_save_args = False
+    '''
+    Whether to force re-saving arguments to the database's config
+    within subcommands.
+    '''
+
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.addons = args.addons or []
-        self.additional_args = args.args
+
+        self.config_args_key = f'args_{self.name}'
+        config_args = list(filter(
+            lambda s: s,
+            self.config['databases'].get(self.database, self.config_args_key, '').split(' ')
+        ))
+
+        self.addons = args.addons or (
+            [config_args.pop(0)] if config_args[:1] and os.path.isdir(config_args[0]) else []
+        )
+        self.additional_args = args.args or config_args
+
+        if args.save and (
+            not config_args
+            or logger.confirm('Arguments have already been saved for this database, do you want to override them?')
+        ):
+            self.force_save_args = True
+            self.config['databases'].set(
+                self.database,
+                self.config_args_key,
+                shlex.join([*self.addons, *self.additional_args]),
+            )
 
     def run(self):
         '''

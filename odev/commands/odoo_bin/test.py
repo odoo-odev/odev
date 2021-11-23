@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import re
+import shlex
 from argparse import Namespace
 
 from odev.commands.odoo_bin import run
@@ -33,11 +33,19 @@ class TestCommand(run.RunCommand):
             self.additional_args.append(TEST_ENABLE)
 
         if args.tags:
-            for index in enumerate(filter(lambda a: TEST_TAGS in str(a), self.additional_args)):
-                self.additional_args[index] += ',' + args.tags
-                break
+            for index, arg in enumerate(self.additional_args):
+                if arg.startswith(TEST_TAGS):
+                    self.additional_args[index] += f''',{','.join(args.tags)}'''
+                    break
             else:
-                self.additional_args.append(f'''--test-tags={','.join(args.tags)}''')
+                self.additional_args.append(f'''{TEST_TAGS}={','.join(args.tags)}''')
+
+            if self.force_save_args:
+                self.config['databases'].set(
+                    self.database,
+                    self.config_args_key,
+                    shlex.join([*self.addons, *self.additional_args]),
+                )
 
 
 TEST_ENABLE = '--test-enable'
