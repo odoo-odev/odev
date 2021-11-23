@@ -51,11 +51,14 @@ class DumpCommand(commands.LocalDatabaseCommand):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.url = ('https://' if not re_url.match(args.url) else '') + args.url
+        self.url = self.sanitize_url(f'''{'https://' if not re_url.match(args.url) else ''}{args.url}''')
         self.destination = args.destination
         if not re_directory.search(self.destination):
             self.destination = self.destination + '/'
         self.database = args.database
+
+    def sanitize_url(self, url, remove_after='.odoo.com'):
+        return url[:url.index(remove_after) + len(remove_after)]
 
     def run(self):
         '''
