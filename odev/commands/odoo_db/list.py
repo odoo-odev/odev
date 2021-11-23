@@ -142,14 +142,14 @@ class ListCommand(commands.LocalDatabaseCommand):
                     database,
                     'version_clean',
                     self.db_version_clean(database),
-                )['version_clean']
+                )[database]['version_clean']
 
             if not db_info['enterprise']:
                 db_info['enterprise'] = self.config['databases'].set(
                     database,
                     'enterprise',
                     'enterprise' if self.db_enterprise(database) else 'standard',
-                )['enterprise']
+                )[database]['enterprise']
 
             db_is_running = self.db_runs(database)
             table_row = [
