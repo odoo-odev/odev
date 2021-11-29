@@ -75,11 +75,11 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand):
 
     arguments = [
         dict(
-            aliases=['--upgrade-path'],
+            aliases=['--upgrade-repo-path'],
             help='Local path of the `upgrade` repository clone from which to copy `util`',
         ),
         dict(
-            aliases=['--psbe-upgrade-path'],
+            aliases=['--psbe-upgrade-repo-path'],
             help='Local path of the `psbe-custom-upgrade` repository clone '
             'from which `base` and `custom_utils` are copied',
         ),
