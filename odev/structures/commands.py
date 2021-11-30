@@ -357,6 +357,17 @@ class LocalDatabaseCommand(Command, ABC):
         database = self._get_database(database)
         return database in self.db_list_all()
 
+    def is_odoo_db(self, database=None):
+        query = """SELECT c.relname
+            FROM pg_class c
+            JOIN pg_namespace n ON (n.oid = c.relnamespace)
+            WHERE c.relname = 'ir_module_module'
+            AND c.relkind IN ('r', 'v', 'm')
+            AND n.nspname = current_schema"""
+
+        result = self.run_queries(query, database, False)
+        return result and isinstance(result, list) and len(result) == 1
+
     def check_database(self, database=None):
         '''
         Checks whether the database both exists and is an Odoo database.
@@ -364,7 +375,7 @@ class LocalDatabaseCommand(Command, ABC):
         database = self._get_database(database)
         if not self.db_exists_all(database):
             raise InvalidDatabase('Database \'%s\' does not exists' % (database))
-        elif not self.db_exists(database):
+        elif not self.db_exists(database) and not self.is_odoo_db(database):
             raise InvalidOdooDatabase('Database \'%s\' is not an Odoo database' % (database))
 
     def db_version(self, database=None):
