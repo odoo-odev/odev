@@ -9,6 +9,7 @@ from argparse import Namespace
 from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.signal import capture_signals
+from odev.exceptions import InvalidQuery
 
 
 _logger = logging.getLogger(__name__)
@@ -28,6 +29,19 @@ class InitCommand(commands.LocalDatabaseCommand):
             aliases=['version'],
             help='Odoo version to use; must match an Odoo community branch',
         )
+    ]
+    queries = [
+        'CREATE SCHEMA unaccent_schema',
+        'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA unaccent_schema',
+        'COMMENT ON EXTENSION unaccent IS \'text search dictionary that removes accents\'',
+        '''
+        CREATE FUNCTION public.unaccent(text) RETURNS text
+            LANGUAGE sql IMMUTABLE
+            AS $_$
+                SELECT unaccent_schema.unaccent('unaccent_schema.unaccent', $1)
+            $_$
+        ''',
+        'GRANT USAGE ON SCHEMA unaccent_schema TO PUBLIC',
     ]
 
     def __init__(self, args: Namespace):
@@ -83,6 +97,11 @@ class InitCommand(commands.LocalDatabaseCommand):
 
         with capture_signals():
             subprocess.run(command, shell=True, check=True)
+
+        result = self.run_queries(self.queries)
+
+        if not result:
+            raise InvalidQuery(f'An error occurred while setting up database {self.database}')
 
         self.config['databases'].set(self.database, 'version_clean', version)
 
