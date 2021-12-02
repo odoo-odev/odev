@@ -28,6 +28,11 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
             name='dump',
             metavar='PATH',
             help='Path to the dump file to upload to the SH branch',
+        ),
+        dict(
+            name='--keep-filestore',
+            action="store_true",
+            help='Prevent SH from deleting the filestore on subsequent uploads',
         )
     ]
 
@@ -38,6 +43,7 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
         if not os.path.exists(self.dump_path) or not os.path.isfile(self.dump_path):
             raise InvalidArgument(f'The specified dump is not a file: {self.dump_path}')
         # TODO: additional checks for .zip file with correct dump.sql/filestore fmt
+        self.keep_filestore: bool = args.keep_filestore
 
     def run(self) -> Any:
         self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
@@ -60,6 +66,12 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
             # TODO: force doing a backup, unless explicitly disabled from cmdline?
             if not logger.confirm('Do you want to continue?'):
                 raise CommandAborted()  # They weren't sure
+
+        if self.keep_filestore:
+            logger.info("Hardlink-cloning existing filestore to preserve it")
+            self.ssh_run(
+                ["bash", "-c", "cp -al ~/data/filestore/* ~/data/filestore.backup"]
+            )
 
         logger.info(
             f'Uploading dump `{os.path.basename(self.dump_path)}` '
@@ -104,3 +116,14 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
             logger.success(
                 f'Database upload to "{self.sh_repo}" / "{self.sh_branch}" successful'
             )
+        finally:
+            if self.keep_filestore:
+                logger.info("Restoring and merging previous filestore")
+                self.ssh_run(
+                    [
+                        "bash",
+                        "-c",
+                        "cp -aluf ~/data/filestore.backup/* ~/data/filestore/*/ "
+                        "&& rm -r ~/data/filestore.backup",
+                    ]
+                )
