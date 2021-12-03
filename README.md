@@ -25,6 +25,15 @@ It provides wrapper scripts around common tasks, speeding up the whole process o
 
 Create your own branch from `psbe-ps-tech-tools/odev` then submit a pull request to merge your development to the `odev` branch. After review and proper testing, your feature will be made available to all.
 
+### Track other `odev` development branches
+
+If you want to participate in developing or testing new features on already existing forked branches, you can track all `odev` branches with
+
+```sh
+git config remote.origin.fetch "+refs/heads/odev*:refs/remotes/origin/odev*"
+git fetch --all
+```
+
 ### Found a bug?
 
 Either fix it in a new branch and create a pull request, or submit an issue on GitHub explaining what happened, how to reproduce it and what was the expected result.
