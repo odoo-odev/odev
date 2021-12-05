@@ -35,6 +35,16 @@ def signal_handler(signum, frame):
     exit(signum)
 
 
+def set_log_level():
+    # Set global log level before registering commands to support custom
+    # log-levels everywhere
+    re_loglevel = re.compile(r'(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)', re.IGNORECASE)
+    loglevel_match = re_loglevel.findall(' '.join(sys.argv))
+
+    if loglevel_match and loglevel_match[~0] in logging.logging._nameToLevel:
+        logging.set_log_level(loglevel_match[~0])
+
+
 def main():
     '''
     Manages taking input from the user and calling the subsequent subcommands
@@ -46,6 +56,8 @@ def main():
     signal(SIGTERM, signal_handler)
 
     try:
+        set_log_level()
+
         if self_update():
             # Restart the process with updated code
             os.execv(sys.argv[0], sys.argv)

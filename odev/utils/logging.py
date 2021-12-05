@@ -149,6 +149,8 @@ class ColorFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         if record.levelname in self.theme['colors']:
             record.__dict__['log_color'] = self.theme['colors'][record.levelname]
+        if record.levelname in SYMBOLS:
+            record.__dict__['symbol'] = SYMBOLS[record.levelname]
         return super().format(record)
 
 

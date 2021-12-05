@@ -78,6 +78,7 @@ def self_update() -> bool:
 
     config = ConfigManager('odev')
     odev_path = config.get('paths', 'odev')
+    logger.debug(f'Fetching changes in remote repository of {odev_path}')
     repo = Repo(odev_path)
     repo.remotes.origin.fetch()
     head = repo.head.ref
@@ -90,6 +91,7 @@ def self_update() -> bool:
     pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
 
     if pending > 0 and logger.confirm('An update is available for odev, do you want to download it now?'):
+        logger.debug(f'Pulling updates: {head.path}..{tracking.path}')
         repo.remotes.origin.pull()
         logger.success('Up to date!')
         return True

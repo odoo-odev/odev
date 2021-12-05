@@ -55,6 +55,7 @@ class ClocCommand(run.RunCommand):
             command_args.insert(2, self.odoobin_subcommand)
 
         command = shlex.join(command_args)
+        logger.debug(f'Running: {command}')
         result = subprocess.getoutput(command)
 
         split = re.split(r'\n-+', result)
