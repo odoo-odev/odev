@@ -1,6 +1,6 @@
 '''Gets help about commands.'''
 
-from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
+from argparse import ArgumentParser, RawTextHelpFormatter
 from textwrap import dedent, indent
 import sys
 

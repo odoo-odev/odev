@@ -4,7 +4,7 @@ import shlex
 from argparse import Namespace
 
 from odev.commands.odoo_bin import run
-from odev.structures.actions import CommaSplitAction, OptionalStringAction
+from odev.structures.actions import CommaSplitAction
 
 
 class TestCommand(run.RunCommand):
