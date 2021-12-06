@@ -19,9 +19,6 @@ from odev.exceptions import RunningOdooDatabase, CommandAborted
 _logger = logging.getLogger(__name__)
 
 
-re_ext = re.compile(r'\.([a-z]+)$')
-
-
 class RestoreCommand(commands.LocalDatabaseCommand):
     '''
     Restore an Odoo dump file to a local database and import its filestore
@@ -76,14 +73,12 @@ class RestoreCommand(commands.LocalDatabaseCommand):
         if not os.path.isfile(self.dump_path):
             raise FileNotFoundError(f'File {self.dump_path} does not exists')
 
-        match = re_ext.search(self.dump_path)
+        _, tail = os.path.split(self.dump_path)
+        _, ext = os.path.splitext(tail)
 
-        if not match:
+        if not ext:
             raise ValueError(f'File `{self.dump_path}` has no extension, couldn\'t guess what to do...')
-
-        ext = match.group(1)
-
-        if ext not in ('dump', 'zip', 'sql'):
+        elif ext not in {'.dump', '.zip', '.sql', '.gz'}:
             raise ValueError(f'Unrecognized extension `{ext}` for file {self.dump_path}')
 
         _logger.info(f'Restoring dump file `{self.dump_path}` to database {self.database}')
@@ -102,11 +97,17 @@ class RestoreCommand(commands.LocalDatabaseCommand):
         def psql_load(database, sql_file):
             pg_subprocess(f'psql "{database}" < "{sql_file}"')
 
-        if ext == 'dump':
+        def psql_pipe(database, cmd):
+            pg_subprocess(f'{cmd} | psql "{database}"')
+
+        if ext == '.dump':
             pg_restore(self.database, self.dump_path)
-        elif ext == 'sql':
+        elif ext == '.sql':
             psql_load(self.database, self.dump_path)
-        elif ext == 'zip':
+        elif ext == '.gz':
+            cmd = f"zcat {self.dump_path}"
+            psql_pipe(self.database, cmd)
+        elif ext == '.zip':
             with TemporaryDirectory() as tempdir, ZipFile(self.dump_path, 'r') as zipref:
                 zipref.extractall(tempdir)
 

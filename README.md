@@ -175,7 +175,7 @@ Rename a local database and move its filestore to the corresponding path.
 
 ### `restore`
 
-Restore an Odoo dump file to a local database and import its filestore if present. '.sql', '.dump' and '.zip' files are supported.
+Restore an Odoo dump file to a local database and import its filestore if present. '.sql', '.sql.gz', '.dump' and '.zip' files are supported.
 
 ### `run`
 
