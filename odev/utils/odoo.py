@@ -56,7 +56,7 @@ def get_python_version(odoo_version):
     return '2.7'
 
 
-def pre_run(odoodir, odoobin, version):
+def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False):
     '''
     Prepares the environment for running odoo-bin.
     - Fetch last changes from GitHub
@@ -97,6 +97,20 @@ def pre_run(odoodir, odoobin, version):
                 '\tsudo apt install -y python%s python%s-dev'
                 % (python_version, python_version)
             )
+
+    if upgrade:
+        odoodir_parent = os.path.normpath(os.path.join(odoodir, '..'))
+        odoodir_upgrade = os.path.normpath(os.path.join(odoodir_parent, 'upgrade'))
+
+        if not os.path.isdir(odoodir_upgrade):
+            logger.warning('Missing files for Odoo Upgrade')
+
+            if not logger.confirm('Do you want to download them now?'):
+                raise CommandAborted()
+
+            git_clone('Odoo Upgrade', odoodir_parent, 'upgrade', 'master')
+        else:
+            git_pull('Odoo Upgrade', odoodir_parent, 'upgrade', 'master')
 
     command = '%s/venv/bin/python -m pip install -r %s/odoo/requirements.txt > /dev/null' % (odoodir, odoodir)
     logger.info('Checking for missing dependencies in requirements.txt')
