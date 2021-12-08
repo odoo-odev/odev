@@ -10,6 +10,7 @@ from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.signal import capture_signals
 from odev.exceptions import InvalidQuery
+from odev.constants.odoo import ODOO_ADDON_PATHS
 
 
 _logger = logging.getLogger(__name__)
@@ -71,14 +72,9 @@ class InitCommand(commands.LocalDatabaseCommand):
         odoodir = os.path.join(self.config['odev'].get('paths', 'odoo'), version)
         odoobin = os.path.join(odoodir, 'odoo/odoo-bin')
 
-        odoo.pre_run(odoodir, odoobin, version)
+        addons = [odoodir + addon_path for addon_path in ODOO_ADDON_PATHS]
 
-        addons = [
-            odoodir + '/enterprise',
-            odoodir + '/design-themes',
-            odoodir + '/odoo/odoo/addons',
-            odoodir + '/odoo/addons',
-        ]
+        odoo.pre_run(odoodir, odoobin, version, addons=addons)
 
         python_exec = os.path.join(odoodir, 'venv/bin/python')
         addons_path = ','.join(addons)

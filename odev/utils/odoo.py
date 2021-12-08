@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+from typing import List
 
 from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES
 from odev.exceptions import InvalidOdooDatabase
@@ -56,7 +57,7 @@ def get_python_version(odoo_version):
     return '2.7'
 
 
-def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False):
+def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False, addons: List[str] = []):
     '''
     Prepares the environment for running odoo-bin.
     - Fetch last changes from GitHub
@@ -112,8 +113,14 @@ def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False):
         else:
             git_pull('Odoo Upgrade', odoodir_parent, 'upgrade', 'master')
 
-    command = '%s/venv/bin/python -m pip install -r %s/odoo/requirements.txt > /dev/null' % (odoodir, odoodir)
     logger.info('Checking for missing dependencies in requirements.txt')
 
-    with capture_signals():
-        subprocess.run(command, shell=True, check=True)
+    def requirements_path(path):
+        return os.path.join(path, 'requirements.txt')
+
+    for addon in filter(lambda a: os.path.exists(requirements_path(a)), addons + [os.path.join(odoodir, 'odoo')]):
+        command = f'{odoodir}/venv/bin/python -m pip install -r {requirements_path(addon)} > /dev/null'
+        logger.debug(f'Installing requirements.txt: {command}')
+
+        with capture_signals():
+            subprocess.run(command, shell=True, check=True)
