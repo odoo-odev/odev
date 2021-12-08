@@ -35,11 +35,18 @@ class RestoreCommand(commands.LocalDatabaseCommand):
             metavar='PATH',
             help='Path to the dump file to import to the database',
         ),
+        dict(
+            aliases=['--no-clean'],
+            dest='no_clean',
+            action='store_true',
+            help='Do not attempt to run the `clean` command on the database (useful for upgrades)',
+        ),
     ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.dump_path = args.dump
+        self.run_clean = not args.no_clean
 
     def run(self):
         '''
@@ -131,6 +138,7 @@ class RestoreCommand(commands.LocalDatabaseCommand):
         db_config.set(self.database, 'enterprise', 'enterprise' if self.db_enterprise(self.database) else 'standard')
         db_config.save()
 
-        clean.CleanCommand.run_with(**self.args.__dict__)
+        if self.run_clean:
+            clean.CleanCommand.run_with(**self.args.__dict__)
 
         return 0
