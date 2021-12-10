@@ -641,6 +641,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
     arguments = [
         dict(
             name='repository',
+            dest='repo',
             metavar='REPOSITORY',
             help='Name of the Odoo SH or GitHub repository to target (e.g. psbe-client)',
         ),
@@ -652,18 +653,18 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
     ]
 
     def __init__(self, args: Namespace):
-        if not args.repository:
+        if not args.repo:
             raise InvalidArgument('Invalid SH project / repository')
 
         if not args.branch:
             raise InvalidArgument('Invalid git branch')
 
-        self.sh_repository = args.repository
+        self.sh_repo = args.repo
         self.sh_branch = args.branch
 
         super().__init__(args)
 
-        self.ssh_url = self.sh_connector.get_last_build_ssh(self.sh_repository, self.sh_branch)
+        self.ssh_url = self.sh_connector.get_last_build_ssh(self.sh_repo, self.sh_branch)
 
     def ssh_run(self, *args, **kwargs) -> subprocess.CompletedProcess:
         '''
@@ -680,7 +681,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
         '''
 
         if not self.ssh_url:
-            raise ValueError(f'SSH url unavailable for {self.sh_repository}/{self.sh_branch}')
+            raise ValueError(f'SSH url unavailable for {self.sh_repo}/{self.sh_branch}')
 
         logger.debug(f'Testing SSH connectivity to SH branch {self.ssh_url}')
         result = self.ssh_run(
@@ -814,7 +815,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
                 # get build info (no sanity check)
                 build_info: Optional[Union[Mapping[str, Any], int]]
                 build_info = build_id and self.sh_connector.build_info(
-                    self.sh_repository,
+                    self.sh_repo,
                     self.sh_branch,
                     build_id=build_id,
                 )

@@ -298,7 +298,7 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
     @contextmanager
     def upgrade_build_context(self) -> Iterator[UpgradeBuildContext]:
         build_info: Optional[Mapping[str, Any]]
-        build_info = self.sh_connector.build_info(self.sh_repository, self.sh_branch)
+        build_info = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
         if not build_info:
             raise RuntimeError(f'Couldn\'t get last build for branch {self.sh_branch}')
         previous_build_commit_id: str = build_info['head_commit_id'][1]
@@ -348,7 +348,7 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
                     )
                 # set own ssh_url to new build, even if failed
                 self.ssh_url = self.sh_connector.get_build_ssh(
-                    self.sh_repository, self.sh_branch, build_id=int(new_build_info['id'])
+                    self.sh_repo, self.sh_branch, build_id=int(new_build_info['id'])
                 )
             else:
                 self.ssh_url = None
@@ -356,11 +356,11 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
             # N.B. the previous build container gets a new id, let's use commit
             previous_build_info: Optional[Mapping[str, Any]]
             previous_build_info = self.sh_connector.build_info(
-                self.sh_repository, self.sh_branch, commit=previous_build_commit_id
+                self.sh_repo, self.sh_branch, commit=previous_build_commit_id
             )
             if previous_build_info and previous_build_info['status'] != 'dropped':
                 self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
-                    self.sh_repository,
+                    self.sh_repo,
                     self.sh_branch,
                     build_id=previous_build_info['id'],
                 )
@@ -417,19 +417,19 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
         super().__init__(args)
 
         project_info: Mapping[str, Any]
-        [project_info] = self.sh_connector.get_project_info(self.sh_repository)
+        [project_info] = self.sh_connector.get_project_info(self.sh_repo)
         self.repository: Repository.Repository = self.github.get_repo(project_info['full_name'])
         self.pull_request: PullRequest.PullRequest = self.repository.get_pull(args.pull_request)
 
         if self.pull_request.merged or not self.pull_request.mergeable:
             raise RuntimeError(
-                f'Pull request {self.repository.full_name} '
+                f'Pull request {self.repo.full_name} '
                 f'#{self.pull_request.number} is not mergeable!'
             )
         pr_dest_branch: str = self.pull_request.base.ref
         if pr_dest_branch != self.sh_branch:
             raise RuntimeError(
-                f'Pull request {self.repository.full_name} #{self.pull_request.number} '
+                f'Pull request {self.repo.full_name} #{self.pull_request.number} '
                 f'destination branch ({pr_dest_branch}) '
                 f'is different than the SH one ({self.sh_branch})'
             )
@@ -440,7 +440,7 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
 
     def _run_upgrade(self) -> None:
         logger.info(
-            f'Will be merging `{self.repository.full_name}` '
+            f'Will be merging `{self.repo.full_name}` '
             f'PR #{self.pull_request.number} `{self.pull_request.title}` '
             f'and running automatic modules upgrades on the SH branch.\n'
             f'''  - branches: merging `{self.pull_request.head.ref}` into `{self.pull_request.base.ref}`\n'''
@@ -462,7 +462,7 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
         with self.upgrade_build_context() as upgrade_context:
             logger.info(
                 f'Merging ({self.merge_method}) '
-                f'pull request {self.repository.full_name} #{self.pull_request.number}'
+                f'pull request {self.repo.full_name} #{self.pull_request.number}'
             )
             # PyGithub considers None args as intended values, so we need to remove them
             merge_kwargs: MutableMapping[str, Any] = dict(
@@ -475,7 +475,7 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
             result: PullRequestMergeStatus.PullRequestMergeStatus = self.pull_request.merge(**merge_kwargs)
             if not result.merged:
                 raise RuntimeError(
-                    f'Pull request {self.repository.full_name} #{self.pull_request.number} '
+                    f'Pull request {self.repo.full_name} #{self.pull_request.number} '
                     f'did not merge: {result.message}'
                 )
             merge_commit_sha: str = result.sha

@@ -19,12 +19,12 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
     name = 'rebuild'
 
     def run(self):
-        branch_info = self.sh_connector.branch_info(self.sh_repository, self.sh_branch)
+        branch_info = self.sh_connector.branch_info(self.sh_repo, self.sh_branch)
         assert branch_info
 
         if branch_info['stage'] == 'production':
             raise InvalidBranch(
-                f'Branch {self.sh_repository}/{self.sh_branch} is a production branch '
+                f'Branch {self.sh_repo}/{self.sh_branch} is a production branch '
                 'and cannot be rebuilt'
             )
         if branch_info['stage'] == 'staging':
@@ -41,20 +41,20 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
         # grab last tracking id
         # TODO: DRY across commands
         branch_history_before: Optional[List[Mapping[str, Any]]] = self.sh_connector.branch_history(
-            self.sh_repository,
+            self.sh_repo,
             self.sh_branch,
         )
         last_tracking_id: int = branch_history_before[0]['id'] if branch_history_before else 0
 
-        logger.info(f'Rebuilding SH project `{self.sh_repository}` branch `{self.sh_branch}`')
-        result: Any = self.sh_connector.branch_rebuild(self.sh_repository, self.sh_branch)
+        logger.info(f'Rebuilding SH project `{self.sh_repo}` branch `{self.sh_branch}`')
+        result: Any = self.sh_connector.branch_rebuild(self.sh_repo, self.sh_branch)
 
         if not isinstance(result, bool) or not result:
             result_info: str = str(result)
             if isinstance(result, dict) and 'error' in result:
                 result_info = str(result['error'])
             raise RuntimeError(
-                f'Failed rebuilding branch {self.sh_repository}/{self.sh_branch}:\n'
+                f'Failed rebuilding branch {self.sh_repo}/{self.sh_branch}:\n'
                 + result_info
             )
 
@@ -71,4 +71,4 @@ class OdooSHRebuildCommand(commands.OdooSHBranchCommand):
                 f': {status_info}' if status_info else ''
             )
         else:
-            logger.success(f'Branch {self.sh_repository}/{self.sh_branch} rebuilt successfully')
+            logger.success(f'Branch {self.sh_repo}/{self.sh_branch} rebuilt successfully')

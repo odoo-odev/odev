@@ -42,11 +42,11 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
     def run(self) -> Any:
         self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
 
-        build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(self.sh_repository, self.sh_branch)
+        build_info: Optional[Mapping[str, Any]] = self.sh_connector.build_info(self.sh_repo, self.sh_branch)
         assert build_info
         build_id = int(build_info['id'])
         build_stage: str = build_info['stage']
-        project_info: Optional[Mapping[str, Any]] = self.sh_connector.project_info(self.sh_repository)
+        project_info: Optional[Mapping[str, Any]] = self.sh_connector.project_info(self.sh_repo)
         assert project_info
         project_url: str = project_info['project_url']
         is_production: bool = build_stage == 'production'
@@ -63,7 +63,7 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
 
         logger.info(
             f'Uploading dump `{os.path.basename(self.dump_path)}` '
-            f'to SH `{self.sh_repository}/{self.sh_branch}`'
+            f'to SH `{self.sh_repo}/{self.sh_branch}`'
         )
         self.copy_to_sh_branch(
             self.dump_path,
@@ -73,7 +73,7 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
 
         # grab last tracking id  # TODO: DRY across commands
         branch_history_before: Optional[List[Mapping[str, Any]]]
-        branch_history_before = self.sh_connector.branch_history(self.sh_repository, self.sh_branch)
+        branch_history_before = self.sh_connector.branch_history(self.sh_repo, self.sh_branch)
         last_tracking_id: int = branch_history_before[0]['id'] if branch_history_before else 0
 
         neutralize: bool = not is_production
@@ -99,4 +99,4 @@ class OdooSHUploadCommand(commands.OdooSHBranchCommand):
                 + (f': {status_info}' if status_info else '')
             )
         else:
-            logger.success(f'Database upload to {self.sh_repository}/{self.sh_branch} successful')
+            logger.success(f'Database upload to {self.sh_repo}/{self.sh_branch} successful')
