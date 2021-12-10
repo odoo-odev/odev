@@ -56,7 +56,7 @@ class GetCommand(commands.Command):
 
         if not self.key:
             if not self.section:
-                for section, vals in self.config['odev'].config.items():
+                for section, vals in self.config['odev'].items():
                     print(self._format_section(section))
 
                     for key, val in vals.items():
@@ -64,7 +64,7 @@ class GetCommand(commands.Command):
 
                 return 0
 
-            section = self.config['odev'].config.get(self.section, {})
+            section = self.config['odev'][self.section]
 
             if not section:
                 raise ValueError(f'Section {self.section} does not exist')

@@ -323,7 +323,7 @@ class LocalDatabaseCommand(Command, ABC):
         '''
         Lists names of local Odoo databases.
         '''
-        return self.config['databases'].config.keys()
+        return self.config['databases'].sections()
 
     def db_list_all(self):
         '''

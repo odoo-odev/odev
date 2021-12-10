@@ -40,7 +40,7 @@ class CommandRegistry:
     '''
 
     def __init__(self):
-        config = ConfigManager('odev').config
+        config = ConfigManager('odev')
         self.odev_path = config['paths']['odev']
         self.base_path = os.path.join(self.odev_path, 'odev', 'commands')
         self.commands = {}

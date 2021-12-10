@@ -133,7 +133,6 @@ class RestoreCommand(commands.LocalDatabaseCommand):
                 psql_load(self.database, tmp_sql_path)
 
         db_config = self.config['databases']
-        db_config.config[self.database] = {}
         db_config.set(self.database, 'version', self.db_version(self.database))
         db_config.set(self.database, 'version_clean', self.db_version_clean(self.database))
         db_config.set(self.database, 'enterprise', 'enterprise' if self.db_enterprise(self.database) else 'standard')

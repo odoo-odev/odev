@@ -88,7 +88,7 @@ class RenameCommand(commands.LocalDatabaseCommand):
             _logger.info('Filestore not found, no action taken')
 
         db_config = self.config['databases']
-        db_config.config[name_new] = db_config.config[name_old]
-        db_config.delete(name_old)
+        db_config[name_new] = db_config[name_old]
+        del db_config[name_old]
 
         return 0

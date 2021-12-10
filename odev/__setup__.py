@@ -82,18 +82,15 @@ def run():
         os.chmod(main, os.stat(main).st_mode | stat.S_IEXEC)
 
         ConfigManager('databases')
-        odev_config = ConfigManager('odev')
 
-        odev_config.config['paths'] = odev_config.config.get('paths', {})
-        odev_config.config['paths']['odev'] = cwd
+        with ConfigManager('odev') as odev_config:
+            odev_config.set('paths', 'odev', cwd)
 
-        for key, question, default in ASK_DIRS:
-            answer = _logger.ask(question, odev_config.config['paths'].get(key, default))
-            path = os.path.expanduser(answer)
-            odev_config.config['paths'][key] = path
-            mkdir(path)
-
-        odev_config.save()
+            for key, question, default in ASK_DIRS:
+                answer = _logger.ask(question, odev_config.get('paths', key, default))
+                path = os.path.expanduser(answer)
+                odev_config.set('paths', key, path)
+                mkdir(path)
 
         _logger.success('All set, enjoy!')
 

@@ -60,7 +60,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
             else:
                 _logger.info('Deleted filestore from disk')
 
-        if self.database in self.config['databases'].config:
+        if self.database in self.config['databases']:
             self.config['databases'].delete(self.database)
 
         return 0

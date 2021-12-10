@@ -138,7 +138,7 @@ class ColorFormatter(logging.Formatter):
     theme: Dict[str, Any]
 
     def __init__(self, fmt: Optional[str] = None, *args, **kwargs):
-        self.config = ConfigManager('odev').load().get('logger', {})
+        self.config = dict(ConfigManager('odev')['logger'])
         self.theme = THEMES.get(self.config.get('theme', 'minimal'), THEMES['minimal'])
 
         fmt = fmt or self.theme.get('format', self.theme.get('format'))
