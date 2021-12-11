@@ -33,12 +33,7 @@ class HelpCommand(commands.Command):
 
         if self.args.command:
             command = registry.get_command([self.args.command])
-            parser = ArgumentParser(
-                parents=command.prepare_parsers(),
-                description=command.help,
-                formatter_class=RawTextHelpFormatter,
-                add_help=False,
-            )
+            parser = command.prepare_parser()
 
             description = command.help.replace('\n', '\n' + ' ' * 12)
             usage = parser.format_usage().replace('usage:', '').strip().replace(' ', f' {command.name} ', 1)

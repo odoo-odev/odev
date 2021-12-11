@@ -164,12 +164,7 @@ class CommandRegistry:
 
         argv = argv or sys.argv[1:]
         command_cls = self.get_command(argv)
-        parser = ArgumentParser(
-            parents=command_cls.prepare_parsers(),
-            description=command_cls.help,
-            formatter_class=RawTextHelpFormatter,
-            add_help=False,
-        )
+        parser = command_cls.prepare_parser()
 
         args = parser.parse_args(argv[1:])
         command = command_cls(args)

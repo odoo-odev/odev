@@ -162,7 +162,7 @@ class BaseCommand(ABC):
         ).strip()
         cls.help_short = textwrap.dedent(cls.help_short or cls.help).strip()
 
-        for super_cls in cls.__mro__:
+        for super_cls in reversed(cls.__mro__):
             if not hasattr(super_cls, 'arguments'):
                 continue
 
@@ -191,13 +191,12 @@ class BaseCommand(ABC):
                     cls.arguments.append(argument)
 
     @classmethod
-    def prepare_parsers(cls) -> List[ArgumentParser]:
+    def prepare_parser(cls) -> ArgumentParser:
         '''
-        Prepares the argument parsers for the :class:`CliCommand` subclass.
-        It can return one or multiple argument parsers that will be used to build
-        the final argument parser for the command.
+        Prepares the argument parser for the :class:`CliCommand` class.
 
-        :return: a sequence of :class:`ArgumentParser` objects.
+        :return: a instance of :class:`ArgumentParser` prepared with all the arguments
+            defined in the command an in its parent's classes.
         '''
         parser: ArgumentParser = ArgumentParser(
             prog=cls.name,
@@ -207,12 +206,7 @@ class BaseCommand(ABC):
         )
         cls.prepare_arguments(parser)
 
-        # FIXME: Maybe redundant?
-        super_parsers: List[ArgumentParser] = []
-        if hasattr(super(), 'prepare_parsers'):
-            super_parsers = getattr(super(), 'prepare_parsers')()
-
-        return [*super_parsers, parser]
+        return parser
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
