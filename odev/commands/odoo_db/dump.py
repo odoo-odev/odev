@@ -125,11 +125,11 @@ class DumpCommand(commands.LocalDatabaseCommand):
 
         if platform == 'sh':
             redirect = get_response_data(re_redirect, 'redirect path')
-            res = curl(f'https://www.odoo.sh{redirect}', f'-H "Cookie: session_id={session}"')
-            session = get_response_data(re_session, 'session token')
             login_url = get_response_data(re_location, 'login URL')
-        elif platform == 'saas':
-            login_url = support_url
+            support_url = f'https://www.odoo.sh{redirect}'
+
+        res = curl(support_url, f'-H "Cookie: session_id={session}"')
+        session = get_response_data(re_session, 'session token')
 
         _logger.success(f'Successfuly logged-in to {login_url}')
 
@@ -171,7 +171,9 @@ class DumpCommand(commands.LocalDatabaseCommand):
                 dump_url = get_response_data(re_sh_dump, 'dump URL')
                 dump_url = f'{dump_url}.{ext}?token={token}'
             except SHConnectionError as e:
-                raise SHDatabaseTooLarge(f'The database {database_name} is likely too large and cannot be downloaded')
+                raise SHDatabaseTooLarge(
+                    f'The database {database_name} is likely too large and cannot be downloaded through odev'
+                )
         elif platform == 'saas':
             dump_url = f'{self.url}/saas_worker/dump.{ext}'
 
