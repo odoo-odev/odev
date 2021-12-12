@@ -161,16 +161,16 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand):
 
     def set_config_upgrade_path(self, upgrade_path: Optional[str]) -> None:
         ssh_result: subprocess.CompletedProcess = self.ssh_run(
-            ['cat', REMOTE_ODOO_CONFIG],
+            ["cat", REMOTE_ODOO_CONFIG],
             stdout=subprocess.PIPE,
             text=True,
         )
         odoo_config_data: str = ssh_result.stdout
         odoo_config_data_new: str = edit_odoo_config_data(
-            odoo_config_data, edit_data={('options', 'upgrade_path'): upgrade_path}
+            odoo_config_data, edit_data={("options", "upgrade_path"): upgrade_path}
         )
         self.ssh_run(
-            f'cat > `{REMOTE_ODOO_CONFIG}`',
+            f'cat > "{REMOTE_ODOO_CONFIG}"',
             stdin_data=odoo_config_data_new,
             text=True,
         )
