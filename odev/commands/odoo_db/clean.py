@@ -1,5 +1,7 @@
 '''Make a local Odoo database suitable for development.'''
 
+from argparse import Namespace
+
 from odev.structures import commands
 from odev.utils import logging
 from odev.exceptions import InvalidQuery
@@ -33,7 +35,6 @@ class CleanCommand(commands.LocalDatabaseCommand):
             SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 50
         )
         ''',
-        'UPDATE ir_config_parameter SET value=\'2050-12-12\' WHERE key=\'database.expiration_date\'',
         'DELETE FROM ir_config_parameter where key =\'database.enterprise_code\'',
         'UPDATE ir_config_parameter SET value=\'http://localhost:8069\' WHERE key=\'web.base.url\'',
         'UPDATE ir_config_parameter SET value=\'http://localhost:8069\' WHERE key=\'report.url\'',
@@ -43,6 +44,20 @@ class CleanCommand(commands.LocalDatabaseCommand):
         'DO $$ BEGIN IF (EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES  WHERE TABLE_NAME = \'auth_oauth_provider\')) '
         'THEN UPDATE auth_oauth_provider SET enabled = false; END IF; END; $$',
     ]
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+
+        expiration_date = '2050-12-12'
+
+        # The database expiration date became a datetime object in version 15.0,
+        # as opposed to a date object in previous versions
+        if float(self.db_version_clean()) >= 15.0:
+            expiration_date += ' 00:00:00'
+
+        self.queries.append(
+            f'UPDATE ir_config_parameter SET value=\'{expiration_date}\' WHERE key=\'database.expiration_date\'',
+        )
 
     def run(self):
         '''
