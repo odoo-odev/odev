@@ -98,7 +98,7 @@ class QuickStartCommand(commands.LocalDatabaseCommand):
                 else:  # mode == 'file'
                     filepath = self.subarg
 
-                result = restore.RestoreCommand.run_with(**self.args.__dict__, dump=filepath)
+                result = restore.RestoreCommand.run_with(**self.args.__dict__, dump=filepath, no_clean=False)
 
                 if result != 0:
                     return result
