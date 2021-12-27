@@ -61,7 +61,9 @@ def git_pull(title, odoodir, name, branch):
     repo = Repo(f'{odoodir}/{name}')
     head = repo.head.ref
     tracking = head.tracking_branch()
-    pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
+    pending = len(
+        list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}'))
+    )
 
     if pending > 0:
         logger.warning(
@@ -71,7 +73,7 @@ def git_pull(title, odoodir, name, branch):
 
         if logger.confirm('Do you want to pull those commits now?'):
             logger.info(f'Pulling {pending} commits')
-            repo.remotes.origin.pull()
+            _get_remote(repo).pull()
             logger.success('Up to date!')
 
 
@@ -86,7 +88,7 @@ def self_update() -> bool:
     odev_path = config.get('paths', 'odev')
     logger.debug(f'Fetching changes in remote repository of {odev_path}')
     repo = Repo(odev_path)
-    repo.remotes.origin.fetch()
+    _get_remote(repo).fetch()
     head = repo.head.ref
     tracking = head.tracking_branch()
 
@@ -94,12 +96,24 @@ def self_update() -> bool:
         logger.debug('No remote branch set, running in development mode')
         return False
 
-    pending = len(list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}')))
+    pending = len(
+        list(tracking.commit.iter_items(repo, f'{head.path}..{tracking.path}'))
+    )
 
-    if pending > 0 and logger.confirm('An update is available for odev, do you want to download it now?'):
+    if pending > 0 and logger.confirm(
+        'An update is available for odev, do you want to download it now?'
+    ):
         logger.debug(f'Pulling updates: {head.path}..{tracking.path}')
-        repo.remotes.origin.pull()
+        _get_remote(repo).pull()
         logger.success('Up to date!')
         return True
 
     return False
+
+
+def _get_remote(repo):
+    try:
+        remote = repo.remotes.origin
+    except AttributeError:
+        remote = repo.remotes[0]
+    return remote
