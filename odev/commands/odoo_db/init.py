@@ -51,6 +51,8 @@ class InitCommand(commands.LocalDatabaseCommand):
         the process.
         '''
 
+        # FIXME: DRY with `run`
+
         if not self.db_exists_all():
             raise Exception(f'Database {self.database} does not exist')
 
@@ -70,7 +72,7 @@ class InitCommand(commands.LocalDatabaseCommand):
         odoo.prepare_odoobin(repos_path, version)
 
         addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
-        odoo.prepare_requirements(version_path, addons=addons)
+        odoo.prepare_requirements(repos_path, version, addons=addons)
 
         python_exec = os.path.join(version_path, 'venv/bin/python')
         addons_path = ','.join(addons)

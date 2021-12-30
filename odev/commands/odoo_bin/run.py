@@ -116,7 +116,7 @@ class RunCommand(commands.LocalDatabaseCommand):
         addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
         addons += [os.getcwd(), *self.addons]
         addons = [path for path in addons if odoo.is_addon_path(path)]
-        odoo.prepare_requirements(version_path, addons=addons)
+        odoo.prepare_requirements(repos_path, version, addons=addons)
 
         python_exec = os.path.join(version_path, 'venv/bin/python')
         addons_path = ','.join(addons)

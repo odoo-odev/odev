@@ -97,7 +97,6 @@ def repos_version_path(repos_path: str, version: str) -> str:
 def prepare_odoobin(
     repos_path: str,
     version: str,
-    addons: Optional[List[str]] = None,
     venv: bool = True,
     upgrade: bool = False,
     force: bool = False,
@@ -105,7 +104,7 @@ def prepare_odoobin(
     """
     Prepares the environment for running odoo-bin.
     - Ensures all the needed repositories are cloned and up-to-date
-    - Prepare the correct virtual environment
+    - Prepare the correct virtual environment (unless ``venv`` is explicitly set False)
     """
     branch: str = branch_from_version(version)
 
@@ -122,14 +121,11 @@ def prepare_odoobin(
         force |= git_clone_or_pull(repos_path, "upgrade-platform", force=force)
 
     if venv:
-        prepare_venv(repos_path, version, addons)
+        prepare_venv(repos_path, version)
 
 
-def prepare_venv(repos_path: str, version: str, addons: Optional[List[str]] = None):
-    if addons is None:
-        addons = []
-
-    version_path: str = os.path.join(repos_path, version)  # TODO: DRY, make global fn
+def prepare_venv(repos_path: str, version: str):
+    version_path: str = repos_version_path(repos_path, version)
 
     if not os.path.isdir(os.path.join(version_path, "venv")):
         py_version = get_python_version(version)
@@ -152,9 +148,13 @@ def prepare_venv(repos_path: str, version: str, addons: Optional[List[str]] = No
             )
 
 
-def prepare_requirements(version_path: str, addons: List[str] = []):
-    logger.info('Checking for missing dependencies in requirements.txt')
+def prepare_requirements(repos_path: str, version: str, addons: Optional[List[str]] = None):
+    if addons is None:
+        addons = []
 
+    version_path: str = repos_version_path(repos_path, version)
+
+    logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
     for addon_path in addons + [os.path.join(version_path, "odoo")]:
         requirements_path: str = os.path.join(addon_path, "requirements.txt")
         if not os.path.exists(requirements_path):
@@ -168,7 +168,7 @@ def prepare_requirements(version_path: str, addons: List[str] = []):
             subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
 
     command = f'{version_path}/venv/bin/python -m pip install pudb ipdb > /dev/null'
-    logger.debug(f'Installing developpment tools : {command}')
+    logger.debug(f'Installing development tools: {command}')
 
     with capture_signals():
         subprocess.run(command, shell=True, check=True)
