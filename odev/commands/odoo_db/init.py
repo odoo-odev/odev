@@ -69,16 +69,16 @@ class InitCommand(commands.LocalDatabaseCommand):
 
         version = match and match.group(0)
 
-        odoodir = os.path.join(self.config['odev'].get('paths', 'odoo'), version)
-        odoobin = os.path.join(odoodir, 'odoo/odoo-bin')
+        repos_path = self.config['odev'].get('paths', 'odoo')
+        version_path = os.path.join(repos_path, version)  # TODO: DRY, make global fn
+        odoobin = os.path.join(version_path, 'odoo/odoo-bin')
 
-        odoo.pre_run(odoodir, odoobin, version)
+        odoo.prepare_odoobin(repos_path, version)
 
-        addons = [odoodir + addon_path for addon_path in ODOO_ADDON_PATHS]
+        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
+        odoo.prepare_requirements(version_path, addons=addons)
 
-        odoo.prepare_requirements(odoodir, addons=addons)
-
-        python_exec = os.path.join(odoodir, 'venv/bin/python')
+        python_exec = os.path.join(version_path, 'venv/bin/python')
         addons_path = ','.join(addons)
         command = shlex.join(
             [
