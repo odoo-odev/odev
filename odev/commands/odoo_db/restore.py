@@ -114,7 +114,7 @@ class RestoreCommand(commands.LocalDatabaseCommand):
             raise ValueError(f'Unrecognized extension `{ext}` for file {self.dump_path}')
 
         db_config = self.config['databases']
-        db_config.set(self.database, 'version', self.db_version(self.database))
+        db_config.set(self.database, 'version', self.db_base_version(self.database))
         db_config.set(self.database, 'version_clean', self.db_version_clean(self.database))
         db_config.set(self.database, 'enterprise', 'enterprise' if self.db_enterprise(self.database) else 'standard')
         db_config.save()

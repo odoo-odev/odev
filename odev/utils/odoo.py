@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import subprocess
 from subprocess import DEVNULL
-from typing import List, Optional
+from typing import List, Optional, Mapping
+
+from distutils.version import StrictVersion
 
 from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES
-from odev.exceptions import InvalidOdooDatabase
+from odev.exceptions import InvalidOdooDatabase, InvalidVersion
 from odev.utils import logging
 from odev.utils.os import mkdir
 from odev.utils.github import git_clone_or_pull, worktree_clone_or_pull
@@ -40,21 +43,55 @@ def check_database_name(name: str) -> None:
         )
 
 
-def get_python_version(odoo_version):
-    if '.' in odoo_version:
-        odoo_version = odoo_version.split('.')[0]
+def get_odoo_version(version: str) -> str:
+    """
+    Converts a loose version string into a valid Odoo version
+    """
+    match = re.match(r"(?:saas[-~+])?(\d+)\.(?:saas[-~+])?(\d+)", version)
+    if not match:
+        raise InvalidVersion(version)
+    return (".saas~" if "saas" in version else ".").join(match.groups())
 
-    if odoo_version == '15':
-        return '3.8'
-    if odoo_version == '14':
-        return '3.7'
-    if odoo_version == '13':
-        return '3.6'
-    if odoo_version == '12':
-        return '3.5'
-    if odoo_version == '11':
-        return '3.5'
-    return '2.7'
+
+def parse_odoo_version(version: str) -> StrictVersion:
+    """
+    Parses an odoo version string into a `StrictVersion` object that can be compared.
+    """
+    try:
+        return StrictVersion(re.sub(f"saas~", "", get_odoo_version(version)))
+    except ValueError as exc:
+        raise InvalidVersion(version) from exc
+
+
+def get_python_version(odoo_version: str) -> str:
+    """Get the correct python version for the given odoo version"""
+    odoo_python_versions: Mapping[int, str] = {
+        15: "3.8",
+        14: "3.7",
+        13: "3.6",
+        12: "3.6",
+        11: "3.5",
+    }
+    odoo_version_major: int = parse_odoo_version(odoo_version).version[0]
+    python_version: str = odoo_python_versions.get(odoo_version_major)
+    if python_version is not None:
+        return python_version
+    elif odoo_version_major < 11:
+        return "2.7"
+    else:
+        raise NotImplementedError(f"No matching python version for odoo {odoo_version}")
+
+
+def branch_from_version(version: str) -> str:
+    if "saas" in version:
+        return "".join(version.partition("saas")[1:]).replace("saas~", "saas-")
+    return version
+
+
+def repos_version_path(repos_path: str, version: str) -> str:
+    branch: str = branch_from_version(version)
+    version_path: str = os.path.join(repos_path, branch)
+    return version_path
 
 
 def prepare_odoobin(
@@ -70,12 +107,14 @@ def prepare_odoobin(
     - Ensures all the needed repositories are cloned and up-to-date
     - Prepare the correct virtual environment
     """
-    version_path: str = os.path.join(repos_path, version)  # TODO: DRY, make global fn
+    branch: str = branch_from_version(version)
+
+    version_path: str = repos_version_path(repos_path, version)
     mkdir(version_path, 0o777)
 
-    force |= worktree_clone_or_pull(version_path, "odoo", version, force=force)
-    force |= worktree_clone_or_pull(version_path, "enterprise", version, force=force)
-    force |= worktree_clone_or_pull(version_path, "design-themes", version, force=force)
+    force |= worktree_clone_or_pull(version_path, "odoo", branch, force=force)
+    force |= worktree_clone_or_pull(version_path, "enterprise", branch, force=force)
+    force |= worktree_clone_or_pull(version_path, "design-themes", branch, force=force)
 
     if upgrade:
         force |= git_clone_or_pull(repos_path, "upgrade", force=force)

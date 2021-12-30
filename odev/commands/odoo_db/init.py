@@ -1,7 +1,6 @@
 '''Initializes an empty PostgreSQL database for a specific Odoo version.'''
 
 import os
-import re
 import shlex
 import subprocess
 from argparse import Namespace
@@ -9,14 +8,11 @@ from argparse import Namespace
 from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.signal import capture_signals
-from odev.exceptions import InvalidQuery
+from odev.exceptions import InvalidQuery, InvalidVersion, InvalidArgument
 from odev.constants.odoo import ODOO_ADDON_PATHS
 
 
 _logger = logging.getLogger(__name__)
-
-
-re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 
 
 class InitCommand(commands.LocalDatabaseCommand):
@@ -62,15 +58,13 @@ class InitCommand(commands.LocalDatabaseCommand):
             _logger.info(f'Database {self.database} is already initialized')
             return 0
 
-        match = re_version.match(self.version)
-
-        if not match:
-            raise Exception(f'Invalid version number `{self.version}`')
-
-        version = match and match.group(0)
+        try:
+            version = odoo.get_odoo_version(self.version)
+        except InvalidVersion as exc:
+            raise InvalidArgument(str(exc)) from exc
 
         repos_path = self.config['odev'].get('paths', 'odoo')
-        version_path = os.path.join(repos_path, version)  # TODO: DRY, make global fn
+        version_path = odoo.repos_version_path(repos_path, version)
         odoobin = os.path.join(version_path, 'odoo/odoo-bin')
 
         odoo.prepare_odoobin(repos_path, version)

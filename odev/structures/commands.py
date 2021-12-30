@@ -9,6 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 from contextlib import nullcontext
+from distutils.version import StrictVersion
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
 from github import Github
@@ -34,9 +35,9 @@ from odev.utils.spinner import SpinnerBar, poll_loop
 from odev.utils.shconnector import get_sh_connector, ShConnector
 from odev.utils.config import ConfigManager
 from odev.utils.psql import PSQL
-from odev.utils.odoo import check_database_name
+from odev.utils.odoo import check_database_name, parse_odoo_version, get_odoo_version
 from odev.structures.actions import OptionalStringAction
-from odev.constants import RE_COMMAND, RE_PORT, RE_VERSION, DEFAULT_DATABASE
+from odev.constants import RE_COMMAND, RE_PORT, DEFAULT_DATABASE
 from odev.exceptions import (
     InvalidDatabase,
     InvalidOdooDatabase,
@@ -372,7 +373,7 @@ class LocalDatabaseCommand(Command, ABC):
         elif not self.db_exists(database) and not self.is_odoo_db(database):
             raise InvalidOdooDatabase('Database \'%s\' is not an Odoo database' % (database))
 
-    def db_version(self, database=None):
+    def db_base_version(self, database=None):
         '''
         Gets the version number of a database.
         '''
@@ -388,21 +389,19 @@ class LocalDatabaseCommand(Command, ABC):
         result = result[0][0]
         return result
 
-    def db_version_clean(self, database=None):
-        '''
-        Gets the version number of a database.
-        '''
-        database = self._get_database(database)
+    def db_version_clean(self, database: Optional[str] = None) -> str:
+        """
+        Gets the Odoo version number of a database.
+        """
+        version: str = self.db_base_version(database=database)
+        return get_odoo_version(version)
 
-        version = self.db_version(database)
-        match = RE_VERSION.match(version)
-
-        if not match:
-            raise ValueError(f'Unknown Odoo version for database {database}: {version}')
-
-        version = match.group(0)
-
-        return version
+    def db_version_parsed(self, database: Optional[str] = None) -> StrictVersion:
+        """
+        Gets the parsed version of a database that can be used for comparisons.
+        """
+        version: str = self.db_base_version(database=database)
+        return parse_odoo_version(version)
 
     def db_version_full(self, database=None):
         '''

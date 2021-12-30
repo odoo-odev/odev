@@ -108,7 +108,7 @@ class RunCommand(commands.LocalDatabaseCommand):
         version = self.db_version_clean()
 
         repos_path = self.config['odev'].get('paths', 'odoo')
-        version_path = os.path.join(repos_path, version)  # TODO: DRY, make global fn
+        version_path = odoo.repos_version_path(repos_path, version)
         odoobin = os.path.join(version_path, 'odoo/odoo-bin')
 
         odoo.prepare_odoobin(repos_path, version)

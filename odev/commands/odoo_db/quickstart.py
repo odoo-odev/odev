@@ -6,15 +6,15 @@ import shutil
 from argparse import Namespace
 from datetime import datetime
 
+from odev.exceptions import InvalidVersion
 from odev.structures import commands
 from odev.commands.odoo_db import create, dump, init, remove, restore
 from odev.utils import logging
-
+from odev.utils.odoo import get_odoo_version
 
 _logger = logging.getLogger(__name__)
 
 
-re_version = re.compile(r'^([a-z~0-9]+\.[0-9]+)')
 re_url = re.compile(
     r'^https?:\/\/|(?:[a-zA-Z0-9-_]+(?:\.dev)?\.odoo\.(com|sh)|localhost|127\.0\.0\.[0-9]+)'
 )
@@ -56,12 +56,11 @@ class QuickStartCommand(commands.LocalDatabaseCommand):
         '''
         Creates, initializes or restores and cleanses a local database.
         '''
-        if re_version.match(self.subarg):
+        try:
+            get_odoo_version(self.subarg)
             mode = 'version'
-        elif re_url.match(self.subarg):
-            mode = 'url'
-        else:
-            mode = 'file'
+        except InvalidVersion:
+            mode = 'url' if re_url.match(self.subarg) else 'file'
 
         result = create.CreateCommand.run_with(**self.args.__dict__, template=None)
         if result != 0:

@@ -34,14 +34,15 @@ class ClocCommand(run.RunCommand):
 
         version = self.db_version_clean()
 
-        odoodir = os.path.join(self.config['odev'].get('paths', 'odoo'), version)
-        odoobin = os.path.join(odoodir, 'odoo/odoo-bin')
+        repos_path = self.config['odev'].get('paths', 'odoo')
+        version_path = odoo.repos_version_path(repos_path, version)
+        odoobin = os.path.join(version_path, 'odoo/odoo-bin')
 
-        addons = [odoodir + addon_path for addon_path in ODOO_ADDON_PATHS]
+        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
         addons += [os.getcwd(), *self.addons]
         addons = [path for path in addons if odoo.is_addon_path(path)]
 
-        python_exec = os.path.join(odoodir, 'venv/bin/python')
+        python_exec = os.path.join(version_path, 'venv/bin/python')
         addons_path = ','.join(addons)
         command_args = [
             python_exec,
