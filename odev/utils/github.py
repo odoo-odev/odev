@@ -28,22 +28,6 @@ from odev.utils.credentials import CredentialsHelper
 logger = logging.getLogger(__name__)
 
 
-class GitException(Exception):
-    """Base class for custom git-related exceptions"""
-
-
-class MissingRemote(GitException):
-    """Raised when a repository doesn't have a (specified) remote"""
-
-
-class MissingTrackingBranch(GitException):
-    """Raised when a local branch doesn't have the required tracking branch"""
-
-
-class HeadRefMismatch(GitException):
-    """Raised when HEAD points to a different branch than the specified one"""
-
-
 def get_github(token: Optional[str] = None) -> Github:
     """
     Gets a `Github` instance from the given token, or using a stored or prompted one

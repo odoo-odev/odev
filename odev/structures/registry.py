@@ -13,17 +13,16 @@ from itertools import product
 from importlib import import_module
 from types import ModuleType
 from typing import List, MutableMapping, Optional, Sequence
-from argparse import ArgumentParser, RawTextHelpFormatter
 
 from odev._version import __version__
-from odev.exceptions.commands import CommandMissing
-from odev.exceptions.registry import UpgradeError
+from odev.exceptions import CommandMissing, UpgradeError
 from odev.utils import logging
 from odev.structures.commands import Command, CommandType
 from odev.utils.config import ConfigManager
 
 
 _logger = logging.getLogger(__name__)
+
 
 class CommandRegistry:
     '''
@@ -52,7 +51,7 @@ class CommandRegistry:
 
     def __init__(self):
         self.config = ConfigManager('odev')
-        self.odev_path = self.config.get('paths','odev')
+        self.odev_path = self.config.get('paths', 'odev')
         self.base_path = os.path.join(self.odev_path, 'odev', 'commands')
         self.commands = {}
 
@@ -77,7 +76,6 @@ class CommandRegistry:
 
                 self.config.set('odev', 'version', ver)
                 current_version = ver
-
 
     def run_upgrade(self, path, script):
         spec = importlib.util.spec_from_file_location(script, path)
