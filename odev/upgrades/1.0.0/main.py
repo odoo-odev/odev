@@ -21,5 +21,4 @@ def run():
     ]
     for dir in repo_dirs:
         _logger.warning(f"Folder '{str(dir)}' will be deleted to improve performance by using git worktree !")
-        _logger.info("Test")
         shutil.rmtree(dir)
