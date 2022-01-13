@@ -3,8 +3,8 @@
 '''
 Commands registry and dispatcher
 '''
-
-from odev.exceptions.commands import CommandMissing
+from packaging import version
+import importlib
 import os
 import sys
 import pkgutil
@@ -15,9 +15,15 @@ from types import ModuleType
 from typing import List, MutableMapping, Optional, Sequence
 from argparse import ArgumentParser, RawTextHelpFormatter
 
+from odev._version import __version__
+from odev.exceptions.commands import CommandMissing
+from odev.exceptions.registry import UpgradeError
+from odev.utils import logging
 from odev.structures.commands import Command, CommandType
 from odev.utils.config import ConfigManager
 
+
+_logger = logging.getLogger(__name__)
 
 class CommandRegistry:
     '''
@@ -39,11 +45,49 @@ class CommandRegistry:
     Collection of existing and loaded commands.
     '''
 
+    config: ConfigManager
+    '''
+    Config instance to load the last installed version
+    '''
+
     def __init__(self):
-        config = ConfigManager('odev')
-        self.odev_path = config['paths']['odev']
+        self.config = ConfigManager('odev')
+        self.odev_path = self.config.get('paths','odev')
         self.base_path = os.path.join(self.odev_path, 'odev', 'commands')
         self.commands = {}
+
+    def run_upgrades(self):
+        current_version = self.config.get('odev', 'version', '0')
+
+        if version.parse(__version__) < version.parse(current_version):
+            return
+
+        upgrade_path = os.path.join(self.odev_path, 'odev', "upgrades")
+        upgrade_scripts = sorted([x for x in os.listdir(upgrade_path) if os.path.isdir(os.path.join(upgrade_path, x))], key=lambda x: version.Version(x))
+
+        for ver in upgrade_scripts:
+            if version.parse(current_version) < version.parse(ver) <= version.parse(__version__):
+                for script in sorted(os.listdir(os.path.join(upgrade_path, ver))):
+                    name, ext = os.path.splitext(os.path.basename(script))
+                    if ext.lower() != '.py':
+                        continue
+
+                    _logger.info(f"Running upgrade from {current_version} to {ver}")
+                    self.run_upgrade(os.path.join(upgrade_path, ver, script), name)
+
+                self.config.set('odev', 'version', ver)
+                current_version = ver
+
+
+    def run_upgrade(self, path, script):
+        spec = importlib.util.spec_from_file_location(script, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        try:
+            module.run()
+        except Exception as e:
+            raise UpgradeError(f"Error while running odev upgrade file {path}") from e
 
     def load_commands(self):
         '''

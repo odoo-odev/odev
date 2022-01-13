@@ -1,7 +1,8 @@
 from typing import Optional
 
-from git import Repo
+from git import Repo, GitCommandError
 from github import Github
+import os
 
 from odev.utils import logging
 from odev.utils.credentials import CredentialsHelper
@@ -23,12 +24,32 @@ def git_clone(title, odoodir, name, branch):
     Clones a repository from GitHub.
     '''
 
-    logger.info('Downloading %s on branch %s' % (title, branch))
+    logger.info(f'Downloading {title}')
     Repo.clone_from(
         f'git@github.com:odoo/{name}.git',
         f'{odoodir}/{name}',
-        multi_options=[f'--branch {branch}', '--single-branch'],
+        multi_options=[f'--branch {branch}'],
     )
+
+
+def git_worktree_create(title, odoodir, name, branch):
+    config = ConfigManager('odev')
+    odev_path = config.get('paths', 'odoo')
+    worktree_base = os.path.join(odev_path, 'master')
+    repo_path = os.path.join(worktree_base, name)
+
+    if not os.path.isdir(repo_path):
+        logger.info(f"The {title} master worktree directory is missing ! Downloading it now ;-)")
+        logger.warning('This may take a while, please be patient...')
+        git_clone(title, worktree_base, name, 'master')
+
+    repo = Repo(repo_path)
+
+    try:
+        repo.git.worktree("add", f"{odoodir}/{name}", branch)
+    except GitCommandError as g:
+        repo.git.worktree("prune")
+        repo.git.worktree("add", f"{odoodir}/{name}", branch)
 
 
 def git_pull(title, odoodir, name, branch):

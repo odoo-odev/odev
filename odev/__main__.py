@@ -26,7 +26,6 @@ _logger = logging.getLogger(__name__)
 
 code = 0
 
-
 def signal_handler(signum, frame):
     global code
     print()  # Empty newline to make sure we're not writing next to a running prompt
@@ -41,8 +40,12 @@ def set_log_level():
     re_loglevel = re.compile(r'(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)', re.IGNORECASE)
     loglevel_match = re_loglevel.findall(' '.join(sys.argv))
 
+    # TODO: Default fall back to set INFO log level before arg parse.
+    level = 'INFO'
     if loglevel_match and loglevel_match[~0] in logging.logging._nameToLevel:
-        logging.set_log_level(loglevel_match[~0])
+        level = loglevel_match[~0]
+
+    logging.set_log_level(level)
 
 
 def main():
@@ -62,7 +65,9 @@ def main():
             # Restart the process with updated code
             os.execv(sys.argv[0], sys.argv)
 
-        registry = CommandRegistry().load_commands()
+        registry = CommandRegistry()
+        registry.run_upgrades()
+        registry.load_commands()
         code = registry.handle()
 
     # Process

@@ -8,7 +8,7 @@ from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES
 from odev.exceptions import InvalidOdooDatabase
 from odev.utils import logging
 from odev.utils.os import mkdir
-from odev.utils.github import git_clone, git_pull
+from odev.utils.github import git_pull, git_clone, git_worktree_create
 from odev.utils.signal import capture_signals
 from odev.exceptions import CommandAborted
 
@@ -72,9 +72,9 @@ def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False, add
 
         mkdir(odoodir, 0o777)
 
-        git_clone('Odoo Community', odoodir, 'odoo', version)
-        git_clone('Odoo Enterprise', odoodir, 'enterprise', version)
-        git_clone('Odoo Design Themes', odoodir, 'design-themes', version)
+        git_worktree_create('Odoo Community', odoodir, 'odoo', version)
+        git_worktree_create('Odoo Enterprise', odoodir, 'enterprise', version)
+        git_worktree_create('Odoo Design Themes', odoodir, 'design-themes', version)
 
     else:
         git_pull('Odoo Community', odoodir, 'odoo', version)
