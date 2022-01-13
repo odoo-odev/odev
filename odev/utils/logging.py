@@ -176,7 +176,6 @@ def getLogger(name: Optional[str] = None, trap: Optional[io.StringIO] = None) ->
         log_handler = logging.StreamHandler(trap)
         log_handler.setFormatter(ColorFormatter())
         logger.addHandler(log_handler)
-        logger.setLevel(logging.INFO)
 
     return logger
 
