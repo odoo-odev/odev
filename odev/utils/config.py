@@ -1,10 +1,20 @@
 # -*- coding: utf-8 -*-
 
-from collections.abc import MutableMapping
+from collections import abc
 from configparser import ConfigParser, SectionProxy
 from os import path
 from pathlib import Path
-from typing import Any, Optional, Union, Iterable, Tuple, List, Mapping, Iterator
+from typing import (
+    Any,
+    Optional,
+    Union,
+    Iterable,
+    Tuple,
+    List,
+    Mapping,
+    Iterator,
+    MutableMapping,
+)
 
 from odev.utils.os import mkdir
 
@@ -13,7 +23,7 @@ ConfigSectionType = MutableMapping[str, str]
 ConfigType = MutableMapping[str, ConfigSectionType]
 
 
-class ConfigManager(MutableMapping):
+class ConfigManager(abc.MutableMapping):
     '''
     Light wrapper around configparser to write and retrieve configuration
     saved on disk.
