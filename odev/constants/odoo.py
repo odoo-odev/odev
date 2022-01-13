@@ -10,6 +10,13 @@ ODOO_ADDON_PATHS = [
     "/odoo/addons",
 ]
 
+OPENERP_ADDON_PATHS = [
+    "/enterprise",
+    "/design-themes",
+    "/odoo/openerp/addons",
+    "/odoo/addons",
+]
+
 ODOO_REPOSITORIES = [
     "odoo",
     "enterprise",

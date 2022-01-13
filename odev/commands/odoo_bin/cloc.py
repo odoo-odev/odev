@@ -6,10 +6,11 @@ import shlex
 import subprocess
 from textwrap import indent
 
+from packaging.version import Version
 from texttable import Texttable
 
 from odev.commands.odoo_bin import run
-from odev.constants import ODOO_ADDON_PATHS
+from odev.constants import ODOO_ADDON_PATHS, OPENERP_ADDON_PATHS
 from odev.utils import logging, odoo
 from odev.utils.logging import term
 
@@ -43,13 +44,17 @@ class ClocCommand(run.RunCommand):
                 "Will try adding the current directory, otherwise will run as enterprise\n",
             )
 
+        # FIXME: DRY "run odoo-bin code" across run/init/cloc commands
+
         version = self.db_version_clean()
+        pre_openerp_refactor = self.db_version_parsed() >= Version("9.13")
 
         repos_path = self.config["odev"].get("paths", "odoo")
         version_path = odoo.repos_version_path(repos_path, version)
-        odoobin = os.path.join(version_path, "odoo/odoo-bin")
+        odoobin = os.path.join(version_path, ("odoo/odoo-bin" if pre_openerp_refactor else "odoo/odoo.py"))
 
-        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
+        common_addons = ODOO_ADDON_PATHS if pre_openerp_refactor else OPENERP_ADDON_PATHS
+        addons = [version_path + addon_path for addon_path in common_addons]
         addons += [os.getcwd(), *self.addons]
         addons = [path for path in addons if odoo.is_addon_path(path)]
 

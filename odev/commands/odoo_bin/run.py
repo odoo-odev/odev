@@ -7,8 +7,10 @@ import subprocess
 from argparse import Namespace
 from datetime import datetime
 
+from packaging.version import Version
+
 from odev.commands.odoo_db import remove
-from odev.constants import DB_TEMPLATE_SUFFIX, ODOO_ADDON_PATHS
+from odev.constants import DB_TEMPLATE_SUFFIX, ODOO_ADDON_PATHS, OPENERP_ADDON_PATHS
 from odev.exceptions.odoo import RunningOdooDatabase
 from odev.structures import actions, commands
 from odev.utils import logging, odoo
@@ -117,18 +119,22 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
                 "Will try adding the current directory, otherwise will run as enterprise",
             )
 
+        # FIXME: DRY "run odoo-bin code" across run/init/cloc commands
+
         version = self.db_version_clean()
+        pre_openerp_refactor = self.db_version_parsed() >= Version("9.13")
 
         repos_path = self.config["odev"].get("paths", "odoo")
         version_path = odoo.repos_version_path(repos_path, version)
-        odoobin = os.path.join(version_path, "odoo/odoo-bin")
+        odoobin = os.path.join(version_path, ("odoo/odoo-bin" if pre_openerp_refactor else "odoo/odoo.py"))
         venv_name = (
             self.database if self.args.alt_venv or os.path.isdir(os.path.join(version_path, self.database)) else "venv"
         )
 
         odoo.prepare_odoobin(repos_path, version, skip_prompt=self.args.pull, venv_name=venv_name)
 
-        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
+        common_addons = ODOO_ADDON_PATHS if pre_openerp_refactor else OPENERP_ADDON_PATHS
+        addons = [version_path + addon_path for addon_path in common_addons]
         addons += [os.getcwd(), *self.addons]
         addons = [path for path in addons if odoo.is_addon_path(path)]
 

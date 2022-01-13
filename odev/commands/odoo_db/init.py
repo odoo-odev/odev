@@ -6,7 +6,9 @@ import shlex
 import subprocess
 from argparse import Namespace
 
-from odev.constants.odoo import ODOO_ADDON_PATHS
+from packaging.version import Version
+
+from odev.constants.odoo import ODOO_ADDON_PATHS, OPENERP_ADDON_PATHS
 from odev.exceptions import InvalidArgument, InvalidQuery, InvalidVersion
 from odev.structures import commands, database
 from odev.utils import logging, odoo
@@ -58,7 +60,7 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
         the process.
         """
 
-        # FIXME: DRY with `run`
+        # FIXME: DRY "run odoo-bin code" across run/init/cloc commands
 
         if self.db_exists():
             _logger.info(f"Database {self.database} is already initialized")
@@ -69,13 +71,16 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
         except InvalidVersion as exc:
             raise InvalidArgument(str(exc)) from exc
 
+        pre_openerp_refactor = self.db_version_parsed() >= Version("9.13")
+
         repos_path = self.config["odev"].get("paths", "odoo")
         version_path = odoo.repos_version_path(repos_path, version)
-        odoobin = os.path.join(version_path, "odoo/odoo-bin")
+        odoobin = os.path.join(version_path, ("odoo/odoo-bin" if pre_openerp_refactor else "odoo/odoo.py"))
 
         odoo.prepare_odoobin(repos_path, version, skip_prompt=self.args.pull)
 
-        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS] + self.args.addons
+        common_addons = ODOO_ADDON_PATHS if pre_openerp_refactor else OPENERP_ADDON_PATHS
+        addons = [version_path + addon_path for addon_path in common_addons] + self.args.addons
         addons = [path for path in addons if odoo.is_addon_path(path)]
         odoo.prepare_requirements(repos_path, version, addons=addons)
 

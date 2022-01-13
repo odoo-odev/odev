@@ -249,6 +249,12 @@ def prepare_requirements(repos_path: str, version: str, venv_name="venv", addons
         except FileNotFoundError:
             continue
 
+    if parse_odoo_version(version).major < 10:
+        # fix broken psycopg2 requirement for obsolete C lib bindings
+        install_packages(packages="psycopg2==2.7.3.1", python_bin=venv_python)
+        # use lessc v3 for odoo < 10
+        subprocess.run("npm install less@3.0.4 less-plugin-clean-css", cwd=version_path, shell=True)
+
 
 def _need_pull(version: str):
     limit = ConfigManager("odev").get("pull_check", "max_days") or 1
