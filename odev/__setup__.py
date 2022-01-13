@@ -55,11 +55,17 @@ def run():
     ]
 
     try:
-        ubin = os.path.join('/usr', 'local', 'bin', 'odev')
         cwd = os.getcwd()
         main = os.path.join(cwd, 'main.py')
 
-        _logger.info('Creating symlink for odev, this might require additional permissions')
+        suffix = 'bin/odev'
+        if _logger.confirm('Would you like to create a system-wide symlink to odev? [/usr/local/bin]'):
+            _logger.info('Creating system-wide symlink for odev, this might require additional permissions')
+            prefix = '/usr/local/'
+        else:
+            prefix = os.path.expanduser('~/.local/')
+        ubin = os.path.join(prefix, suffix)
+
         rm_command = shlex.join(['rm', '-f', ubin])
         ln_command = shlex.join(['ln', '-s', main, ubin])
         password = None
