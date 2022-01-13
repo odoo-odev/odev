@@ -124,3 +124,9 @@ def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False, add
 
         with capture_signals():
             subprocess.run(command, shell=True, check=True)
+
+    command = f'{odoodir}/venv/bin/python -m pip install pudb ipdb > /dev/null'
+    logger.debug(f'Installing developpment tools : {command}')
+
+    with capture_signals():
+        subprocess.run(command, shell=True, check=True)
