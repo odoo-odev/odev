@@ -113,6 +113,7 @@ def pre_run(odoodir: str, odoobin: str, version: str, upgrade: bool = False, add
         else:
             git_pull('Odoo Upgrade', odoodir_parent, 'upgrade', 'master')
 
+def prepare_requirements(odoodir: str, addons: List[str] = []):
     logger.info('Checking for missing dependencies in requirements.txt')
 
     def requirements_path(path):
