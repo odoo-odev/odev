@@ -101,18 +101,17 @@ class RestoreCommand(commands.LocalDatabaseCommand):
         _logger.info(f'Restoring dump file `{self.dump_path}` to database {self.database}')
         _logger.warning('This may take a while, please be patient...')
 
-        match ext:
-            case '.dump':
-                pg_restore(self.database, self.dump_path)
-            case '.sql':
-                psql_load(self.database, self.dump_path)
-            case '.gz':
-                cmd = f"zcat {self.dump_path}"
-                psql_pipe(self.database, cmd)
-            case '.zip':
-                self.handle_zipped_dump()
-            case _:
-                raise ValueError(f'Unrecognized extension `{ext}` for file {self.dump_path}')
+        if ext == '.dump':
+            pg_restore(self.database, self.dump_path)
+        elif ext == '.sql':
+            psql_load(self.database, self.dump_path)
+        elif ext == '.gz':
+            cmd = f'zcat {self.dump_path}'
+            psql_pipe(self.database, cmd)
+        elif ext == '.zip':
+            self.handle_zipped_dump()
+        else:
+            raise ValueError(f'Unrecognized extension `{ext}` for file {self.dump_path}')
 
         db_config = self.config['databases']
         db_config.set(self.database, 'version', self.db_version(self.database))
@@ -152,16 +151,15 @@ class RestoreCommand(commands.LocalDatabaseCommand):
                             choice = _logger.ask('[O]verwrite / [M]erge / [C]ancel ').capitalize()[0]
                         except ValueError:
                             continue
-                    
-                    match choice:
-                        case 'O':
-                            _logger.warning(f'Deleting existing filestore directory')
-                            shutil.rmtree(filestore_path)
-                        case 'M':
-                            _logger.warning(f'Merging existing filestore directory')
-                        case 'C':
-                            _logger.warning(f'Not touching filestore...finishing')
-                            return
+
+                    if choice == 'O':
+                        _logger.warning(f'Deleting existing filestore directory')
+                        shutil.rmtree(filestore_path)
+                    elif choice == 'M':
+                        _logger.warning(f'Merging existing filestore directory')
+                    elif choice == 'C':
+                        _logger.warning(f'Not touching filestore...finishing')
+                        return
 
             for zipinfo in filestore_infos:
                 # member is saved w/ full filepath, modify it
