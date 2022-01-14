@@ -9,7 +9,6 @@ import subprocess
 import time
 from pathlib import Path
 from contextlib import nullcontext
-from distutils.version import StrictVersion
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
 from github import Github
@@ -27,6 +26,8 @@ from typing import (
     Type,
     Union,
 )
+
+from packaging.version import Version
 
 from odev.utils import logging
 from odev.utils.github import get_github
@@ -396,7 +397,7 @@ class LocalDatabaseCommand(Command, ABC):
         version: str = self.db_base_version(database=database)
         return get_odoo_version(version)
 
-    def db_version_parsed(self, database: Optional[str] = None) -> StrictVersion:
+    def db_version_parsed(self, database: Optional[str] = None) -> Version:
         """
         Gets the parsed version of a database that can be used for comparisons.
         """

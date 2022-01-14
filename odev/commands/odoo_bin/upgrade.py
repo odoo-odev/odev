@@ -6,7 +6,6 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from distutils.version import StrictVersion
 from getpass import getuser
 from pathlib import Path
 from argparse import Namespace, REMAINDER
@@ -14,6 +13,7 @@ from typing import Sequence, Mapping, Union, Optional, Match, MutableMapping, Li
 
 from asyncio.subprocess import Process, PIPE, STDOUT
 from blessed.sequences import Sequence as TermSequence
+from packaging.version import Version
 
 from odev.structures.commands import LocalDatabaseCommand
 from odev.utils import logging
@@ -141,8 +141,8 @@ class UpgradeCommand(LocalDatabaseCommand):
         Returns a sequence of the required Odoo versions as strings needed to upgrade
         from ``version_from`` to ``version_to``. Will always include ``version_from``.
         """
-        version_from_parsed: StrictVersion = parse_odoo_version(version_from)
-        version_to_parsed: StrictVersion = parse_odoo_version(version_to)
+        version_from_parsed: Version = parse_odoo_version(version_from)
+        version_to_parsed: Version = parse_odoo_version(version_to)
         version: str
         required_versions: List[str] = [
             version

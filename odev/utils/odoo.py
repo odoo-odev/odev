@@ -6,7 +6,7 @@ import subprocess
 from subprocess import DEVNULL
 from typing import List, Optional, Mapping
 
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
@@ -53,12 +53,12 @@ def get_odoo_version(version: str) -> str:
     return (".saas~" if "saas" in version else ".").join(match.groups())
 
 
-def parse_odoo_version(version: str) -> StrictVersion:
+def parse_odoo_version(version: str) -> Version:
     """
-    Parses an odoo version string into a `StrictVersion` object that can be compared.
+    Parses an odoo version string into a `Version` object that can be compared.
     """
     try:
-        return StrictVersion(re.sub(f"saas~", "", get_odoo_version(version)))
+        return Version(re.sub(f"saas~", "", get_odoo_version(version)))
     except ValueError as exc:
         raise InvalidVersion(version) from exc
 
@@ -72,7 +72,7 @@ def get_python_version(odoo_version: str) -> str:
         12: "3.6",
         11: "3.5",
     }
-    odoo_version_major: int = parse_odoo_version(odoo_version).version[0]
+    odoo_version_major: int = parse_odoo_version(odoo_version).major
     python_version: str = odoo_python_versions.get(odoo_version_major)
     if python_version is not None:
         return python_version
