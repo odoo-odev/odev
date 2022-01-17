@@ -118,7 +118,7 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand):
         '''
         fake_install_version: str = '0.1.0.1'
         fake_install_values: str = ', '.join(
-            f'(`{module}`, `to upgrade`, `{fake_install_version}`)'
+            f"('{module}', 'to upgrade', '{fake_install_version}')"
             for module in fake_install_modules
         )
         fake_install_query: str = (
