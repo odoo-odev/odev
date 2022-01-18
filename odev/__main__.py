@@ -16,7 +16,7 @@ from subprocess import CalledProcessError
 from git.exc import GitCommandError
 
 from odev.utils import logging
-from odev.utils.github import self_update
+from odev.utils.github import self_update, handle_git_error
 from odev.structures.registry import CommandRegistry
 from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgument, InvalidQuery
 from odev.exceptions.odoo import InvalidDatabase, InvalidOdooDatabase, RunningOdooDatabase
@@ -81,9 +81,7 @@ def main():
     # Git
 
     except GitCommandError as e:
-        message = re.sub(r'((\n\s{0,}|\')(stderr|error):|\.?\'$)', '', e.stderr).strip()
-        _logger.error(f'Git error, {message}')
-        code = e.status
+        code = handle_git_error(e)
 
     # Commands registry
 

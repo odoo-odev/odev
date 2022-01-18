@@ -1,5 +1,6 @@
 import os
 import os.path
+import re
 from functools import partial
 from logging import getLevelName
 from typing import Optional, Callable
@@ -173,6 +174,11 @@ def git_worktree_create(
 
     return did_clone
 
+def handle_git_error(e, log_level="ERROR") -> int:
+    message = re.sub(r'((\n\s{0,}|\')(stderr|error):|\.?\'$)', '', e.stderr).strip()
+    logger.log(getLevelName(log_level), f'Git error, {message}')
+    # return code
+    return e.status
 
 def get_remote(repo: Repo) -> Remote:
     """
@@ -224,7 +230,14 @@ def git_pull(
     )
     repo: Repo = Repo(repo_path)
     repo_remote: Remote = get_remote(repo)
-    repo_remote.fetch()
+    try:
+        repo_remote.fetch()
+    except GitCommandError as e:
+        if handle_git_error(e, log_level="WARNING") == 128:
+            return False
+        else:
+            raise
+            
     head_branch: Head = repo.head.ref
     if branch and head_branch.name != branch:
         # TODO: prompt user to checkout branch?
