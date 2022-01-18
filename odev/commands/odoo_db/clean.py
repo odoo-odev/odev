@@ -1,6 +1,7 @@
 '''Make a local Odoo database suitable for development.'''
 
 from argparse import Namespace
+from packaging.version import Version
 
 from odev.structures import commands
 from odev.utils import logging
@@ -52,7 +53,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
 
         # The database expiration date became a datetime object in version 15.0,
         # as opposed to a date object in previous versions
-        if self.db_version_parsed() >= "15.0":
+        if self.db_version_parsed() >= Version("15.0"):
             expiration_date += ' 00:00:00'
 
         self.queries.append(
