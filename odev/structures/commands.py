@@ -164,33 +164,39 @@ class BaseCommand(ABC):
         ).strip()
         cls.help_short = textwrap.dedent(cls.help_short or cls.help).strip()
 
-        for super_cls in reversed(cls.__mro__):
-            if not hasattr(super_cls, 'arguments'):
-                continue
+        cls.arguments = cls._get_merged_arguments()
 
-            for argument in getattr(super_cls, 'arguments'):
-                argument_name = argument.get('name') or argument.get('dest') or argument.get('aliases', [])
-
-                if isinstance(argument_name, list) and len(argument_name) > 0:
-                    argument_name = argument_name[0]
-
+    @classmethod
+    def _get_merged_arguments(cls) -> List[MutableMapping[str, Any]]:
+        merged_arguments: MutableMapping[str, MutableMapping[str, Any]] = {}
+        cls_: Type
+        for cls_ in reversed(cls.mro()):
+            argument: MutableMapping[str, Any]
+            for argument in getattr(cls_, "arguments", []):
+                argument_name: Optional[str] = argument.get(
+                    "name", argument.get("dest", argument.get("aliases", [None])[0])
+                )
                 if not argument_name:
                     raise ValueError(
-                        f'Missing name for argument {argument}, '
-                        'please provide at least one of `name`, `dest` or `aliases`'
+                        f"Missing name for argument {argument}, "
+                        "please provide at least one of `name`, `dest` or `aliases`"
                     )
+                merged_argument: MutableMapping[str, Any]
+                # pop existing argument to preserve order of current class
+                merged_argument = dict(merged_arguments.pop(argument_name, {}))
+                merged_argument.update(argument)
+                merged_argument.setdefault("name", argument_name)
+                aliases: Union[str, List[str]] = merged_argument.get("aliases", [])
+                if isinstance(aliases, str):
+                    aliases = [aliases]
+                if argument_name not in aliases:
+                    if not aliases or not aliases[0].startswith("-"):
+                        aliases = [argument_name] + aliases
+                merged_argument["aliases"] = aliases
 
-                argument['name'] = argument_name
+                merged_arguments[argument_name] = merged_argument
 
-                if 'aliases' not in argument:
-                    argument['aliases'] = [argument_name]
-
-                for a in getattr(cls, 'arguments'):
-                    if a.get('name') == argument_name:
-                        a.update(**argument)
-                        break
-                else:
-                    cls.arguments.append(argument)
+        return list(merged_arguments.values())
 
     @classmethod
     def prepare_parser(cls) -> ArgumentParser:
@@ -219,9 +225,6 @@ class BaseCommand(ABC):
             params = dict(argument)
             params.pop('name')
             aliases = params.pop('aliases')
-
-            if isinstance(aliases, str):
-                aliases = [aliases]
 
             parser.add_argument(*aliases, **params)
 

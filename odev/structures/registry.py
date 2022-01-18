@@ -140,10 +140,10 @@ class CommandRegistry:
         names = [command.name] + (list(command.aliases) or [])
 
         for name in names:
-            if name in self.commands:
+            if name in self.commands and command is not self.commands[name]:
                 raise ValueError(f'A command with name `{name}` is already registered')
 
-            self.commands.update({name: command})
+            self.commands[name] = command
 
     def register_subcommand(self, subcommand: CommandType):
         '''
