@@ -25,45 +25,48 @@ class ShSessionError(ShError):
     """Session-related SH errors (es. expired cookie)"""
 
 
+
+def extract_csrf_token(response: requests.Response) -> str:
+    soup: BeautifulSoup = BeautifulSoup(response.content, "html5lib")
+    return soup.find("input", attrs={"name": "csrf_token"})["value"]
+
 class ShConnector(object):
-    def __init__(self, login: str, passwd: str, repo_name: str, github_user: str):
-        self.login: str = login
+    headers: MutableMapping[str, str] = {
+        "user-agent": "odev (https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev)"
+    }
+    repos: Sequence[Mapping] = []
+
+    def __init__(self, login: str, passwd: str, repo_name: str = '', github_user: str = ''):
+        self.user_login: str = login
         self.repo: str = repo_name
         self.github_user: str = github_user
         self.session: Optional[requests.Session] = None
+        self.impersonation_csrf_token: str = None
 
-        self.login_impersonate(passwd)
+        self.login(passwd)
 
-        self.test_session()
 
-    def login_impersonate(self, passwd: str) -> None:
-        headers: MutableMapping[str, str] = {
-            "user-agent": "odev (https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev)"
-        }
+    def login(self, passwd: str) -> None:
 
         impersonate_page_url = "/_odoo/support"
 
         self.session = requests.Session()
         resp: requests.Response
 
-        def extract_csrf_token(response: requests.Response) -> str:
-            soup: BeautifulSoup = BeautifulSoup(response.content, "html5lib")
-            return soup.find("input", attrs={"name": "csrf_token"})["value"]
-
         # do login
         login_data: MutableMapping[str, str] = {
             "redirect": impersonate_page_url,
-            "login": self.login,
+            "login": self.user_login,
             "password": passwd,
         }
         resp = self.session.get(
             f"https://www.odoo.sh/web/login?debug=1&redirect={impersonate_page_url}",
-            headers=headers,
+            headers=self.headers,
         )
         login_data["csrf_token"] = extract_csrf_token(resp)
 
         resp = self.session.post(
-            "https://www.odoo.sh/web/login", data=login_data, headers=headers
+            "https://www.odoo.sh/web/login", data=login_data, headers=self.headers
         )
         if resp.status_code != 200:
             raise ShSessionError("Failed logging in to odoo.sh")
@@ -72,14 +75,19 @@ class ShConnector(object):
             raise ShSessionError(
                 f"Unexpected redirect for impersonation page, got: {resp.url}"
             )
-        impersonation_csrf_token: str = extract_csrf_token(resp)
 
-        # get repos and match gh user
-        repos: Sequence[Mapping] = self.jsonrpc("https://www.odoo.sh/support/json/repos")
-        repo: Mapping
+        self.impersonation_csrf_token = extract_csrf_token(resp)
+
+        # get repos
+        self.repos = self.jsonrpc("https://www.odoo.sh/support/json/repos")
+
+        return self
+
+    def impersonate(self):
+        # match gh user
         matching_repos: List[Mapping] = [
             repo
-            for repo in repos
+            for repo in self.repos
             if repo.get("project_name") == self.repo
             or repo.get("full_name") == self.repo
             or (
@@ -111,7 +119,7 @@ class ShConnector(object):
 
         # impersonate
         impersonation_data: MutableMapping[str, str] = dict(
-            csrf_token=impersonation_csrf_token,
+            csrf_token=self.impersonation_csrf_token,
             repository_id=repo["id"],
             hosting_user_id=user["hosting_user_id"][0],
             repository_search=f'{repo["full_name"]}+({repo["project_name"]})',
@@ -119,10 +127,13 @@ class ShConnector(object):
         resp = self.session.post(
             "https://www.odoo.sh/support/impersonate",
             data=impersonation_data,
-            headers=headers,
+            headers=self.headers,
         )
         if resp.status_code != 200:
             raise ShSessionError("Failed impersonating")
+
+        self.test_session()
+        return self
 
     @property
     def session_id(self):

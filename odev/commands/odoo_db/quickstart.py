@@ -9,6 +9,7 @@ from datetime import datetime
 from odev.exceptions import InvalidVersion
 from odev.structures import commands
 from odev.commands.odoo_db import create, dump, init, remove, restore
+from odev.commands.github import clone
 from odev.utils import logging
 from odev.utils.odoo import get_odoo_version
 
@@ -98,6 +99,8 @@ class QuickStartCommand(commands.LocalDatabaseCommand):
                     filepath = self.subarg
 
                 result = restore.RestoreCommand.run_with(**self.args.__dict__, dump=filepath, no_clean=False)
+
+                result += clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg)
 
                 if result != 0:
                     return result

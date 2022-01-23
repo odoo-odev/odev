@@ -93,14 +93,18 @@ class Logger(logging.getLoggerClass()):
             answer = input(message)[0].lower()
         return answer == 'y'
 
-    def ask(self, question: str, default: Optional[str] = None) -> Optional[str]:
+    def ask(self, question: str, default: Optional[str] = None, choice_options: Optional[list] = []) -> Optional[str]:
         '''
         Asks something to the user.
         '''
         message = self.format_question(question, default=default)
         answer: str = input(message)
         if default and not answer:
-            return default
+            answer = default
+
+        if choice_options and answer not in choice_options:
+            answer = self.ask(question, default, choice_options)
+
         return answer
 
     def password(self, question: str, default: Optional[str] = None) -> Optional[str]:

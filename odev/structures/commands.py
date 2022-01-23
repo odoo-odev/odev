@@ -639,7 +639,7 @@ class OdooSHDatabaseCommand(OdooComCliMixin, Command, ABC):
         logger.info("Connecting to odoo.sh")
         self.sh_connector: ShConnector = get_sh_connector(
             self.login, self.password, self.sh_repo, self.github_user
-        )
+        ).impersonate()
 
 
 class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):

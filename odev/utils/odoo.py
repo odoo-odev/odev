@@ -2,6 +2,7 @@
 
 import os
 import re
+import requests
 import subprocess
 from subprocess import DEVNULL
 from typing import List, Optional, Mapping
@@ -30,6 +31,14 @@ def is_addon_path(path):
                 return True
 
     return any(clean(name) for name in os.listdir(path) if is_really_module(name))
+
+def is_saas_db(url):
+    session = requests.Session()
+    url = url + "/" if not url.endswith("/") else url
+
+    resp = session.get(url + "saas_worker/noop")
+
+    return resp.status_code == 200
 
 
 def check_database_name(name: str) -> None:
