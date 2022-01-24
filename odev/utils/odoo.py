@@ -2,22 +2,23 @@
 
 import os
 import re
-import requests
 import subprocess
 from subprocess import DEVNULL
 from typing import List, Optional, Mapping
 
+import requests
 from packaging.version import Version
 
 from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
-from odev.utils import logging
+from odev.utils.logging import getLogger
 from odev.utils.os import mkdir
 from odev.utils.github import git_clone_or_pull, worktree_clone_or_pull
+from odev.utils.python import install_packages
 from odev.utils.signal import capture_signals
 
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 def is_addon_path(path):
@@ -31,6 +32,7 @@ def is_addon_path(path):
                 return True
 
     return any(clean(name) for name in os.listdir(path) if is_really_module(name))
+
 
 def is_saas_db(url):
     session = requests.Session()
@@ -163,21 +165,13 @@ def prepare_requirements(repos_path: str, version: str, addons: Optional[List[st
 
     version_path: str = repos_version_path(repos_path, version)
 
+    venv_python: str = f"{version_path}/venv/bin/python"
+
     logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
     for addon_path in addons + [os.path.join(version_path, "odoo")]:
-        requirements_path: str = os.path.join(addon_path, "requirements.txt")
-        if not os.path.exists(requirements_path):
+        try:
+            install_packages(requirements_dir=addon_path, python_bin=venv_python)
+        except FileNotFoundError:
             continue
-        command = (
-            f'"{version_path}/venv/bin/python" -m pip install -r "{requirements_path}"'
-        )
-        logger.debug(f"Installing requirements for {os.path.basename(addon_path)}")
 
-        with capture_signals():
-            subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
-
-    command = f'{version_path}/venv/bin/python -m pip install pudb ipdb > /dev/null'
-    logger.debug(f'Installing development tools: {command}')
-
-    with capture_signals():
-        subprocess.run(command, shell=True, check=True)
+    install_packages(packages="pudb ipdb", python_bin=venv_python)

@@ -25,6 +25,7 @@ from odev.exceptions import (
 from odev.utils import logging
 from odev.utils.config import ConfigManager
 from odev.utils.credentials import CredentialsHelper
+from odev.utils.python import install_packages
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +322,7 @@ def self_update() -> bool:
     config = ConfigManager("odev")
     odev_path = config.get("paths", "odev")
     try:
-        return git_pull(
+        did_update: bool = git_pull(
             odev_path,
             "odev",
             verbose=False,
@@ -332,3 +333,9 @@ def self_update() -> bool:
     except (MissingTrackingBranch, HeadRefMismatch) as exc:
         logger.debug(f"{exc}, odev running in development mode")
         return False
+
+    if did_update:
+        logger.info(f'Checking for new odev package requirements')
+        install_packages(requirements_dir=odev_path)
+
+    return did_update

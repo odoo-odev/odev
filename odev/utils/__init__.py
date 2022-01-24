@@ -3,6 +3,7 @@
 from . import credentials
 from . import config
 from . import curl
+from . import python
 from . import github
 from . import logging
 from . import odoo
