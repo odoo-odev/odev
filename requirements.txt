@@ -11,3 +11,6 @@ agentcrypt<1
 texttable>=1.6.4
 decorator>=5.1.0
 packaging==20.9
+python-Levenshtein==0.12.2
+giturlparse.py==0.0.5
+tldextract==3.1.0
