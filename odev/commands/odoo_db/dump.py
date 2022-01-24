@@ -10,6 +10,7 @@ from datetime import datetime
 from odev.structures import commands
 from odev.utils import logging
 from odev.utils.os import mkdir
+from odev.utils.credentials import CredentialsHelper
 from odev.utils.curl import curl
 from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarge
 
@@ -29,7 +30,7 @@ re_sh_dump = re.compile(r'href="//([a-z0-9]+.odoo.com/_long/paas/build/[0-9]+/du
 re_sh_token = re.compile(r'\?token=([^"]+)')
 
 
-class DumpCommand(commands.LocalDatabaseCommand):
+class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
     '''
     Download a dump of a SaaS or SH database and save it locally.
     You can choose whether to download the filestore or not.
@@ -46,6 +47,11 @@ class DumpCommand(commands.LocalDatabaseCommand):
             aliases=['destination'],
             metavar='dest',
             help='Directory to which the dumped file will be saved once downloaded',
+        ),
+        dict(
+            aliases=['-r','--reason'],
+            metavar='reason',
+            help='Fill the reason field when loggin with /_odoo/support',
         )
     ]
 
@@ -102,9 +108,11 @@ class DumpCommand(commands.LocalDatabaseCommand):
         session = get_response_data(re_session, 'session token')
         csrf = get_response_data(re_csrf, 'CSRF token')
 
-        login = _logger.ask('Login:')
-        passwd = _logger.password('Password:')
-        reason = _logger.ask('Reason (optional):')
+        with CredentialsHelper() as creds:
+            login = creds.get("odoo.login", "Odoo login:", self.login)
+            passwd = creds.secret("odoo.passwd", f"Odoo password for {login}:", self.password)
+
+        reason = _logger.ask('Reason (optional):') if not self.args.reason else self.args.reason
 
         login_url = support_login_url if platform == 'saas' else re_location.findall(res)[-1]
 
