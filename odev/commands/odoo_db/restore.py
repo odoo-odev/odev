@@ -28,7 +28,7 @@ def pg_subprocess(fnc):
 
 @pg_subprocess
 def pg_restore(database, dump_path):
-    return ['pg_restore', *('-d', database), dump_path]
+    return f'pg_restore -d {database} {dump_path}'
 
 @pg_subprocess
 def psql_load(database, sql_file):
