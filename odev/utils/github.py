@@ -70,6 +70,7 @@ def git_clone(
     *,
     organization: str = "odoo",
     title: Optional[str] = None,
+    repo_dir_name: Optional[str] = None,
 ) -> None:
     """
     Clones a repository from odoo's GitHub.
@@ -88,6 +89,10 @@ def git_clone(
         repo_name = repo_name.split("/")[-1]
     else:
         url_path = f"{organization}/{repo_name}"
+
+    if repo_dir_name:
+        repo_name = repo_dir_name
+
     logger.info(
         f"Cloning {title or repo_name}" + (f" on branch {branch}" if branch else "")
     )

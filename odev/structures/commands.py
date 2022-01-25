@@ -236,7 +236,7 @@ class BaseCommand(ABC):
         # TODO: automatically fill missing args with None?
         res = cls(Namespace(**dict(*args, **kwargs))).run()
 
-        if kwargs.get('do_raise', True) and res:
+        if kwargs.get('do_raise', True) == False and res:
             res = 0
         return res
 
