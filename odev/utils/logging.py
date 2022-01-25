@@ -83,14 +83,17 @@ class Logger(logging.getLoggerClass()):
         '''
         Asks the user to enter Y or N (case-insensitive).
         '''
-        if not interactive:
-            return assume_yes
-
-        choices = ['y', 'n']
+        choices = ['n', 'y']
         answer: str = ''
         message = self.format_question(question, choices=choices)
-        while answer not in choices:
-            answer = input(message)[0].lower()
+
+        if not interactive:
+            answer = choices[int(assume_yes)]
+            print(message + answer)
+        else:
+            while answer not in choices:
+                answer = input(message)[0].lower()
+
         return answer == 'y'
 
     def ask(self, question: str, default: Optional[str] = None, choice_options: Optional[list] = []) -> Optional[str]:
