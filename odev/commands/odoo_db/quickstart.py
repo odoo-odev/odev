@@ -23,7 +23,7 @@ re_url = re.compile(
 TMP_DIR = '/tmp/odev'
 
 
-class QuickStartCommand(commands.LocalDatabaseCommand):
+class QuickStartCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
     '''
     Quickly setup a local database and start working with it directly.
 
@@ -100,8 +100,6 @@ class QuickStartCommand(commands.LocalDatabaseCommand):
 
                 result = restore.RestoreCommand.run_with(**self.args.__dict__, dump=filepath, no_clean=False)
 
-                result += clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg)
-
                 if result != 0:
                     return result
 
@@ -114,5 +112,8 @@ class QuickStartCommand(commands.LocalDatabaseCommand):
         finally:
             if os.path.isdir(TMP_DIR):
                 shutil.rmtree(TMP_DIR)
+
+        if mode == "url":
+            result += clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg, do_raise=False)
 
         return result

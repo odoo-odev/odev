@@ -234,7 +234,11 @@ class BaseCommand(ABC):
         Runs the command directly with the provided arguments, bypassing parsers
         '''
         # TODO: automatically fill missing args with None?
-        return cls(Namespace(**dict(*args, **kwargs))).run()
+        res = cls(Namespace(**dict(*args, **kwargs))).run()
+
+        if kwargs.get('do_raise', True) and res:
+            res = 0
+        return res
 
     @abstractmethod
     def run(self) -> int:
@@ -596,6 +600,10 @@ class OdooComCliMixin(Command, ABC):
         dict(
             aliases=['-p', '--password'],
             help='Password for GitHub or Odoo SH login',
+        ),
+        dict(
+            aliases=['-r','--reason'],
+            help='Fill the reason field when loggin with /_odoo/support',
         ),
     ]
 

@@ -47,11 +47,6 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             aliases=['destination'],
             metavar='dest',
             help='Directory to which the dumped file will be saved once downloaded',
-        ),
-        dict(
-            aliases=['-r','--reason'],
-            metavar='reason',
-            help='Fill the reason field when loggin with /_odoo/support',
         )
     ]
 
