@@ -138,7 +138,7 @@ class RunCommand(commands.LocalDatabaseCommand):
         )
 
         command = shlex.join(command_args)
-        logger.debug(f'Running: {command}')
+        logger.info(f'Running: {command}')
 
         with capture_signals():
             subprocess.run(command, shell=True, check=True)
