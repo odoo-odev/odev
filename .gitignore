@@ -3,3 +3,4 @@ __pycache__
 .vscode
 .history
 .mypy_cache
+.pytest_cache
