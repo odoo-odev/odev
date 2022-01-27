@@ -24,6 +24,7 @@ class TestCommand(run.RunCommand):
             for more information on test tags
             ''',
         ),
+        dict(name='args'),  # moves `args` from RunCommand last
     ]
 
     def __init__(self, args: Namespace):

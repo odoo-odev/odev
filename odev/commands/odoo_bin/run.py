@@ -37,13 +37,13 @@ class RunCommand(commands.LocalDatabaseCommand):
             help='Save the current arguments for next calls',
         ),
         dict(
-            aliases=['addons'],
+            name='addons',
             action=actions.CommaSplitAction,
             nargs='?',
             help='Comma-separated list of additional addon paths',
         ),
         dict(
-            aliases=['args'],
+            name='args',
             nargs=REMAINDER,
             help='''
             Additional arguments to pass to odoo-bin; Check the documentation at
