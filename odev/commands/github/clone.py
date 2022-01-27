@@ -151,7 +151,7 @@ class CloneCommand(commands.Command):
 
     def clone(self, repo: str):
         dir_name = ""
-        devs_path = self.config["odev"].get("paths", "devs")
+        devs_path = self.config["odev"].get("paths", "dev")
         parent_path = os.path.join(devs_path, repo["organization"])
         repo_path = os.path.join(devs_path, repo["repo"])
 
