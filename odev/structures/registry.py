@@ -17,7 +17,7 @@ from packaging import version
 from odev._version import __version__
 from odev.constants import HELP_ARGS_ALIASES
 from odev.exceptions import CommandMissing, UpgradeError
-from odev.structures.commands import Command, CommandType
+from odev.structures.commands import BaseCommand, CommandType
 from odev.utils.config import ConfigManager
 from odev.utils.logging import logging
 
@@ -108,7 +108,10 @@ class CommandRegistry:
 
         def filter_commands(attr):
             return (
-                inspect.isclass(attr) and issubclass(attr, Command) and not attr.is_abstract and "name" in attr.__dict__
+                inspect.isclass(attr)
+                and issubclass(attr, BaseCommand)
+                and not attr.is_abstract
+                and "name" in attr.__dict__
             )
 
         all_commands: List[CommandType] = []

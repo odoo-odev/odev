@@ -16,6 +16,7 @@ from collections import defaultdict
 from contextlib import nullcontext
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     ContextManager,
@@ -70,7 +71,14 @@ from odev.utils.spinner import SpinnerBar, poll_loop
 from odev.utils.template import Template
 
 
+if TYPE_CHECKING:
+    from odev.structures.registry import CommandRegistry
+
+
 _logger = logging.getLogger(__name__)
+
+
+CommandType = Type["BaseCommand"]
 
 
 class BaseCommand(ABC):
@@ -83,27 +91,22 @@ class BaseCommand(ABC):
     The name of the command associated with the class. Must be unique.
     """
 
-    config: Dict[str, ConfigManager] = {}
-    """
-    General configuration for odev and databases.
-    """
-
     aliases: ClassVar[Sequence[str]] = []
     """
     Additional aliases for the command. These too must be unique.
     """
 
-    subcommands: ClassVar[MutableMapping[str, "CommandType"]] = {}
+    subcommands: ClassVar[MutableMapping[str, CommandType]] = {}
     """
     Subcommands' classes available for this command.
     """
 
-    command: ClassVar[Optional["CommandType"]] = None
+    command: ClassVar[Optional[CommandType]] = None
     """
     Parent command class.
     """
 
-    registry: ClassVar[Optional["CommandRegistry"]] = None  # type: ignore # noqa: F821 - Undefined name
+    registry: ClassVar[Optional["CommandRegistry"]] = None
     """
     Commands registry for access to sibling commands.
     """
@@ -124,48 +127,12 @@ class BaseCommand(ABC):
     If omitted, the class or source module docstring will be used instead.
     """
 
-    arguments: ClassVar[List[Dict[str, Any]]] = [
-        {
-            "aliases": ["-y", "--yes"],
-            "dest": "assume_yes",
-            "action": "store_true",
-            "help": "Assume `yes` as answer to all prompts and run non-interactively",
-        },
-        {
-            "aliases": ["-n", "--no"],
-            "dest": "assume_no",
-            "action": "store_true",
-            "help": "Assume `no` as answer to all prompts and run non-interactively",
-        },
-        {
-            "aliases": ["-v", "--log-level"],
-            "choices": ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
-            "default": "INFO",
-            "help": "Set logging verbosity",
-        },
-        {
-            "aliases": HELP_ARGS_ALIASES,
-            "dest": "show_help",
-            "action": "store_true",
-            "help": "Show help for the current command.",
-        },
-    ]
+    arguments: ClassVar[List[MutableMapping[str, Any]]] = []
     """
-    Optional arguments definition to extend commands capabilities.
+    Arguments definitions to extend commands capabilities.
     """
 
     is_abstract: ClassVar[bool] = False
-
-    capture_output: bool = False
-    """
-    If True, return the output of commands executed through `run_with`.
-    """
-
-    _globals_context: ClassVar[MutableMapping[str, Any]] = {}
-
-    @property
-    def globals_context(self) -> MutableMapping[str, Any]:
-        return self.__class__._globals_context
 
     def __init__(self, args: Namespace):
         """
@@ -173,28 +140,8 @@ class BaseCommand(ABC):
 
         :param args: the parsed arguments as an instance of :class:`Namespace`
         """
-
-        if args.assume_yes and args.assume_no:
-            raise InvalidArgument("Arguments `assume_yes` and `assume_no` cannot be used together")
-
-        logging.interactive = not (args.assume_yes or args.assume_no)
-        logging.assume_yes = args.assume_yes or not args.assume_no
-        logging.set_log_level(args.log_level)
         self.args: Namespace = args
         self.argv: Optional[Sequence[str]] = None
-
-        # Raise errors unless explicitly disabled through `run_with()` with `do_raise=False`
-        self.args.do_raise = "do_raise" not in self.args or self.args.do_raise
-
-        # Capture subprocesses output
-        self.args.capture_output = "capture_output" in self.args and self.args.capture_output
-
-        if not logging.interactive and not logging.assume_prompted:
-            _logger.info(f"""Assuming '{'yes' if logging.assume_yes else 'no'}' for all confirmation prompts""")
-            logging.assume_prompted = True
-
-        for key in ["odev"]:
-            self.config[key] = ConfigManager(key)
 
     @classmethod
     def prepare(cls):
@@ -302,10 +249,79 @@ class BaseCommand(ABC):
         return getattr(self.args, name, default)
 
 
-class Command(BaseCommand):
+class Command(BaseCommand, ABC):
     """
     Basic command to run from the terminal.
     """
+
+    config: Dict[str, ConfigManager] = {}
+    """
+    General configuration for odev and databases.
+    """
+
+    do_raise: bool = True
+    """
+    Raise errors unless explicitly disabled through `run_with()` with `do_raise=False`
+    """
+
+    capture_output: bool = False
+    """
+    If True, return the output of commands executed through `run_with()`.
+    """
+
+    _globals_context: ClassVar[MutableMapping[str, Any]] = {}
+
+    arguments: ClassVar[List[MutableMapping[str, Any]]] = [
+        {
+            "aliases": ["-y", "--yes"],
+            "dest": "assume_yes",
+            "action": "store_true",
+            "help": "Assume `yes` as answer to all prompts and run non-interactively",
+        },
+        {
+            "aliases": ["-n", "--no"],
+            "dest": "assume_no",
+            "action": "store_true",
+            "help": "Assume `no` as answer to all prompts and run non-interactively",
+        },
+        {
+            "aliases": ["-v", "--log-level"],
+            "choices": ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
+            "default": "INFO",
+            "help": "Set logging verbosity",
+        },
+        {
+            "aliases": HELP_ARGS_ALIASES,
+            "dest": "show_help",
+            "action": "store_true",
+            "help": "Show help for the current command.",
+        },
+    ]
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+
+        if args.assume_yes and args.assume_no:
+            raise InvalidArgument("Arguments `assume_yes` and `assume_no` cannot be used together")
+
+        logging.interactive = not (args.assume_yes or args.assume_no)
+        logging.assume_yes = args.assume_yes or not args.assume_no
+        logging.set_log_level(args.log_level)
+
+        self.do_raise = "do_raise" not in args or args.do_raise
+
+        self.capture_output = "capture_output" in args and args.capture_output
+
+        if not logging.interactive and not logging.assume_prompted:
+            _logger.info(f"""Assuming '{'yes' if logging.assume_yes else 'no'}' for all confirmation prompts""")
+            logging.assume_prompted = True
+
+        for key in ["odev"]:
+            self.config[key] = ConfigManager(key)
+
+    @property
+    def globals_context(self) -> MutableMapping[str, Any]:
+        return self.__class__._globals_context
 
 
 class LocalDatabaseCommand(Command, ABC):
@@ -1257,14 +1273,3 @@ class ExportCommand(Command, ABC, Template):
             util_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates/static/", "util.py")
 
             shutil.copy(util_file, os.path.join(self.args.path, self.module_name, "migrations"))
-
-
-CommandType = Union[
-    Type[BaseCommand],
-    Type[Command],
-    Type[LocalDatabaseCommand],
-    Type[GitHubCommand],
-    Type[OdooSHDatabaseCommand],
-    Type[OdooSHBranchCommand],
-    Type[ExportCommand],
-]

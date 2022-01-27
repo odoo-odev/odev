@@ -122,7 +122,7 @@ class QuickStartCommand(
 
         except Exception as exception:
             _logger.error(f"An error occurred : {str(exception)}")
-            result = int(self.args.do_raise)
+            result = int(self.do_raise)
 
             if result:
                 _logger.error("Cleaning up files and removing database")

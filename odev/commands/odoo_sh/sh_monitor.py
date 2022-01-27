@@ -51,7 +51,7 @@ re_build_errors = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} \d+ (
 CSV_COLUMN_URL = "Url"
 
 
-class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.BaseCommand):
+class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
     """
     Parses a CSV file containing database information (from `odoo.com` SH projects list),
     run tests on a the production database' source code and report results to the PS Tools
@@ -424,10 +424,8 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.BaseCommand):
             + "\n".join([f"{' ' * 5}- {m['name']} ({m['cloc']}/{m['cloc_pre_commit']} lines)" for m in odoo_modules])
         )
         _logger.warning("This might take some time, please be patient...")
-        init_command = init.InitCommand
-        init_command.capture_output = True
         init_start_time = time.time()
-        init_command.run_with(**self.args.__dict__)
+        init.InitCommand.run_with(**dict(self.args.__dict__, capture_output=True))
         init_exec_time = time.time() - init_start_time
         init_result = self.globals_context.get("init_result", "")
 
