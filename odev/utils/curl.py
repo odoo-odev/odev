@@ -3,6 +3,9 @@
 import os
 
 from odev.utils.signal import capture_signals
+from odev.utils import logging
+
+_logger = logging.getLogger(__name__)
 
 
 # TODO: move to requests library
@@ -18,4 +21,7 @@ def curl(url, *args, include_response_headers=True, follow_redirects=True, silen
     cmdline = f'curl {compiled_args} "{url}"'
     with capture_signals():
         stream = os.popen(cmdline)
-    return stream.read().strip()
+
+    t = stream.read().strip()
+    _logger.debug(t)
+    return t

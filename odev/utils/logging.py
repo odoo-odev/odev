@@ -15,6 +15,8 @@ atexit.register(lambda: print(STYLE_RESET))
 interactive: bool = True
 assume_yes: bool = True
 
+global last_color
+last_color = term.gray53
 
 class LogRecord(logging.LogRecord):
     '''
@@ -162,11 +164,25 @@ class ColorFormatter(logging.Formatter):
         super().__init__(fmt, *args, **kwargs)
 
     def format(self, record: logging.LogRecord) -> str:
+        global last_color
+
         if record.levelname in self.theme['colors']:
             record.__dict__['log_color'] = self.theme['colors'][record.levelname]
         if record.levelname in SYMBOLS:
             record.__dict__['symbol'] = SYMBOLS[record.levelname]
-        return super().format(record)
+        if record.name in self.theme['tree_color']:
+            last_color = self.theme['tree_color'][record.name]
+            record.__dict__['tree_color'] = last_color
+        else:
+            record.__dict__['tree_color'] = last_color
+
+        msg = logging.Formatter.format(self, record)
+
+        if record.message != "":
+            parts = msg.split(record.message)
+            msg = msg.replace('\n', '\n' + ' '.join(parts[0].split(' ')[:self.theme['prefix_length']]))
+
+        return msg
 
 
 def getLogger(name: Optional[str] = None, trap: Optional[io.StringIO] = None) -> Logger:
