@@ -25,7 +25,13 @@ class InitCommand(commands.LocalDatabaseCommand):
         dict(
             aliases=['version'],
             help='Odoo version to use; must match an Odoo community branch',
-        )
+        ),
+        dict(
+            aliases=['--pull'],
+            dest='pull',
+            action='store_true',
+            help='Force a update check before initializing Odoo',
+        ),
     ]
     queries = [
         'CREATE SCHEMA unaccent_schema',
@@ -69,7 +75,8 @@ class InitCommand(commands.LocalDatabaseCommand):
         version_path = odoo.repos_version_path(repos_path, version)
         odoobin = os.path.join(version_path, 'odoo/odoo-bin')
 
-        odoo.prepare_odoobin(repos_path, version)
+        if self.args.pull:
+            odoo.prepare_odoobin(repos_path, version, skip_prompt=True)
 
         addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
         odoo.prepare_requirements(repos_path, version, addons=addons)

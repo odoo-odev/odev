@@ -37,6 +37,12 @@ class RunCommand(commands.LocalDatabaseCommand):
             help='Save the current arguments for next calls',
         ),
         dict(
+            aliases=['--pull'],
+            dest='pull',
+            action='store_true',
+            help='Force a update check before launching Odoo',
+        ),
+        dict(
             name='addons',
             action=actions.CommaSplitAction,
             nargs='?',
@@ -111,7 +117,7 @@ class RunCommand(commands.LocalDatabaseCommand):
         version_path = odoo.repos_version_path(repos_path, version)
         odoobin = os.path.join(version_path, 'odoo/odoo-bin')
 
-        odoo.prepare_odoobin(repos_path, version)
+        odoo.prepare_odoobin(repos_path, version, skip_prompt=self.args.pull)
 
         addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
         addons += [os.getcwd(), *self.addons]

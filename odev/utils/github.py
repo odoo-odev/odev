@@ -207,7 +207,7 @@ def git_pull(
     repo_path: str,
     branch: Optional[str] = None,
     title: Optional[str] = None,
-    force: bool = False,
+    skip_prompt: bool = False,
     verbose: bool = True,
     confirm_message_t: Optional[str] = None,
 ) -> bool:
@@ -261,7 +261,7 @@ def git_pull(
         tracking_branch=tracking_branch.name,
         pending_commits=pending_commits,
     )
-    if pending_commits > 0 and (force or logger.confirm(confirm_message)):
+    if pending_commits > 0 and (skip_prompt or logger.confirm(confirm_message)):
         logger.log(log_level, f"Pulling {pending_commits} commits")
         repo_remote.pull()
         logger.success(f"Updated {title}!")
@@ -275,7 +275,7 @@ def git_clone_or_pull(
     repo_name: str,
     branch: Optional[str] = None,
     title: Optional[str] = None,
-    force: bool = False,
+    skip_prompt: bool = False,
     conditional_clone_fn: Callable[..., bool] = git_clone_if_missing,  # FIXME: Protocol
     **kwargs,
 ) -> bool:
@@ -289,12 +289,12 @@ def git_clone_or_pull(
     :return: True if cloned or pulled (ie. user confirmed), else False
     """
     did_clone: bool = conditional_clone_fn(
-        parent_dir, repo_name, branch=branch, title=title, force=force, **kwargs
+        parent_dir, repo_name, branch=branch, title=title, skip_prompt=skip_prompt, **kwargs
     )
 
     if not did_clone:
         return git_pull(
-            os.path.join(parent_dir, repo_name), branch=branch, title=title, force=force
+            os.path.join(parent_dir, repo_name), branch=branch, title=title, skip_prompt=skip_prompt
         )
 
     return did_clone

@@ -81,9 +81,7 @@ source $HOME/.keychain/$HOST-sh
 
 ## Updates
 
-Odev will automatically check for updates and ask whether you want to install them at each run.
-
-If you want to manually fetch updates, simply `git fetch && git pull` the repository to update to the latest version.
+Odev can fetch new Odoo revisions periodically (defaults to one day) or on demand by using the `--pull` argument with `odev run`.
 
 You may have to rerun the `setup` if you didn't keep your local repository as install path, otherwise you are good to go!
 
@@ -133,6 +131,14 @@ Render a local Odoo database suitable for development:
 
 Count the lines of code in custom modules.
 
+### `clone`
+
+Try to clone a customer repository locally on your custom code path based on the Odoo database url.
+
+The algorithm depends on the database type: 
+- Sh: Try to find the repository linked to the database url on odoo.sh/_odoo/support;
+- Saas: Return the most accurate repository base on levensthein distance that compare the subdomain to the branch name.
+
 ### `create`
 
 Create a new empty local PostgreSQL database without initializing it with Odoo.
@@ -164,6 +170,11 @@ Kill a running Odoo database. Useful if the process crashed because of a forgott
 List all Odoo databases on this computer. If a database is defined in PostgreSQL but not initialized with Odoo, it will not be listed here.
 
 A pattern can optionally be provided to filter databases based on their name.
+
+### `pull`
+
+Update all the codes sources that you have locally (`odoo`, `enterprise` and `design-themes`).
+You can provide a specific version to update, otherwise all locally checked out versions will be updated.
 
 ### `quickstart`
 
