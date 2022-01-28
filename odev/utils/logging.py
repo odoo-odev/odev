@@ -94,7 +94,7 @@ class Logger(logging.getLoggerClass()):
             print(message + answer)
         else:
             while answer not in choices:
-                answer = input(message)[0].lower()
+                answer = input(message)[:1].lower()
 
         return answer == 'y'
 
