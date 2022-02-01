@@ -8,3 +8,6 @@ ODOO_ADDON_PATHS = [
     '/odoo/odoo/addons',
     '/odoo/addons',
 ]
+
+
+ODOO_MASTER_REPO = '/master/odoo'

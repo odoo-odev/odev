@@ -1,3 +1,4 @@
+import git
 import os
 import os.path
 import re
@@ -344,3 +345,9 @@ def self_update() -> bool:
         install_packages(requirements_dir=odev_path)
 
     return did_update
+
+def get_worktree_list(odoo_path):
+    worktree_list = git.Repo(odoo_path ).git.worktree('list', '--porcelain')
+    odoo_version = [os.path.basename(b) for b in worktree_list.split("\n") if "branch" in b and "master" not in b]
+
+    return odoo_version

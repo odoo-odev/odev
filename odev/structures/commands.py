@@ -585,6 +585,15 @@ class GitHubCommand(Command, ABC):
         super().__init__(args)
         self.github: Github = get_github(args.token)
 
+class OdooBinMixin(Command, ABC):
+    arguments = [
+        dict(
+            aliases=['--pull'],
+            dest='pull',
+            action='store_true',
+            help='Try to pull new version of Odoo,Enterprise,Design-themes and upgrades repos',
+        ),
+    ]
 
 # TODO: reuse this mixin for all commands that use odoo.com creds (dump... uhh... just dump)
 class OdooComCliMixin(Command, ABC):

@@ -23,7 +23,7 @@ re_url = re.compile(
 TMP_DIR = '/tmp/odev'
 
 
-class QuickStartCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
+class QuickStartCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin, commands.OdooBinMixin):
     '''
     Quickly setup a local database and start working with it directly.
 

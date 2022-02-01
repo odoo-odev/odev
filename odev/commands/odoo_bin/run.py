@@ -16,7 +16,7 @@ from odev.constants import ODOO_ADDON_PATHS
 logger = logging.getLogger(__name__)
 
 
-class RunCommand(commands.LocalDatabaseCommand):
+class RunCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
     '''
     Run a local Odoo database, prefilling common addon paths and making
     sure the right version of Odoo is installed and in use.
@@ -35,12 +35,6 @@ class RunCommand(commands.LocalDatabaseCommand):
             dest='save',
             action='store_true',
             help='Save the current arguments for next calls',
-        ),
-        dict(
-            aliases=['--pull'],
-            dest='pull',
-            action='store_true',
-            help='Force a update check before launching Odoo',
         ),
         dict(
             name='addons',

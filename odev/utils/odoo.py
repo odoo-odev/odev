@@ -10,12 +10,12 @@ from typing import List, Optional, Mapping
 import requests
 from packaging.version import Version
 
-from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES
+from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES, ODOO_MASTER_REPO
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
 from odev.utils.config import ConfigManager
 from odev.utils.logging import getLogger
 from odev.utils.os import mkdir
-from odev.utils.github import git_clone_or_pull, worktree_clone_or_pull
+from odev.utils.github import git_clone_or_pull, worktree_clone_or_pull, get_worktree_list
 from odev.utils.python import install_packages
 from odev.utils.signal import capture_signals
 
@@ -125,33 +125,37 @@ def prepare_odoobin(
     - Ensures all the needed repositories are cloned and up-to-date
     - Prepare the correct virtual environment (unless ``venv`` is explicitly set False)
     """
-    pull , last_update = _need_pull(version)
-
-    if pull and not skip_prompt:
-        force = logger.confirm(f"Your last pull for Odoo {version} was on {last_update} do you want to pull now ?")
-
-        if not force:
-            return
-
-
     branch: str = branch_from_version(version)
+    available_version = get_worktree_list(repos_path + ODOO_MASTER_REPO)
+
+    need_pull , last_update = _need_pull(version)
+
+    do_pull = skip_prompt or branch not in available_version or (
+                need_pull and logger.confirm(
+                    f"The last pull check for Odoo {version} was on "
+                    f"{last_update} do you want to pull now?"
+                )
+            )
+
+    ConfigManager("pull_check").set("version",version, datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
+
+    if not do_pull:
+        return
 
     version_path: str = repos_version_path(repos_path, version)
     mkdir(version_path, 0o777)
 
-    skip_prompt |= worktree_clone_or_pull(version_path, "odoo", branch, skip_prompt=skip_prompt)
-    skip_prompt |= worktree_clone_or_pull(version_path, "enterprise", branch, skip_prompt=skip_prompt)
-    skip_prompt |= worktree_clone_or_pull(version_path, "design-themes", branch, skip_prompt=skip_prompt)
+
+    for pull_repo in ("odoo", "enterprise", "design-themes"):
+        do_pull |= worktree_clone_or_pull(version_path, pull_repo, branch, skip_prompt=do_pull)
 
     if upgrade:
-        skip_prompt |= git_clone_or_pull(repos_path, "upgrade", skip_prompt=skip_prompt)
-        skip_prompt |= git_clone_or_pull(repos_path, "upgrade-specific", skip_prompt=skip_prompt)
-        skip_prompt |= git_clone_or_pull(repos_path, "upgrade-platform", skip_prompt=skip_prompt)
+        for pull_repo in ("upgrade", "upgrade-specific", "upgrade-platform"):
+            do_pull |= git_clone_or_pull(repos_path, pull_repo, skip_prompt=do_pull)
 
     if venv:
         prepare_venv(repos_path, version)
 
-    ConfigManager("pull").set("version",version, datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
 
 
 def prepare_venv(repos_path: str, version: str):
@@ -196,9 +200,9 @@ def prepare_requirements(repos_path: str, version: str, addons: Optional[List[st
     install_packages(packages="pudb ipdb", python_bin=venv_python)
 
 def _need_pull(version: int):
-    limit = ConfigManager("odev").get("pull", "max_days") or 1
+    limit = ConfigManager("odev").get("pull_check", "max_days") or 1
     default_date = (datetime.today() - timedelta(days=8)).strftime(DEFAULT_DATETIME_FORMAT)
-    last_update = ConfigManager("pull").get('version', version) or default_date
+    last_update = ConfigManager("pull_check").get('version', version) or default_date
 
     need_pull = (datetime.today() - datetime.strptime(last_update, DEFAULT_DATETIME_FORMAT)).days > int(limit)
 

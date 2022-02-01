@@ -1,13 +1,14 @@
 import os
 import glob
-import git
 from argparse import Namespace
 
+from odev.constants import ODOO_MASTER_REPO
 from odev.exceptions import InvalidVersion, InvalidArgument
 from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.odoo import version_from_branch, prepare_odoobin
 from odev.utils.config import ConfigManager
+from odev.utils.github import get_worktree_list
 _logger = logging.getLogger(__name__)
 
 class PullCommand(commands.Command):
@@ -37,9 +38,7 @@ class PullCommand(commands.Command):
     def run(self):
         config = ConfigManager("odev")
         odoo_path = config.get("paths", "odoo")
-
-        worktree_list = git.Repo(odoo_path + "/master/odoo").git.worktree('list', '--porcelain')
-        odoo_version = [os.path.basename(b) for b in worktree_list.split("\n") if "branch" in b and "master" not in b]
+        odoo_version = get_worktree_list(odoo_path + ODOO_MASTER_REPO)
 
         if self.args.version:
             try:
