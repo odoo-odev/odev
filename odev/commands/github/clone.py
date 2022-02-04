@@ -171,3 +171,6 @@ class CloneCommand(commands.Command):
             git_clone(
                 parent_path, repo["repo"], repo["branch"], organization=repo["organization"], repo_dir_name=dir_name
             )
+
+
+        self.globals_context['repo_git_path'] = repo_path

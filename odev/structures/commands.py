@@ -125,6 +125,12 @@ class BaseCommand(ABC):
 
     is_abstract: ClassVar[bool] = False
 
+    _globals_context: ClassVar[MutableMapping[str, Any]] = {}
+
+    @property
+    def globals_context(self) -> MutableMapping[str, Any]:
+        return self.__class__._globals_context
+
     def __init__(self, args: Namespace):
         '''
         Initialize the command runner.
@@ -229,14 +235,14 @@ class BaseCommand(ABC):
             parser.add_argument(*aliases, **params)
 
     @classmethod
-    def run_with(cls, *args, **kwargs) -> Any:
+    def run_with(cls, *args, do_raise: bool = True, **kwargs) -> Any:
         '''
         Runs the command directly with the provided arguments, bypassing parsers
         '''
         # TODO: automatically fill missing args with None?
         res = cls(Namespace(**dict(*args, **kwargs))).run()
 
-        if kwargs.get('do_raise', True) == False and res:
+        if not do_raise and res:
             res = 0
         return res
 
