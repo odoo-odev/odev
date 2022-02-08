@@ -3,6 +3,7 @@
 from argparse import ArgumentParser, RawTextHelpFormatter
 from textwrap import dedent, indent
 import sys
+import os
 
 from odev.structures import commands
 from odev.utils.logging import term
@@ -36,7 +37,7 @@ class HelpCommand(commands.Command):
             parser = command.prepare_parser()
 
             description = command.help.replace('\n', '\n' + ' ' * 12)
-            usage = parser.format_usage().replace('usage:', '').strip().replace(' ', f' {command.name} ', 1)
+            usage = parser.format_usage().replace('usage:', f"{os.path.basename(sys.argv[0])}").strip()
             title = f'Command: {command.name}'
             message = f'''
             {term.bold(title)}
