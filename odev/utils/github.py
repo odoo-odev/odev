@@ -355,7 +355,7 @@ def self_update() -> bool:
     return did_update
 
 def get_worktree_list(odoo_path):
-    if is_git_repo(odoo_path):
+    if not is_git_repo(odoo_path):
         return []
     
     repo = git.Repo(odoo_path)
