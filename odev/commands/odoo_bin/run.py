@@ -6,17 +6,18 @@ import subprocess
 from argparse import Namespace
 from datetime import datetime
 
+from odev.commands.odoo_db import remove
 from odev.structures import commands, actions
 from odev.utils import logging, odoo
 from odev.utils.signal import capture_signals
-from odev.exceptions.odoo import RunningOdooDatabase
-from odev.constants import ODOO_ADDON_PATHS
+from odev.exceptions.odoo import InvalidDatabase, RunningOdooDatabase
+from odev.constants import ODOO_ADDON_PATHS, DB_TEMPLATE_SUFFIX
 
 
 logger = logging.getLogger(__name__)
 
 
-class RunCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
+class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
     '''
     Run a local Odoo database, prefilling common addon paths and making
     sure the right version of Odoo is installed and in use.
@@ -87,6 +88,17 @@ class RunCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
         '''
         Runs a local Odoo database.
         '''
+
+        if self.args.from_template:
+            template_db_name = f"{self.database}{DB_TEMPLATE_SUFFIX}"
+            self.check_database(template_db_name)
+
+            if self.db_exists(self.database):
+                logger.info("The old database will be deleted to restore the template")
+                remove.RemoveCommand.run_with(**self.args.__dict__, keep_template=bool(self.args.from_template))
+
+            logger.warning(f"Restoring the template {template_db_name}")
+            self.run_queries(f"CREATE DATABASE {self.database} WITH TEMPLATE {template_db_name}", f"{template_db_name}")
 
         self.check_database()
 

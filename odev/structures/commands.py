@@ -38,7 +38,7 @@ from odev.utils.config import ConfigManager
 from odev.utils.psql import PSQL
 from odev.utils.odoo import check_database_name, parse_odoo_version, get_odoo_version
 from odev.structures.actions import OptionalStringAction
-from odev.constants import RE_COMMAND, RE_PORT, DEFAULT_DATABASE
+from odev.constants import RE_COMMAND, RE_PORT, DEFAULT_DATABASE, DB_TEMPLATE_SUFFIX
 from odev.exceptions import (
     InvalidDatabase,
     InvalidOdooDatabase,
@@ -575,6 +575,36 @@ class LocalDatabaseCommand(Command, ABC):
         return sum(f.stat().st_size for f in path.glob('**/*') if f.is_file()) or 0.0
 
 
+class TemplateDBCommand(LocalDatabaseCommand):
+    '''
+    Command class for dealing with Template restoration
+    '''
+
+    arguments = [
+        dict(
+            aliases=['-t', '--template'],
+            dest='from_template',
+            action='store_true',
+            help='Delete the database and restore the template before launching Odoo',
+        ),
+    ]
+
+
+class TemplateCreateDBCommand(LocalDatabaseCommand):
+    '''
+    Command class for dealing with Template creation
+    '''
+
+    arguments = [
+        dict(
+            aliases=['-t', '--template'],
+            dest='create_template',
+            action='store_true',
+            help='Create a template right after restore',
+        ),
+    ]
+
+
 class GitHubCommand(Command, ABC):
     '''
     Command class for interacting with GitHub through odev.
@@ -590,6 +620,7 @@ class GitHubCommand(Command, ABC):
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.github: Github = get_github(args.token)
+
 
 class OdooBinMixin(Command, ABC):
     arguments = [
@@ -609,6 +640,7 @@ class OdooBinMixin(Command, ABC):
             ''',
         ),
     ]
+
 
 # TODO: reuse this mixin for all commands that use odoo.com creds (dump... uhh... just dump)
 class OdooComCliMixin(Command, ABC):

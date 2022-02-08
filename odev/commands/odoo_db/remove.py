@@ -2,10 +2,11 @@
 
 import os
 import shutil
+from argparse import Namespace
 
 from odev.structures import commands
 from odev.utils import logging
-from odev.constants import DEFAULT_DATABASE
+from odev.constants import DEFAULT_DATABASE, DB_TEMPLATE_SUFFIX
 from odev.exceptions import InvalidDatabase, RunningOdooDatabase, CommandAborted
 
 
@@ -19,6 +20,11 @@ class RemoveCommand(commands.LocalDatabaseCommand):
 
     name = 'remove'
     aliases = ['rm', 'del']
+    keep_template = False
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+        self.keep_template = 'keep_template' in args
 
     def run(self):
         '''
@@ -31,36 +37,60 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         if self.db_runs():
             raise RunningOdooDatabase(f'Database {self.database} is running, please shut it down and retry')
 
+        keep_filestore = self.keep_template
+        dbs = [self.database]
+        queries = [f'''DROP DATABASE "{self.database}";''']
+        info_text = f'Deleting PSQL database {self.database}'
+        template_db_name = f"{self.database}{DB_TEMPLATE_SUFFIX}"
+
+        if not self.keep_template and self.db_exists(template_db_name):
+            _logger.warning(f'You are about to delete the database template {template_db_name}')
+
+            confirm = _logger.confirm(f"Delete database template `{template_db_name}` ?")
+            if confirm:
+                queries.append(f'''DROP DATABASE "{template_db_name}";''')
+                dbs.append(template_db_name)
+                info_text += " and his template"
+
+            keep_filestore = not confirm
+
+        with_filestore = " and his filestore" if not keep_filestore else ""
+
         _logger.warning(
-            f'You are about to delete the database {self.database} and its filestore. '
-            'This action is irreversible.'
+            f'You are about to delete the database {self.database}{with_filestore}.'
+            ' This action is irreversible.'
         )
 
-        if not _logger.confirm(f'Delete database `{self.database}` and its filestore?'):
+        if not _logger.confirm(f'Delete database `{self.database}`{with_filestore}?'):
             raise CommandAborted()
 
+        _logger.info(info_text)
+        # We need two calls as Postgres will embed those two queries inside a block
+        # https://github.com/psycopg/psycopg2/issues/1201
+        for query in queries:
+            result = self.run_queries(query, database=DEFAULT_DATABASE)
+
         filestore = self.db_filestore()
-        _logger.info(f'Deleting PSQL database {self.database}')
-        query = f'''DROP DATABASE "{self.database}";'''
-        result = self.run_queries(query, database=DEFAULT_DATABASE)
 
         if not result or self.db_exists_all():
             return 1
 
         _logger.info('Deleted database')
 
-        if not os.path.exists(filestore):
-            _logger.info('Filestore not found, no action taken')
-        else:
-            try:
-                _logger.info(f'Attempting to delete filestore in `{filestore}`')
-                shutil.rmtree(filestore)
-            except Exception as exc:
-                _logger.warning(f'Error while deleting filestore: {exc}')
+        if not keep_filestore:
+            if not os.path.exists(filestore):
+                _logger.info('Filestore not found, no action taken')
             else:
-                _logger.info('Deleted filestore from disk')
+                try:
+                    _logger.info(f'Attempting to delete filestore in `{filestore}`')
+                    shutil.rmtree(filestore)
+                except Exception as exc:
+                    _logger.warning(f'Error while deleting filestore: {exc}')
+                else:
+                    _logger.info('Deleted filestore from disk')
 
-        if self.database in self.config['databases']:
-            self.config['databases'].delete(self.database)
+        for db in dbs:
+            if db in self.config['databases']:
+                self.config['databases'].delete(db)
 
         return 0

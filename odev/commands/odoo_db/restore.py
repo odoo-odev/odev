@@ -8,6 +8,7 @@ from argparse import Namespace
 from pathlib import Path
 from zipfile import ZipFile
 
+from odev.constants import DB_TEMPLATE_SUFFIX
 from odev.structures import commands
 from odev.commands.odoo_db import remove, create, clean
 from odev.utils import logging
@@ -38,7 +39,7 @@ def psql_load(database, sql_file):
 def psql_pipe(database, cmd):
     return f'{cmd} | psql "{database}"'
 
-class RestoreCommand(commands.LocalDatabaseCommand):
+class RestoreCommand(commands.TemplateCreateDBCommand):
     '''
     Restore an Odoo dump file to a local database and import its filestore
     if present. '.sql', '.dump' and '.zip' files are supported.
@@ -113,14 +114,35 @@ class RestoreCommand(commands.LocalDatabaseCommand):
         else:
             raise ValueError(f'Unrecognized extension `{ext}` for file {self.dump_path}')
 
-        db_config = self.config['databases']
-        db_config.set(self.database, 'version', self.db_base_version(self.database))
-        db_config.set(self.database, 'version_clean', self.db_version_clean(self.database))
-        db_config.set(self.database, 'enterprise', 'enterprise' if self.db_enterprise(self.database) else 'standard')
-        db_config.save()
-
         if self.run_clean:
             clean.CleanCommand.run_with(**self.args.__dict__)
+
+        dbs = [self.database]
+
+        if self.args.create_template:
+            template_db_name = f"{self.database}{DB_TEMPLATE_SUFFIX}"
+
+            q = f"A template with the same name `{template_db_name}` already exist do you want to delete it ?"
+            if self.db_exists(template_db_name) and _logger.confirm(q):
+                arg = self.args.__dict__.copy()
+                arg['database'] = template_db_name
+                remove.RemoveCommand.run_with(**arg, keep_template=True)
+
+            _logger.info(f"Creating template : {template_db_name}")
+            self.run_queries(f"CREATE DATABASE {template_db_name} WITH TEMPLATE {self.database}")
+            dbs.append(f"{template_db_name}")
+
+        db_config = self.config['databases']
+        version = self.db_base_version(self.database)
+        version_clean = self.db_version_clean(self.database)
+        enterprise = 'enterprise' if self.db_enterprise(self.database) else 'standard'
+
+        for db in dbs:
+            db_config.set(db, 'version', version)
+            db_config.set(db, 'version_clean', version_clean)
+            db_config.set(db, 'enterprise', enterprise)
+
+        db_config.save()
 
         return 0
 
