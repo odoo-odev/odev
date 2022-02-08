@@ -1,14 +1,23 @@
 '''Command-line commands base classes and utility functions'''
 
 from odev.exceptions.commands import InvalidQuery
-import os
 import sys
+import imgkit
 import inspect
-import textwrap
+import odoolib
+import os
+import random
+import re
+import shutil
 import subprocess
+import textwrap
 import time
+import urllib.parse
 from pathlib import Path
+from copier import copy
+from collections import defaultdict
 from contextlib import nullcontext
+from packaging.version import Version
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter, REMAINDER
 from github import Github
@@ -29,17 +38,21 @@ from typing import (
 
 from packaging.version import Version
 
-from odev.utils import logging
+from odev.utils import logging, odoo
 from odev.utils.github import get_github
 from odev.utils.signal import capture_signals
 from odev.utils.spinner import SpinnerBar, poll_loop
 from odev.utils.shconnector import get_sh_connector, ShConnector
 from odev.utils.config import ConfigManager
+from odev.utils.exporter import odoo_field
+from odev.utils.os import mkdir
 from odev.utils.psql import PSQL
 from odev.utils.odoo import check_database_name, parse_odoo_version, get_odoo_version
 from odev.structures.actions import OptionalStringAction
-from odev.constants import RE_COMMAND, RE_PORT, DEFAULT_DATABASE, DB_TEMPLATE_SUFFIX
+from odev.utils.template import Template
+from odev.constants import RE_COMMAND, RE_PORT, DEFAULT_DATABASE, ICON_COLORS, ICON_OPTIONS, LAST_ODOO_VERSION
 from odev.exceptions import (
+    InvalidVersion,
     InvalidDatabase,
     InvalidOdooDatabase,
     InvalidArgument,
@@ -147,8 +160,9 @@ class BaseCommand(ABC):
         self.args: Namespace = args
         self.argv: Optional[Sequence[str]] = None
 
-        if not logging.interactive:
+        if not logging.interactive and not logging.assume_prompted:
             logger.info(f'''Assuming '{'yes' if logging.assume_yes else 'no'}' for all confirmation prompts''')
+            logging.assume_prompted = True
 
         for key in ['odev']:
             self.config[key] = ConfigManager(key)
@@ -240,7 +254,7 @@ class BaseCommand(ABC):
         Runs the command directly with the provided arguments, bypassing parsers
         '''
         # TODO: automatically fill missing args with None?
-        res = cls(Namespace(**dict(*args, **kwargs))).run()
+        res = cls(Namespace(**dict(*args, **kwargs), do_raise=do_raise)).run()
 
         if not do_raise and res:
             res = 0
@@ -922,6 +936,283 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
             self.ssh_run(['rm', '-rf', *reversed(self.paths_to_cleanup)])
 
 
+class ExportCommand(Command, ABC, Template):
+    '''
+    Base class with common functionality to generate code.
+    '''
+
+    arguments = [
+        dict(
+            aliases=['path'],
+            default='.',
+            help='Path of the folder to create the module (default=CWD)',
+        ),
+        dict(
+            aliases=['name'],
+            help='Module''s name',
+        ),
+        dict(
+            aliases=['--line_length'],
+            dest='line_length',
+            type=int,
+            default=120,
+            help='Line length',
+        ),
+        dict(
+            aliases=['--pretty-off'],
+            action='store_true',
+            dest='pretty_off',
+            help='Pretty off',
+        ),
+        dict(
+            aliases=['--pretty-py-off'],
+            action='store_true',
+            dest='pretty_py_off',
+            help='Pretty Py off',
+        ),
+        dict(
+            aliases=['--pretty-xml-off'],
+            action='store_true',
+            dest='pretty_xml_off',
+            help='Pretty Xml off',
+        ),
+        dict(
+            aliases=['--pretty-import-off'],
+            action='store_true',
+            dest='pretty_import_off',
+            help='Pretty Import off',
+        ),
+        dict(
+            aliases=['--version'],
+            type=str,
+            dest='version',
+            help='Odoo target version',
+        ),
+        dict(
+            aliases=['-t', '--type'],
+            choices=['saas','sh'],
+            default='sh',
+            help='Scaffold type [saas (xml),sh (python)] (default=plaform defined on the presale analysis)',
+        ),
+        dict(
+            aliases=['-c', '--comment'],
+            action='store_true',
+            dest='comment',
+            help='Add comment to the generated code',
+        ),
+    ]
+
+    manifest = {
+        "name": "",
+        "summary": "",
+        "description": "",
+        "category": [0, ""],
+        "author": "Odoo PS",
+        "website": "http://www.odoo.com",
+        "license": "OEEL-1",
+        "version": 0,
+        "depends": set(),
+        "data": set(),
+        "qweb": set(),
+        "assets": defaultdict(list),
+        "pre_init_hook": False,
+        "post_init_hook": False,
+        "uninstall": False,
+    }
+
+    init = {
+        "class": set(),
+        "pre_init_hook": [],
+        "post_init_hook": [],
+        "uninstall": []
+        }
+
+    migration_script = {
+        "pre_migrate": {"models": [], "fields": [], "remove_view": set(), "lines": []},
+        "post_migrate": {"lines": []},
+        "end_migrate": {"lines": []},
+    }
+
+    connection = None
+    export_type = "export"
+    export_config= None
+    module_name = ""
+
+    @classmethod
+    def prepare_arguments(cls, parser: ArgumentParser) -> None:
+        if cls.add_database_argument and not any(a.get('name') == 'database' for a in cls.arguments):
+            parser.add_argument(
+                'database',
+                action=OptionalStringAction,
+                nargs=1 if cls.database_required else '?',
+                help='Name of the local database to target',
+            )
+        super().prepare_arguments(parser)
+
+    def __init__(self, args: Namespace):
+        self.type = args.type
+        super().__init__(args)
+
+        try:
+            self.version = odoo.parse_odoo_version(self.args.version or LAST_ODOO_VERSION)
+        except InvalidVersion as exc:
+            raise InvalidArgument(str(exc)) from exc
+
+    def init_connection(self, hostname, database, login, password):
+        self.connection = odoolib.get_connection(
+            hostname=hostname,
+            database=database,
+            login=login,
+            password=password,
+            protocol="jsonrpcs",
+            port=443
+        )
+
+    def safe_mkdir(self, path: str, module: str ="") -> str:
+        module_path = os.path.join(path, module)
+
+        if os.path.exists(module_path):
+            if logger.confirm(f"Module folder {module_path} already exist do you want to delete first ?"):
+                logger.warning(f"Existing folder '{module_path}'  successfully deleted")
+                shutil.rmtree(module_path)
+            else:
+                return module_path
+
+        logger.debug(f"Folder {module_path} successfully created")
+        mkdir(module_path)
+        return module_path
+
+    def _check_and_add_migrate(self, data_type, model, field=None):
+        if data_type == "model" and model[:2] == "x_":
+            self.migration_script["pre_migrate"]["models"].append(
+                {"old_model": model, "new_model": self.odoo_model(model)}
+            )
+        elif data_type == "field" and field[:2] == "x_":
+            self.migration_script["pre_migrate"]["fields"].append(
+                {"old_field": field, "new_field": odoo_field(field), "model": odoo_field(model)}
+            )
+
+    def _get_version(self, short=False) -> Version:
+        version = str(self.export_config.version).split(".")
+
+        if not short:
+            version.extend([1, 0, 0])
+
+        return Version(".".join(map(str, version)))
+
+    def _generate_init(self):
+        cfg = self.export_config.config["init"]
+
+        if self.type == "saas":
+            self.init["class"] = []
+        elif self.type == "sh":
+            self.init["class"] = list(self.init["class"])
+            self.init["class"].sort()
+
+            if self.init["class"]:
+                self.generate_template({"class": self.init["class"]}, cfg)
+
+            self.init["class"] = ["models"]
+
+        main_init = cfg.copy()
+        main_init.update({"folder_name": "."})
+
+        self.generate_template(self.init, main_init)
+
+    def _generate_manifest(self):
+        cfg = self.export_config.config["manifest"]
+
+        self.manifest["depends"] = list(self.manifest["depends"])
+        self.manifest["depends"].sort()
+        self.manifest["data"] = [path.replace("\\", "/") for path in self.manifest["data"]]
+        self.manifest["data"].sort()
+
+        self.generate_template(self.manifest, cfg)
+
+    def _generate_icon(self):
+        icon_path = os.path.join(self.args.path, self.module_name, "static", "description")
+
+
+        url_param = {
+            "color": random.choice(ICON_COLORS),
+            "class_name": "",
+        }
+
+        if not os.path.exists(icon_path):
+            os.makedirs(icon_path)
+
+        imgkit.from_url(
+            "https://ps-tools.odoo.com/icon?" + urllib.parse.urlencode(url_param),
+            icon_path + "/icon.png",
+            options=ICON_OPTIONS,
+        )
+
+    def _copy_files(self, module=""):
+        files = [
+            ".gitignore",
+        ]
+
+        for file in files:
+            path_file = os.path.join(
+                                    os.path.dirname(os.path.abspath(__file__)),
+                                    '..',
+                                    "templates/static/",
+                                    file)
+
+            shutil.copy(path_file, self.args.path)
+
+        cfg = self.export_config.config["readme"]
+        self.generate_template({"module_name": self.module_name.replace("_", "").title()}, cfg)
+
+        odoo_version = self._get_version(True)
+
+        if odoo_version >= Version("13.0"):
+            copy(
+                "git@github.com:odoo-ps/psbe-ps-tech-tools.git",
+                dst_path=self.args.path,
+                vcs_ref=f"{odoo_version}-pre-commit-config",
+                force=True,
+                quiet=True,
+            )
+
+    def _generate_mig_script(self):
+        if self.type == "saas":
+            return
+
+        copy_script = False
+        module_version = self.manifest["version"]
+        version = re.match(r"^([\d]+\.[\d]+)\.([\d\.]+)$", module_version)
+
+        if version:
+            module_version = version[2]
+
+        dest = os.path.join("migrations/", str(self._get_version(True)) + "." + module_version)
+
+        for migration_type in ["end", "pre", "post"]:
+            cfg = self.export_config.config[migration_type + "-10"]
+            cfg.update({"folder_name": dest})
+
+            migration_script = self.migration_script[migration_type + "_migrate"]
+            generate = bool(migration_script["lines"])
+
+            if migration_type == "pre":
+                for key in ["models", "fields", "remove_view"]:
+                    generate = generate or migration_script[key]
+
+            if generate:
+                self.generate_template(migration_script, cfg)
+                copy_script = generate
+
+        if copy_script:
+            util_file =  os.path.join(
+                                    os.path.dirname(os.path.abspath(__file__)),
+                                    '..',
+                                    "templates/static/",
+                                    'util.py')
+
+            shutil.copy(util_file, os.path.join(self.args.path, self.module_name, "migrations"))
+
+
 CommandType = Union[
     Type[BaseCommand],
     Type[Command],
@@ -929,4 +1220,5 @@ CommandType = Union[
     Type[GitHubCommand],
     Type[OdooSHDatabaseCommand],
     Type[OdooSHBranchCommand],
+    Type[ExportCommand],
 ]

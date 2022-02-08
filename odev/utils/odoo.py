@@ -41,7 +41,7 @@ def is_saas_db(url):
     session = requests.Session()
     url = url + "/" if not url.endswith("/") else url
 
-    resp = session.get(url + "saas_worker/noop")
+    resp = session.get(url + "saas_worker/noop", allow_redirects=False)
 
     return resp.status_code == 200
 

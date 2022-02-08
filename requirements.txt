@@ -14,3 +14,12 @@ packaging==20.9
 python-Levenshtein==0.12.2
 giturlparse.py==0.0.5
 tldextract==3.1.0
+black==20.8b1
+tldextract==3.1.0
+Jinja2==2.11.2
+lxml==4.6.2
+pre-commit==2.9.3
+imgkit==1.0.2
+isort==5.8.0
+copier==5.1.0
+odoo-client-lib==1.2.2

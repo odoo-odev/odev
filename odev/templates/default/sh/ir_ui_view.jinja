@@ -1,0 +1,41 @@
+{% import "sh/utils_makro.jinja" as makro -%}
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo {%- if data.noupdate %} noupdate="1"{%-endif-%}>
+    {% if data.type == "qweb" -%}
+    <template id="{{data.xml_id | odoo_field }}" {%- if data.inherit_id %} inherit_id="{{data.inherit_id[0]['xml_id'] | odoo_field}}"{%-endif-%}>
+    {%-if data.arch %}
+{{data.arch | trim | indent(12, False) | odoo_field}}
+    {%- endif %}
+    </template>
+    {%- else -%}
+    <record id="{{data.xml_id | odoo_field }}" model="ir.ui.view">
+        <field name="name">{{data.name | odoo_field | trim | e}}</field>
+        {% if data.model -%}
+        <field name="model">{{data.model | odoo_field}}</field>
+        {% endif -%}
+        {% if data.inherit_id -%}
+        <field name="inherit_id" ref="{{data.inherit_id[0]['xml_id'] | odoo_field}}" />
+        {% endif -%}
+        {% if data.priority -%}
+        <field name="priority">{{data.priority}}</field>
+        {% endif -%}
+        <field name="arch" type="xml">
+        {%-if data.arch -%}
+            {{data.arch | trim | indent(16, False) | odoo_field}}
+        {%- endif %}
+{{makro.todo(data.export_type, "xml", 'Complete the view and check the inherit_id/xml_id') | indent(12,True)}}
+        {%-if data.description | trim != '' %}
+{#TODO: Split before wordwrap ?#}
+            <!--
+{{data.description | odoo_field | trim | replace('--','-') | wordwrap(100) | indent(16, true) }}
+            {%- if data.export_type == "scaffold" %}
+                {% for field in data.fields %}
+                <field name="{{field | trim}}" />
+                {%- endfor-%}
+            {%- endif %}
+            -->
+        {% endif %}
+        </field>
+    </record>
+    {%-endif%}
+</odoo>

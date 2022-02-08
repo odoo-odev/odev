@@ -1,0 +1,21 @@
+from .. import util
+from odoo import api, SUPERUSER_ID
+import os
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+def migrate(cr, version):
+    env = api.Environment(cr, SUPERUSER_ID, {})
+
+    if "ODOO_STAGE" in os.environ and os.environ['ODOO_STAGE'] == "dev":
+        _logger.info('Exit migration script : dev env database !')
+        return ""
+
+    {% for line in data.lines %}
+    # {% if line.model %}{{line.model}}{%endif%} {%if line.field%}{{line.field}}{%endif%} - {{line.description}}
+    {% endfor %}
+
+    _logger.info('###################################################################################')
+    _logger.info('Begin post-10')

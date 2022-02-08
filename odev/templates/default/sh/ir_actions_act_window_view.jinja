@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo {%- if data.noupdate %} noupdate="1"{%-endif-%}>
+    <record id="{{data.xml_id | replace(data.module_name ~ '.', '')}}" model="ir.actions.act_window.view">
+        <field name="sequence" eval="{{data.sequence}}"/>
+        <field name="view_mode">{{data.view_mode}}</field>
+        <field name="view_id" ref="{{data.view_id[1]}}"/>
+        <field name="act_window_id" ref="{{data.act_window_id}}"/>
+    </record>
+</odoo>

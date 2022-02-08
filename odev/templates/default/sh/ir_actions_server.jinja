@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    <record id="{{data.xml_id | replace(data.module_name ~ '.', '')}}" model="ir.actions.server" >
+            <field name="name">{{data.name | odoo_field | e}}</field>
+            <field name="model_id" ref="{{data.model_id[0].xml_id | odoo_field}}"/>
+            {% if data.binding_model_id -%}
+            <field name="binding_model_id" ref="{{data.binding_model_id[0].xml_id | odoo_field}}" />
+            {%-endif-%}
+            {% if data.biding_view_types -%}
+            <field name="binding_view_types">{{data.biding_view_types}}</field>
+            {%-endif-%}
+            <field name="state">{{data.state}}</field>
+            {%if data.groups_id | length %}
+            <field name="groups_id" eval="[
+                {%-for g in data.groups_id -%}
+                (4, ref('{{g.xml_id | odoo_field}}'))
+                {%-endfor-%}
+            ]"/>
+            {%-endif-%}
+            <field name="code">
+{%- if data.export_type == "scaffold" %}
+{{data.code}}
+{%- else -%}
+{%- if "return " in data.code -%}
+action = records.{{data.xml_name  | replace(".","_")}}()
+{%- else -%}
+records.{{data.xml_name  | replace(".","_")}}()
+{%- endif -%}
+{%- endif -%}
+            </field>
+    </record>
+</odoo>

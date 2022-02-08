@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo {%- if data.noupdate %} noupdate="1"{%-endif-%}>
+    {%- if data.filter -%}
+    <record id="{{data.name | e | odoo_field | replace(' ','_')}}_filter" model="ir.filters">
+        <field name="name">{{data.name | e | capitalize}}</field>
+        <field name="model_id">{{data.model}}</field>
+        <!-- {{data.filter}} -->
+        <field name="domain">[[]]</field>
+    </record>
+    {%- endif %}
+
+    <record id="{{data.name | e | odoo_field | replace(' ','_')}}_connection" model="edi.connection">
+        <field name="name">{{data.name | e | capitalize}}</field>
+        <field name="type">{{data.type | e | lower}}</field>
+        <field name="configuration"><![CDATA[
+{
+    "host": "",
+    "user": "",
+    "password": "",
+    {%- if data.flow == "in" %}
+    "in_folder": "",
+    "in_folder_done": "",
+    "in_folder_error": ""
+    {%- else %}
+    "out_folder": ""
+    {%- endif %}
+}]]></field>
+    </record>
+
+    <record id="{{data.name | e | odoo_field | replace(' ','_')}}_integration" model="edi.integration">
+        <field name="name">{{data.name | e | capitalize}}</field>
+        <field name="type">{{data.name | e | odoo_field | replace(' ','_')}}</field>
+        <field name="integration_flow">{{data.flow | lower}}</field>
+        <field name="interval_number">{{data.interval_number}}</field>
+        <field name="interval_type">{{data.interval_type | lower}}</field>
+        <field name="synchronization_content_type">{{data.format | lower}}</field>
+        <!-- 1 XML file per product  -->
+        <field name="synchronization_creation">one</field>
+        <field name="connection_id" ref="{{data.name | e | odoo_field}}_connection"/>
+        {%- if data.filter %}
+        <field name="record_filter_id" ref="{{data.name | odoo_field}}_filter"/>
+        {%- endif %}
+        <!-- archived by default to avoid automatic cron execution during the dev !-->
+        <field name="active" eval="False" />
+    </record>
+</odoo>

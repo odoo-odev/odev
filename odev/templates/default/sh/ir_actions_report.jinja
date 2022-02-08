@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="{{data.xml_id | replace(data.module_name ~ '.', '')}}" model="ir.actions.report">
+        <field name="name">{{data.name | e}}</field>
+        {%-if data.model-%}
+        <field name="model">{{data.model}}</field>
+        {%-endif-%}
+        <field name="report_type">{{data.report_type}}</field>
+        <field name="report_name">{{data.report_name}}</field>
+        <field name="report_file">{{data.report_file}}</field>
+        {%- if data.paperformat_id -%}
+        <field name="paperformat_id" ref="{{data.paperformat_id[0].xml_id}}"/>
+        {%- endif -%}
+        {%- if data.binding_model_id -%}
+        <field name="binding_model_id" ref="{{data.binding_model_id[0].xml_id}}"/>
+        {%- endif -%}
+        {%- if data.binding_type -%}
+        <field name="binding_type">{{data.binding_type}}</field>
+        {%- endif -%}
+    </record>
+</odoo>

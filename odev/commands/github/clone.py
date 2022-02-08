@@ -41,6 +41,7 @@ class CloneCommand(commands.Command):
     ]
 
     platform = ""
+    path = None
 
     def __init__(self, args: Namespace):
         super().__init__(args)
@@ -63,7 +64,6 @@ class CloneCommand(commands.Command):
 
         elif is_saas_url:
             repos = self._get_saas_repo()
-
         else:
             repos = self._get_sh_repo()
 
@@ -72,7 +72,7 @@ class CloneCommand(commands.Command):
             repos = sorted(repos[0:MAX_CHOICE_NUMBER], key=lambda r: r["branch"], reverse=True)
 
             for index, ref in enumerate(repos):
-                text = text + "\n  " + str(index + 1) + ") " + ref["branch"] + " (" + str(ref["repo"]) + ")"
+                text = text + f"\n  {str(index + 1)}) {ref['branch'] or ref['db_name']} ({str(ref['repo'])})"
 
             _logger.info(text)
             choice = _logger.ask("Please choose the correct one ? ", "1", list(map(str, range(1, MAX_CHOICE_NUMBER))))
@@ -93,6 +93,7 @@ class CloneCommand(commands.Command):
         odev_repo = Repo(odev_path)
         repos = []
 
+        # FIXME: Handle psus-custom, pshk-custom and psae-custom
         for ps_repo in ["odoo-ps/psbe-custom", "odoo/ps-custom"]:
             # TODO: Use giturlparse ?
             organization = ps_repo.split("/")[0]
@@ -144,7 +145,9 @@ class CloneCommand(commands.Command):
         repos = sorted(repos, key=lambda b: b["levenshtein"])
 
         for repo in repos[:MAX_CHOICE_NUMBER]:
-            if repo["levenshtein"] < MIN_LEVENSTHEIN_SCORE:
+            if repo["levenshtein"] == 0:
+                return [repo]
+            elif repo["levenshtein"] < MIN_LEVENSTHEIN_SCORE:
                 repos_match_lev.append(repo)
 
         return repos_match_lev
@@ -171,6 +174,5 @@ class CloneCommand(commands.Command):
             git_clone(
                 parent_path, repo["repo"], repo["branch"], organization=repo["organization"], repo_dir_name=dir_name
             )
-
 
         self.globals_context['repo_git_path'] = repo_path

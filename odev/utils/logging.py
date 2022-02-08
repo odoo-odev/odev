@@ -14,6 +14,7 @@ atexit.register(lambda: print(STYLE_RESET))
 
 interactive: bool = True
 assume_yes: bool = True
+assume_prompted: bool = False
 
 global last_color
 last_color = term.gray53

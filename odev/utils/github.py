@@ -100,6 +100,7 @@ def git_clone(
     logger.info(
         f"Cloning {title or repo_name}" + (f" on branch {branch}" if branch else "")
     )
+
     Repo.clone_from(
         f"git@github.com:{url_path}.git",
         f"{parent_dir}/{repo_name}",

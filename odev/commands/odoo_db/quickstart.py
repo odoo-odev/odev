@@ -106,16 +106,18 @@ class QuickStartCommand(commands.TemplateCreateDBCommand, commands.OdooComCliMix
                     return result
 
         except Exception as exception:
-            _logger.error('An error occured, cleaning up files and removing database:')
-            _logger.error(str(exception))
-            remove.RemoveCommand.run_with(**self.args.__dict__)
-            result = 1
+            _logger.error(f"An error occured : {str(exception)}")
+            result = int(self.args.do_raise)
+
+            if result:
+                _logger.error("Cleaning up files and removing database")
+                remove.RemoveCommand.run_with(**self.args.__dict__)
 
         finally:
             if os.path.isdir(TMP_DIR):
                 shutil.rmtree(TMP_DIR)
 
         if mode == "url":
-            result += clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg, do_raise=False)
+            result += clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg)
 
         return result

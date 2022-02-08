@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo {%- if data.noupdate %} noupdate="1"{%-endif-%}>
+    {%- for rule in data['ir.rule'] %}
+    <record id="{{rule.xml_id}}" model="ir.rule">
+        <field name="name">{{rule.name | e}}</field>
+        <field name="model_id" ref="{{rule.model_id[0].xml_id}}"/>
+        {%-if rule.groups | length %}
+        <field name="groups" eval="[
+            {%-for g in rule.groups -%}
+            (4, ref('{{g.xml_id}}'), 0),
+            {%-endfor-%}
+        ]"/>
+        {%-endif-%}
+        {%-if rule.global%}
+        <field name="global" eval="True" />
+        {%-endif%}
+        <field name="perm_read" eval="{{rule.perm_read | int}}"/>
+        <field name="perm_write" eval="{{rule.perm_write | int}}"/>
+        <field name="perm_create" eval="{{rule.perm_create | int}}"/>
+        <field name="perm_unlink" eval="{{rule.perm_unlink | int}}"/>
+        {%-if rule.domain_force %}
+        <field name="domain_force">{{rule.domain_force | odoo_domain | odoo_field}}</field>
+        {%-endif %}
+    </record>
+    {%-endfor%}
+</odoo>

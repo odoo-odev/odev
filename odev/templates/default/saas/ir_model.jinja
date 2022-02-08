@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+{%- if data.state == "manual" %}
+    <record id="{{data.xml_id | replace(data.module_name ~ '.', '')}}" model="ir.model">
+        <field name="name">{{data.name | e}}</field>
+        <field name="model">{{data.model | odoo_saas_field | odoo_field_name}}</field>
+        {%- if "wizard" in data.model -%}
+        <field name="transient">1</field>
+        {%- endif %}
+    </record>
+{%- endif %}
+{%- include 'saas/ir_model_fields.jinja' %}
+</odoo>

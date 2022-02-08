@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="{{data.xml_id | replace(data.module_name ~ '.', '')}}" model="base.automation">
+        <field name="name">{{data.name | e}}</field>
+        {%-if data.model-%}
+        <field name="model_id">{{data.model_id[0].xml_id | odoo_field}}</field>
+        {%-endif-%}
+        {%-if data.active-%}
+        <field name="active" eval="{{data.active}}"/>
+        {%-endif-%}
+        {% if data.state-%}
+        <field name="state">{{data.state}}</field>
+        {%-endif-%}
+        <field name="trigger">{{data.trigger}}</field>
+        {%if data.state == "code" -%}
+        <field name="code">
+{%- if data.description %}
+        <!--
+            {{data.description | trim | wordwrap(80) | indent(12,False)}}
+        -->
+
+{% endif -%}
+<![CDATA[
+for rec in records:
+    return
+]]>
+        </field>
+        {%-endif%}
+        {%if data.server_action_ids -%}
+        <field name="server_action_ids" eval="[
+                {%-for sa in data.server_action_ids -%}
+                (6, ref('{{sa.xml_id | odoo_field}}'))
+                {%-endfor-%}
+            ]"/>
+        {%-endif%}
+        {#
+        <field name="on_change_fields"></field>
+        <field name="filter_domain">[]</field>
+        <field name="filter_pre_domain">[]</field>
+        <field name="trg_date_id" eval="False"/>
+        <field name="trg_date_range" eval="False"/>
+        <field name="trg_date_range_type">day</field>
+        #}
+    </record>
+</odoo>
