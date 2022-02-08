@@ -290,7 +290,7 @@ def git_clone_or_pull(
     :return: True if cloned or pulled (ie. user confirmed), else False
     """
     did_clone: bool = conditional_clone_fn(
-        parent_dir, repo_name, branch=branch, title=title, skip_prompt=skip_prompt, **kwargs
+        parent_dir, repo_name, branch=branch, title=title, **kwargs
     )
 
     if not did_clone:
@@ -347,7 +347,12 @@ def self_update() -> bool:
     return did_update
 
 def get_worktree_list(odoo_path):
-    worktree_list = git.Repo(odoo_path ).git.worktree('list', '--porcelain')
-    odoo_version = [os.path.basename(b) for b in worktree_list.split("\n") if "branch" in b and "master" not in b]
+    if is_git_repo(odoo_path):
+        return []
+    
+    repo = git.Repo(odoo_path)
+    logger.debug(f"Launching git prune on {odoo_path}")
+    repo.git.worktree("prune")
+    worktree_list = repo.git.worktree('list', '--porcelain')
 
-    return odoo_version
+    return [os.path.basename(b) for b in worktree_list.split("\n") if "branch" in b and "master" not in b]
