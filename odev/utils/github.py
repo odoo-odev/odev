@@ -4,7 +4,7 @@ import os.path
 import re
 from functools import partial
 from logging import getLevelName
-from typing import Optional, Callable
+from typing import Optional, Callable, Set
 
 from git import (
     Repo,
@@ -29,6 +29,9 @@ from odev.utils.credentials import CredentialsHelper
 from odev.utils.python import install_packages
 
 logger = logging.getLogger(__name__)
+
+
+_just_fetched_repos: Set[str] = set()
 
 
 def get_github(token: Optional[str] = None) -> Github:
@@ -237,13 +240,17 @@ def git_pull(
     )
     repo: Repo = Repo(repo_path)
     repo_remote: Remote = get_remote(repo)
-    try:
-        repo_remote.fetch()
-    except GitCommandError as e:
-        if handle_git_error(e, log_level="WARNING") == 128:
-            return False
-        else:
-            raise
+    dotgit_path: str = os.path.abspath(getattr(repo, "_common_dir", None) or repo.git_dir)
+
+    if force or dotgit_path not in _just_fetched_repos:
+        try:
+            repo_remote.fetch()
+        except GitCommandError as e:
+            if handle_git_error(e, log_level="WARNING") == 128:
+                return False
+            else:
+                raise
+        _just_fetched_repos.add(dotgit_path)
             
     head_branch: Head = repo.head.ref
     if branch and head_branch.name != branch:
@@ -264,7 +271,7 @@ def git_pull(
     )
     if pending_commits > 0 and (skip_prompt or logger.confirm(confirm_message)):
         logger.log(log_level, f"Pulling {pending_commits} commits")
-        repo_remote.pull()
+        repo.git.merge(tracking_branch.name, "--ff-only")
         logger.success(f"Updated {title}!")
         return True
 
