@@ -3,7 +3,7 @@
 import os
 import shlex
 import subprocess
-from argparse import Namespace, REMAINDER
+from argparse import Namespace
 from datetime import datetime
 
 from odev.structures import commands, actions
@@ -29,6 +29,9 @@ class RunCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
     '''
 
     name = 'run'
+
+    odoobin_mixin_args = [x for x in commands.OdooBinMixin.arguments if x.get('name') == 'args']
+
     arguments = [
         dict(
             aliases=['-s', '--save'],
@@ -42,16 +45,7 @@ class RunCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
             nargs='?',
             help='Comma-separated list of additional addon paths',
         ),
-        dict(
-            name='args',
-            nargs=REMAINDER,
-            help='''
-            Additional arguments to pass to odoo-bin; Check the documentation at
-            https://www.odoo.com/documentation/14.0/fr/developer/misc/other/cmdline.html
-            for the list of available arguments
-            ''',
-        ),
-    ]
+    ] + odoobin_mixin_args
 
     odoobin_subcommand = None
     '''

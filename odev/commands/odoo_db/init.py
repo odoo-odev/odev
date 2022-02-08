@@ -21,12 +21,16 @@ class InitCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
     '''
 
     name = 'init'
+
+    odoobin_mixin_args = [x for x in commands.OdooBinMixin.arguments if x.get('name') == 'args']
+
     arguments = [
         dict(
             aliases=['version'],
             help='Odoo version to use; must match an Odoo community branch',
         ),
-    ]
+    ] + odoobin_mixin_args
+
     queries = [
         'CREATE SCHEMA unaccent_schema',
         'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA unaccent_schema',
@@ -44,6 +48,7 @@ class InitCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.version = args.version
+        self.additional_args = args.args
 
     def run(self):
         '''
@@ -84,7 +89,7 @@ class InitCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
                 f'--addons-path={addons_path}',
                 *('-i', 'base'),
                 '--stop-after-init',
-                '--without-demo=all',
+                *self.additional_args,
             ]
         )
         _logger.info(f'Running: {command}')

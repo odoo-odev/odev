@@ -36,6 +36,8 @@ class QuickStartCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin,
     name = 'quickstart'
     aliases = ['qs']
 
+    odoobin_mixin_args = [x for x in commands.OdooBinMixin.arguments if x.get('name') == 'args']
+
     arguments = [
         dict(
             aliases=['source'],
@@ -47,7 +49,7 @@ class QuickStartCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin,
               - a url to an Odoo SaaS or SH database to dump and restore locally
             ''',
         ),
-    ]
+    ] + odoobin_mixin_args
 
     def __init__(self, args: Namespace):
         super().__init__(args)

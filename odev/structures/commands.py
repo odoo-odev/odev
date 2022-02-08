@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from contextlib import nullcontext
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
+from argparse import ArgumentParser, Namespace, RawTextHelpFormatter, REMAINDER
 from github import Github
 from typing import (
     Any,
@@ -598,6 +598,15 @@ class OdooBinMixin(Command, ABC):
             dest='pull',
             action='store_true',
             help='Try to pull new version of Odoo,Enterprise,Design-themes and upgrades repos',
+        ),
+        dict(
+            name='args',
+            nargs=REMAINDER,
+            help='''
+            Additional arguments to pass to odoo-bin; Check the documentation at
+            https://www.odoo.com/documentation/14.0/fr/developer/misc/other/cmdline.html
+            for the list of available arguments
+            ''',
         ),
     ]
 
