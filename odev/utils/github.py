@@ -242,7 +242,7 @@ def git_pull(
     repo_remote: Remote = get_remote(repo)
     dotgit_path: str = os.path.abspath(getattr(repo, "_common_dir", None) or repo.git_dir)
 
-    if force or dotgit_path not in _just_fetched_repos:
+    if dotgit_path not in _just_fetched_repos:
         try:
             repo_remote.fetch()
         except GitCommandError as e:
