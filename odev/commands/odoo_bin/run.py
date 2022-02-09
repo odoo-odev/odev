@@ -122,7 +122,9 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
         addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
         addons += [os.getcwd(), *self.addons]
         addons = [path for path in addons if odoo.is_addon_path(path)]
-        odoo.prepare_requirements(repos_path, version, addons=addons)
+
+        if '-i' in self.additional_args or '-u' in self.additional_args:
+            odoo.prepare_requirements(repos_path, version, addons=addons)
 
         python_exec = os.path.join(version_path, 'venv/bin/python')
         addons_path = ','.join(addons)
