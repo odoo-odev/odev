@@ -2,6 +2,7 @@ import git
 import os
 import os.path
 import re
+from datetime import datetime, timedelta
 from functools import partial
 from logging import getLevelName
 from typing import Optional, Callable, Set
@@ -23,6 +24,7 @@ from odev.exceptions import (
     HeadRefMismatch,
     MissingRemote,
 )
+from odev.constants import DEFAULT_DATETIME_FORMAT
 from odev.utils import logging
 from odev.utils.config import ConfigManager
 from odev.utils.credentials import CredentialsHelper
@@ -335,6 +337,15 @@ def self_update() -> bool:
     """
     config = ConfigManager("odev")
     odev_path = config.get("paths", "odev")
+
+    default_date = (datetime.today() - timedelta(days=1)).strftime(DEFAULT_DATETIME_FORMAT)
+    update_check_interval = config.get("update", "check_interval") or 1
+    last_update_check = config.get("update", "last_check") or default_date
+    last_check_diff = (datetime.today() - datetime.strptime(last_update_check, DEFAULT_DATETIME_FORMAT)).days
+
+    if last_check_diff < update_check_interval:
+        return False
+
     try:
         did_update: bool = git_pull(
             odev_path,
@@ -351,6 +362,8 @@ def self_update() -> bool:
     if did_update:
         logger.info(f'Checking for new odev package requirements')
         install_packages(requirements_dir=odev_path)
+
+    config.set("update","last_check", datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
 
     return did_update
 

@@ -10,7 +10,7 @@ from typing import List, Optional, Mapping
 import requests
 from packaging.version import Version
 
-from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES, ODOO_MASTER_REPO
+from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES, ODOO_MASTER_REPO, DEFAULT_DATETIME_FORMAT
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
 from odev.utils.config import ConfigManager
 from odev.utils.logging import getLogger
@@ -22,7 +22,6 @@ from odev.utils.signal import capture_signals
 
 logger = getLogger(__name__)
 
-DEFAULT_DATETIME_FORMAT="%Y-%m-%d %H:%M:%S"
 
 def is_addon_path(path):
     def clean(name):

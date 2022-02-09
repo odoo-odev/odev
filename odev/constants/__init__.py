@@ -4,6 +4,7 @@
 Generic constants
 '''
 
+from .date import *
 from .logging import *
 from .odoo import *
 from .psql import *
