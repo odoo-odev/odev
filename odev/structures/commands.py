@@ -682,6 +682,45 @@ class OdooComCliMixin(Command, ABC):
         self.login: Optional[str] = args.login
         self.password: Optional[str] = args.password
 
+class OdooUpgradeRepoMixin(Command, ABC):
+    """
+    Mixin to include in commands using (custom) upgrade repo
+    """
+    arguments = [
+        dict(
+            aliases=['--upgrade-repo-path'],
+            help='Local path of the `upgrade` repository clone',
+        ),
+        dict(
+            aliases=['--psbe-upgrade-repo-path'],
+            help='Local path of the `psbe-custom-upgrade` repository clone '
+        ),
+    ]
+
+    def get_upgrade_repo_paths(self, args: Namespace) -> Mapping[str, str]:
+        """
+        Extracts the upgrade (custom) upgrade repository paths from args or config
+        Updates config if args are present
+        """
+        config = ConfigManager('odev')
+        upgrade_repo_parameter_to_path = {'upgrade_repo_path': None, 'psbe_upgrade_repo_path': None}
+        for upgrade_repo_parameter in upgrade_repo_parameter_to_path.keys():
+            args_repo_path: str = getattr(args, upgrade_repo_parameter)
+            if args_repo_path and self.validate(args_repo_path):
+                path = os.path.realpath(os.path.normpath(args_repo_path))
+                upgrade_repo_parameter_to_path[upgrade_repo_parameter] = path
+                config.set('paths', upgrade_repo_parameter, path)
+            else:
+                upgrade_repo_parameter_to_path[upgrade_repo_parameter] = config.get('paths', upgrade_repo_parameter)
+        
+        return upgrade_repo_parameter_to_path
+
+    @staticmethod
+    def validate(path: str) -> bool:
+        if not os.path.exists(path):
+            raise ValueError(f"Path doesn't exist: {path}")
+        else:
+            return True
 
 class OdooSHDatabaseCommand(OdooComCliMixin, Command, ABC):
     """

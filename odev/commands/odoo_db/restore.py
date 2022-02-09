@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+from functools import wraps
 from argparse import Namespace
 from pathlib import Path
 from zipfile import ZipFile
@@ -19,6 +20,7 @@ from odev.exceptions import RunningOdooDatabase, CommandAborted
 _logger = logging.getLogger(__name__)
 
 def pg_subprocess(fnc):
+    @wraps(fnc)
     def wrapper(*args):
         database = args[0]
         _logger.info(f'Importing SQL data to database {database}')

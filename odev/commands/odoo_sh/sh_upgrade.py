@@ -68,21 +68,11 @@ def edit_odoo_config_data(config_data: str, edit_data: Mapping[Tuple[Optional[st
         return fp.getvalue()
 
 
-class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand):
+class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgradeRepoMixin):
     '''
     Command class for running modules upgrades on a odoo.sh branch with `util` support.
     '''
-
     arguments = [
-        dict(
-            aliases=['--upgrade-repo-path'],
-            help='Local path of the `upgrade` repository clone from which to copy `util`',
-        ),
-        dict(
-            aliases=['--psbe-upgrade-repo-path'],
-            help='Local path of the `psbe-custom-upgrade` repository clone '
-            'from which `base` and `custom_utils` are copied',
-        ),
         dict(
             aliases=['-r', '--remote-dir'],
             default=REMOTE_UPGRADE_DIR,
@@ -91,11 +81,12 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand):
     ]
 
     def __init__(self, args: Namespace):
-        if args.upgrade_repo_path is None:
+        for key, dir in self.get_upgrade_repo_paths(args).items():
+            setattr(self, key, dir)
+
+        if self.upgrade_repo_path is None:
             raise ValueError('No `upgrade-repo-path` specified')
 
-        self.upgrade_repo_path: str = os.path.normpath(args.upgrade_repo_path)
-        self.psbe_upgrade_repo_path: str = os.path.normpath(args.psbe_upgrade_repo_path)
         self.remote_upgrade_dir: str = args.remote_dir or REMOTE_UPGRADE_DIR
 
         self.remote_util_path: str = os.path.join(

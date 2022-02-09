@@ -255,3 +255,7 @@ Uploads a .zip database dump to an Odoo SH branch.
 ### `version`
 
 Get the Odoo version on which a local database is running.
+
+### `code`
+
+Generate a config file to use VSCode for debugging with two available configurations: webinterface or `odoo-bin shell`.
