@@ -23,3 +23,5 @@ imgkit>=1,<2
 isort>=5.8,<6
 copier>=5.1,<6
 odoo-client-lib>=1.2.2, <2
+paramiko>=2.7.2,<3
+scp>=0.14.2,<1

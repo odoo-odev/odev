@@ -174,6 +174,9 @@ class BaseCommand(ABC):
         self.args: Namespace = args
         self.argv: Optional[Sequence[str]] = None
 
+        # Raise errors unless explicitly disabled through `run_with()` with `do_raise=False`
+        self.args.do_raise = 'do_raise' not in self.args or self.args.do_raise
+
         if not logging.interactive and not logging.assume_prompted:
             logger.info(f'''Assuming '{'yes' if logging.assume_yes else 'no'}' for all confirmation prompts''')
             logging.assume_prompted = True
