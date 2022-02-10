@@ -78,9 +78,7 @@
       "ir.model.fields": {
         "export": false,
         "parent": "ir.model",
-        "order": {
-          "order": "ttype asc, name asc"
-        }
+        "order": "ttype asc, name asc"
       },
       "res.groups": {
         "template": "res_groups.jinja",

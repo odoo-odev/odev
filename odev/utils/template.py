@@ -89,7 +89,7 @@ class Template:
     def prettier(self, txt, ext):
 
         if ext == "py" and not self.args.pretty_py_off:
-            txt = black.format_str(txt, mode=black.FileMode(line_length=self.args.line_length))
+            txt = black.format_str(txt, mode=black.FileMode(line_length=self.args.line_length or 9999))
 
             if not self.args.pretty_import_off:
                 txt = isort.code(txt, force_single_line=True, single_line_exclusions=["odoo"])
@@ -117,7 +117,7 @@ class Template:
             if cfg["file_ext"] == "xml":
                 txt = self._merge_xml(dest, txt)
                 file_mode = "w"
-            elif cfg["file_name"] == "requirements":
+            elif cfg.get("file_name") == "requirements":
                 f = open(dest, "r")
                 lines = f.read().splitlines() + txt.split("\n")
                 lib = sorted(set(lines), key=lines.index)

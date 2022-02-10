@@ -1041,52 +1041,10 @@ class ExportCommand(Command, ABC, Template):
         ),
     ]
 
-    manifest = {
-        "name": "",
-        "summary": "",
-        "description": "",
-        "category": [0, ""],
-        "author": "Odoo PS",
-        "website": "http://www.odoo.com",
-        "license": "OEEL-1",
-        "version": 0,
-        "depends": set(),
-        "data": set(),
-        "qweb": set(),
-        "assets": defaultdict(list),
-        "pre_init_hook": False,
-        "post_init_hook": False,
-        "uninstall": False,
-    }
-
-    init = {
-        "class": set(),
-        "pre_init_hook": [],
-        "post_init_hook": [],
-        "uninstall": []
-        }
-
-    migration_script = {
-        "pre_migrate": {"models": [], "fields": [], "remove_view": set(), "lines": []},
-        "post_migrate": {"lines": []},
-        "end_migrate": {"lines": []},
-    }
-
     connection = None
     export_type = "export"
     export_config= None
     module_name = ""
-
-    @classmethod
-    def prepare_arguments(cls, parser: ArgumentParser) -> None:
-        if cls.add_database_argument and not any(a.get('name') == 'database' for a in cls.arguments):
-            parser.add_argument(
-                'database',
-                action=OptionalStringAction,
-                nargs=1 if cls.database_required else '?',
-                help='Name of the local database to target',
-            )
-        super().prepare_arguments(parser)
 
     def __init__(self, args: Namespace):
         self.type = args.type
@@ -1096,6 +1054,40 @@ class ExportCommand(Command, ABC, Template):
             self.version = odoo.parse_odoo_version(self.args.version or LAST_ODOO_VERSION)
         except InvalidVersion as exc:
             raise InvalidArgument(str(exc)) from exc
+
+    def _init_config(self):
+        super()._init_config()
+
+        self.manifest = {
+            "name": "",
+            "summary": "",
+            "description": "",
+            "category": [0, ""],
+            "author": "Odoo PS",
+            "website": "http://www.odoo.com",
+            "license": "OEEL-1",
+            "version": self._get_version(),
+            "depends": set(),
+            "data": set(),
+            "qweb": set(),
+            "assets": defaultdict(list),
+            "pre_init_hook": False,
+            "post_init_hook": False,
+            "uninstall": False,
+        }
+
+        self.init = {
+            "class": set(),
+            "pre_init_hook": [],
+            "post_init_hook": [],
+            "uninstall": []
+            }
+
+        self.migration_script = {
+            "pre_migrate": {"models": [], "fields": [], "remove_view": set(), "lines": []},
+            "post_migrate": {"lines": []},
+            "end_migrate": {"lines": []},
+        }
 
     def init_connection(self, hostname, database, login, password):
         self.connection = odoolib.get_connection(
@@ -1220,12 +1212,12 @@ class ExportCommand(Command, ABC, Template):
 
         copy_script = False
         module_version = self.manifest["version"]
-        version = re.match(r"^([\d]+\.[\d]+)\.([\d\.]+)$", module_version)
+        version = re.match(r"^([\d]+\.[\d]+)\.([\d\.]+)$", str(module_version))
 
         if version:
             module_version = version[2]
 
-        dest = os.path.join("migrations/", str(self._get_version(True)) + "." + module_version)
+        dest = os.path.join("migrations/", str(self._get_version(True)) + "." + str(module_version))
 
         for migration_type in ["end", "pre", "post"]:
             cfg = self.export_config.config[migration_type + "-10"]

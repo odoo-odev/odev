@@ -8,8 +8,6 @@ from packaging.version import Version
 from pre_commit.commands.install_uninstall import install
 import pre_commit.constants as C
 
-
-from odev.commands.odoo_db import quickstart, remove
 from odev.constants import LAST_ODOO_VERSION,PSTOOLS_DB,PSTOOLS_PASSWORD,PSTOOLS_USER
 from odev.structures import commands
 from odev.utils import logging, odoo
@@ -111,11 +109,12 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
 
     def _init_config(self) -> None:
+        self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
+
+        super()._init_config()
 
         if not self.version:
             self.version = odoo.get_odoo_version(self.analysis["version"][1] or LAST_ODOO_VERSION)
-
-        self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
 
         if not self.args.type:
             self.type = "saas" if self.analysis["platform"] == "saas" else "sh"
@@ -124,8 +123,6 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         self.manifest["summary"] = f"{self.manifest['name']} scaffolded module"
         self.manifest['version'] = str(self._get_version(False))
         self.manifest["task_id"] = self.analysis["task_id"]
-
-        super()._init_config()
 
 
     def export(self) -> None:

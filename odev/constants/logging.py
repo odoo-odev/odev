@@ -39,7 +39,7 @@ THEMES = {
             'odev.commands.odoo_db.set': term.dodgerblue2,
             # Exporter
             'odev.commands.exporter.scaffold': term.darkviolet,
-            'odev.commands.exporter.exporter': term.darkviolet,
+            'odev.commands.exporter.export': term.darkviolet,
             'odev.commands.exporter.pleasedo': term.darkviolet,
             # Github
             'odev.commands.github.clone': term.steelblue1,
@@ -93,7 +93,7 @@ THEMES = {
             'odev.commands.odoo_db.set': term.on_dodgerblue2,
             # Exporter
             'odev.commands.exporter.scaffold': term.on_darkviolet,
-            'odev.commands.exporter.exporter': term.on_darkviolet,
+            'odev.commands.exporter.export': term.on_darkviolet,
             'odev.commands.exporter.pleasedo': term.on_darkviolet,
             # Github
             'odev.commands.github.clone': term.on_steelblue1,
