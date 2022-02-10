@@ -4,6 +4,7 @@
 Generic constants
 '''
 
+from .arguments import *
 from .date import *
 from .logging import *
 from .odoo import *

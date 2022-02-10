@@ -50,7 +50,15 @@ from odev.utils.psql import PSQL
 from odev.utils.odoo import check_database_name, parse_odoo_version, get_odoo_version
 from odev.structures.actions import OptionalStringAction
 from odev.utils.template import Template
-from odev.constants import RE_COMMAND, RE_PORT, DEFAULT_DATABASE, ICON_COLORS, ICON_OPTIONS, LAST_ODOO_VERSION
+from odev.constants import (
+    RE_COMMAND,
+    RE_PORT,
+    DEFAULT_DATABASE,
+    ICON_COLORS,
+    ICON_OPTIONS,
+    LAST_ODOO_VERSION,
+    HELP_ARGS_ALIASES,
+)
 from odev.exceptions import (
     InvalidVersion,
     InvalidDatabase,
@@ -130,6 +138,12 @@ class BaseCommand(ABC):
             choices=['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG', 'NOTSET'],
             default='INFO',
             help='Set logging verbosity',
+        ),
+        dict(
+            aliases=HELP_ARGS_ALIASES,
+            dest='show_help',
+            action='store_true',
+            help='Show help for the current command.',
         ),
     ]
     '''

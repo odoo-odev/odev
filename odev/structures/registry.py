@@ -16,8 +16,9 @@ from typing import List, MutableMapping, Optional, Sequence
 
 from odev._version import __version__
 from odev.exceptions import CommandMissing, UpgradeError
-from odev.utils import logging
+from odev.constants import HELP_ARGS_ALIASES
 from odev.structures.commands import Command, CommandType
+from odev.utils import logging
 from odev.utils.config import ConfigManager
 
 
@@ -205,6 +206,10 @@ class CommandRegistry:
         '''
 
         argv = argv or sys.argv[1:]
+
+        if any(arg in HELP_ARGS_ALIASES for arg in argv):
+            argv = ["help", argv[0]]
+
         command_cls = self.get_command(argv)
         parser = command_cls.prepare_parser()
 
