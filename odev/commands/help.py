@@ -85,6 +85,7 @@ class HelpCommand(commands.Command):
                 '''
                 message += indent(dedent(optionals), ' ' * 12)
         else:
+            executable = os.path.basename(sys.argv[0])
             commands = ('\n' + ' ' * 14).join([
                 term.bold(c.name) + (' ' * (24 - len(c.name))) + '\n\n' + indent(c.help, ' ' * 16) + '\n'
                 for c in sorted(set(registry.commands.values()), key=lambda c: c.name)
@@ -101,13 +102,13 @@ class HelpCommand(commands.Command):
 
             Check the complete help on https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev#readme.
 
-            {term.bold('Usage:')} {sys.argv[0]} <command> <args>
+            {term.bold('Usage:')} {executable} <command> <args>
 
             Arguments in square brackets ({term.italic('[arg]')}) are optional and can be omitted,
             arguments in curvy brackets ({term.italic('{arg}')}) are options to choose from,
             arguments without brackets ({term.italic('arg')}) are required.
 
-            To get help on a specific command and its usage, use {term.italic(f'{sys.argv[0]} help <command>')}
+            To get help on a specific command and its usage, use {term.italic(f'{executable} <command> --help')}
 
             {term.bold(titles[2])}
             {term.snow4('-' * len(titles[2]))}
