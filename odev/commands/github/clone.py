@@ -91,10 +91,10 @@ class CloneCommand(commands.Command):
         # To use PyGithub we need to be inside a repository
         odev_path = self.config['odev'].get("paths", "odev")
         odev_repo = Repo(odev_path)
+        saas_repo = (self.config["odev"].get("repos", "saas_repos") or "").split(",")
         repos = []
 
-        # FIXME: Handle psus-custom, pshk-custom and psae-custom
-        for ps_repo in ["odoo-ps/psbe-custom", "odoo/ps-custom"]:
+        for ps_repo in saas_repo:
             # TODO: Use giturlparse ?
             organization = ps_repo.split("/")[0]
             branch_list = odev_repo.git.ls_remote("--heads", f"git@github.com:{ps_repo}.git")

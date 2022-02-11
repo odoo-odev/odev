@@ -75,7 +75,7 @@ class CommandRegistry:
                     _logger.info(f"Running upgrade from {current_version} to {ver}")
                     self.run_upgrade(os.path.join(upgrade_path, ver, script), name)
 
-                self.config.set('odev', 'version', ver)
+                ConfigManager('odev').set('odev', 'version', ver)
                 current_version = ver
 
     def run_upgrade(self, path, script):
