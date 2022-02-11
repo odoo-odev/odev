@@ -19,8 +19,14 @@ from odev.utils import logging
 from odev.utils.github import self_update, handle_git_error
 from odev.structures.registry import CommandRegistry
 from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgument, InvalidQuery
-from odev.exceptions.odoo import InvalidDatabase, InvalidOdooDatabase, RunningOdooDatabase
 from odev.exceptions.odoo_sh import SHConnectionError, SHDatabaseTooLarge
+from odev.exceptions.odoo import (
+    InvalidDatabase,
+    InvalidOdooDatabase,
+    RunningOdooDatabase,
+    InvalidOdooModule,
+    MissingOdooDependencies,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -115,6 +121,15 @@ def main():
     except SHDatabaseTooLarge as e:
         _logger.error(str(e))
         code = 302
+
+    # Odoo
+
+    except InvalidOdooModule as e:
+        _logger.error(str(e))
+        code = 401
+    except MissingOdooDependencies as e:
+        _logger.error(str(e))
+        code = 402
 
     # ============================================================================== #
     # FIXME: implement custom exceptions to catch expected errors and graceful exit. #

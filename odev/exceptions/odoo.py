@@ -28,3 +28,14 @@ class InvalidVersion(OdooException):
 
 class RunningOdooDatabase(OdooException):
     """Raised when trying to access an Odoo database which is currently being used."""
+    pass
+
+
+class InvalidOdooModule(OdooException):
+    """Raised when a given path is not a valid Odoo module."""
+    pass
+
+
+class MissingOdooDependencies(OdooException):
+    """Raised when missing dependencies are detected while installing an Odoo module."""
+    pass
