@@ -1,35 +1,37 @@
-# -*- coding: utf-8 -*-
+# type: ignore
 
 import signal
-from signal import Signals, SIGINT, SIGTERM
 from contextlib import contextmanager
+from signal import SIGINT, SIGTERM, Signals
 from types import FrameType
 from typing import (
     Callable,
-    ContextManager,
-    Union,
     Collection,
-    Optional,
     MutableMapping,
+    Optional,
+    Union,
 )
 
 from odev.utils import logging
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 SignalHandler = Callable[[Signals, FrameType], None]
 
 
 def warn_signal_handler(signum: Signals, frame: FrameType) -> None:
-    logger.warning(f'Received signal {signum}')
+    _logger.warning(f"Received signal {signum}")
 
 
 @contextmanager
 def capture_signals(
     signals: Optional[Union[Signals, Collection[Signals]]] = None,
     handler: Optional[SignalHandler] = None,
-) -> ContextManager:
+):
+    if isinstance(signals, Signals):
+        signals = [signals]
+
     if signals is None:
         signals = [SIGINT, SIGTERM]
 

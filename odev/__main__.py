@@ -1,41 +1,46 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import sys
 import os
 import re
+import sys
+from types import FrameType
+from typing import Optional
+
 
 # Explicitly initialize relative imports if run directly
 if not __package__:
     package_dir = os.path.dirname(os.path.realpath(__file__))
-    sys.path.append(os.path.normpath(os.path.join(package_dir, '..')))
-    __package__ = os.path.basename(package_dir)
+    sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
+    __package__ = os.path.basename(package_dir)  # pylint: disable=redefined-builtin
 
-from signal import signal, SIGINT, SIGTERM
+from signal import SIGINT, SIGTERM, signal
 from subprocess import CalledProcessError
+
 from git.exc import GitCommandError
 
-from odev.utils import logging
-from odev.utils.github import self_update, handle_git_error
-from odev.structures.registry import CommandRegistry
 from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgument, InvalidQuery
-from odev.exceptions.odoo_sh import SHConnectionError, SHDatabaseTooLarge
 from odev.exceptions.odoo import (
     InvalidDatabase,
     InvalidOdooDatabase,
-    RunningOdooDatabase,
     InvalidOdooModule,
     MissingOdooDependencies,
+    RunningOdooDatabase,
 )
+from odev.exceptions.odoo_sh import SHConnectionError, SHDatabaseTooLarge
+from odev.structures.registry import CommandRegistry
+from odev.utils import logging
+from odev.utils.github import handle_git_error, self_update
+
 
 _logger = logging.getLogger(__name__)
 
 code = 0
 
-def signal_handler(signum, frame):
+
+def signal_handler(signum: int, frame: Optional[FrameType]):
     global code
     print()  # Empty newline to make sure we're not writing next to a running prompt
-    _logger.warning('Received signal (%s), exiting...' % (signum))
+    _logger.warning(f"Received signal ({signum}), exiting...")
     code = signum
     exit(signum)
 
@@ -43,22 +48,18 @@ def signal_handler(signum, frame):
 def set_log_level():
     # Set global log level before registering commands to support custom
     # log-levels everywhere
-    re_loglevel = re.compile(r'(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)', re.IGNORECASE)
-    loglevel_match = re_loglevel.findall(' '.join(sys.argv))
+    re_loglevel = re.compile(r"(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)", re.IGNORECASE)
+    loglevel_match = re_loglevel.findall(" ".join(sys.argv))
 
     # TODO: Default fall back to set INFO log level before arg parse.
-    level = 'INFO'
-    if loglevel_match and loglevel_match[~0] in logging.logging._nameToLevel:
-        level = loglevel_match[~0]
-
-    logging.set_log_level(level)
+    logging.set_log_level(logging.logging.getLevelName(str(loglevel_match[~0]).upper()) if loglevel_match else "INFO")
 
 
-def main():
-    '''
+def main():  # noqa: C901 - Complexity
+    """
     Manages taking input from the user and calling the subsequent subcommands
     with the proper arguments as specified in the command line.
-    '''
+    """
     global code
 
     signal(SIGINT, signal_handler)
@@ -142,4 +143,4 @@ def main():
         raise
     finally:
         if code not in (None, 0):
-            _logger.error(f'Exiting with code {code}')
+            _logger.error(f"Exiting with code {code}")

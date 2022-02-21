@@ -321,7 +321,7 @@ def pg_html_escape(s, quote=True):
             ("'", "&#x27;"),
         ]
 
-    q = lambda s: psycopg2.extensions.QuotedString(s).getquoted().decode("utf-8")  # noqa: E731
+    def q(s): return psycopg2.extensions.QuotedString(s).getquoted().decode("utf-8")  # noqa: E731
     return reduce(lambda s, r: "replace({}, {}, {})".format(s, q(r[0]), q(r[1])), replacements, s)
 
 
@@ -452,7 +452,8 @@ def model_of_table(cr, table):
         # Not a real model until saas~13
         {gte_saas13} mail_message_res_partner_needaction_rel mail.notification
     """.format(
-                action_report_model="ir.actions.report" if version_gte("10.saas~17") else "ir.actions.report.xml",
+                action_report_model="ir.actions.report" if version_gte(
+                    "10.saas~17") else "ir.actions.report.xml",
                 gte_saas13="" if version_gte("9.saas~13") else "#",
             )
         )
@@ -498,7 +499,8 @@ def remove_view(cr, xml_id=None, view_id=None, silent=False):
             raise ValueError("%r should point to a 'ir.ui.view', not a %r" % (xml_id, model))
     else:
         # search matching xmlid for logging or renaming of custom views
-        cr.execute("SELECT module, name FROM ir_model_data WHERE model='ir.ui.view' AND res_id=%s", [view_id])
+        cr.execute(
+            "SELECT module, name FROM ir_model_data WHERE model='ir.ui.view' AND res_id=%s", [view_id])
         if cr.rowcount:
             xml_id = "%s.%s" % cr.fetchone()
         else:
@@ -611,7 +613,8 @@ def add_view(cr, name, model, view_type, arch_db, inherit_xml_id=None, priority=
         inherit_id = ref(cr, inherit_xml_id)
         if not inherit_id:
             raise ValueError(
-                "Unable to add view '%s' because its inherited view '%s' cannot be found!" % (name, inherit_xml_id)
+                "Unable to add view '%s' because its inherited view '%s' cannot be found!" % (
+                    name, inherit_xml_id)
             )
     arch_col = "arch_db" if column_exists(cr, "ir_ui_view", "arch_db") else "arch"
     cr.execute(
@@ -660,7 +663,8 @@ def remove_record(cr, name, deactivate=False, active_field="active"):
             raise ValueError("Please use a 2-tuple (<model>, <res_id>)")
         model, res_id = name
     else:
-        raise ValueError("Either use a fully qualified xmlid string <module>.<name> or a 2-tuple (<model>, <res_id>)")
+        raise ValueError(
+            "Either use a fully qualified xmlid string <module>.<name> or a 2-tuple (<model>, <res_id>)")
 
     if model == "ir.ui.menu":
         _logger.log(NEARLYWARN, "Removing menu %r", name)
@@ -676,7 +680,8 @@ def remove_record(cr, name, deactivate=False, active_field="active"):
         cr.execute('UPDATE "%s" SET "%s"=%%s WHERE id=%%s' % (table, active_field), (False, res_id))
     else:
         for ir in indirect_references(cr, bound_only=True):
-            query = 'DELETE FROM "{}" WHERE {} AND "{}"=%s'.format(ir.table, ir.model_filter(), ir.res_id)
+            query = 'DELETE FROM "{}" WHERE {} AND "{}"=%s'.format(
+                ir.table, ir.model_filter(), ir.res_id)
             cr.execute(query, [model, res_id])
         _rm_refs(cr, model, [res_id])
 
@@ -686,14 +691,16 @@ def remove_record(cr, name, deactivate=False, active_field="active"):
         # explicitly in `base/0.0.0/end-user_groups_view.py`.
         arch_col = "arch_db" if column_exists(cr, "ir_ui_view", "arch_db") else "arch"
         cr.execute(
-            "UPDATE ir_ui_view SET {} = '<form/>' WHERE id = %s".format(arch_col), [ref(cr, "base.user_groups_view")]
+            "UPDATE ir_ui_view SET {} = '<form/>' WHERE id = %s".format(
+                arch_col), [ref(cr, "base.user_groups_view")]
         )
 
 
 def if_unchanged(cr, xmlid, callback, interval="1 minute"):
     assert "." in xmlid
     module, _, name = xmlid.partition(".")
-    cr.execute("SELECT model, res_id FROM ir_model_data WHERE module=%s AND name=%s", [module, name])
+    cr.execute("SELECT model, res_id FROM ir_model_data WHERE module=%s AND name=%s",
+               [module, name])
     data = cr.fetchone()
     if not data:
         return
@@ -917,7 +924,8 @@ def update_record_from_xml(cr, xmlid, reset_write_metadata=True):
                 new_root[0].append(node)
 
     importer = xml_import(cr, module, idref={}, mode="update")
-    kw = dict(mode="update") if parse_version("8.0") <= parse_version(release.series) <= parse_version("12.0") else {}
+    kw = dict(mode="update") if parse_version("8.0") <= parse_version(
+        release.series) <= parse_version("12.0") else {}
     importer.parse(new_root, **kw)
 
     if noupdate:
@@ -1044,7 +1052,8 @@ def fixup_m2m(cr, m2m, fk1, fk2, col1=None, col2=None):
         target = None
     if not target:
         _logger.debug("%(m2m)s: add FK %(col1)s -> %(fk1)s", locals())
-        cr.execute("ALTER TABLE {m2m} ADD FOREIGN KEY ({col1}) REFERENCES {fk1} ON DELETE CASCADE".format(**locals()))
+        cr.execute(
+            "ALTER TABLE {m2m} ADD FOREIGN KEY ({col1}) REFERENCES {fk1} ON DELETE CASCADE".format(**locals()))
 
     target = target_of(cr, m2m, col2)
     if target and target[:2] != (fk2, "id"):
@@ -1052,7 +1061,8 @@ def fixup_m2m(cr, m2m, fk1, fk2, col1=None, col2=None):
         target = None
     if not target:
         _logger.debug("%(m2m)s: add FK %(col2)s -> %(fk2)s", locals())
-        cr.execute("ALTER TABLE {m2m} ADD FOREIGN KEY ({col2}) REFERENCES {fk2} ON DELETE CASCADE".format(**locals()))
+        cr.execute(
+            "ALTER TABLE {m2m} ADD FOREIGN KEY ({col2}) REFERENCES {fk2} ON DELETE CASCADE".format(**locals()))
 
     # create indexes
     idx1 = get_index_on(cr, m2m, col1, col2)
@@ -1457,7 +1467,8 @@ def merge_module(cr, old, into, without_deps=False):
     cr.execute("DELETE FROM ir_module_module WHERE name=%s RETURNING state", [old])
     [state] = cr.fetchone()
     cr.execute("DELETE FROM ir_module_module_dependency WHERE name=%s", [old])
-    cr.execute("DELETE FROM ir_model_data WHERE model='ir.module.module' AND res_id=%s", [mod_ids[old]])
+    cr.execute("DELETE FROM ir_model_data WHERE model='ir.module.module' AND res_id=%s",
+               [mod_ids[old]])
     if state in _INSTALLED_MODULE_STATES:
         force_install_module(cr, into)
 
@@ -1528,7 +1539,8 @@ def force_install_module(cr, module, if_installed=None):
             [toinstall, list(_INSTALLED_MODULE_STATES)],
         )
         for (mod,) in cr.fetchall():
-            _logger.debug("auto install module %r due to module %r being force installed", mod, module)
+            _logger.debug(
+                "auto install module %r due to module %r being force installed", mod, module)
             force_install_module(cr, mod)
 
     # TODO handle module exclusions
@@ -1573,7 +1585,8 @@ def new_module_dep(cr, module, new_dep):
 
 
 def remove_module_deps(cr, module, old_deps):
-    assert isinstance(old_deps, (collections.Sequence, collections.Set)) and not isinstance(old_deps, basestring)
+    assert isinstance(old_deps, (collections.Sequence, collections.Set)
+                      ) and not isinstance(old_deps, basestring)
     # As the goal is to have dependencies removed, the objective is reached even when they don't exist.
     # Therefore, we don't need to assert their existence (at the cost of missing typos).
     cr.execute(
@@ -1620,7 +1633,8 @@ def module_auto_install(cr, module, auto_install):
             params + [module],
         )
 
-    cr.execute("UPDATE ir_module_module SET auto_install = %s WHERE name = %s", [auto_install is not False, module])
+    cr.execute("UPDATE ir_module_module SET auto_install = %s WHERE name = %s",
+               [auto_install is not False, module])
 
 
 def new_module(cr, module, deps=(), auto_install=False):
@@ -1730,7 +1744,8 @@ def create_column(cr, table, column, definition):
     curtype = column_type(cr, table, column)
     if curtype:
         if curtype != definition:
-            _logger.error("%s.%s already exists but is %r instead of %r", table, column, curtype, definition)
+            _logger.error("%s.%s already exists but is %r instead of %r",
+                          table, column, curtype, definition)
         return False
     else:
         cr.execute("""ALTER TABLE "%s" ADD COLUMN "%s" %s""" % (table, column, definition))
@@ -2054,7 +2069,8 @@ def remove_field(cr, model, fieldname, cascade=False, drop_column=True):
     cr.execute("DELETE FROM ir_model_fields WHERE model=%s AND name=%s RETURNING id", (model, fieldname))
     fids = tuple(map(itemgetter(0), cr.fetchall()))
     if fids:
-        cr.execute("DELETE FROM ir_model_data WHERE model=%s AND res_id IN %s", ("ir.model.fields", fids))
+        cr.execute("DELETE FROM ir_model_data WHERE model=%s AND res_id IN %s",
+                   ("ir.model.fields", fids))
 
     # cleanup translations
     cr.execute(
@@ -2084,7 +2100,8 @@ def remove_field(cr, model, fieldname, cascade=False, drop_column=True):
             except Exception:
                 continue
             defaults.pop(fieldname, None)
-            cr.execute("UPDATE mail_alias SET alias_defaults = %s WHERE id = %s", [repr(defaults), alias_id])
+            cr.execute("UPDATE mail_alias SET alias_defaults = %s WHERE id = %s",
+                       [repr(defaults), alias_id])
 
     # if field was a binary field stored as attachment, clean them...
     if column_exists(cr, "ir_attachment", "res_field"):
@@ -2093,7 +2110,8 @@ def remove_field(cr, model, fieldname, cascade=False, drop_column=True):
             explode_query(
                 cr,
                 cr.mogrify(
-                    "DELETE FROM ir_attachment WHERE res_model = %s AND res_field = %s", [model, fieldname]
+                    "DELETE FROM ir_attachment WHERE res_model = %s AND res_field = %s", [
+                        model, fieldname]
                 ).decode(),
             ),
         )
@@ -2137,13 +2155,15 @@ def rename_field(cr, model, old, new, update_references=True):
         name = IMD_FIELD_PATTERN % (model.replace(".", "_"), new)
         try:
             with savepoint(cr):
-                cr.execute("UPDATE ir_model_data SET name=%s WHERE model='ir.model.fields' AND res_id=%s", [name, fid])
+                cr.execute(
+                    "UPDATE ir_model_data SET name=%s WHERE model='ir.model.fields' AND res_id=%s", [name, fid])
         except psycopg2.IntegrityError:
             # duplicate key. May happen du to conflict between
             # some_model.sub_id and some_model_sub.id
             # (before saas~11.2, where pattern changed)
             name = "%s_%s" % (name, fid)
-            cr.execute("UPDATE ir_model_data SET name=%s WHERE model='ir.model.fields' AND res_id=%s", [name, fid])
+            cr.execute(
+                "UPDATE ir_model_data SET name=%s WHERE model='ir.model.fields' AND res_id=%s", [name, fid])
         cr.execute("UPDATE ir_property SET name=%s WHERE fields_id=%s", [new, fid])
 
     cr.execute(
@@ -2325,7 +2345,8 @@ def convert_binary_field_to_attachment(cr, model, field, encoded=True):
     A = env(cr)["ir.attachment"]
     iter_cur = cr._cnx.cursor("fetch_binary")
     iter_cur.itersize = 1
-    iter_cur.execute('SELECT id, "{field}" FROM {table} WHERE "{field}" IS NOT NULL'.format(**locals()))
+    iter_cur.execute(
+        'SELECT id, "{field}" FROM {table} WHERE "{field}" IS NOT NULL'.format(**locals()))
     for rid, data in iter_cur:
         # we can't save create the attachment with res_model & res_id as it will fail computing
         # `res_name` field for non-loaded models. Store it naked and change it via SQL after.
@@ -2599,7 +2620,8 @@ def remove_model(cr, model, drop_table=True):
 
         cr.execute("DELETE FROM ir_model WHERE id=%s", (mod_id,))
 
-    cr.execute("DELETE FROM ir_model_data WHERE model=%s AND name=%s", ("ir.model", "model_%s" % model_underscore))
+    cr.execute("DELETE FROM ir_model_data WHERE model=%s AND name=%s",
+               ("ir.model", "model_%s" % model_underscore))
     cr.execute(
         "DELETE FROM ir_model_data WHERE model='ir.model.fields' AND name LIKE %s",
         [(IMD_FIELD_PATTERN % (model_underscore, "%")).replace("_", r"\_")],
@@ -2675,7 +2697,8 @@ def rename_model(cr, old, new, rename_table=True):
         cr.execute('ALTER SEQUENCE "{}_id_seq" RENAME TO "{}_id_seq"'.format(old_table, new_table))
 
         # update moved0 references
-        ENVIRON["moved0"] = {(new_table if t == old_table else t, c) for t, c in ENVIRON.get("moved0", ())}
+        ENVIRON["moved0"] = {(new_table if t == old_table else t, c)
+                             for t, c in ENVIRON.get("moved0", ())}
 
         # find & rename primary key, may still use an old name from a former migration
         cr.execute(
@@ -2792,7 +2815,8 @@ def rename_model(cr, old, new, rename_table=True):
              WHERE model='ir.model.fields'
                AND name LIKE %s
     """,
-        ["field_%s" % new_u, len(old_u) + 7, (IMD_FIELD_PATTERN % (old_u, "%")).replace("_", r"\_")],
+        ["field_%s" % new_u, len(old_u) + 7, (IMD_FIELD_PATTERN %
+                                              (old_u, "%")).replace("_", r"\_")],
     )
 
     col_prefix = ""
@@ -2897,7 +2921,8 @@ def replace_record_references_batch(cr, id_mapping, model_src, model_dst=None, r
                     % query
                 )
 
-            cr.execute(query.format(table=table, fk=fk, jmap=jmap, col2=col2), dict(new=new, old=old))
+            cr.execute(query.format(table=table, fk=fk, jmap=jmap,
+                                    col2=col2), dict(new=new, old=old))
 
             if not col2:  # it's a model
                 # update default values
@@ -3268,13 +3293,15 @@ def split_group(cr, from_groups, to_group):
 
 
 def rst2html(rst):
-    overrides = dict(embed_stylesheet=False, doctitle_xform=False, output_encoding="unicode", xml_declaration=False)
+    overrides = dict(embed_stylesheet=False, doctitle_xform=False,
+                     output_encoding="unicode", xml_declaration=False)
     html = publish_string(source=dedent(rst), settings_overrides=overrides, writer=MyWriter())
     return html_sanitize(html, silent=False)
 
 
 def md2html(md):
-    mdversion = markdown.__version_info__ if hasattr(markdown, "__version_info__") else markdown.version_info
+    mdversion = markdown.__version_info__ if hasattr(
+        markdown, "__version_info__") else markdown.version_info
     extensions = [
         "markdown.extensions.nl2br",
         "markdown.extensions.sane_lists",

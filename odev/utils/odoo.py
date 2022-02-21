@@ -1,26 +1,24 @@
-# -*- coding: utf-8 -*-
-
 import os
 import re
 import subprocess
 from datetime import datetime, timedelta
 from subprocess import DEVNULL
-from typing import List, Optional, Mapping
+from typing import List, Mapping, Optional
 
 import requests
 from packaging.version import Version
 
-from odev.constants import RE_ODOO_DBNAME, ODOO_MANIFEST_NAMES, ODOO_MASTER_REPO, DEFAULT_DATETIME_FORMAT
+from odev.constants import DEFAULT_DATETIME_FORMAT, ODOO_MANIFEST_NAMES, ODOO_MASTER_REPO, RE_ODOO_DBNAME
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
+from odev.utils import logging
 from odev.utils.config import ConfigManager
-from odev.utils.logging import getLogger
+from odev.utils.github import get_worktree_list, git_clone_or_pull, worktree_clone_or_pull
 from odev.utils.os import mkdir
-from odev.utils.github import git_clone_or_pull, worktree_clone_or_pull, get_worktree_list
 from odev.utils.python import install_packages
 from odev.utils.signal import capture_signals
 
 
-logger = getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 def is_addon_path(path):
@@ -46,13 +44,13 @@ def is_saas_db(url):
 
 
 def check_database_name(name: str) -> None:
-    '''
+    """
     Raise if the provided database name is not valid for Odoo.
-    '''
+    """
     if not RE_ODOO_DBNAME.match(name):
         raise InvalidOdooDatabase(
-            f'`{name}` is not a valid odoo database name. '
-            f'Only alphanumerical characters, underscore, hyphen and dot are allowed.'
+            f"`{name}` is not a valid odoo database name. "
+            f"Only alphanumerical characters, underscore, hyphen and dot are allowed."
         )
 
 
@@ -71,7 +69,7 @@ def parse_odoo_version(version: str) -> Version:
     Parses an odoo version string into a `Version` object that can be compared.
     """
     try:
-        return Version(re.sub(f"saas~", "", get_odoo_version(version)))
+        return Version(re.sub("saas~", "", get_odoo_version(version)))
     except ValueError as exc:
         raise InvalidVersion(version) from exc
 
@@ -86,7 +84,8 @@ def get_python_version(odoo_version: str) -> str:
         11: "3.5",
     }
     odoo_version_major: int = parse_odoo_version(odoo_version).major
-    python_version: str = odoo_python_versions.get(odoo_version_major)
+    python_version = odoo_python_versions.get(odoo_version_major)
+
     if python_version is not None:
         return python_version
     elif odoo_version_major < 11:
@@ -99,6 +98,7 @@ def branch_from_version(version: str) -> str:
     if "saas" in version:
         return "".join(version.partition("saas")[1:]).replace("saas~", "saas-")
     return version
+
 
 def version_from_branch(version: str) -> str:
     if "saas" in version:
@@ -127,23 +127,26 @@ def prepare_odoobin(
     branch: str = branch_from_version(version)
     available_version = get_worktree_list(repos_path + ODOO_MASTER_REPO)
 
-    need_pull , last_update = _need_pull(version)
+    need_pull, last_update = _need_pull(version)
 
-    do_pull = skip_prompt or branch not in available_version or (
-                need_pull and logger.confirm(
-                    f"The last pull check for Odoo {version} was on "
-                    f"{last_update} do you want to pull now?"
-                )
+    do_pull = (
+        skip_prompt
+        or branch not in available_version
+        or (
+            need_pull
+            and _logger.confirm(
+                f"The last pull check for Odoo {version} was on " f"{last_update} do you want to pull now?"
             )
+        )
+    )
 
-    ConfigManager("pull_check").set("version",version, datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
+    ConfigManager("pull_check").set("version", version, datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
 
     if not do_pull:
         return
 
     version_path: str = repos_version_path(repos_path, version)
     mkdir(version_path, 0o777)
-
 
     for pull_repo in ("odoo", "enterprise", "design-themes"):
         do_pull |= worktree_clone_or_pull(version_path, pull_repo, branch, skip_prompt=do_pull)
@@ -156,7 +159,6 @@ def prepare_odoobin(
         prepare_venv(repos_path, version)
 
 
-
 def prepare_venv(repos_path: str, version: str):
     version_path: str = repos_version_path(repos_path, version)
 
@@ -165,16 +167,14 @@ def prepare_venv(repos_path: str, version: str):
 
         try:
             command = f'cd "{version_path}" && virtualenv --python={py_version} venv'
-            logger.info(
-                f"Creating virtual environment: Odoo {version} + Python {py_version}"
-            )
+            _logger.info(f"Creating virtual environment: Odoo {version} + Python {py_version}")
             with capture_signals():
                 subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
 
         except Exception:  # FIXME: W0703 broad-except
             # TODO: log Exception details (if any) or capture stdout+stderr to log?
-            logger.error(f"Error creating virtual environment for Python {py_version}")
-            logger.error(
+            _logger.error(f"Error creating virtual environment for Python {py_version}")
+            _logger.error(
                 "Please check the correct version of Python is installed on your computer:\n"
                 "\tsudo add-apt-repository ppa:deadsnakes/ppa\n"
                 f"\tsudo apt install -y python{py_version} python{py_version}-dev"
@@ -189,7 +189,7 @@ def prepare_requirements(repos_path: str, version: str, addons: Optional[List[st
 
     venv_python: str = f"{version_path}/venv/bin/python"
 
-    logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
+    _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
     for addon_path in addons + [os.path.join(version_path, "odoo")]:
         try:
             install_packages(requirements_dir=addon_path, python_bin=venv_python)
@@ -198,10 +198,11 @@ def prepare_requirements(repos_path: str, version: str, addons: Optional[List[st
 
     install_packages(packages="pudb ipdb", python_bin=venv_python)
 
-def _need_pull(version: int):
+
+def _need_pull(version: str):
     limit = ConfigManager("odev").get("pull_check", "max_days") or 1
     default_date = (datetime.today() - timedelta(days=8)).strftime(DEFAULT_DATETIME_FORMAT)
-    last_update = ConfigManager("pull_check").get('version', version) or default_date
+    last_update = ConfigManager("pull_check").get("version", version) or default_date
 
     need_pull = (datetime.today() - datetime.strptime(last_update, DEFAULT_DATETIME_FORMAT)).days > int(limit)
 

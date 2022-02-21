@@ -1,36 +1,32 @@
-import git
 import os
 import os.path
 import re
 from datetime import datetime, timedelta
 from functools import partial
 from logging import getLevelName
-from typing import Optional, Callable, Set
+from typing import Callable, Optional, Set
 
+import git
 from git import (
-    Repo,
     GitCommandError,
+    Head,
     InvalidGitRepositoryError,
     NoSuchPathError,
-    Head,
-    RemoteReference,
     Remote,
+    RemoteReference,
+    Repo,
 )
 from github import Github
 
-from odev.exceptions import (
-    CommandAborted,
-    MissingTrackingBranch,
-    HeadRefMismatch,
-    MissingRemote,
-)
 from odev.constants import DEFAULT_DATETIME_FORMAT
+from odev.exceptions import CommandAborted, HeadRefMismatch, MissingRemote, MissingTrackingBranch
 from odev.utils import logging
 from odev.utils.config import ConfigManager
 from odev.utils.credentials import CredentialsHelper
 from odev.utils.python import install_packages
 
-logger = logging.getLogger(__name__)
+
+_logger = logging.getLogger(__name__)
 
 
 _just_fetched_repos: Set[str] = set()
@@ -99,9 +95,7 @@ def git_clone(
     if repo_dir_name:
         repo_name = repo_dir_name
 
-    logger.info(
-        f"Cloning {title or repo_name}" + (f" on branch {branch}" if branch else "")
-    )
+    _logger.info(f"Cloning {title or repo_name}" + (f" on branch {branch}" if branch else ""))
 
     Repo.clone_from(
         f"git@github.com:{url_path}.git",
@@ -131,10 +125,8 @@ def git_clone_if_missing(
         title = repo_name_to_title(repo_name)
     if not is_git_repo(os.path.join(parent_dir, repo_name)):
         if not force:
-            logger.warning(
-                f"Missing repo files for {title}" + (f" (@{branch})" if branch else "")
-            )
-            if not logger.confirm("Do you want to download them now?"):
+            _logger.warning(f"Missing repo files for {title}" + (f" (@{branch})" if branch else ""))
+            if not _logger.confirm("Do you want to download them now?"):
                 raise CommandAborted()
         git_clone(parent_dir, repo_name, branch=branch, title=title, **kwargs)
         return True
@@ -170,9 +162,7 @@ def git_worktree_create(
         # default to `parent_dir/../main_branch`, supposing it's odev repos dir
         main_parent = os.path.join(os.path.dirname(parent_dir), main_branch)
 
-    did_clone = git_clone_if_missing(
-        main_parent, repo_name, branch=main_branch, title=title, force=force, **kwargs
-    )
+    did_clone = git_clone_if_missing(main_parent, repo_name, branch=main_branch, title=title, force=force, **kwargs)
 
     repo = Repo(os.path.join(main_parent, repo_name))
     worktree_branch = os.path.join(parent_dir, repo_name)
@@ -187,11 +177,13 @@ def git_worktree_create(
 
     return did_clone
 
+
 def handle_git_error(e, log_level="ERROR") -> int:
-    message = re.sub(r'((\n\s{0,}|\')(stderr|error):|\.?\'$)', '', e.stderr).strip()
-    logger.log(getLevelName(log_level), f'Git error, {message}')
+    message = re.sub(r"((\n\s{0,}|\')(stderr|error):|\.?\'$)", "", e.stderr).strip()
+    _logger.log(getLevelName(log_level), f"Git error, {message}")
     # return code
     return e.status
+
 
 def get_remote(repo: Repo) -> Remote:
     """
@@ -237,7 +229,7 @@ def git_pull(
         )
 
     log_level: int = getLevelName("INFO" if verbose else "DEBUG")
-    logger.log(
+    _logger.log(
         log_level,
         f"Checking for updates in {title}" + (f" on branch {branch}" if branch else ""),
     )
@@ -254,13 +246,13 @@ def git_pull(
             else:
                 raise
         _just_fetched_repos.add(dotgit_path)
-            
-    head_branch: Head = repo.head.ref
+
+    head_branch = repo.head.ref
     if branch and head_branch.name != branch:
         # TODO: prompt user to checkout branch?
         raise HeadRefMismatch(f"HEAD is on {head_branch.name}, expected on {branch}")
 
-    tracking_branch: RemoteReference = head_branch.tracking_branch()
+    tracking_branch = head_branch.tracking_branch()
     if not tracking_branch:
         raise MissingTrackingBranch(f"No tracking branch for {head_branch.name}")
 
@@ -272,10 +264,10 @@ def git_pull(
         tracking_branch=tracking_branch.name,
         pending_commits=pending_commits,
     )
-    if pending_commits > 0 and (skip_prompt or logger.confirm(confirm_message)):
-        logger.log(log_level, f"Pulling {pending_commits} commits")
+    if pending_commits > 0 and (skip_prompt or _logger.confirm(confirm_message)):
+        _logger.log(log_level, f"Pulling {pending_commits} commits")
         repo.git.merge(tracking_branch.name, "--ff-only")
-        logger.success(f"Updated {title}!")
+        _logger.success(f"Updated {title}!")
         return True
 
     return False
@@ -292,21 +284,17 @@ def git_clone_or_pull(
 ) -> bool:
     """
     Check if the specified ``repo_name`` exists in the given ``parent_dir``,
-    otherwise clones it, and pulls remote changes to bring uptodate.
+    otherwise clones it, and pulls remote changes to bring up-to-date.
     Signature is the same as :func:`git_clone_if_missing` except for ``conditional_clone_fn``.
 
     :param conditional_clone_fn: the callable that conditionally clones the repo, returning
         True if cloned, False otherwise.
     :return: True if cloned or pulled (ie. user confirmed), else False
     """
-    did_clone: bool = conditional_clone_fn(
-        parent_dir, repo_name, branch=branch, title=title, **kwargs
-    )
+    did_clone: bool = conditional_clone_fn(parent_dir, repo_name, branch=branch, title=title, **kwargs)
 
     if not did_clone:
-        return git_pull(
-            os.path.join(parent_dir, repo_name), branch=branch, title=title, skip_prompt=skip_prompt
-        )
+        return git_pull(os.path.join(parent_dir, repo_name), branch=branch, title=title, skip_prompt=skip_prompt)
 
     return did_clone
 
@@ -323,10 +311,8 @@ def worktree_clone_or_pull(
     that's already provided, and ``main_branch`` / ``main_parent`` which are
     the same from :func:`git_worktree_create`.
     """
-    conditional_clone_fn = partial(
-        git_worktree_create, main_branch=main_branch, main_parent=main_parent
-    )
-    return git_clone_or_pull(*args, conditional_clone_fn=conditional_clone_fn, **kwargs)
+    conditional_clone_fn = partial(git_worktree_create, main_branch=main_branch, main_parent=main_parent)
+    return git_clone_or_pull(*args, conditional_clone_fn=conditional_clone_fn, **kwargs)  # type: ignore
 
 
 def self_update() -> bool:
@@ -351,29 +337,28 @@ def self_update() -> bool:
             odev_path,
             "odev",
             verbose=False,
-            confirm_message_t=(
-                "An update is available for odev, do you want to download it now?"
-            ),
+            confirm_message_t=("An update is available for odev, do you want to download it now?"),
         )
     except (MissingTrackingBranch, HeadRefMismatch) as exc:
-        logger.debug(f"{exc}, odev running in development mode")
+        _logger.debug(f"{exc}, odev running in development mode")
         return False
 
     if did_update:
-        logger.info(f'Checking for new odev package requirements')
+        _logger.info("Checking for new odev package requirements")
         install_packages(requirements_dir=odev_path)
 
-    config.set("update","last_check", datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
+    config.set("update", "last_check", datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
 
     return did_update
+
 
 def get_worktree_list(odoo_path):
     if not is_git_repo(odoo_path):
         return []
-    
+
     repo = git.Repo(odoo_path)
-    logger.debug(f"Launching git prune on {odoo_path}")
+    _logger.debug(f"Launching git prune on {odoo_path}")
     repo.git.worktree("prune")
-    worktree_list = repo.git.worktree('list', '--porcelain')
+    worktree_list = repo.git.worktree("list", "--porcelain")
 
     return [os.path.basename(b) for b in worktree_list.split("\n") if "branch" in b and "master" not in b]

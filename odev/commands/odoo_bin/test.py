@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import shlex
 from argparse import Namespace
 
@@ -8,23 +6,23 @@ from odev.structures.actions import CommaSplitAction
 
 
 class TestCommand(run.RunCommand):
-    '''
+    """
     Run tests on a local Odoo database.
-    '''
+    """
 
-    name = 'test'
+    name = "test"
     arguments = [
-        dict(
-            name='tags',
-            action=CommaSplitAction,
-            nargs='?',
-            help='''
+        {
+            "name": "tags",
+            "action": CommaSplitAction,
+            "nargs": "?",
+            "help": """
             Comma-separated list of tags to target specific tests to run
             Check https://www.odoo.com/documentation/14.0/fr/developer/misc/other/cmdline.html
             for more information on test tags
-            ''',
-        ),
-        dict(name='args'),  # moves `args` from RunCommand last
+            """,
+        },
+        {"name": "args"},  # moves `args` from RunCommand last
     ]
 
     def __init__(self, args: Namespace):
@@ -36,18 +34,18 @@ class TestCommand(run.RunCommand):
         if args.tags:
             for index, arg in enumerate(self.additional_args):
                 if arg.startswith(TEST_TAGS):
-                    self.additional_args[index] += f''',{','.join(args.tags)}'''
+                    self.additional_args[index] += f""",{','.join(args.tags)}"""
                     break
             else:
-                self.additional_args.append(f'''{TEST_TAGS}={','.join(args.tags)}''')
+                self.additional_args.append(f"""{TEST_TAGS}={','.join(args.tags)}""")
 
             if self.force_save_args:
-                self.config['databases'].set(
+                self.config["databases"].set(
                     self.database,
                     self.config_args_key,
                     shlex.join([*self.addons, *self.additional_args]),
                 )
 
 
-TEST_ENABLE = '--test-enable'
-TEST_TAGS = '--test-tags'
+TEST_ENABLE = "--test-enable"
+TEST_TAGS = "--test-tags"

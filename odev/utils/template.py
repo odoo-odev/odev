@@ -1,37 +1,47 @@
+import os
+import sys
+from argparse import Namespace
+from typing import Any, MutableMapping, Optional
 
-from odev.utils import logging
-logging.getLogger("black").setLevel(logging.logging.ERROR)
-logging.getLogger("blib2to3").setLevel(logging.logging.ERROR)
 import black
 import isort
-import sys
-import re
 import lxml.etree as ET
-import os
 from jinja2 import Environment, FileSystemLoader
 
+from odev.utils import logging
 from odev.utils.exporter import (
-    odoo_field,
-    odoo_model,
-    odoo_server_action,
-    odoo_saas_field,
+    Config,
     odoo_domain,
+    odoo_field,
     odoo_field_name,
+    odoo_model,
+    odoo_saas_field,
+    odoo_server_action,
 )
 
-logger = logging.getLogger(__name__)
+
+_logger = logging.getLogger(__name__)
+logging.getLogger("black").setLevel(logging.logging.ERROR)
+logging.getLogger("blib2to3").setLevel(logging.logging.ERROR)
 
 
 class Template:
     type = "sh"
     version = None
 
+    export_config: Optional[Config]
+    export_type: str
+    module_name: str
+    manifest: MutableMapping[str, Any]
+    args: Namespace
+
     def _init_config(self) -> None:
+        assert self.export_config is not None
         self.template_folder = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            '..',
+            "..",
             "templates",
-            self.export_config.config["template_folder"] if "template_folder" in self.export_config.config else self.version,
+            self.export_config.config.get("template_folder", self.version),
         )
 
         self.env = Environment(loader=FileSystemLoader(self.template_folder), keep_trailing_newline=True)
@@ -74,7 +84,7 @@ class Template:
         tpl = self.env.get_template(template_file)
         txt = tpl.render(data=data)
 
-        # FIXME: 
+        # FIXME:
         # if not self.pretty:
         #     return txt
 
@@ -83,7 +93,7 @@ class Template:
         except black.NothingChanged:
             return txt
         except Exception as e:
-            logger.error(e)
+            _logger.error(e)
             return txt
 
     def prettier(self, txt, ext):
@@ -96,8 +106,13 @@ class Template:
         elif ext == "xml" and not self.args.pretty_xml_off:
             parser = ET.XMLParser(remove_blank_text=True, strip_cdata=False)
             root = ET.fromstring(txt.encode(), parser)
-            ET.indent(root, space="    ")
-            txt = ET.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=True).decode("utf-8")
+            ET.indent(root, space=" " * 4)
+            txt = ET.tostring(
+                root,
+                encoding="utf-8",  # type: ignore
+                pretty_print=True,  # type: ignore
+                xml_declaration=True,  # type: ignore
+            ).decode("utf-8")
 
         return txt
 
@@ -124,7 +139,6 @@ class Template:
                 txt = "\n".join(lib)
                 file_mode = "w"
 
-
         with open(dest, file_mode) as fh:
             fh.write(txt)
 
@@ -147,7 +161,6 @@ class Template:
                         else:
                             data_cp = data_cp[key]
 
-
         name = self.env.from_string(name).render(data)
         file_name = f"{odoo_field(name.replace('.','_'))}.{cfg['file_ext']}"
 
@@ -166,6 +179,11 @@ class Template:
                 root.append(elem)
 
             ET.indent(root, space="    ")
-            return ET.tostring(root, encoding="utf-8", pretty_print=True, xml_declaration=True).decode("utf-8")
+            return ET.tostring(
+                root,
+                encoding="utf-8",  # type: ignore
+                pretty_print=True,  # type: ignore
+                xml_declaration=True,  # type: ignore
+            ).decode("utf-8")
         except Exception as e:
             raise ValueError(f'Failed merging xml in "{file_path}" with:\n{txt}') from e

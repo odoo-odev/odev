@@ -1,15 +1,16 @@
-import os
-import glob
 from argparse import Namespace
 
 from odev.constants import ODOO_MASTER_REPO
-from odev.exceptions import InvalidVersion, InvalidArgument
+from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
 from odev.utils import logging, odoo
-from odev.utils.odoo import version_from_branch, prepare_odoobin
 from odev.utils.config import ConfigManager
 from odev.utils.github import get_worktree_list
+from odev.utils.odoo import prepare_odoobin, version_from_branch
+
+
 _logger = logging.getLogger(__name__)
+
 
 class PullCommand(commands.Command):
     """
@@ -18,18 +19,18 @@ class PullCommand(commands.Command):
 
     name = "pull"
     arguments = [
-        dict(
-            aliases=["-f", "--force"],
-            dest='force',
-            action='store_true',
-            help="Force reset in case of conflict",
-        ),
-        dict(
-            aliases=["version"],
-            nargs='?',
-            default="",
-            help="Odoo version to update",
-        ),
+        {
+            "aliases": ["-f", "--force"],
+            "dest": "force",
+            "action": "store_true",
+            "help": "Force reset in case of conflict",
+        },
+        {
+            "aliases": ["version"],
+            "nargs": "?",
+            "default": "",
+            "help": "Odoo version to update",
+        },
     ]
 
     def __init__(self, args: Namespace):

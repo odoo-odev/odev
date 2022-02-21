@@ -1,69 +1,71 @@
-# -*- coding: utf-8 -*-
-
 import os
 import re
-import tldextract
-import lxml.etree as ET
 from argparse import Namespace
 from collections import defaultdict
+from typing import Any
 from xmlrpc.client import Fault as xmlrpc_Fault
 
-from odev.constants import PSTOOLS_DB, PSTOOLS_PASSWORD, PSTOOLS_USER
-from odev.structures import commands, actions
+import lxml.etree as ET
+import tldextract
+
+from odev.structures import actions, commands
 from odev.utils import logging
 from odev.utils.exporter import Config
 
+
 _logger = logging.getLogger(__name__)
 
-DEFAULT_MODULE_LIST=["__export_module__","studio_customization"]
+DEFAULT_MODULE_LIST = ["__export_module__", "studio_customization"]
+
 
 class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
-    '''
+    """
     Export module from a Odoo db in python or saas
-    '''
+    """
 
-    name = 'export'
+    name = "export"
     database_required = False
-    exporter_subcommand = 'export'
+    exporter_subcommand = "export"
     arguments = [
-        dict(
-            aliases=['url'],
-            default="http://localhost:8069",
-            help='Database URL',
-        ),
-        dict(
-            aliases=['-l', '--login'],
-            dest='user',
-            default="admin",
-            help='Username used for the JsonRpc connection',
-        ),
-        dict(
-            aliases=['-p', '--password'],
-            dest='password',
-            default="admin",
-            help='Password  for the JsonRpc connection',
-        ),
-        dict(
-            aliases=['-m','--modules'],
-            dest='modules',
-            action=actions.CommaSplitAction,
-            default=DEFAULT_MODULE_LIST,
-            help='Comma-separated list of modules to export',
-        ),
-        dict(
-            aliases=['--models'],
-            action=actions.CommaSplitAction,
-            help='Comma-separated list of models to include',
-        ),
-        dict(
-            aliases=['--regex-off'],
-            action='store_true',
-            dest='regex_off',
-            help='Regex off',
-        ),
+        {
+            "aliases": ["url"],
+            "default": "http://localhost:8069",
+            "help": "Database URL",
+        },
+        {
+            "aliases": ["-l", "--login"],
+            "dest": "user",
+            "default": "admin",
+            "help": "Username used for the JsonRpc connection",
+        },
+        {
+            "aliases": ["-p", "--password"],
+            "dest": "password",
+            "default": "admin",
+            "help": "Password  for the JsonRpc connection",
+        },
+        {
+            "aliases": ["-m", "--modules"],
+            "dest": "modules",
+            "action": actions.CommaSplitAction,
+            "default": DEFAULT_MODULE_LIST,
+            "help": "Comma-separated list of modules to export",
+        },
+        {
+            "aliases": ["--models"],
+            "action": actions.CommaSplitAction,
+            "help": "Comma-separated list of models to include",
+        },
+        {
+            "aliases": ["--regex-off"],
+            "action": "store_true",
+            "dest": "regex_off",
+            "help": "Regex off",
+        },
     ]
 
-    cache_xmlid:dict = defaultdict(lambda: defaultdict(list))
+    cache_xmlid: dict = defaultdict(lambda: defaultdict(list))
+    xmlrpc: Any
 
     def __init__(self, args: Namespace):
         super().__init__(args)
@@ -73,18 +75,19 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         no_cache_extract = tldextract.TLDExtract(cache_dir=False)
         url_extract = no_cache_extract(self.args.url)
 
-        if not self.args.database :
+        if not self.args.database:
             self.args.database = url_extract.subdomain
 
-        self.args.url = '.'.join(part for part in url_extract if part)
+        self.args.url = ".".join(part for part in url_extract if part)
 
         self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
         self.init_connection(self.args.url, self.args.database, self.args.user, self.args.password)
 
     def run(self):
-        _logger.info(f"Starting the export of {','.join(self.args.modules)} from "
-                    f"{self.args.url} into "
-                    f"{'xml' if self.args.type == 'saas' else 'python'} module(s)"
+        _logger.info(
+            f"Starting the export of {','.join(self.args.modules)} from "
+            f"{self.args.url} into "
+            f"{'xml' if self.args.type == 'saas' else 'python'} module(s)"
         )
         _logger.info("All the data (from specific models) without an XmlId will also be exported")
 
@@ -94,7 +97,7 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             _logger.error(exception)
             return 1
 
-        _logger.success(f"Export completed successfuly into {self.args.path}!")
+        _logger.success(f"Export completed successfully into {self.args.path}!")
 
         return 0
 
@@ -117,15 +120,15 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 if "export" not in cfg or cfg["export"] is not False:
                     # Search all id to export
                     domain = [("id", "in", list(exportable_ids[module][model_name]))]
-                    datas = self.get_data(cfg, model_name, domain)
+                    data = self.get_data(cfg, model_name, domain)
 
-                    if datas:
+                    if data:
                         # For each data, generate the corresponding template
                         if "split" in cfg and cfg["split"]:
-                            for data in datas[model_name]:
+                            for data in data[model_name]:
                                 self.generate_template(data, cfg)
                         else:
-                            self.generate_template(datas, cfg)
+                            self.generate_template(data, cfg)
 
             # Write __init__.py
             self._generate_init()
@@ -135,7 +138,6 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
             # Write migration script
             self._generate_mig_script()
-
 
     def safe_read_ids(self, model_name, ids):
         model = self.connection.get_model(model_name)
@@ -148,10 +150,7 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                     yield self.xmlrpc.read(model_name, [id_])
                 except xmlrpc_Fault as exc:
                     # TODO: Add the error to some custom report?
-                    _logger.warning(
-                        f'Error while reading "{model_name}" record id={id_}:\n'
-                        f'{exc.faultString}'
-                    )
+                    _logger.warning(f'Error while reading "{model_name}" record id={id_}:\n' f"{exc.faultString}")
 
     # This method returns data related to one model and its children ( include_model )
     def get_data(self, cfg, model_name, domain, with_include=True, same_module=False, order=None):
@@ -182,7 +181,7 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 if imd["module"] == self.module_name:
                     xml_id = imd["name"]
                 else:
-                    xml_id = "%s.%s" % (imd["module"], imd["name"])
+                    xml_id = f"{imd['module']}.{imd['name']}"
 
                 data.update(
                     {
@@ -193,7 +192,9 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                     }
                 )
 
-                _logger.info(f"Export : {self.module_name} {model_name} ({data['id']}) -> {imd['module']}.{imd['name']}")
+                _logger.info(
+                    f"Export : {self.module_name} {model_name} ({data['id']}) -> {imd['module']}.{imd['name']}"
+                )
 
                 # If model_name has child , override data with data from child
                 if "includes" in cfg and with_include:
@@ -251,13 +252,14 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         _logger.warning("Can take some times to finish.")
 
         ir_model_data = self.connection.get_model("ir.model.data")
-        exportable_ids = ir_model_data.search_read([("module", "in", self.args.modules)], fields=["res_id", "model", "module"] )
-        all_know_ir_data_ids =  ir_model_data.search_read(
+        exportable_ids = ir_model_data.search_read(
+            [("module", "in", self.args.modules)], fields=["res_id", "model", "module"]
+        )
+        all_know_ir_data_ids = ir_model_data.search_read(
             [("model", "in", self.export_config.all_models)],
             fields=["res_id", "model", "module", "name", "noupdate"],
-            order="id asc"
+            order="id asc",
         )
-
 
         # Tab of all ids to export
         for res_id in all_know_ir_data_ids:
@@ -280,7 +282,7 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 exportable_ids.append({"model": model_name, "res_id": model_id["id"], "module": "__export_module__"})
 
         # Load all IDS related to the modules in self.include_module
-        # If models is passed as args only take id from theses models
+        # If models is passed as args only take id from these models
         for item in exportable_ids:
             if not self.args.models or item["model"] in self.args.models:
                 ids[item["module"]][item["model"]].add(int(item["res_id"]))
@@ -291,10 +293,13 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
             cfg = self.export_config.config["base_model"][model_name]
             inc = self.export_config._get_parent_include(cfg["parent"], model_name)
+            assert inc is not None
             inverse_field = inc["inverse_name"]
 
             for module in ids.keys():
-                parent_ids = model.search_read([("id", "in", list(ids[module][model_name]))], fields=[inverse_field], order="id asc")
+                parent_ids = model.search_read(
+                    [("id", "in", list(ids[module][model_name]))], fields=[inverse_field], order="id asc"
+                )
                 ids[module][cfg["parent"]].update({int(x["model_id"][0]) for x in parent_ids})
 
         return ids
@@ -310,12 +315,20 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             xml = root.find("./data")
         elif root.tag == "data":
             for node in root:
-                odoo_xml += ET.tostring(node, encoding="utf-8", pretty_print="True", xml_declaration=False).decode(
-                    "utf-8"
-                )
+                odoo_xml += ET.tostring(
+                    node,
+                    encoding="utf-8",  # type: ignore
+                    pretty_print="True",  # type: ignore
+                    xml_declaration=False,  # type: ignore
+                ).decode("utf-8")
 
         if odoo_xml == "":
-            odoo_xml = ET.tostring(xml, encoding="utf-8", pretty_print=True, xml_declaration=False).decode("utf-8")
+            odoo_xml = ET.tostring(
+                xml,
+                encoding="utf-8",  # type: ignore
+                pretty_print=True,  # type: ignore
+                xml_declaration=False,  # type: ignore
+            ).decode("utf-8")
 
         odoo_xml = self._parse_action(odoo_xml)
 
@@ -381,21 +394,26 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 xml_id = self.cache_xmlid[model_name][res_id]
 
         if not xml_id:
-            # We already know xml_id if ressources to export
-            # Here we only try to get xml id for external ressources
+            # We already know xml_id if resources to export
+            # Here we only try to get xml id for external resources
             if model_name not in self.export_config.exportable_models:
                 imd = self.connection.get_model("ir.model.data")
                 imd_id = imd.search_read(
                     [("model", "=", model_name), ("res_id", "=", res_id)],
-                    fields=["module", "name", "noupdate"], order="id asc", limit=1
+                    fields=["module", "name", "noupdate"],
+                    order="id asc",
+                    limit=1,
                 )
 
                 if imd_id:
-                    xml_id = {"module": imd_id[0]["module"], "name": imd_id[0]["name"], "noupdate": imd_id[0]["noupdate"]}
-
+                    xml_id = {
+                        "module": imd_id[0]["module"],
+                        "name": imd_id[0]["name"],
+                        "noupdate": imd_id[0]["noupdate"],
+                    }
 
             if not xml_id:
-                xml_id = {"module": "__export_module__", "name": "%s_%s" % (model_name, res_id), "noupdate": False}
+                xml_id = {"module": "__export_module__", "name": f"{model_name}_{res_id}", "noupdate": False}
 
             self.cache_xmlid[model_name][res_id] = xml_id
 
@@ -438,15 +456,15 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         module_info = module.search_read(
             [("name", "=", module_name)],
             fields=[
-                    "summary",
-                    "description",
-                    "icon",
-                    "latest_version",
-                    "license",
-                    "author",
-                    "shortdesc",
-                    "category_id",
-                ]
+                "summary",
+                "description",
+                "icon",
+                "latest_version",
+                "license",
+                "author",
+                "shortdesc",
+                "category_id",
+            ],
         )
 
         self.module_name = module_name

@@ -5,25 +5,33 @@ import re
 import subprocess
 import sys
 import tempfile
+from argparse import REMAINDER, Namespace
+from asyncio.subprocess import PIPE, STDOUT, Process
 from collections import defaultdict
 from getpass import getuser
 from pathlib import Path
-from argparse import Namespace, REMAINDER
-from typing import Sequence, Mapping, Union, Optional, Match, MutableMapping, List
+from typing import (
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Union,
+)
 
-from asyncio.subprocess import Process, PIPE, STDOUT
 from blessed.sequences import Sequence as TermSequence
 from packaging.version import Version
 
+from odev.exceptions.odoo import RunningOdooDatabase
 from odev.structures.commands import LocalDatabaseCommand
 from odev.utils import logging
-from odev.utils.odoo import prepare_odoobin, parse_odoo_version, branch_from_version
+from odev.utils.odoo import branch_from_version, parse_odoo_version, prepare_odoobin
 from odev.utils.psql import PSQL
 from odev.utils.signal import capture_signals
-from odev.exceptions.odoo import RunningOdooDatabase
 from odev.utils.spinner import SpinnerBar
 
-logger = logging.getLogger(__name__)
+
+_logger = logging.getLogger(__name__)
 
 
 StrOrPath = Union[str, Path]
@@ -113,20 +121,20 @@ class UpgradeCommand(LocalDatabaseCommand):
 
     name = "upgrade"
     arguments = [
-        dict(
-            aliases=["target"],
-            help="Odoo version to target; must match an Odoo community branch",
-        ),
-        dict(
-            aliases=["args"],
-            nargs=REMAINDER,
-            help="""
+        {
+            "aliases": ["target"],
+            "help": "Odoo version to target; must match an Odoo community branch",
+        },
+        {
+            "aliases": ["args"],
+            "nargs": REMAINDER,
+            "help": """
                 Additional arguments to pass to upgrade.py; Check the code at
                 https://github.com/odoo/upgrade-platform/blob/master/upgrade-docker/upgrade.py#L355
                 for the list of available arguments.
                 (N.B. -d and -t are already provided by odev)
             """,
-        ),
+        },
     ]
 
     def __init__(self, args: Namespace):
@@ -190,14 +198,14 @@ class UpgradeCommand(LocalDatabaseCommand):
                 line: str = file_line.strip()
 
                 if not line_continues:
-                    instruction_match: Match = re.search(r"^(\w+\b)\s+(.*)", line)
+                    instruction_match = re.search(r"^(\w+\b)\s+(.*)", line)
                     if instruction_match:
                         docker_instruction = instruction_match.group(1).upper()
                         line = instruction_match.group(2).strip()
 
                 in_run_istruction: bool = docker_instruction == "RUN"
 
-                line_continues_match: Match = re.search(r"^(.*)\s*\\$", line)
+                line_continues_match = re.search(r"^(.*)\s*\\$", line)
                 line_continues = bool(line_continues_match)
                 if line_continues_match:
                     line = line_continues_match.group(1).strip()
@@ -214,7 +222,7 @@ class UpgradeCommand(LocalDatabaseCommand):
         run_line: str
         for run_line in dockerfile_run_lines:
             for commandline in re.split(r"\s*(?:&&|;)\s*", run_line.strip()):
-                venv_match: Match = re.search(r"venvs/([\d.]+)", commandline)
+                venv_match = re.search(r"venvs/([\d.]+)", commandline)
                 if venv_match:
                     venv_version: str = venv_match.group(1)
                     venv_commands[venv_version].append(commandline.strip())
@@ -238,16 +246,13 @@ class UpgradeCommand(LocalDatabaseCommand):
             poll_interval: float = 0.05
             stdout: str = ""
 
-            proc: Process = await asyncio.create_subprocess_shell(
-                cmd, stdout=PIPE, stderr=STDOUT
-            )
+            proc: Process = await asyncio.create_subprocess_shell(cmd, stdout=PIPE, stderr=STDOUT)
+            assert proc.stdout is not None
             pbar.message = cmd
 
             for _ in pbar.loop(poll_interval):
                 try:
-                    line: str = (
-                        await asyncio.wait_for(proc.stdout.readline(), poll_interval)
-                    ).decode()
+                    line: str = (await asyncio.wait_for(proc.stdout.readline(), poll_interval)).decode()
                 except asyncio.TimeoutError:
                     pass
                 else:
@@ -260,8 +265,8 @@ class UpgradeCommand(LocalDatabaseCommand):
                     break
 
             if proc.returncode != 0:
-                logger.error(f"Error in subprocess, output:\n{stdout}")
-                raise subprocess.CalledProcessError(proc.returncode, command)
+                _logger.error(f"Error in subprocess, output:\n{stdout}")
+                raise subprocess.CalledProcessError(proc.returncode or 1, command)
 
             return proc.returncode
 
@@ -282,12 +287,8 @@ class UpgradeCommand(LocalDatabaseCommand):
         last_venv_version: Optional[str] = None
         with SpinnerBar() as pbar:
             for venv_version, commands in reversed(list(venv_commands.items())):
-                venv_odoo_versions: str = f">={venv_version}" + (
-                    f",<{last_venv_version}" if last_venv_version else ""
-                )
-                logger.info(
-                    f"Setting up upgrade venv for Odoo versions {venv_odoo_versions}"
-                )
+                venv_odoo_versions: str = f">={venv_version}" + (f",<{last_venv_version}" if last_venv_version else "")
+                _logger.info(f"Setting up upgrade venv for Odoo versions {venv_odoo_versions}")
                 command: str
                 for command in commands:
                     command = re.sub(r"/home/odoo|~", str(home_path), command)
@@ -310,7 +311,7 @@ class UpgradeCommand(LocalDatabaseCommand):
         def symlink(src: StrOrPath, dest: StrOrPath, resolve: bool = True):
             os.symlink(Path(src).resolve() if resolve else src, dest)
 
-        logger.info(f"Preparing filesystem for upgrade at {home_path}")
+        _logger.info(f"Preparing filesystem for upgrade at {home_path}")
 
         odev_repos_root: Path = Path(self.config["odev"].get("paths", "odoo"))
 
@@ -322,8 +323,7 @@ class UpgradeCommand(LocalDatabaseCommand):
             "enterprise": "enterprise",
             "design-themes": "themes",
         }
-        link_src: str
-        link_dest: Path
+
         for link_src, link_dest in versioned_paths.items():
             os.makedirs(src_path / link_dest)
             for version in self.get_required_versions(version_before, version_target):
@@ -368,21 +368,15 @@ class UpgradeCommand(LocalDatabaseCommand):
         self.check_database()
 
         if self.db_runs():
-            raise RunningOdooDatabase(
-                f"Database {self.database} is already running, please shut it down first"
-            )
+            raise RunningOdooDatabase(f"Database {self.database} is already running, please shut it down first")
 
         before_version: str = self.db_version_clean()
 
         if parse_odoo_version(self.target) == parse_odoo_version(before_version):
-            logger.warning(
-                f"Database {self.database} is already at version {self.target}, nothing to upgrade"
-            )
+            _logger.warning(f"Database {self.database} is already at version {self.target}, nothing to upgrade")
             return 0
         elif parse_odoo_version(self.target) <= parse_odoo_version(before_version):
-            logger.error(
-                f"Database {self.database} is at a newer version than {self.target}, cannot downgrade"
-            )
+            _logger.error(f"Database {self.database} is at a newer version than {self.target}, cannot downgrade")
             return 1
 
         # TODO: create a template/backup? add an option for that?
@@ -393,10 +387,9 @@ class UpgradeCommand(LocalDatabaseCommand):
             self.setup_fs_tree(upgrade_home, before_version, self.target)
 
             with capture_signals():
-                env: MutableMapping[str, str] = dict(
-                    os.environ, UPGRADE_HOME_PATH=os.path.abspath(upgrade_home)
-                )
+                env: MutableMapping[str, str] = dict(os.environ, UPGRADE_HOME_PATH=os.path.abspath(upgrade_home))
                 with PSQL() as psql:
+                    assert psql.connection is not None
                     pg_params: Mapping[str, str] = psql.connection.get_dsn_parameters()
                 env.setdefault("PGUSER", pg_params.get("user", getuser()))
                 if pg_params.get("password"):
@@ -408,9 +401,7 @@ class UpgradeCommand(LocalDatabaseCommand):
                         *("-t", self.target),
                         *self.additional_args,
                     ],
-                    cwd=os.path.join(
-                        upgrade_home, "src/upgrade-platform/upgrade-docker"
-                    ),
+                    cwd=os.path.join(upgrade_home, "src/upgrade-platform/upgrade-docker"),
                     env=env,
                     input=RUNNER_SCRIPT,
                     text=True,
@@ -424,12 +415,9 @@ class UpgradeCommand(LocalDatabaseCommand):
         self.config["databases"].set(self.database, "version", self.db_base_version())
 
         if version_after != self.target:
-            logger.warning(
-                f"Upgraded version of {self.database} is {version_after} "
-                f"instead of the requested {self.target}!"
+            _logger.warning(
+                f"Upgraded version of {self.database} is {version_after} " f"instead of the requested {self.target}!"
             )
         else:
-            logger.success(
-                f"Successfully upgraded {self.database} [{before_version} -> {version_after}]"
-            )
+            _logger.success(f"Successfully upgraded {self.database} [{before_version} -> {version_after}]")
         return 0

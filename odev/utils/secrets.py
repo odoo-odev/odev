@@ -1,5 +1,4 @@
 import base64
-import logging
 from io import StringIO
 
 from agentcrypt.io import Container
@@ -9,9 +8,6 @@ __all__ = [
     "ssh_agent_encrypt",
     "ssh_agent_decrypt",
 ]
-
-
-_logger: logging.Logger = logging.getLogger(__name__)
 
 
 class NamedStringIO(StringIO):

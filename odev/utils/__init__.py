@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from . import credentials
 from . import config
 from . import request

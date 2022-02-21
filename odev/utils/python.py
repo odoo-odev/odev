@@ -1,24 +1,23 @@
 """Python and venv-related utilities"""
 
-import logging
 import os
 import subprocess
 import sys
 from subprocess import DEVNULL
-from typing import Optional, Union, Iterable
+from typing import Iterable, Optional, Union
 
-from odev.utils.logging import getLogger
+from odev.utils import logging
 from odev.utils.signal import capture_signals
 
 
-logger = getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 def install_packages(
     requirements_dir: Optional[str] = None,
     packages: Union[str, Iterable[str], None] = None,
     python_bin: Optional[str] = None,
-    log_level: int = logging.DEBUG,
+    log_level: int = logging.logging.DEBUG,
 ) -> None:
     """
     Installs packages using pip in a python environment.
@@ -53,7 +52,7 @@ def install_packages(
         log_msg = f"Installing python packages: {packages}"
 
     command: str = f'"{python_bin}" -m pip install {pip_args}'
-    logger.log(log_level, log_msg)
+    _logger.log(log_level, log_msg)
 
     with capture_signals():
         subprocess.run(command, shell=True, check=True, stdout=DEVNULL)

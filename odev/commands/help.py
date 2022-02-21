@@ -1,102 +1,103 @@
-'''Gets help about commands.'''
+"""Gets help about commands."""
 
-from argparse import ArgumentParser, RawTextHelpFormatter
-from textwrap import dedent, indent
-import sys
 import os
+import sys
+from textwrap import dedent, indent
 
 from odev.structures import commands
 from odev.utils.logging import term
 
 
 class HelpCommand(commands.Command):
-    '''
+    """
     Display extensive help about the selected command or a generic help message
     lightly covering all available commands.
-    '''
+    """
 
-    name = 'help'
-    aliases = ['h', 'man', '-h', '--help']
+    name = "help"
+    aliases = ["h", "man", "-h", "--help"]
     arguments = [
-        dict(
-            aliases=['command'],
-            nargs='?',
-            help='Get help about a specific command',
-        ),
+        {
+            "aliases": ["command"],
+            "nargs": "?",
+            "help": "Get help about a specific command",
+        },
     ]
 
     def run(self):
-        '''
+        """
         Gets help about commands.
-        '''
+        """
 
-        registry = getattr(self, 'registry')
+        assert self.registry
 
         if self.args.command:
-            command = registry.get_command([self.args.command])
+            command = self.registry.get_command([self.args.command])
             parser = command.prepare_parser()
 
-            description = command.help.replace('\n', '\n' + ' ' * 12)
-            usage = parser.format_usage().replace('usage:', f"{os.path.basename(sys.argv[0])}").strip()
-            title = f'Command: {command.name}'
-            message = f'''
+            description = command.help.replace("\n", "\n" + " " * 12)
+            usage = parser.format_usage().replace("usage:", f"{os.path.basename(sys.argv[0])}").strip()
+            title = f"Command: {command.name}"
+            message = f"""
             {term.bold(title)}
             {term.snow4('=' * len(title))}
 
             {description}
 
             {term.bold('Usage:')}      {usage}
-            '''
+            """
 
             if command.aliases:
-                aliases = f'''
+                aliases = f"""
                 {term.bold('Aliases:')}    {', '.join(command.aliases)}
-                '''
-                message += indent(dedent(aliases), ' ' * 12)
+                """
+                message += indent(dedent(aliases), " " * 12)
 
             if parser._positionals:
                 arguments = []
 
                 for arg in parser._positionals._group_actions:
                     arg_dict = arg.__dict__
-                    arg_help = arg_dict['help'].strip().replace('\n', '\n' + ' ' * 30)
-                    arguments.append(f'''{arg_dict['dest']}{' ' * (24 - len(arg_dict['dest']))}{arg_help}''')
+                    arg_help = arg_dict["help"].strip().replace("\n", "\n" + " " * 30)
+                    arguments.append(f"""{arg_dict['dest']}{' ' * (24 - len(arg_dict['dest']))}{arg_help}""")
 
-                arguments = ('\n' + ' ' * 18).join(arguments)
-                positionals = f'''
+                arguments = ("\n" + " " * 18).join(arguments)
+                positionals = f"""
                 {term.bold('Positional Arguments:')}
                   {arguments}
-                '''
-                message += indent(dedent(positionals), ' ' * 12)
+                """
+                message += indent(dedent(positionals), " " * 12)
 
             if parser._optionals:
                 arguments = []
 
                 for arg in parser._optionals._group_actions:
                     arg_dict = arg.__dict__
-                    arg_options = ', '.join(arg_dict['option_strings'])
-                    arg_help = arg_dict['help'].strip().replace('\n', '\n' + ' ' * 30)
-                    arguments.append(f'''{arg_options}{' ' * (24 - len(arg_options))}{arg_help}''')
+                    arg_options = ", ".join(arg_dict["option_strings"])
+                    arg_help = arg_dict["help"].strip().replace("\n", "\n" + " " * 30)
+                    arguments.append(f"""{arg_options}{' ' * (24 - len(arg_options))}{arg_help}""")
 
-                arguments = ('\n' + ' ' * 18).join(arguments)
-                optionals = f'''
+                arguments = ("\n" + " " * 18).join(arguments)
+                optionals = f"""
                 {term.bold('Optional Arguments:')}
                   {arguments}
-                '''
-                message += indent(dedent(optionals), ' ' * 12)
+                """
+                message += indent(dedent(optionals), " " * 12)
         else:
             executable = os.path.basename(sys.argv[0])
-            commands = ('\n' + ' ' * 14).join([
-                term.bold(c.name) + (' ' * (24 - len(c.name))) + '\n\n' + indent(c.help, ' ' * 16) + '\n'
-                for c in sorted(set(registry.commands.values()), key=lambda c: c.name)
-            ])
+            commands = ("\n" + " " * 14).join(
+                [
+                    term.bold(c.name) + (" " * (24 - len(c.name))) + "\n\n" + indent(c.help, " " * 16) + "\n"
+                    for c in sorted(set(self.registry.commands.values()), key=lambda c: c.name)
+                ]
+            )
 
             titles = [
-                'ODEV',
-                'Automate common tasks relative to working with Odoo development databases',
-                'Odev provides the following commands:',
+                "ODEV",
+                "Automate common tasks relative to working with Odoo development databases",
+                "Odev provides the following commands:",
             ]
-            message = f'''
+            message = f"""
             {term.bold(titles[0])} - {term.italic(titles[1])}
             {term.snow4('=' * (len(titles[0] + titles[1]) + 3))}
 
@@ -114,7 +115,7 @@ class HelpCommand(commands.Command):
             {term.snow4('-' * len(titles[2]))}
 
               {commands}
-            '''
+            """
 
         print(dedent(message).rstrip())
 

@@ -1,6 +1,6 @@
 """Github-related exception classes."""
 
-from odev.exceptions import OdevException
+from odev.exceptions.odev import OdevException
 
 
 class GitException(OdevException):

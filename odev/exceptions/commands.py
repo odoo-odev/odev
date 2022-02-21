@@ -1,6 +1,8 @@
 """Command-related exception classes."""
 
-from odev.exceptions import OdevException
+from typing import Any, List, MutableMapping, Optional
+
+from odev.exceptions.odev import OdevException
 
 
 class CommandException(OdevException):
@@ -10,7 +12,7 @@ class CommandException(OdevException):
 class CommandAborted(CommandException):
     """Raised when a command has been aborted by the user."""
 
-    def __init__(self, message: str = None, *args, **kwargs) -> None:
+    def __init__(self, message: Optional[str] = None, *args: List[Any], **kwargs: MutableMapping[str, Any]) -> None:
         message = message or "Action cancelled"
         super().__init__(message, *args, **kwargs)
 

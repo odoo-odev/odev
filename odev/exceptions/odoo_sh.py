@@ -1,8 +1,8 @@
 """SH-related exception classes."""
 
-from typing import Mapping, Any
+from typing import Any, List, Mapping, MutableMapping
 
-from odev.exceptions import OdevException
+from odev.exceptions.odev import OdevException
 
 
 class OdooSHException(OdevException):
@@ -20,8 +20,8 @@ class BuildTimeout(BuildException, TimeoutError):
 class BuildCompleteException(BuildException):
     """Raised when a build completed on Odoo SH."""
 
-    def __init__(self, *args, build_info: Mapping[str, Any], **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, msg: str, *args: List[Any], build_info: Mapping[str, Any], **kwargs: MutableMapping[str, Any]):
+        super().__init__(msg, *args, **kwargs)
         self.build_info: Mapping[str, Any] = build_info
 
 
@@ -38,7 +38,7 @@ class InvalidBranch(OdooSHException):
 
 
 class SHConnectionError(OdooSHException):
-    """Raised when an error ocurred while trying to fetch an Odoo SH webpage."""
+    """Raised when an error occurred while trying to fetch an Odoo SH webpage."""
 
 
 class SHDatabaseTooLarge(OdooSHException):

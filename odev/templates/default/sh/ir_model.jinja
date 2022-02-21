@@ -135,7 +135,7 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
 {% set sql = name ~ "_unique" %}
 {%-endif%}
 {%- if not constraint["name"].startswith('_') -%}
-{{makro.todo(data.export_type, "py", 'Choose betwen sql or python constraint') | indent(4, True)}}
+{{makro.todo(data.export_type, "py", 'Choose between sql or python constraint') | indent(4, True)}}
     # _sql_constraints = [
     #     (
     #         '{{name | odoo_field}}_unique',

@@ -1,12 +1,12 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, MutableMapping, Tuple
+from typing import MutableMapping, Optional, Tuple
 
 from agentcrypt.exceptions import AgentCryptException
 
 from odev.utils.config import ConfigManager
-from odev.utils.logging import PromptFn, Logger
-from odev.utils.secrets import ssh_agent_encrypt, ssh_agent_decrypt
+from odev.utils.logging import Logger, PromptFn
+from odev.utils.secrets import ssh_agent_decrypt, ssh_agent_encrypt
 
 
 __all__ = [
@@ -17,7 +17,7 @@ __all__ = [
 ]
 
 
-_logger: Logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class ValueCodec(ABC):
@@ -49,9 +49,7 @@ class SecretCodec(ValueCodec):
             return ssh_agent_encrypt(decoded)
         except AgentCryptException:
             secret_name: str = f' "{self.secret_name}"' if self.secret_name else ""
-            _logger.warning(
-                f"Failed encrypting{secret_name} secret. Is ssh-agent running?"
-            )
+            _logger.warning(f"Failed encrypting{secret_name} secret. Is ssh-agent running?")
             return None  # TODO: check/handle consequences of this
 
     def decode(self, encoded: Optional[str]) -> Optional[str]:
@@ -61,9 +59,7 @@ class SecretCodec(ValueCodec):
             return ssh_agent_decrypt(encoded)
         except AgentCryptException:
             secret_name: str = f' "{self.secret_name}"' if self.secret_name else ""
-            _logger.warning(
-                f"Failed decrypting{secret_name} secret. Is ssh-agent running?"
-            )
+            _logger.warning(f"Failed decrypting{secret_name} secret. Is ssh-agent running?")
             return None
 
 
@@ -77,7 +73,7 @@ class CredentialsHelper:
         fullname: str,
         prompt: str,
         value: Optional[str] = None,
-        prompt_fn: PromptFn = _logger.ask,
+        prompt_fn: PromptFn = _logger.ask,  # type: ignore
         store_codec: Optional[ValueCodec] = None,
     ) -> Optional[str]:
         section: str
@@ -99,7 +95,7 @@ class CredentialsHelper:
         fullname: str,
         prompt: str,
         value: Optional[str] = None,
-        prompt_fn: PromptFn = _logger.password,
+        prompt_fn: PromptFn = _logger.password,  # type: ignore
     ) -> Optional[str]:
         return self.get(
             fullname,

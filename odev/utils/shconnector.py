@@ -2,10 +2,19 @@ import re
 import shlex
 import subprocess
 import sys
-from typing import Optional, List, MutableMapping, Any, Tuple, Mapping, Sequence
+from typing import (
+    Any,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import NavigableString, Tag
 
 from odev.utils import logging
 from odev.utils.credentials import CredentialsHelper
@@ -14,7 +23,7 @@ from odev.utils.credentials import CredentialsHelper
 __all__ = ["ShConnector", "get_sh_connector"]
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 class ShError(Exception):
@@ -25,28 +34,33 @@ class ShSessionError(ShError):
     """Session-related SH errors (es. expired cookie)"""
 
 
-
-def extract_csrf_token(response: requests.Response) -> str:
-    soup: BeautifulSoup = BeautifulSoup(response.content, "html5lib")
-    return soup.find("input", attrs={"name": "csrf_token"})["value"]
-
 class ShConnector(object):
-    headers: MutableMapping[str, str] = {
-        "user-agent": "odev (https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev)"
-    }
+    headers: MutableMapping[str, str] = {"user-agent": "odev (https://github.com/odoo-ps/psbe-ps-tech-tools/tree/odev)"}
     repos: Sequence[Mapping] = []
 
-    def __init__(self, login: str, passwd: str, repo_name: str = '', github_user: str = ''):
+    def __init__(self, login: str, passwd: str, repo_name: str = "", github_user: str = ""):
         self.user_login: str = login
         self.repo: str = repo_name
         self.github_user: str = github_user
         self.session: Optional[requests.Session] = None
-        self.impersonation_csrf_token: str = None
+        self.impersonation_csrf_token: Optional[str] = None
 
         self.login(passwd)
 
+    def extract_csrf_token(self, response: requests.Response) -> Optional[str]:
+        soup = BeautifulSoup(response.content, "html5lib")
+        found = soup.find("input", attrs={"name": "csrf_token"})
 
-    def login(self, passwd: str) -> None:
+        if isinstance(found, NavigableString):
+            return found.getText()
+
+        if isinstance(found, Tag):
+            value = found.get("value")
+            return " ".join(value) if isinstance(value, list) else value
+
+        return None
+
+    def login(self, passwd: str) -> "ShConnector":
 
         impersonate_page_url = "/_odoo/support"
 
@@ -63,47 +77,41 @@ class ShConnector(object):
             f"https://www.odoo.sh/web/login?debug=1&redirect={impersonate_page_url}",
             headers=self.headers,
         )
-        login_data["csrf_token"] = extract_csrf_token(resp)
+        login_data["csrf_token"] = self.extract_csrf_token(resp) or ""
 
-        resp = self.session.post(
-            "https://www.odoo.sh/web/login", data=login_data, headers=self.headers
-        )
+        resp = self.session.post("https://www.odoo.sh/web/login", data=login_data, headers=self.headers)
         if resp.status_code != 200:
             raise ShSessionError("Failed logging in to odoo.sh")
 
         if impersonate_page_url not in resp.url:
-            raise ShSessionError(
-                f"Unexpected redirect for impersonation page, got: {resp.url}"
-            )
+            raise ShSessionError(f"Unexpected redirect for impersonation page, got: {resp.url}")
 
-        self.impersonation_csrf_token = extract_csrf_token(resp)
+        self.impersonation_csrf_token = self.extract_csrf_token(resp)
 
         # get repos
         self.repos = self.jsonrpc("https://www.odoo.sh/support/json/repos")
 
         return self
 
-    def impersonate(self):
-        # match gh user
-        matching_repos: List[Mapping] = [
+    def _get_matching_repos(self, repos: Sequence[Mapping] = None) -> List[Mapping]:
+        return [
             repo
-            for repo in self.repos
+            for repo in repos or self.repos
             if repo.get("project_name") == self.repo
             or repo.get("full_name") == self.repo
-            or (
-                repo.get("full_name")
-                and re.search(f"(?<=/){self.repo}$", repo.get("full_name"))
-            )
+            or (repo.get("full_name") and re.search(rf"(?<=/){self.repo}$", repo.get("full_name", "")))
         ]
+
+    def impersonate(self):
+        # match gh user
+        matching_repos = self._get_matching_repos()
         user: Mapping
         matching_repos_users: List[Tuple[Mapping, Mapping]] = []
         for repo in matching_repos:
             users: Sequence[Mapping] = self.jsonrpc(
                 "https://www.odoo.sh/support/json/repo_users", {"repository_id": repo["id"]}
             )
-            matching_users: List[Mapping] = [
-                user for user in users if user.get("username") == self.github_user
-            ]
+            matching_users: List[Mapping] = [user for user in users if user.get("username") == self.github_user]
             if len(matching_users) == 1:
                 [user] = matching_users
                 matching_repos_users.append((repo, user))
@@ -112,18 +120,19 @@ class ShConnector(object):
             if len(matching_repos_users) > 1:
                 msgpart = "More than one repo-user match"
             raise ShSessionError(
-                f"{msgpart} to impersonate for odoo.sh access "
-                f'(for repo="{self.repo}", user="{self.github_user}")'
+                f"{msgpart} to impersonate for odoo.sh access " f'(for repo="{self.repo}", user="{self.github_user}")'
             )
         [(repo, user)] = matching_repos_users
 
         # impersonate
-        impersonation_data: MutableMapping[str, str] = dict(
-            csrf_token=self.impersonation_csrf_token,
-            repository_id=repo["id"],
-            hosting_user_id=user["hosting_user_id"][0],
-            repository_search=f'{repo["full_name"]}+({repo["project_name"]})',
-        )
+        impersonation_data: MutableMapping[str, Optional[str]] = {
+            "csrf_token": self.impersonation_csrf_token,
+            "repository_id": repo["id"],
+            "hosting_user_id": user["hosting_user_id"][0],
+            "repository_search": f'{repo["full_name"]}+({repo["project_name"]})',
+        }
+
+        assert self.session is not None
         resp = self.session.post(
             "https://www.odoo.sh/support/impersonate",
             data=impersonation_data,
@@ -137,11 +146,10 @@ class ShConnector(object):
 
     @property
     def session_id(self):
+        assert self.session is not None
         return self.session.cookies.get("session_id", domain="www.odoo.sh")
 
-    def jsonrpc(
-        self, url, params=None, method="call", version="2.0", allow_empty=True, retry=False
-    ):
+    def jsonrpc(self, url, params=None, method="call", version="2.0", allow_empty=True, retry=False):
         if params is None:
             params = {}
         data = {
@@ -151,6 +159,7 @@ class ShConnector(object):
         }
         resp = None
         try:
+            assert self.session is not None
             resp = self.session.post(url=url, json=data)
             resp_data = resp.json()
         except Exception:  # FIXME: too broad?
@@ -158,9 +167,9 @@ class ShConnector(object):
             if retry:
                 return self.jsonrpc(url, params, method=method, version=version, retry=retry)
             else:
-                logger.exception(data)
+                _logger.exception(data)
                 if resp:
-                    logger.error(resp.text)
+                    _logger.error(resp.text)
                 raise
 
         if not ("result" in resp_data if allow_empty else resp_data.get("result")):
@@ -177,7 +186,7 @@ class ShConnector(object):
     def call_kw(self, model, method, args, kwargs=None, retry=False):
         if kwargs is None:
             kwargs = {}
-        url = "https://www.odoo.sh/web/dataset/call_kw/%s/%s" % (model, method)
+        url = f"https://www.odoo.sh/web/dataset/call_kw/{model}/{method}"
         params = {
             "model": model,
             "method": method,
@@ -190,23 +199,21 @@ class ShConnector(object):
         result = self.jsonrpc("https://www.odoo.sh/project/json/user/profile")
         if result.get("errors"):
             raise ShSessionError("Failed getting user profile while testing session")
-        logger.debug("SH session okay")
+        _logger.debug("SH session okay")
 
-    def _get_branch_id(self, branch):
+    def _get_branch_id(self, branch: str):
         branch_id = self.call_kw(
             "paas.branch",
             "search",
-            [[["name", "=", "%s" % branch], ["repository_id.name", "=", self.repo]]],
+            [[["name", "=", branch], ["repository_id.name", "=", self.repo]]],
         )
         if not branch_id:
-            raise ValueError("Branch %s not found on repo %s" % (branch, self.repo))
+            raise ValueError(f"Branch {branch} not found on repo {self.repo}")
         return branch_id
 
     def _get_last_build_id_name(self, branch):
         branch_id = self._get_branch_id(branch)
-        vals = self.call_kw(
-            "paas.branch", "search_read", [[("id", "=", branch_id)], ["last_build_id"]]
-        )
+        vals = self.call_kw("paas.branch", "search_read", [[("id", "=", branch_id)], ["last_build_id"]])
         if vals:
             last_build_id = vals[0].get("last_build_id")
             if last_build_id:
@@ -250,7 +257,9 @@ class ShConnector(object):
             raise ValueError(f'Got more than 1 result for branch "{branch}":\n{results}')
         return results[0]
 
-    def branch_history(self, branch: str, custom_domain: Optional[List] = None) -> Optional[List[MutableMapping[str, Any]]]:
+    def branch_history(
+        self, branch: str, custom_domain: Optional[List] = None
+    ) -> Optional[List[MutableMapping[str, Any]]]:
         """
         Return history tracking info of an odoo.sh branch, or None.
         """
@@ -276,17 +285,17 @@ class ShConnector(object):
 
         branch_id = self._get_branch_id(branch)
         self.call_kw("paas.branch", "write", [branch_id, {"stage": state}])
-        logger.info("%s: %s -> %s" % (self.repo, branch, state))
+        _logger.info(f"{self.repo}: {branch} -> {state}")
 
     def branch_rebuild(self, branch):
         """
         Rebuild a branch.
         """
         project_info = self.project_info()
-        project_url: str = project_info["project_url"]
-        return self.jsonrpc(f"{project_url}/branch/rebuild", params={"branch": branch})
+        assert project_info is not None
+        return self.jsonrpc(f"{project_info.get('project_url')}/branch/rebuild", params={"branch": branch})
 
-    def build_info(self, branch, build_id=None, commit=None, custom_domain=None):
+    def build_info(self, branch, build_id=None, commit=None, custom_domain=None) -> Optional[Mapping[str, Any]]:
         """
         Returns status, hash and creation date of last build on given branch
         (but you can force status search of a specific commit if you need to time travel)
@@ -316,7 +325,10 @@ class ShConnector(object):
                 domain,
                 [],
             ],
-            dict(limit=1, order="start_datetime desc"),
+            {
+                "limit": 1,
+                "order": "start_datetime desc",
+            },
         )
         return res and res[0]
 
@@ -431,11 +443,9 @@ class ShConnector(object):
         kwargs.setdefault("stdout", logfile)
         kwargs.setdefault("stderr", logfile)
         if script is None:
-            logger.debug(f"Running ssh command on SH build {ssh_url}: {command}")
+            _logger.debug(f"Running ssh command on SH build {ssh_url}: {command}")
         else:
-            logger.debug(
-                f"Running {command.split(' ')[0]} script through ssh on SH build {ssh_url}"
-            )
+            _logger.debug(f"Running {command.split(' ')[0]} script through ssh on SH build {ssh_url}")
         return subprocess.run(
             ["ssh", ssh_url, "-o", "StrictHostKeyChecking=no", command],
             input=stdin_data,
@@ -468,6 +478,8 @@ def get_sh_connector(
 ) -> ShConnector:
     with CredentialsHelper() as creds:
         login = creds.get("odoo.login", "Odoo login:", login)
+        assert login is not None
         passwd = creds.secret("odoo.passwd", f"Odoo password for {login}:", passwd)
+        assert passwd is not None
         github_user = creds.get("github.user", "GitHub username:", github_user)
-        return ShConnector(login, passwd, repo_name, github_user)
+        return ShConnector(login, passwd, repo_name or "", github_user or "")

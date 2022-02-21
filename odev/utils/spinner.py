@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
-
-import time
 import math
 import random
-import enlighten
-from contextlib import ExitStack
+import time
 from collections import defaultdict
+from contextlib import ExitStack
 from typing import List, Mapping, Optional, Union
+
+import enlighten
 
 from odev.utils.logging import term
 
@@ -19,18 +18,18 @@ def poll_loop(poll_interval: float):
 
 class SpinnerBar:
     def __init__(self, message: Optional[str] = None):
-        br_start: int = ord('\u2800')
-        br_end: int = ord('\u28ff')
+        br_start: int = ord("\u2800")
+        br_end: int = ord("\u28ff")
         self._density_bins: Mapping[int, List[str]] = defaultdict(list)
         for o in range(br_start, br_end):
-            self._density_bins[bin(o - br_start).count('1')].append(chr(o))
+            self._density_bins[bin(o - br_start).count("1")].append(chr(o))
         self._density_bins = dict(self._density_bins)
         self._db_max: int = max(self._density_bins.keys())
         self._message: Optional[str] = message
         self._manager: Union[enlighten.Manager, enlighten.NotebookManager] = enlighten.get_manager()
         self._status_bar: enlighten.StatusBar = self._manager.status_bar(
-            '',
-            color='white_on_deeppink4',
+            "",
+            color="white_on_deeppink4",
             justify=enlighten.Justify.CENTER,
             leave=False,
         )
@@ -50,26 +49,18 @@ class SpinnerBar:
         self._message = value
 
     def update(self, pos: Optional[float] = None):
-        padded_message: str = f' {self._message} ' if self.message else ''
+        padded_message: str = f" {self._message} " if self.message else ""
         bar_width: int = term.width - len(padded_message)
         if pos is None:
             pos = (-time.monotonic() * 40) / bar_width
         intensities: List[float] = [
-            (
-                0.5
-                - 0.5
-                * math.cos((max(0.0, min(-1 + 2 * pos + p, 1.0)) + 1) * 2 * math.pi)
-            )
+            (0.5 - 0.5 * math.cos((max(0.0, min(-1 + 2 * pos + p, 1.0)) + 1) * 2 * math.pi))
             * math.sin(p * math.pi) ** 0.5
             for i in range(bar_width)
             if (p := (i / bar_width)) is not None
         ]
-        bar_str: str = ''.join(
-            random.choice(
-                self._density_bins[
-                    int((self._db_max + 0.99999) * max(0.0, min(i, 1.0)))
-                ]
-            )
+        bar_str: str = "".join(
+            random.choice(self._density_bins[int((self._db_max + 0.99999) * max(0.0, min(i, 1.0)))])
             for i in intensities
         )
         status_str: str = padded_message + bar_str[::-1]

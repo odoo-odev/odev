@@ -1,15 +1,17 @@
 import json
 import keyword
 import os
-import unidecode
 import re
+from typing import Any, List, MutableMapping
+
+import unidecode
 
 
 class Config:
-    json = None
+    json: MutableMapping[str, Any]
     version = None
-    config = None
-    exportable_models = []
+    config: MutableMapping[str, Any]
+    exportable_models: List[str] = []
 
     def __init__(self, version, path):
         self.version = version
@@ -57,6 +59,7 @@ def odoo_field_name(field):
 
     return field
 
+
 # Model use . instead of _
 def odoo_model(model):
     model = str(odoo_field(model))
@@ -100,12 +103,14 @@ def odoo_field(field):
 
     return field
 
+
 # Saas field need to have a prefix x_
 def odoo_saas_field(field):
     if field[:2] != "x_" and field[:7] != "studio_":
         field = "x_" + field
 
     return field
+
 
 def odoo_server_action(server_action):
     server_action = server_action.replace(" env[", " self.env[")
@@ -120,6 +125,7 @@ def odoo_server_action(server_action):
         server_action += "\n\n        return action"
 
     return server_action
+
 
 def odoo_domain(data):
     data = str(data)

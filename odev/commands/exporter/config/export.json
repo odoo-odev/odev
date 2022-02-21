@@ -1,396 +1,390 @@
 {
-  "default": {
-    "template_folder": "default",
-    "regexp": {
-      "*": [
-        {
-          "fields": [
-            "model",
-            "model_id",
-            "xml_id",
-            "xml_name",
-            "model_name",
-            "name",
-            "res_model",
-            "code"
-          ],
-          "regexp": [
-            {
-              "pattern": "account([\\._])invoice([\\._])line",
-              "replace": "account\\1move\\2line"
-            },
-            {
-              "pattern": "account([\\._])invoice",
-              "replace": "account\\1move"
-            }
-          ]
+    "default": {
+        "template_folder": "default",
+        "regexp": {
+            "*": [
+                {
+                    "fields": ["model", "model_id", "xml_id", "xml_name", "model_name", "name", "res_model", "code"],
+                    "regexp": [
+                        {
+                            "pattern": "account([\\._])invoice([\\._])line",
+                            "replace": "account\\1move\\2line"
+                        },
+                        {
+                            "pattern": "account([\\._])invoice",
+                            "replace": "account\\1move"
+                        }
+                    ]
+                },
+                {
+                    "fields": ["name"],
+                    "regexp": [
+                        {
+                            "pattern": "Invoice Line",
+                            "replace": "Move Line"
+                        }
+                    ]
+                }
+            ],
+            "ir.model.fields": [],
+            "ir.ui.view": [
+                {
+                    "fields": ["arch"],
+                    "regexp": [
+                        {
+                            "pattern": "report.html_container",
+                            "replace": "web.html_container"
+                        }
+                    ]
+                }
+            ]
         },
-        {
-          "fields": ["name"],
-          "regexp": [
-            {
-              "pattern": "Invoice Line",
-              "replace": "Move Line"
+        "base_model": {
+            "ir.model": {
+                "split": true,
+                "split_name_field": ["model"],
+                "include_info": false,
+                "template": "ir_model.jinja",
+                "includes": [
+                    {
+                        "key": "ir.model.fields",
+                        "comodel_name": "ir.model.fields",
+                        "inverse_name": "model_id",
+                        "field": "id",
+                        "domain": "('state', '=', 'manual')",
+                        "same_module": true
+                    },
+                    {
+                        "key": "ir.actions.server",
+                        "comodel_name": "ir.actions.server",
+                        "inverse_name": "model_id",
+                        "field": "id",
+                        "same_module": true
+                    }
+                ],
+                "_comment": "The following param is used to search ALL models that have a custom field",
+                "folder_name": "models",
+                "file_ext": {
+                    "sh": "py",
+                    "saas": "xml"
+                }
+            },
+            "ir.model.fields": {
+                "export": false,
+                "parent": "ir.model",
+                "order": "ttype asc, name asc"
+            },
+            "res.groups": {
+                "template": "res_groups.jinja",
+                "includes": [
+                    {
+                        "key": "category_id",
+                        "comodel_name": "ir.module.category",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "implied_ids",
+                        "comodel_name": "res.groups",
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "security",
+                "file_name": "res_groups",
+                "file_ext": "xml"
+            },
+            "ir.model.access": {
+                "template": "ir_model_access.jinja",
+                "includes": [
+                    {
+                        "key": "group_id",
+                        "comodel_name": "res.groups",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "security",
+                "file_name": "ir.model.access",
+                "file_ext": "csv"
+            },
+            "ir.rule": {
+                "template": "ir_rule.jinja",
+                "includes": [
+                    {
+                        "key": "model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "security",
+                "file_name": "ir_rule",
+                "file_ext": "xml"
+            },
+            "ir.ui.view": {
+                "split": true,
+                "split_name_field": ["model", "xml_name"],
+                "includes": [
+                    {
+                        "key": "inherit_id",
+                        "comodel_name": "ir.ui.view",
+                        "inverse_name": "id"
+                    }
+                ],
+                "template": "ir_ui_view.jinja",
+                "folder_name": "views",
+                "file_ext": "xml",
+                "callback": ["_get_odoo_xml"]
+            },
+            "ir.actions.act_window": {
+                "split": true,
+                "split_name_field": ["res_model", "xml_id"],
+                "template": "ir_actions_act_window.jinja",
+                "folder_name": "data",
+                "file_ext": "xml"
+            },
+            "ir.actions.act_window.view": {
+                "split": true,
+                "split_name_field": ["res_model", "xml_id"],
+                "template": "ir_actions_act_window_view.jinja",
+                "folder_name": "views",
+                "file_ext": "xml"
+            },
+            "ir.actions.report.xml": {
+                "split": true,
+                "split_name_field": ["model"],
+                "template": "ir_actions_report.jinja",
+                "folder_name": "views",
+                "file_ext": "xml"
+            },
+            "ir.actions.report": {
+                "split": true,
+                "split_name_field": ["model_id"],
+                "template": "ir_actions_report.jinja",
+                "includes": [
+                    {
+                        "key": "paperformat_id",
+                        "comodel_name": "report.paperformat",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "binding_model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "views",
+                "file_ext": "xml"
+            },
+            "ir.actions.server": {
+                "parent": "ir.model",
+                "split": true,
+                "split_name_field": ["model_name"],
+                "template": "ir_actions_server.jinja",
+                "includes": [
+                    {
+                        "key": "model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "binding_model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "group_id",
+                        "comodel_name": "res.groups",
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "data/server_actions",
+                "file_ext": "xml"
+            },
+            "ir.actions.act_url": {
+                "template": "ir_actions_act_url.jinja",
+                "folder_name": "data",
+                "file_name": "data",
+                "file_ext": "xml"
+            },
+            "ir.ui.menu": {
+                "template": "ir_ui_menu.jinja",
+                "includes": [
+                    {
+                        "key": "parent_id",
+                        "comodel_name": "ir.ui.menu",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "action",
+                        "is_reference": true,
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "views",
+                "file_name": "menu",
+                "file_ext": "xml"
+            },
+            "ir.cron": {
+                "template": "ir_cron.jinja",
+                "folder_name": "data",
+                "split": true,
+                "split_name_field": ["res_model"],
+                "file_ext": "xml"
+            },
+            "ir.filters": {
+                "template": "ir_filters.jinja",
+                "folder_name": "data/filters",
+                "split": true,
+                "split_name_field": ["model_id"],
+                "file_ext": "xml"
+            },
+            "ir.values": {
+                "export": false
+            },
+            "base.action.rule": {
+                "split": true,
+                "split_name_field": ["model_id.0.xml_name"],
+                "template": "base_action_rule.jinja",
+                "includes": [
+                    {
+                        "key": "model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "server_action_ids",
+                        "comodel_name": "ir.actions.server",
+                        "inverse_name": "id"
+                    }
+                ],
+                "folder_name": "data/action_rules",
+                "file_ext": "xml"
+            },
+            "base.automation": {
+                "template": "base_automation.jinja",
+                "folder_name": "data",
+                "file_name": "base_automation",
+                "file_ext": "xml"
+            },
+            "ir.module.category": {
+                "_comment": "Needed for res_groups export",
+                "export": false
+            },
+            "default": {
+                "_comment": "Export all other models as data",
+                "split": true,
+                "split_name_field": ["ir_model_name"],
+                "includes": [
+                    {
+                        "key": "model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    }
+                ],
+                "template": "data.jinja",
+                "folder_name": "data",
+                "file_ext": "xml"
             }
-          ]
+        },
+        "init": {
+            "template": "scaffold_init.jinja",
+            "file_ext": "py",
+            "folder_name": "models",
+            "file_name": "__init__"
+        },
+        "manifest": {
+            "template": "scaffold_manifest.jinja",
+            "file_ext": "py",
+            "folder_name": ".",
+            "file_name": "__manifest__"
+        },
+        "pre-10": {
+            "template": "scaffold_pre-10.jinja",
+            "file_ext": "py",
+            "folder_name": "",
+            "file_name": "pre-10"
+        },
+        "post-10": {
+            "template": "scaffold_post-10.jinja",
+            "file_ext": "py",
+            "folder_name": "",
+            "file_name": "post-10"
+        },
+        "end-10": {
+            "template": "scaffold_post-10.jinja",
+            "file_ext": "py",
+            "folder_name": "",
+            "file_name": "end-10"
+        },
+        "readme": {
+            "template": "scaffold_readme.jinja",
+            "file_ext": "md",
+            "folder_name": ".",
+            "file_name": "README"
+        },
+        "requirements": {
+            "template": "scaffold_requirements.jinja",
+            "file_ext": "txt",
+            "folder_name": "../",
+            "file_name": "requirements"
+        },
+        "sql": {
+            "template": "scaffold_sql.jinja",
+            "file_ext": "sql",
+            "folder_name": "security",
+            "split": true,
+            "split_name_field": ["model"]
+        },
+        "controller": {
+            "template": "scaffold_controller.jinja",
+            "file_ext": "py",
+            "folder_name": "controllers",
+            "file_name": "controllers"
+        },
+        "report": {
+            "template": "scaffold_report.jinja",
+            "file_ext": "xml",
+            "folder_name": "report",
+            "split_name_field": ["model", "view_id"]
+        },
+        "assets": {
+            "template": "scaffold_assets.jinja",
+            "file_ext": "xml",
+            "folder_name": "views",
+            "split_name_field": ["asset_template"]
+        },
+        "default_js": {
+            "template": "scaffold_default_js.jinja",
+            "file_ext": "js",
+            "folder_name": "static/src/js",
+            "split_name_field": ["file_name"]
+        },
+        "default_scss": {
+            "template": "scaffold_default_scss.jinja",
+            "file_ext": "scss",
+            "folder_name": "static/src/scss",
+            "split_name_field": ["file_name"]
+        },
+        "edi_integration": {
+            "template": "scaffold_edi_integration.jinja",
+            "file_ext": "xml",
+            "folder_name": "data",
+            "split_name_field": ["model"]
+        },
+        "unit_test": {
+            "template": "scaffold_unit_test.jinja",
+            "folder_name": "tests",
+            "file_name": "test_{{model}}",
+            "file_ext": "py"
+        },
+        "unit_test_common": {
+            "template": "scaffold_unit_test_common.jinja",
+            "folder_name": "tests",
+            "file_name": "common",
+            "file_ext": "py"
         }
-      ],
-      "ir.model.fields": [],
-      "ir.ui.view": [
-        {
-          "fields": ["arch"],
-          "regexp": [
-            {
-              "pattern": "report.html_container",
-              "replace": "web.html_container"
-            }
-          ]
-        }
-      ]
-    },
-    "base_model": {
-      "ir.model": {
-        "split": true,
-        "split_name_field": ["model"],
-        "include_info": false,
-        "template": "ir_model.jinja",
-        "includes": [
-          {
-            "key": "ir.model.fields",
-            "comodel_name": "ir.model.fields",
-            "inverse_name": "model_id",
-            "field": "id",
-            "domain": "('state', '=', 'manual')",
-            "same_module": true
-          },
-          {
-            "key": "ir.actions.server",
-            "comodel_name": "ir.actions.server",
-            "inverse_name": "model_id",
-            "field": "id",
-            "same_module": true
-          }
-        ],
-        "_comment": "The following param is used to search ALL models that have a custom field",
-        "folder_name": "models",
-        "file_ext": {"sh": "py", "saas": "xml"}
-      },
-      "ir.model.fields": {
-        "export": false,
-        "parent": "ir.model",
-        "order": "ttype asc, name asc"
-      },
-      "res.groups": {
-        "template": "res_groups.jinja",
-        "includes": [
-          {
-            "key": "category_id",
-            "comodel_name": "ir.module.category",
-            "inverse_name": "id"
-          },
-          {
-            "key": "implied_ids",
-            "comodel_name": "res.groups",
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "security",
-        "file_name": "res_groups",
-        "file_ext": "xml"
-      },
-      "ir.model.access": {
-        "template": "ir_model_access.jinja",
-        "includes": [
-          {
-            "key": "group_id",
-            "comodel_name": "res.groups",
-            "inverse_name": "id"
-          },
-          {
-            "key": "model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "security",
-        "file_name": "ir.model.access",
-        "file_ext": "csv"
-      },
-      "ir.rule": {
-        "template": "ir_rule.jinja",
-        "includes": [
-          {
-            "key": "model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "security",
-        "file_name": "ir_rule",
-        "file_ext": "xml"
-      },
-      "ir.ui.view": {
-        "split": true,
-        "split_name_field": ["model", "xml_name"],
-        "includes": [
-          {
-            "key": "inherit_id",
-            "comodel_name": "ir.ui.view",
-            "inverse_name": "id"
-          }
-        ],
-        "template": "ir_ui_view.jinja",
-        "folder_name": "views",
-        "file_ext": "xml",
-        "callback": ["_get_odoo_xml"]
-      },
-      "ir.actions.act_window": {
-        "split": true,
-        "split_name_field": ["res_model", "xml_id"],
-        "template": "ir_actions_act_window.jinja",
-        "folder_name": "data",
-        "file_ext": "xml"
-      },
-      "ir.actions.act_window.view": {
-        "split": true,
-        "split_name_field": ["res_model", "xml_id"],
-        "template": "ir_actions_act_window_view.jinja",
-        "folder_name": "views",
-        "file_ext": "xml"
-      },
-      "ir.actions.report.xml": {
-        "split": true,
-        "split_name_field": ["model"],
-        "template": "ir_actions_report.jinja",
-        "folder_name": "views",
-        "file_ext": "xml"
-      },
-      "ir.actions.report": {
-        "split": true,
-        "split_name_field": ["model_id"],
-        "template": "ir_actions_report.jinja",
-        "includes": [
-          {
-            "key": "paperformat_id",
-            "comodel_name": "report.paperformat",
-            "inverse_name": "id"
-          },
-          {
-            "key": "binding_model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "views",
-        "file_ext": "xml"
-      },
-      "ir.actions.server": {
-        "parent": "ir.model",
-        "split": true,
-        "split_name_field": ["model_name"],
-        "template": "ir_actions_server.jinja",
-        "includes": [
-          {
-            "key": "model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          },
-          {
-            "key": "binding_model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          },
-          {
-            "key": "group_id",
-            "comodel_name": "res.groups",
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "data/server_actions",
-        "file_ext": "xml"
-      },
-      "ir.actions.act_url": {
-        "template": "ir_actions_act_url.jinja",
-        "folder_name": "data",
-        "file_name": "data",
-        "file_ext": "xml"
-      },
-      "ir.ui.menu": {
-        "template": "ir_ui_menu.jinja",
-        "includes": [
-          {
-            "key": "parent_id",
-            "comodel_name": "ir.ui.menu",
-            "inverse_name": "id"
-          },
-          {
-            "key": "action",
-            "is_reference": true,
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "views",
-        "file_name": "menu",
-        "file_ext": "xml"
-      },
-      "ir.cron": {
-        "template": "ir_cron.jinja",
-        "folder_name": "data",
-        "split": true,
-        "split_name_field": ["res_model"],
-        "file_ext": "xml"
-      },
-      "ir.filters": {
-        "template": "ir_filters.jinja",
-        "folder_name": "data/filters",
-        "split": true,
-        "split_name_field": ["model_id"],
-        "file_ext": "xml"
-      },
-      "ir.values": {
-        "export": false
-      },
-      "base.action.rule": {
-        "split": true,
-        "split_name_field": ["model_id.0.xml_name"],
-        "template": "base_action_rule.jinja",
-        "includes": [
-          {
-            "key": "model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          },
-          {
-            "key": "server_action_ids",
-            "comodel_name": "ir.actions.server",
-            "inverse_name": "id"
-          }
-        ],
-        "folder_name": "data/action_rules",
-        "file_ext": "xml"
-      },
-      "base.automation": {
-        "template": "base_automation.jinja",
-        "folder_name": "data",
-        "file_name": "base_automation",
-        "file_ext": "xml"
-      },
-      "ir.module.category": {
-        "_comment": "Needed for res_groups export",
-        "export": false
-      },
-      "default": {
-        "_comment": "Export all other models as data",
-        "split": true,
-        "split_name_field": ["ir_model_name"],
-        "includes": [
-          {
-            "key": "model_id",
-            "comodel_name": "ir.model",
-            "inverse_name": "id"
-          }
-        ],
-        "template": "data.jinja",
-        "folder_name": "data",
-        "file_ext": "xml"
-      }
-    },
-    "init": {
-      "template": "scaffold_init.jinja",
-      "file_ext": "py",
-      "folder_name": "models",
-      "file_name": "__init__"
-    },
-    "manifest": {
-      "template": "scaffold_manifest.jinja",
-      "file_ext": "py",
-      "folder_name": ".",
-      "file_name": "__manifest__"
-    },
-    "pre-10": {
-      "template": "scaffold_pre-10.jinja",
-      "file_ext": "py",
-      "folder_name": "",
-      "file_name": "pre-10"
-    },
-    "post-10": {
-      "template": "scaffold_post-10.jinja",
-      "file_ext": "py",
-      "folder_name": "",
-      "file_name": "post-10"
-    },
-    "end-10": {
-      "template": "scaffold_post-10.jinja",
-      "file_ext": "py",
-      "folder_name": "",
-      "file_name": "end-10"
-    },
-    "readme": {
-      "template": "scaffold_readme.jinja",
-      "file_ext": "md",
-      "folder_name": ".",
-      "file_name": "README"
-    },
-    "requirements": {
-      "template": "scaffold_requirements.jinja",
-      "file_ext": "txt",
-      "folder_name": "../",
-      "file_name": "requirements"
-    },
-    "sql": {
-      "template": "scaffold_sql.jinja",
-      "file_ext": "sql",
-      "folder_name": "security",
-      "split": true,
-      "split_name_field": ["model"]
-    },
-    "controller": {
-      "template": "scaffold_controller.jinja",
-      "file_ext": "py",
-      "folder_name": "controllers",
-      "file_name": "controllers"
-    },
-    "report": {
-      "template": "scaffold_report.jinja",
-      "file_ext": "xml",
-      "folder_name": "report",
-      "split_name_field": ["model", "view_id"]
-    },
-    "assets": {
-      "template": "scaffold_assets.jinja",
-      "file_ext": "xml",
-      "folder_name": "views",
-      "split_name_field": ["asset_template"]
-    },
-    "default_js": {
-      "template": "scaffold_default_js.jinja",
-      "file_ext": "js",
-      "folder_name": "static/src/js",
-      "split_name_field": ["file_name"]
-    },
-    "default_scss": {
-      "template": "scaffold_default_scss.jinja",
-      "file_ext": "scss",
-      "folder_name": "static/src/scss",
-      "split_name_field": ["file_name"]
-    },
-    "edi_integration": {
-      "template": "scaffold_edi_integration.jinja",
-      "file_ext": "xml",
-      "folder_name": "data",
-      "split_name_field": ["model"]
-    },
-    "unit_test": {
-      "template": "scaffold_unit_test.jinja",
-      "folder_name": "tests",
-      "file_name": "test_{{model}}",
-      "file_ext": "py"
-    },
-    "unit_test_common": {
-      "template": "scaffold_unit_test_common.jinja",
-      "folder_name": "tests",
-      "file_name": "common",
-      "file_ext": "py"
     }
-  }
 }

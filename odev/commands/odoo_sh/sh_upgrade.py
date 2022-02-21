@@ -1,52 +1,51 @@
-'''Runs modules upgrades on a odoo.sh branch with `util` support.'''
+"""Runs modules upgrades on a odoo.sh branch with `util` support."""
 
 import configparser
-from odev.exceptions.commands import CommandAborted
 import os
 import subprocess
-from contextlib import contextmanager
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from argparse import Namespace
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import StringIO
-from github import Repository, PullRequest, PullRequestMergeStatus
 from typing import (
-    Sequence,
-    List,
-    Optional,
-    Mapping,
-    Tuple,
     Any,
-    Set,
-    MutableMapping,
     Iterator,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
 )
 
+from github import PullRequestMergeStatus
+
+from odev.exceptions import BuildCompleteException, BuildWarning
+from odev.exceptions.commands import CommandAborted
 from odev.structures import commands
 from odev.structures.actions import CommaSplitAction
 from odev.utils import logging
-from odev.exceptions import BuildCompleteException, BuildWarning
 
 
-logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 # TODO: do proper config
-REMOTE_ODOO_HOME: str = '/home/odoo'
-REMOTE_ODOO_CONFIG: str = os.path.join(REMOTE_ODOO_HOME, '.config/odoo/odoo.conf')
-REMOTE_UPGRADE_DIR: str = os.path.join(REMOTE_ODOO_HOME, 'odev_upgrade_temp')
+REMOTE_ODOO_HOME: str = "/home/odoo"
+REMOTE_ODOO_CONFIG: str = os.path.join(REMOTE_ODOO_HOME, ".config/odoo/odoo.conf")
+REMOTE_UPGRADE_DIR: str = os.path.join(REMOTE_ODOO_HOME, "odev_upgrade_temp")
 
-UPGRADE_UTIL_RELPATH: str = 'migrations/util'
-PSBE_MIGRATIONS_RELPATH: str = 'migrations'
-PSBE_UPGRADE_BASE_RELPATH: str = os.path.join(PSBE_MIGRATIONS_RELPATH, 'base')
-REMOTE_UTIL_RELPATH: str = 'upgrade-util'
+UPGRADE_UTIL_RELPATH: str = "migrations/util"
+PSBE_MIGRATIONS_RELPATH: str = "migrations"
+PSBE_UPGRADE_BASE_RELPATH: str = os.path.join(PSBE_MIGRATIONS_RELPATH, "base")
+REMOTE_UTIL_RELPATH: str = "upgrade-util"
 
 
 def edit_odoo_config_data(config_data: str, edit_data: Mapping[Tuple[Optional[str], str], Optional[str]]) -> str:
     # preserve comments (although w/out empty lines)
-    parser: configparser.RawConfigParser = configparser.RawConfigParser(
-        comment_prefixes=[], allow_no_value=True
-    )
+    parser: configparser.RawConfigParser = configparser.RawConfigParser(comment_prefixes=[], allow_no_value=True)
     parser.read_string(config_data)
     section_name: Optional[str]
     option_name: str
@@ -69,70 +68,71 @@ def edit_odoo_config_data(config_data: str, edit_data: Mapping[Tuple[Optional[st
 
 
 class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgradeRepoMixin):
-    '''
+    """
     Command class for running modules upgrades on a odoo.sh branch with `util` support.
-    '''
+    """
+
     arguments = [
-        dict(
-            aliases=['-r', '--remote-dir'],
-            default=REMOTE_UPGRADE_DIR,
-            help='Remote working directory where files are copied. Defaults to `~/tmp`',
-        ),
+        {
+            "aliases": ["-r", "--remote-dir"],
+            "default": REMOTE_UPGRADE_DIR,
+            "help": "Remote working directory where files are copied. Defaults to `~/tmp`",
+        },
     ]
 
+    upgrade_repo_path: Optional[str] = None
+    psbe_upgrade_repo_path: Optional[str] = None
+
     def __init__(self, args: Namespace):
-        for key, dir in self.get_upgrade_repo_paths(args).items():
-            setattr(self, key, dir)
+        for key, directory in self.get_upgrade_repo_paths(args).items():
+            setattr(self, key, directory)
 
         if self.upgrade_repo_path is None:
-            raise ValueError('No `upgrade-repo-path` specified')
+            raise ValueError("No `upgrade-repo-path` specified")
 
         self.remote_upgrade_dir: str = args.remote_dir or REMOTE_UPGRADE_DIR
 
-        self.remote_util_path: str = os.path.join(
-            self.remote_upgrade_dir, REMOTE_UTIL_RELPATH
-        )
+        self.remote_util_path: str = os.path.join(self.remote_upgrade_dir, REMOTE_UTIL_RELPATH)
         self.remote_psbe_upgrade_path: str = os.path.join(
-            self.remote_upgrade_dir, os.path.basename(self.psbe_upgrade_repo_path)
+            self.remote_upgrade_dir, os.path.basename(self.psbe_upgrade_repo_path or "")
         )
-        self.remote_psbe_migrations_path: str = os.path.join(
-            self.remote_psbe_upgrade_path, PSBE_MIGRATIONS_RELPATH
-        )
+        self.remote_psbe_migrations_path: str = os.path.join(self.remote_psbe_upgrade_path, PSBE_MIGRATIONS_RELPATH)
         self._prepared_upgrade_paths: Set[str] = set()
 
         super().__init__(args)
 
     def prepare_fake_install(self, fake_install_modules: Sequence[str]) -> None:
-        '''
+        """
         Prepares the given modules for fake-install into the database.
         :param fake_install_modules: a sequence of module names.
-        '''
-        fake_install_version: str = '0.1.0.1'
-        fake_install_values: str = ', '.join(
-            f"('{module}', 'to upgrade', '{fake_install_version}')"
-            for module in fake_install_modules
+        """
+        fake_install_version: str = "0.1.0.1"
+        fake_install_values: str = ", ".join(
+            f"('{module}', 'to upgrade', '{fake_install_version}')" for module in fake_install_modules
         )
         fake_install_query: str = (
-            'INSERT INTO ir_module_module (name, state, latest_version) '
-            'VALUES ' + fake_install_values
+            "INSERT INTO ir_module_module (name, state, latest_version) " "VALUES " + fake_install_values
         )
-        logger.info(f'Preparing {len(fake_install_modules)} modules to fake-install')
+        _logger.info(f"Preparing {len(fake_install_modules)} modules to fake-install")
         # TODO: somehow add fake install to cleanups?
-        self.ssh_run(['psql', '-c', fake_install_query])
+        self.ssh_run(["psql", "-c", fake_install_query])
 
     def _prepare_upgrade_path_files(self, *sources: str, dest: str, **copy_kwargs):
         dest_noslash: str = dest
-        if dest_noslash.endswith(('/', '\\')):
+        if dest_noslash.endswith(("/", "\\")):
             dest_noslash = dest_noslash[:-1]
-        logger.info(f'Preparing `{os.path.basename(dest_noslash)}` upgrade files on SH')
-        copy_kwargs.setdefault('to_cleanup', True)
+        _logger.info(f"Preparing `{os.path.basename(dest_noslash)}` upgrade files on SH")
+        copy_kwargs.setdefault("to_cleanup", True)
         self.copy_to_sh_branch(*sources, dest=dest, **copy_kwargs)
         self._prepared_upgrade_paths.add(dest_noslash)
 
     def copy_upgrade_path_files(self) -> None:
-        logger.debug(f'Making sure `{self.remote_upgrade_dir}` exists')
-        self.ssh_run(['mkdir', '-p', self.remote_upgrade_dir])
+        _logger.debug(f"Making sure `{self.remote_upgrade_dir}` exists")
+        self.ssh_run(["mkdir", "-p", self.remote_upgrade_dir])
         self.paths_to_cleanup.append(self.remote_upgrade_dir)
+
+        assert self.upgrade_repo_path is not None
+        assert self.psbe_upgrade_repo_path is not None
 
         self._prepare_upgrade_path_files(
             os.path.join(self.upgrade_repo_path, UPGRADE_UTIL_RELPATH),
@@ -141,14 +141,14 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgrad
             dest_as_dir=True,
         )
         self._prepare_upgrade_path_files(
-            os.path.join(self.psbe_upgrade_repo_path, PSBE_MIGRATIONS_RELPATH) + '/',
+            os.path.join(self.psbe_upgrade_repo_path, PSBE_MIGRATIONS_RELPATH) + "/",
             dest=self.remote_psbe_upgrade_path,
             dest_as_dir=True,
         )
 
     @property
     def prepared_upgrade_path(self) -> str:
-        return ','.join(self._prepared_upgrade_paths)
+        return ",".join(self._prepared_upgrade_paths)
 
     def set_config_upgrade_path(self, upgrade_path: Optional[str]) -> None:
         ssh_result: subprocess.CompletedProcess = self.ssh_run(
@@ -173,69 +173,69 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgrad
         upgrade_modules: Sequence[str],
     ) -> None:
         odoo_bin_cmdline: List[str] = [
-            'odoo-bin',
-            '--addons-path=~/src/odoo/addons,~/src/enterprise,~/src/themes,~/src/user',
-            '--upgrade-path=' + upgrade_path,
-            '--stop-after-init',
+            "odoo-bin",
+            "--addons-path=~/src/odoo/addons,~/src/enterprise,~/src/themes,~/src/user",
+            "--upgrade-path=" + upgrade_path,
+            "--stop-after-init",
         ]
         if install_modules:
-            odoo_bin_cmdline += ['-i', ','.join(install_modules)]
+            odoo_bin_cmdline += ["-i", ",".join(install_modules)]
         if upgrade_modules:
-            odoo_bin_cmdline += ['-u', ','.join(upgrade_modules)]
-        logger.info(f'Running modules upgrade')
+            odoo_bin_cmdline += ["-u", ",".join(upgrade_modules)]
+        _logger.info("Running modules upgrade")
         self.ssh_run(odoo_bin_cmdline)
 
     @abstractmethod
     def _run_upgrade(self) -> None:
-        '''Run the upgrade'''
+        """Run the upgrade"""
 
     def run(self) -> None:
         self.test_ssh()  # FIXME: move somewhere else like in OdooSH?
         try:
             self._run_upgrade()
         except Exception as exc:
-            logger.error(f'Got an exception: {repr(exc)}')
+            _logger.error(f"Got an exception: {repr(exc)}")
             raise
         else:
-            logger.success(f'Upgrade on {self.sh_branch} was successful')
+            _logger.success(f"Upgrade on {self.sh_branch} was successful")
         finally:
             self._cleanup()
 
     def _cleanup(self):
         if not self.paths_to_cleanup:
             return
-        logger.info(f'Cleaning up copied temporary files')
+        _logger.info("Cleaning up copied temporary files")
         self.cleanup_copied_files()
 
 
 class OdooSHUpgradeManualCommand(OdooSHUpgradeBaseCommand):
-    '''
+    """
     Manually run 'odoo-bin' on SH to install / upgrade the specified modules,
     copying the required 'util' files beforehand.
     Useful to run migrations right after having uploaded a dump on the branch.
-    '''
+    """
 
-    name = 'upgrade-manual'
+    name = "upgrade-manual"
     arguments = [
-        dict(
-            aliases=['-u', '--upgrade'],
-            action=CommaSplitAction,
-            help='Comma-separated list of modules to upgrade',
-        ),
-        dict(
-            aliases=['-i', '--install'],
-            action=CommaSplitAction,
-            help='''
+        {
+            "aliases": ["-u", "--upgrade"],
+            "action": CommaSplitAction,
+            "help": "Comma-separated list of modules to upgrade",
+        },
+        {
+            "aliases": ["-i", "--install"],
+            "action": CommaSplitAction,
+            "help": """
             Comma-separated list of new modules to install.
             They will be 'fake-installed' and upgraded, so that eventual migration scripts are run.
-            ''',
-        ),
+            """,
+        },
     ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)
         if not args.install and not args.upgrade:
-            raise ValueError('Must specify at least one module to install or upgrade')
+            raise ValueError("Must specify at least one module to install or upgrade")
         self.install_modules: Sequence[str] = args.install or []
         self.upgrade_modules: Sequence[str] = args.upgrade or []
 
@@ -252,8 +252,8 @@ class OdooSHUpgradeManualCommand(OdooSHUpgradeBaseCommand):
         upgrade_path: str = self.prepared_upgrade_path
         self.run_odoo_bin_upgrade(upgrade_path, install_modules, upgrade_modules)
 
-        logger.info(f'Restarting SH server')
-        self.ssh_run('odoosh-restart')
+        _logger.info("Restarting SH server")
+        self.ssh_run("odoosh-restart")
 
 
 @dataclass
@@ -264,20 +264,20 @@ class UpgradeBuildContext:
 
 
 class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
-    '''
+    """
     TODO: Missing command description
-    '''
+    """
 
-    name = 'upgrade-build'
+    name = "upgrade-build"
     arguments = [
-        dict(
-            aliases=['-i', '--install'],
-            action=CommaSplitAction,
-            help='''
+        {
+            "aliases": ["-i", "--install"],
+            "action": CommaSplitAction,
+            "help": """
             Comma-separated list of new modules to install.
             They will be 'fake-installed' and upgraded, so that eventual migration scripts are run.
-            ''',
-        ),
+            """,
+        },
     ]
 
     def __init__(self, args: Namespace):
@@ -299,33 +299,26 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
         if self.install_modules:
             self.prepare_fake_install(self.install_modules)
 
-        logger.info(f'Setting odoo config "upgrade_path"')
+        _logger.info("Setting odoo config 'upgrade_path'")
         self.set_config_upgrade_path(self.prepared_upgrade_path)
         self.upgrade_path_config_set = True  # TODO: do in the method?
 
-        upgrade_context: UpgradeBuildContext = UpgradeBuildContext(
-            previous_build_info=build_info
-        )
+        upgrade_context: UpgradeBuildContext = UpgradeBuildContext(previous_build_info=build_info)
         yield upgrade_context
 
-        logger.info(f"Waiting for SH to build on new commit")
+        _logger.info("Waiting for SH to build on new commit")
         new_build_info: Optional[Mapping[str, Any]] = None
         try:
             # TODO: refactor call as callable of the context, wrap yield instead,
             #       this allows to wait for none or more builds, so collect
             #       from the callable the new builds infos to append for cleanup
-            new_build_info = self.wait_for_build(
-                check_success=True, **(upgrade_context.wait_for_build_kwargs or {})
-            )
+            new_build_info = self.wait_for_build(check_success=True, **(upgrade_context.wait_for_build_kwargs or {}))
         except BuildCompleteException as build_exc:
             # get the new failed build for either warning logging or cleanup
             new_build_info = build_exc.build_info
             status_info: Optional[str] = new_build_info.get("status_info")
             if isinstance(build_exc, BuildWarning):
-                logger.warning(
-                    "SH build completed with warnings"
-                    + (f": {status_info}" if status_info else "")
-                )
+                _logger.warning("SH build completed with warnings" + (f": {status_info}" if status_info else ""))
             else:
                 raise
         finally:
@@ -333,9 +326,8 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
                 expected_sha: Optional[str] = upgrade_context.expected_commit_sha
                 new_build_sha: str = new_build_info["head_commit_id"][1]
                 if expected_sha and new_build_sha != expected_sha:
-                    logger.warning(
-                        f"New build has a different commit SHA "
-                        f"({new_build_sha}) than expected ({expected_sha})"
+                    _logger.warning(
+                        f"New build has a different commit SHA " f"({new_build_sha}) than expected ({expected_sha})"
                     )
                 # set own ssh_url to new build, even if failed
                 self.ssh_url = self.sh_connector.get_build_ssh(self.sh_branch, build_id=int(new_build_info["id"]))
@@ -346,13 +338,11 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
             previous_build_info: Optional[Mapping[str, Any]]
             previous_build_info = self.sh_connector.build_info(self.sh_branch, commit=previous_build_commit_id)
             if previous_build_info and previous_build_info["status"] != "dropped":
-                self.previous_build_ssh_url = self.sh_connector.get_build_ssh(self.sh_branch,
-                                                                              build_id=previous_build_info["id"])
-            else:
-                logger.info(
-                    f"Previous build on {previous_build_commit_id[:7]} unavailable, "
-                    f"no need to cleanup"
+                self.previous_build_ssh_url = self.sh_connector.get_build_ssh(
+                    self.sh_branch, build_id=previous_build_info["id"]
                 )
+            else:
+                _logger.info(f"Previous build on {previous_build_commit_id[:7]} unavailable, " f"no need to cleanup")
 
     def _cleanup(self):
         if not self.paths_to_cleanup and not self.upgrade_path_config_set:
@@ -361,40 +351,40 @@ class OdooSHUpgradeBuildCommand(OdooSHUpgradeBaseCommand):
             if ssh_url is None:
                 continue
             self.ssh_url = ssh_url  # FIXME: kinda hacky
-            logger.info(f'Cleaning up on {ssh_url}')
+            _logger.info(f"Cleaning up on {ssh_url}")
             if self.upgrade_path_config_set:
-                logger.info(f'Removing `upgrade_path` config setting')
+                _logger.info("Removing `upgrade_path` config setting")
                 self.set_config_upgrade_path(None)
             super()._cleanup()
 
 
 class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubCommand):
-    '''
+    """
     Prepares the SH branch to run automatic upgrades with `util` support for
     merging a PR / pushing commits, and cleans up after it's done.
     Directly handles the PR merge.
-    '''
+    """
 
-    name = 'upgrade-merge'
+    name = "upgrade-merge"
     arguments = [
-        dict(
-            name='pull_request',
-            type=int,
-            help='Pull request number from the GitHub repository',
-        ),
-        dict(
-            name='merge_method',
-            choices=('merge', 'squash', 'rebase'),
-            help='Method used to merge the pull request',
-        ),
-        dict(
-            aliases=['-c', '--commit-title'],
-            help='Title to use for the commit instead of the automatic one',
-        ),
-        dict(
-            aliases=['-m', '--commit-message'],
-            help='Extra message appended to the commit',
-        ),
+        {
+            "name": "pull_request",
+            "type": int,
+            "help": "Pull request number from the GitHub repository",
+        },
+        {
+            "name": "merge_method",
+            "choices": ("merge", "squash", "rebase"),
+            "help": "Method used to merge the pull request",
+        },
+        {
+            "aliases": ["-c", "--commit-title"],
+            "help": "Title to use for the commit instead of the automatic one",
+        },
+        {
+            "aliases": ["-m", "--commit-message"],
+            "help": "Extra message appended to the commit",
+        },
     ]
 
     def __init__(self, args: Namespace):
@@ -402,19 +392,16 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
 
         project_info: Mapping[str, Any]
         [project_info] = self.sh_connector.get_project_info()
-        self.repo: Repository = self.github.get_repo(project_info["full_name"])
-        self.pull_request: PullRequest = self.repo.get_pull(args.pull_request)
+        self.repo = self.github.get_repo(project_info["full_name"])
+        self.pull_request = self.repo.get_pull(args.pull_request)
         if self.pull_request.merged or not self.pull_request.mergeable:
-            raise RuntimeError(
-                f'Pull request {self.repo.full_name} '
-                f'#{self.pull_request.number} is not mergeable!'
-            )
+            raise RuntimeError(f"Pull request {self.repo.full_name} " f"#{self.pull_request.number} is not mergeable!")
         pr_dest_branch: str = self.pull_request.base.ref
         if pr_dest_branch != self.sh_branch:
             raise RuntimeError(
-                f'Pull request {self.repo.full_name} #{self.pull_request.number} '
-                f'destination branch ({pr_dest_branch}) '
-                f'is different than the SH one ({self.sh_branch})'
+                f"Pull request {self.repo.full_name} #{self.pull_request.number} "
+                f"destination branch ({pr_dest_branch}) "
+                f"is different than the SH one ({self.sh_branch})"
             )
 
         self.merge_method: str = args.merge_method
@@ -422,62 +409,60 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
         self.commit_message: Optional[str] = args.commit_message
 
     def _run_upgrade(self) -> None:
-        logger.info(
-            f'Will be merging `{self.repo.full_name}` '
-            f'PR #{self.pull_request.number} `{self.pull_request.title}` '
-            f'and running automatic modules upgrades on the SH branch.\n'
-            f'''  - branches: merging `{self.pull_request.head.ref}` into `{self.pull_request.base.ref}`\n'''
-            f'''  - merge method: {self.merge_method}\n'''
-            f'''  - merge commit title: {self.commit_title or '(automatic)'}\n'''
-            f'''  - merge commit message: {self.commit_message or '(automatic)'}\n'''
-            f'''  - new modules to (fake-)install: '''
-            f'''{', '.join(self.install_modules) if self.install_modules else '(none)'}'''
+        _logger.info(
+            f"Will be merging `{self.repo.full_name}` "
+            f"PR #{self.pull_request.number} `{self.pull_request.title}` "
+            f"and running automatic modules upgrades on the SH branch.\n"
+            f"""  - branches: merging `{self.pull_request.head.ref}` into `{self.pull_request.base.ref}`\n"""
+            f"""  - merge method: {self.merge_method}\n"""
+            f"""  - merge commit title: {self.commit_title or '(automatic)'}\n"""
+            f"""  - merge commit message: {self.commit_message or '(automatic)'}\n"""
+            f"""  - new modules to (fake-)install: """
+            f"""{', '.join(self.install_modules) if self.install_modules else '(none)'}"""
         )
-        logger.warning(
-            'The pull-request merge action cannot be undone! '
-            'Please check that all the above information is correct'
+        _logger.warning(
+            "The pull-request merge action cannot be undone! " "Please check that all the above information is correct"
         )
 
-        if not logger.confirm('Proceed?'):
+        if not _logger.confirm("Proceed?"):
             raise CommandAborted()
 
         upgrade_context: UpgradeBuildContext
         with self.upgrade_build_context() as upgrade_context:
-            logger.info(
-                f'Merging ({self.merge_method}) '
-                f'pull request {self.repo.full_name} #{self.pull_request.number}'
+            _logger.info(
+                f"Merging ({self.merge_method}) " f"pull request {self.repo.full_name} #{self.pull_request.number}"
             )
             # PyGithub considers None args as intended values, so we need to remove them
-            merge_kwargs: MutableMapping[str, Any] = dict(
-                merge_method=self.merge_method,
-                commit_title=self.commit_title,
-                commit_message=self.commit_message,
-                sha=self.pull_request.head.sha,
-            )
+            merge_kwargs: MutableMapping[str, Any] = {
+                "merge_method": self.merge_method,
+                "commit_title": self.commit_title,
+                "commit_message": self.commit_message,
+                "sha": self.pull_request.head.sha,
+            }
             merge_kwargs = {k: v for k, v in merge_kwargs.items() if v is not None}
             result: PullRequestMergeStatus.PullRequestMergeStatus = self.pull_request.merge(**merge_kwargs)
             if not result.merged:
                 raise RuntimeError(
-                    f'Pull request {self.repo.full_name} #{self.pull_request.number} '
-                    f'did not merge: {result.message}'
+                    f"Pull request {self.repo.full_name} #{self.pull_request.number} "
+                    f"did not merge: {result.message}"
                 )
             merge_commit_sha: str = result.sha
             upgrade_context.expected_commit_sha = merge_commit_sha
 
 
 class OdooSHUpgradeWaitCommand(OdooSHUpgradeBuildCommand):
-    '''
+    """
     Prepares the SH branch to run automatic upgrades with `util` support
     and waits for a new SH build to complete, then cleans up when it's done.
     Useful for handling all other build cases (webhook redeliver, generic push).
-    '''
+    """
 
-    name = 'upgrade-wait'
+    name = "upgrade-wait"
 
     def _run_upgrade(self) -> None:
         context: UpgradeBuildContext
         with self.upgrade_build_context() as context:
-            context.wait_for_build_kwargs = dict(build_appear_timeout=600.0)
+            context.wait_for_build_kwargs = {"build_appear_timeout": 600.0}
 
 
 # TODO: implement variations:

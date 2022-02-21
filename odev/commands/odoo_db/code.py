@@ -5,22 +5,21 @@ import jinja2
 from odev.structures import commands
 from odev.utils import logging, odoo
 
+
 _logger = logging.getLogger(__name__)
 
 
-class VSCodeDebugConfigCommand(
-    commands.LocalDatabaseCommand, commands.OdooUpgradeRepoMixin
-):
+class VSCodeDebugConfigCommand(commands.LocalDatabaseCommand, commands.OdooUpgradeRepoMixin):
     """
     Generate a VSCode debug config for a database and repository
     """
 
     name = "code"
     arguments = [
-        dict(
-            name="repo",
-            help="Repo name or path",
-        ),
+        {
+            "name": "repo",
+            "help": "Repo name or path",
+        },
     ]
 
     def __init__(self, *args, **kwargs):
@@ -46,12 +45,12 @@ class VSCodeDebugConfigCommand(
         self.check_database()
 
         kwargs = {}
-        for key, dir in self.get_upgrade_repo_paths(self.args).items():
-            if not dir:
+        for key, directory in self.get_upgrade_repo_paths(self.args).items():
+            if not directory:
                 continue
-            migrations_dir = os.path.join(dir, "migrations")
+            migrations_dir = os.path.join(directory, "migrations")
             if self.validate(migrations_dir):
-                kwargs[key] = dir
+                kwargs[key] = directory
 
         kwargs.update(version=self.db_version_clean())
 
@@ -62,14 +61,10 @@ class VSCodeDebugConfigCommand(
         output_path = os.path.join(output_dir, "launch.json")
         if os.path.exists(output_path):
             _logger.warning(f"File exists: {output_path}")
-            if not _logger.confirm(
-                "Would you like to overwrite the existing VSCode debug configuration?"
-            ):
+            if not _logger.confirm("Would you like to overwrite the existing VSCode debug configuration?"):
                 return
         with open(output_path, "w") as file:
-            file.write(
-                self.render_debug_template(repo_path, self.args.database, **kwargs)
-            )
+            file.write(self.render_debug_template(repo_path, self.args.database, **kwargs))
 
         _logger.info(f"Success. Wrote config to {output_path}")
 
@@ -83,28 +78,23 @@ class VSCodeDebugConfigCommand(
         }
 
         custom_modules_to_update = (
-            item.name
-            for item in os.scandir(repo_path)
-            if item.is_dir() and item.name[0] != "."
+            item.name for item in os.scandir(repo_path) if item.is_dir() and item.name[0] != "."
         )
         render_kwargs.update(custom_modules_str=",".join(custom_modules_to_update))
 
-        upgrade_repo_keys = set(
-            ["upgrade_migrations_dir", "custom_upgrade_migrations_dir"]
-        )
+        upgrade_repo_keys = {"upgrade_migrations_dir", "custom_upgrade_migrations_dir"}
         if kwargs.keys() & upgrade_repo_keys:
             render_kwargs.update(
                 upgrade_paths_str=",".join(
-                    kwargs.get(upgrade_repo)
-                    for upgrade_repo in (upgrade_repo_keys & kwargs.keys())
+                    kwargs.get(upgrade_repo, "") for upgrade_repo in (upgrade_repo_keys & kwargs.keys())
                 )
             )
 
         repos_path = self.config["odev"].get("paths", "odoo")
-        version_path = odoo.repos_version_path(repos_path, kwargs.get("version"))
+        version = kwargs.get("version")
+        assert version is not None
+        version_path = odoo.repos_version_path(repos_path, version)
         render_kwargs.update(odoo_dir=os.path.join(version_path, "odoo/"))
-        render_kwargs.update(
-            venv_python_bin=os.path.join(version_path, "venv/bin/python")
-        )
+        render_kwargs.update(venv_python_bin=os.path.join(version_path, "venv/bin/python"))
 
         return self.template.render(**render_kwargs)

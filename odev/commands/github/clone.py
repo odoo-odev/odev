@@ -1,6 +1,7 @@
 import os
 import re
 from argparse import Namespace
+from typing import Any
 
 import Levenshtein as lev
 import tldextract
@@ -13,12 +14,14 @@ from odev.utils.github import git_clone, git_pull
 from odev.utils.odoo import is_saas_db
 from odev.utils.shconnector import ShConnector, get_sh_connector
 
+
 _logger = logging.getLogger(__name__)
 
 MIN_LEVENSTHEIN_SCORE = 3
 MAX_CHOICE_NUMBER = 3
 
 RE_BRANCH_VERSION = re.compile(r"^([a-z~0-9]+\.[0-9]+-)")
+
 
 class CloneCommand(commands.Command):
     """
@@ -28,16 +31,16 @@ class CloneCommand(commands.Command):
     name = "clone"
     database_required = False
     arguments = [
-        dict(
-            name="url",
-            help="Repo or database URL",
-        ),
-        dict(
-            aliases=["branch"],
-            help="Branch name",
-            nargs="?",
-            default="",
-        ),
+        {
+            "name": "url",
+            "help": "Repo or database URL",
+        },
+        {
+            "aliases": ["branch"],
+            "help": "Branch name",
+            "nargs": "?",
+            "default": "",
+        },
     ]
 
     platform = ""
@@ -59,7 +62,7 @@ class CloneCommand(commands.Command):
         _logger.info(f"Trying to {clone_or_find} on github for {self.args.url} .")
 
         if is_github_url:
-            repo = parse(self.args.url)
+            repo: Any = parse(self.args.url)
             repos = [{"repo": f"{repo.owner}/{repo.repo}", "organization": repo.owner, "branch": self.args.branch}]
 
         elif is_saas_url:
@@ -89,7 +92,7 @@ class CloneCommand(commands.Command):
 
     def _get_saas_repo(self):
         # To use PyGithub we need to be inside a repository
-        odev_path = self.config['odev'].get("paths", "odev")
+        odev_path = self.config["odev"].get("paths", "odev")
         odev_repo = Repo(odev_path)
         saas_repo = (self.config["odev"].get("repos", "saas_repos") or "").split(",")
         repos = []
@@ -105,8 +108,9 @@ class CloneCommand(commands.Command):
                     "organization": organization,
                     "branch": b.split("/")[-1],
                     "db_name": RE_BRANCH_VERSION.sub("", b.split("/")[-1]),
-                    "levenshtein": lev.distance(
-                        self.url_info.subdomain, RE_BRANCH_VERSION.sub("", b.split("/")[-1])
+                    "levenshtein": lev.distance(  # type: ignore
+                        self.url_info.subdomain,
+                        RE_BRANCH_VERSION.sub("", b.split("/")[-1]),
                     ),
                     "saas": True,
                 }
@@ -125,7 +129,7 @@ class CloneCommand(commands.Command):
         sh_connector: ShConnector = get_sh_connector()
 
         if not sh_connector.repos:
-            _logger.error("Can't retreive the repo list from odoo.sh support page")
+            _logger.error("Can't retrieve the repo list from odoo.sh support page")
 
         repos = [
             {
@@ -133,7 +137,7 @@ class CloneCommand(commands.Command):
                 "organization": x["full_name"].split("/")[0],
                 "branch": "",
                 "db_name": x["project_name"],
-                "levenshtein": lev.distance(self.url_info.subdomain, x["project_name"]),
+                "levenshtein": lev.distance(self.url_info.subdomain, x["project_name"]),  # type: ignore
             }
             for x in sh_connector.repos
         ]
@@ -152,7 +156,7 @@ class CloneCommand(commands.Command):
 
         return repos_match_lev
 
-    def clone(self, repo: str):
+    def clone(self, repo):
         dir_name = ""
         devs_path = self.config["odev"].get("paths", "dev")
         parent_path = os.path.join(devs_path, repo["organization"])
@@ -175,4 +179,4 @@ class CloneCommand(commands.Command):
                 parent_path, repo["repo"], repo["branch"], organization=repo["organization"], repo_dir_name=dir_name
             )
 
-        self.globals_context['repo_git_path'] = repo_path
+        self.globals_context["repo_git_path"] = repo_path
