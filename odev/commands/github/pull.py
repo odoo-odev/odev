@@ -47,7 +47,7 @@ class PullCommand(commands.Command):
             except InvalidVersion as exc:
                 raise InvalidArgument(str(exc)) from exc
 
-            odoo_version = [p for p in odoo_version if version == p[1]]
+            odoo_version = [p for p in odoo_version if version == p]
 
         for version in odoo_version:
             version = version_from_branch(version)
