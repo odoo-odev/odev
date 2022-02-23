@@ -177,6 +177,7 @@ def prepare_venv(repos_path: str, version: str):
             _logger.error(
                 "Please check the correct version of Python is installed on your computer:\n"
                 "\tsudo add-apt-repository ppa:deadsnakes/ppa\n"
+                "\tsudo apt update\n"
                 f"\tsudo apt install -y python{py_version} python{py_version}-dev"
             )
 
