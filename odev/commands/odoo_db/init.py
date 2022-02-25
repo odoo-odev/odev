@@ -7,7 +7,7 @@ from argparse import Namespace
 
 from odev.constants.odoo import ODOO_ADDON_PATHS
 from odev.exceptions import InvalidArgument, InvalidQuery, InvalidVersion
-from odev.structures import commands
+from odev.structures import commands, database
 from odev.utils import logging, odoo
 from odev.utils.signal import capture_signals
 
@@ -15,7 +15,7 @@ from odev.utils.signal import capture_signals
 _logger = logging.getLogger(__name__)
 
 
-class InitCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
+class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
     """
     Initialize an empty PSQL database with the base version of Odoo for a given major version.
     """
@@ -57,9 +57,6 @@ class InitCommand(commands.LocalDatabaseCommand, commands.OdooBinMixin):
         """
 
         # FIXME: DRY with `run`
-
-        if not self.db_exists_all():
-            raise Exception(f"Database {self.database} does not exist")
 
         if self.db_exists():
             _logger.info(f"Database {self.database} is already initialized")

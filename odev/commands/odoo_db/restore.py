@@ -9,10 +9,10 @@ from functools import wraps
 from pathlib import Path
 from zipfile import ZipFile
 
-from odev.commands.odoo_db import clean, create, remove
+from odev.commands.odoo_db import clean, remove
 from odev.constants import DB_TEMPLATE_SUFFIX
-from odev.exceptions import CommandAborted, RunningOdooDatabase
-from odev.structures import commands
+from odev.exceptions import RunningOdooDatabase
+from odev.structures import commands, database
 from odev.utils import logging
 from odev.utils.signal import capture_signals
 
@@ -47,7 +47,7 @@ def psql_pipe(database, cmd):
     return f'{cmd} | psql "{database}"'
 
 
-class RestoreCommand(commands.TemplateCreateDBCommand):
+class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCommand):
     """
     Restore an Odoo dump file to a local database and import its filestore
     if present. '.sql', '.dump' and '.zip' files are supported.
@@ -77,23 +77,6 @@ class RestoreCommand(commands.TemplateCreateDBCommand):
         """
         Restores a dump file to a local database.
         """
-
-        if self.db_exists_all():
-            if self.db_exists():
-                _logger.warning(f"Database {self.database} already exists and is an Odoo database")
-
-                if not _logger.confirm("Do you want to overwrite its content?"):
-                    raise CommandAborted()
-
-                remove.RemoveCommand.run_with(**self.args.__dict__)
-                create.CreateCommand.run_with(**self.args.__dict__, template=None)
-        else:
-            _logger.warning(f"Database {self.database} does not exist")
-
-            if not _logger.confirm("Do you want to create it now?"):
-                raise CommandAborted()
-
-            create.CreateCommand.run_with(**self.args.__dict__, template=None)
 
         if self.db_runs():
             raise RunningOdooDatabase(f"Database {self.database} is running, please shut it down and retry")

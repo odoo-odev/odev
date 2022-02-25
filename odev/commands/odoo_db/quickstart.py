@@ -15,7 +15,7 @@ from odev.commands.odoo_db import (
     restore,
 )
 from odev.exceptions import InvalidVersion
-from odev.structures import commands
+from odev.structures import commands, database
 from odev.utils import logging
 from odev.utils.odoo import get_odoo_version
 
@@ -28,7 +28,7 @@ re_url = re.compile(r"^https?:\/\/|(?:[a-zA-Z0-9-_]+(?:\.dev)?\.odoo\.(com|sh)|l
 TMP_DIR = "/tmp/odev"
 
 
-class QuickStartCommand(commands.TemplateCreateDBCommand, commands.OdooComCliMixin, commands.OdooBinMixin):
+class QuickStartCommand(database.DBExistsCommandMixin, commands.OdooComCliMixin, commands.OdooBinMixin):
     """
     Quickly setup a local database and start working with it directly.
 
@@ -72,10 +72,6 @@ class QuickStartCommand(commands.TemplateCreateDBCommand, commands.OdooComCliMix
             mode = "version"
         except InvalidVersion:
             mode = "url" if re_url.match(self.subarg) else "file"
-
-        result = create.CreateCommand.run_with(**self.args.__dict__, template=None)
-        if result != 0:
-            return result
 
         try:
             if mode == "version":
