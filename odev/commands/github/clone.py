@@ -59,7 +59,7 @@ class CloneCommand(commands.Command):
 
         clone_or_find = f'{"clone" if is_github_url else "find"} the {"branch" if is_saas_url else "repository"}'
 
-        _logger.info(f"Trying to {clone_or_find} on github for {self.args.url} .")
+        _logger.info(f"Trying to {clone_or_find} on github for {self.args.url}")
 
         if is_github_url:
             repo: Any = parse(self.args.url)

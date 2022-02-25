@@ -31,7 +31,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
     arguments = [
         {
-            "aliases": ["id"],
+            "aliases": ["task_id"],
             "help": "Ps-tools or Odoo.com task id to generate",
         },
         {
@@ -66,7 +66,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         self.init_connection(connection["url"], connection["db"], PSTOOLS_USER, PSTOOLS_PASSWORD)
 
     def run(self):
-        _logger.info(f"Generate scaffold code for analysis : {self.args.id}")
+        _logger.info(f"Generate scaffold code for analysis : {self.args.task_id}")
 
         try:
             self.export()
@@ -93,16 +93,16 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         analysis = self.connection.get_model("presales.analysis")
 
         analysis_ids = analysis.search_read(
-            ["|", ("id", "=", self.args.id), ("task_id", "=", self.args.id)],
+            ["|", ("id", "=", self.args.task_id), ("task_id", "=", self.args.task_id)],
             order="write_date desc",
         )
 
         if not analysis_ids:
-            raise Exception(f"Cannot find any analysis with id : {self.args.id}")
+            raise Exception(f"Cannot find any analysis with id : {self.args.task_id}")
         elif len(analysis_ids) == 1:
             return analysis_ids[0]
         else:
-            ask = f"Multiple analysis found with id : {self.args.id}"
+            ask = f"Multiple analysis found with id : {self.args.task_id}"
             ask += f"\n{' ' * 4}".join(
                 f"    {i+1}) {analysis_ids[i]['name']} ({analysis_ids[i]['id']})" for i in range(len(analysis_ids))
             )
@@ -168,7 +168,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         _logger.info(
             "\n\t".join(
                 [
-                    "Generation done , now you can use those commands to init the github repo :\n",
+                    "Generation done, now you can use those commands to init the github repo :\n",
                     f"cd {os.path.join(self.args.path)}",
                     "git init",
                     f"git remote add origin {remote_git}",
@@ -279,7 +279,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
             self.generate_template(model, cfg)
 
-        self.init["class"] = [x for x in models.keys()]
+        self.init["class"] = models.keys()
 
         return models
 

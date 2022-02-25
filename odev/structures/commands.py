@@ -997,12 +997,13 @@ class ExportCommand(Command, ABC, Template):
 
     arguments = [
         {
-            "aliases": ["path"],
+            "aliases": ["--path"],
             "default": ".",
             "help": "Path of the folder to create the module (default=CWD)",
         },
         {
-            "aliases": ["name"],
+            "aliases": ["--name"],
+            "default": "scaffolded_module",
             "help": "Module" "s name",
         },
         {
@@ -1053,6 +1054,12 @@ class ExportCommand(Command, ABC, Template):
             "action": "store_true",
             "dest": "comment",
             "help": "Add comment to the generated code",
+        },
+        {
+            "aliases": ["-e", "--env"],
+            "choices": ["prod", "staging"],
+            "default": "prod",
+            "help": "Default database to use (use staging for test)",
         },
     ]
 
@@ -1109,7 +1116,7 @@ class ExportCommand(Command, ABC, Template):
 
         if os.path.exists(module_path):
             if _logger.confirm(f"Module folder {module_path} already exist do you want to delete first ?"):
-                _logger.warning(f"Existing folder '{module_path}'  successfully deleted")
+                _logger.warning(f"Existing folder '{module_path}' successfully deleted")
                 shutil.rmtree(module_path)
             else:
                 return module_path

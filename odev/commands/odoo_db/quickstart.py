@@ -6,6 +6,7 @@ import shutil
 from argparse import Namespace
 from datetime import datetime
 
+from odev.commands.exporter import scaffold
 from odev.commands.github import clone
 from odev.commands.odoo_db import (
     create,
@@ -55,6 +56,11 @@ class QuickStartCommand(database.DBExistsCommandMixin, commands.OdooComCliMixin,
                 - a url to an Odoo SaaS or SH database to dump and restore locally
             """,
             },
+            {
+                "aliases": ["--id", "--task"],
+                "dest": "task_id",
+                "help": "Scaffold the code for this task_id",
+            },
         ]
         + odoobin_mixin_args
     )
@@ -62,6 +68,9 @@ class QuickStartCommand(database.DBExistsCommandMixin, commands.OdooComCliMixin,
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.subarg = args.source
+        self.args.reason = (
+            f"Working on {self.args.task_id}" if not self.args.reason and self.args.task_id else self.args.reason
+        )
 
     def run(self):
         """
@@ -122,6 +131,10 @@ class QuickStartCommand(database.DBExistsCommandMixin, commands.OdooComCliMixin,
                 shutil.rmtree(TMP_DIR)
 
         if mode == "url":
-            result += clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg)
+            clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg)
+
+        if self.args.task_id:
+            self.args.path = self.globals_context.get("repo_git_path", self.args.path)
+            result = result + scaffold.ScaffoldCommand.run_with(**self.args.__dict__)
 
         return result
