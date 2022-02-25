@@ -1043,10 +1043,9 @@ class ExportCommand(Command, ABC, Template):
             "help": "Odoo target version",
         },
         {
-            "aliases": ["-p", "--platform", "--type"],
+            "aliases": ["--platform", "--type"],
             "choices": ["saas", "sh"],
             "dest": "type",
-            "default": "sh",
             "help": "Scaffold type [saas (xml),sh (python)] (default=platform defined on the presale analysis)",
         },
         {
