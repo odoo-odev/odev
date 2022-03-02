@@ -4,8 +4,12 @@ import gzip
 import os
 import re
 import shutil
+import subprocess
+import tempfile
 from argparse import Namespace
 from datetime import datetime
+from pathlib import Path
+from zipfile import ZipFile
 
 from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarge
 from odev.structures import commands
@@ -18,7 +22,8 @@ from odev.utils.ssh import SSHClient
 _logger = logging.getLogger(__name__)
 
 
-re_url = re.compile(r"^https?://")
+re_http = re.compile(r"^https?://")
+re_url = re.compile(r"^https?:\/\/|(?:[a-zA-Z0-9-_]+(?:\.dev)?\.odoo\.(com|sh)|localhost|127\.0\.0\.[0-9]+)")
 re_redirect = re.compile(r'href="([^"]+)')
 re_csrf = re.compile(r'name="csrf_token"\svalue="([a-z0-9]+)"')
 re_database = re.compile(r"<h2>Current database: <a[^>]+>([^<]+)")
@@ -38,8 +43,13 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
     database_required = False
     arguments = [
         {
-            "aliases": ["url"],
-            "help": "URL to the database to dump, in the form of https://db.odoo.com",
+            "aliases": ["source"],
+            "metavar": "DATABASE|URL",
+            "help": """
+            One of the following:
+                - a local odoo database,
+                - URL to the database to dump, in the form of https://db.odoo.com
+            """,
         },
         {
             "aliases": ["destination"],
@@ -51,9 +61,13 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.url = self.sanitize_url(f"""{'https://' if not re_url.match(args.url) else ''}{args.url}""")
         self.destination = args.destination
-        self.database = args.database
+        self.mode = "online" if re_url.match(args.source) else "local"
+
+        if self.mode == "online":
+            self.source = self.sanitize_url(f"""{'https://' if not re_http.match(args.source) else ''}{args.source}""")
+        else:
+            self.database = args.source
 
     def sanitize_url(self, url, remove_after=".odoo.com"):
         return url[: url.index(remove_after) + len(remove_after)]
@@ -65,14 +79,68 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
         """
         Dumps a SaaS or SH database.
         """
+        if self.mode == "online":
+            return self.dump_online()
+        else:
+            return self.dump_localdb()
 
+    def dump_localdb(self):
+        if not self.db_exists(self.database):
+            _logger.error(f"Database {self.database} doesn't exist or is not a Odoo database")
+            return 1
+
+        _logger.info(f"Generating dump for your local database {self.database}")
+
+        is_db_clean = bool(
+            self.run_queries("SELECT value FROM ir_config_parameter where key ='database.enterprise_code'")
+        )
+
+        timestamp = datetime.now().strftime("%Y%m%d")
+        zip_filename = f"{timestamp}-{self.database}{'_clean' if is_db_clean else ''}_dump.zip"
+        zip_path = Path(self.config["odev"].get("paths", "dumps"), zip_filename)
+
+        if os.path.isfile(zip_path) and _logger.confirm(f"{zip_path} already exist do you want override it?"):
+            os.remove(zip_path)
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            dump_path = os.path.join(tmpdirname, "dump.sql")
+
+            filestores_root = Path.home() / ".local/share/Odoo/filestore"
+            filestore_path = filestores_root / self.database
+
+            with ZipFile(zip_path, "w") as archive:
+                if os.path.isdir(filestore_path) and _logger.confirm("Do you want to include your local filestores?"):
+                    for root, dirs, files in os.walk(filestore_path):
+
+                        clean_root = f"filestores/{root[len(str(filestore_path)):]}"
+
+                        for file in files:
+                            archive.write(os.path.join(root, file), os.path.join(clean_root, file))
+                        for directory in dirs:
+                            archive.write(os.path.join(root, directory), os.path.join(clean_root, directory))
+                else:
+                    filestore_path = os.path.join(tmpdirname, "filestores")
+
+                    os.mkdir(filestore_path)
+                    archive.write(filestore_path, "filestores")
+
+                subprocess.run(
+                    f"pg_dump -d {self.database} > {dump_path}", shell=True, check=True, stdout=subprocess.DEVNULL
+                )
+                archive.write(dump_path, "dump.sql")
+
+        if not is_db_clean:
+            _logger.warning("This is a cleaned database, don't use it on a production server")
+
+        _logger.success(f"Dump {zip_path} successfully created")
+
+    def dump_online(self):
         # ---------------------------------------------------------------------
         # Find out on which platform the database is running (SaaS or SH)
         # ---------------------------------------------------------------------
+        _logger.info(f"Logging you in to {self.source} support console")
 
-        _logger.info(f"Logging you in to {self.url} support console")
-
-        support_url = f"{self.url}/_odoo/support"
+        support_url = f"{self.source}/_odoo/support"
         support_login_url = f"{support_url}/login"
 
         res = request.get(support_login_url)
@@ -157,7 +225,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
         dump_url = self._get_dump_url_for_platform(res, platform, ext)
 
         if dump_url:
-            if not re_url.match(dump_url):
+            if not re_http.match(dump_url):
                 dump_url = "https://" + dump_url
 
             _logger.info(f"Downloading dump from {dump_url} to {destfile}...")
