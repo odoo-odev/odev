@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 class DBExistsCommandMixin(TemplateCreateDBCommand):
     """
-    Base class with common functionality for commands running on odoo.sh
+    Base class to handle database existence check and override
     """
 
     def __init__(self, args):
