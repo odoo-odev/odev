@@ -115,6 +115,7 @@ def repos_version_path(repos_path: str, version: str) -> str:
 def prepare_odoobin(
     repos_path: str,
     version: str,
+    venv_name: Optional[str] = None,
     venv: bool = True,
     upgrade: bool = False,
     skip_prompt: bool = False,
@@ -124,6 +125,7 @@ def prepare_odoobin(
     - Ensures all the needed repositories are cloned and up-to-date
     - Prepare the correct virtual environment (unless ``venv`` is explicitly set False)
     """
+    venv_name = venv_name or "venv"
     branch: str = branch_from_version(version)
     available_version = get_worktree_list(repos_path + ODOO_MASTER_REPO)
 
@@ -142,11 +144,14 @@ def prepare_odoobin(
 
     ConfigManager("pull_check").set("version", version, datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
 
-    if not do_pull:
-        return
-
     version_path: str = repos_version_path(repos_path, version)
     mkdir(version_path, 0o777)
+
+    if venv or venv_name != "venv":
+        prepare_venv(repos_path, version, venv_name)
+
+    if not do_pull:
+        return
 
     for pull_repo in ("odoo", "enterprise", "design-themes"):
         do_pull |= worktree_clone_or_pull(version_path, pull_repo, branch, skip_prompt=do_pull)
@@ -155,19 +160,16 @@ def prepare_odoobin(
         for pull_repo in ("upgrade", "upgrade-specific", "upgrade-platform"):
             do_pull |= git_clone_or_pull(repos_path, pull_repo, skip_prompt=do_pull)
 
-    if venv:
-        prepare_venv(repos_path, version)
 
-
-def prepare_venv(repos_path: str, version: str):
+def prepare_venv(repos_path: str, version: str, venv_name: str):
     version_path: str = repos_version_path(repos_path, version)
 
-    if not os.path.isdir(os.path.join(version_path, "venv")):
+    if not os.path.isdir(os.path.join(version_path, venv_name)):
         py_version = get_python_version(version)
 
         try:
-            command = f'cd "{version_path}" && virtualenv --python={py_version} venv'
-            _logger.info(f"Creating virtual environment: Odoo {version} + Python {py_version}")
+            command = f'cd "{version_path}" && virtualenv --python={py_version} {venv_name}'
+            _logger.info(f"Creating virtual environment: Odoo {version} + Python {py_version} ({venv_name})")
             with capture_signals():
                 subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
 
@@ -182,13 +184,13 @@ def prepare_venv(repos_path: str, version: str):
             )
 
 
-def prepare_requirements(repos_path: str, version: str, addons: Optional[List[str]] = None):
+def prepare_requirements(repos_path: str, version: str, venv_name="venv", addons: Optional[List[str]] = None):
     if addons is None:
         addons = []
 
     version_path: str = repos_version_path(repos_path, version)
 
-    venv_python: str = f"{version_path}/venv/bin/python"
+    venv_python: str = f"{version_path}/{venv_name}/bin/python"
 
     _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
     for addon_path in addons + [os.path.join(version_path, "odoo")]:

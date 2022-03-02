@@ -41,6 +41,12 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
             "help": "Save the current arguments for next calls",
         },
         {
+            "aliases": ["-e", "--env"],
+            "dest": "alt_venv",
+            "action": "store_true",
+            "help": "Create an alternative venv (database name)",
+        },
+        {
             "name": "addons",
             "action": actions.CommaSplitAction,
             "nargs": "?",
@@ -113,8 +119,11 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
         repos_path = self.config["odev"].get("paths", "odoo")
         version_path = odoo.repos_version_path(repos_path, version)
         odoobin = os.path.join(version_path, "odoo/odoo-bin")
+        venv_name = (
+            self.database if self.args.alt_venv or os.path.isdir(os.path.join(version_path, self.database)) else "venv"
+        )
 
-        odoo.prepare_odoobin(repos_path, version, skip_prompt=self.args.pull)
+        odoo.prepare_odoobin(repos_path, version, skip_prompt=self.args.pull, venv_name=venv_name)
 
         addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
         addons += [os.getcwd(), *self.addons]
@@ -124,10 +133,11 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
             "-i" in self.additional_args
             or "-u" in self.additional_args
             or not self.config["databases"].get(self.database, "last_run", False)
+            or self.args.alt_venv
         ):
-            odoo.prepare_requirements(repos_path, version, addons=addons)
+            odoo.prepare_requirements(repos_path, version, venv_name=venv_name, addons=addons)
 
-        python_exec = os.path.join(version_path, "venv/bin/python")
+        python_exec = os.path.join(version_path, f"{venv_name}/bin/python")
         addons_path = ",".join(addons)
         command_args = [
             python_exec,

@@ -37,6 +37,14 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         if self.db_runs():
             raise RunningOdooDatabase(f"Database {self.database} is running, please shut it down and retry")
 
+        version = self.db_version_clean()
+        odoo_path = self.config["odev"].get("paths", "odoo")
+        venv_path = os.path.join(odoo_path, version, self.database)
+
+        if os.path.isdir(venv_path) and self.database != "venv":
+            _logger.info(f"Deleted specific virtual env {self.database}")
+            shutil.rmtree(venv_path)
+
         keep_filestore = self.keep_template
         dbs = [self.database]
         queries = [f"""DROP DATABASE "{self.database}";"""]
