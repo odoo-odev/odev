@@ -48,7 +48,7 @@ def signal_handler(signum: int, frame: Optional[FrameType]):
 def set_log_level():
     # Set global log level before registering commands to support custom
     # log-levels everywhere
-    re_loglevel = re.compile(r"(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)", re.IGNORECASE)
+    re_loglevel = re.compile(r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)", re.IGNORECASE)
     loglevel_match = re_loglevel.findall(" ".join(sys.argv))
 
     # TODO: Default fall back to set INFO log level before arg parse.
