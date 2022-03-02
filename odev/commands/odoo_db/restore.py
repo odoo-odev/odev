@@ -120,7 +120,7 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
                 remove.RemoveCommand.run_with(**arg, keep_template=True)
 
             _logger.info(f"Creating template : {template_db_name}")
-            self.run_queries(f"CREATE DATABASE {template_db_name} WITH TEMPLATE {self.database}")
+            self.run_queries(f'CREATE DATABASE "{template_db_name}" WITH TEMPLATE "{self.database}"')
             dbs.append(f"{template_db_name}")
 
         db_config = self.config["databases"]
