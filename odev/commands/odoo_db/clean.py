@@ -1,9 +1,10 @@
 """Make a local Odoo database suitable for development."""
-
+import os
 from argparse import Namespace
 
 from packaging.version import Version
 
+from odev.constants.config import ODEV_CONFIG_DIR
 from odev.exceptions import InvalidQuery
 from odev.structures import commands
 from odev.utils import logging
@@ -71,6 +72,16 @@ class CleanCommand(commands.LocalDatabaseCommand):
         """
 
         self.ensure_stopped()
+
+        queries_file = os.path.join(ODEV_CONFIG_DIR, "clean_queries.sql")
+
+        try:
+            with open(queries_file, "r") as clean_queries:
+                for query in [q.strip() for q in clean_queries.read().split(";") if q.strip()]:
+                    _logger.debug(f"Query added to the list : {query}")
+                    self.queries.append(query)
+        except FileNotFoundError:
+            pass
 
         _logger.info(f"Cleaning database {self.database}")
         result = self.run_queries(self.queries)

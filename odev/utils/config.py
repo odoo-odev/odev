@@ -1,6 +1,6 @@
+import os
 from collections import abc
 from configparser import ConfigParser, SectionProxy
-from os import path
 from pathlib import Path
 from typing import (
     Any,
@@ -14,6 +14,7 @@ from typing import (
     Union,
 )
 
+from odev.constants.config import ODEV_CONFIG_DIR
 from odev.utils.os import mkdir
 
 
@@ -27,8 +28,6 @@ class ConfigManager(abc.MutableMapping):
     saved on disk.
     """
 
-    ODEV_CONFIG_DIR: str = str(Path.home() / ".config" / "odev")
-
     def __init__(self, name: str, auto_save: bool = True):
         """
         Light wrapper around configparser to write and retrieve configuration
@@ -41,7 +40,7 @@ class ConfigManager(abc.MutableMapping):
         of the file to save configuration in
         """
 
-        self.path: str = path.join(self.ODEV_CONFIG_DIR, f"{self.name}.cfg")
+        self.path: Path = Path(ODEV_CONFIG_DIR, f"{self.name}.cfg")
         """
         Path to the file containing configuration options,
         inferred from the name
@@ -54,10 +53,10 @@ class ConfigManager(abc.MutableMapping):
 
         self.auto_save: bool = auto_save
 
-        if not path.isdir(self.ODEV_CONFIG_DIR):
-            mkdir(self.ODEV_CONFIG_DIR)
+        if not os.path.isdir(ODEV_CONFIG_DIR):
+            mkdir(ODEV_CONFIG_DIR)
 
-        if not path.isfile(self.path):
+        if not os.path.isfile(self.path):
             open(self.path, "a").close()
 
         self.load()
