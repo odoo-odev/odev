@@ -2,6 +2,7 @@ import os
 import re
 from argparse import Namespace
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Mapping
 
 import pre_commit.constants as C
@@ -79,7 +80,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                     config_file=C.CONFIG_FILE,
                     store=True,  # type: ignore
                     hook_types=["pre-commit"],
-                    git_dir=self.args.path,
+                    git_dir=Path(self.args.path, ".git"),
                 )
             else:
                 self.print_info()
