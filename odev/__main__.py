@@ -66,6 +66,10 @@ def main():  # noqa: C901 - Complexity
     signal(SIGTERM, signal_handler)
 
     try:
+        if os.geteuid() == 0:
+            _logger.error("This program should not be run as root user!")
+            sys.exit(1)
+
         set_log_level()
 
         if self_update():

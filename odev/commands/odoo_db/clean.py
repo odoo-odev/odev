@@ -22,6 +22,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
       - Extend database validity to December 2050 and remove enterprise code
       - Set report.url and web.base.url to http://localhost:8069
       - Disable Oauth providers
+      - Remove saas_% module and views
     """
 
     name = "clean"
@@ -38,13 +39,16 @@ class CleanCommand(commands.LocalDatabaseCommand):
         )
         """,
         "DELETE FROM ir_config_parameter where key ='database.enterprise_code'",
+        "DELETE FROM ir_config_parameter WHERE key='report.url'",
         "UPDATE ir_config_parameter SET value='http://localhost:8069' WHERE key='web.base.url'",
-        "UPDATE ir_config_parameter SET value='http://localhost:8069' WHERE key='report.url'",
         "UPDATE ir_cron SET active='False'",
         "DELETE FROM fetchmail_server",
         "DELETE FROM ir_mail_server",
         "DO $$ BEGIN IF (EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES  WHERE TABLE_NAME = 'auth_oauth_provider')) "
         "THEN UPDATE auth_oauth_provider SET enabled = false; END IF; END; $$",
+        "DELETE FROM ir_config_parameter WHERE key IN ('ocn.ocn_push_notification','odoo_ocn.project_id', 'ocn.uuid')",
+        "UPDATE ir_module_module SET state='uninstalled' WHERE name ilike '%saas%'",
+        "DELETE FROM ir_ui_view WHERE name ilike '%saas%'",
     ]
 
     def __init__(self, args: Namespace):
