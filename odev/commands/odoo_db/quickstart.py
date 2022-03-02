@@ -86,7 +86,7 @@ class QuickStartCommand(
 
         try:
             if mode == "version":
-                result = init.InitCommand.run_with(**self.args.__dict__, version=self.subarg)
+                result = init.InitCommand.run_with(**dict(self.args.__dict__, version=self.subarg))
             else:
                 if mode == "url":
                     result = dump.DumpCommand.run_with(

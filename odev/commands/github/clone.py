@@ -17,7 +17,7 @@ from odev.utils.shconnector import ShConnector, get_sh_connector
 
 _logger = logging.getLogger(__name__)
 
-MIN_LEVENSTHEIN_SCORE = 3
+MIN_LEVENSTHEIN_SCORE = 1
 MAX_CHOICE_NUMBER = 3
 
 RE_BRANCH_VERSION = re.compile(r"^([a-z~0-9]+\.[0-9]+-)")

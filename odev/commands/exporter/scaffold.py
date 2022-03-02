@@ -5,6 +5,7 @@ from collections import defaultdict
 from typing import Any, Mapping
 
 import pre_commit.constants as C
+import tldextract
 from packaging.version import Version
 from pre_commit.commands.install_uninstall import install
 
@@ -17,6 +18,9 @@ from odev.utils.github import is_git_repo
 
 
 _logger = logging.getLogger(__name__)
+
+
+REPO_NAME = {1: "psbe-custom", 2: "pshk-custom", 3: "psae-custom", 4: "psus-custom", 5: "psus-custom"}
 
 
 class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
@@ -40,27 +44,18 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             "default": "prod",
             "help": "Default database to use (use staging for test)",
         },
-        {
-            "aliases": ["-d", "--db"],
-            "metavar": "VERSION|PATH|URL",
-            "dest": "source",
-            "help": """
-            One of the following:
-                - an Odoo version number to create and init an empty database
-                - a path to a local dump file to restore to a new database
-                - a url to an Odoo SaaS or SH database to dump and restore locally
-            """,
-        },
     ]
 
     analysis: Mapping[str, Any]
     export_type = "scaffold"
 
     def __init__(self, args: Namespace):
-        args.database = args.name
+        super().__init__(args)
+
         self.module_name = args.name
 
-        super().__init__(args)
+        no_cache_extract = tldextract.TLDExtract(cache_dir=False)
+        self.url_info = no_cache_extract(args.source)
 
         connection = PSTOOLS_DB[self.args.env]
         self.init_connection(connection["url"], connection["db"], PSTOOLS_USER, PSTOOLS_PASSWORD)
@@ -69,6 +64,13 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         _logger.info(f"Generate scaffold code for analysis : {self.args.task_id}")
 
         try:
+            self.analysis = self.get_analysis()
+            self._init_config()
+
+            if self.args.path == ".":
+                _logger.info("Trying to generate a logical addons-path")
+                self.args.path = self._get_default_path()
+
             self.export()
 
             if is_git_repo(self.args.path):
@@ -128,14 +130,29 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         self.manifest["version"] = str(self._get_version(short=False))
         self.manifest["task_id"] = self.analysis["task_id"]
 
+    def _get_default_path(self) -> str:
+        saas_repo_name = REPO_NAME.get(self.analysis["company_id"][0], "psbe-custom")
+        countries_prefix = {id: country.split("-")[0] for id, country in REPO_NAME.items()}
+        country_prefix = countries_prefix.get(self.analysis["company_id"][0], "psbe")
+        db_name = self.url_info.subdomain or self.args.database
+        branch_name = repo_name = ""
+
+        if self.type == "saas":
+            repo_name = saas_repo_name
+            branch_name = f"{self.analysis['version'][1]}-{db_name}"
+        else:
+            repo_name = (
+                f"{country_prefix}-{db_name}" if not [c for c in countries_prefix.values() if c in db_name] else db_name
+            )
+
+        return os.path.join(self.config["odev"].get("paths", "dev"), "odoo-ps", repo_name, branch_name)
+
     def export(self) -> None:
-        self.analysis = self.get_analysis()
         _logger.info(
             f"Ps-Tools DB : Scaffold analysis {self.analysis['name']} "
             f"({self.analysis['task_id']}) into {self.args.path}"
         )
         self.safe_mkdir(self.args.path, self.args.name)
-        self._init_config()
 
         models = self._generate_data_models()
         self._generate_unit_test(models)
@@ -156,12 +173,11 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         analysis.write(self.analysis["id"], {"state": "scaffolded"})
 
     def print_info(self):
-        repo_name = {1: "psbe-custom", 2: "pshk-custom", 3: "psae-custom", 4: "psus-custom"}
 
         if self.type == "sh":
             remote_git = "git@github.com:odoo-ps/[CLIENT_REPO].git"
         else:
-            remote_git = f"git@github.com:odoo-ps/{repo_name.get(self.analysis['company_id'][0], 'psbe-custom')}.git"
+            remote_git = f"git@github.com:odoo-ps/{REPO_NAME.get(self.analysis['company_id'][0], 'psbe-custom')}.git"
 
         github_user = CredentialsHelper().get("github.user", "GitHub username:")
 
@@ -576,14 +592,15 @@ for rec in records:
 
     def _generate_controller(self):
         _logger.debug("Generate controller")
-        if self.type == "saas":
-            _logger.warning("Tried to generate a controller for a saas project, ignored.")
-            return
 
         controller_line = self.connection.get_model("presales.controller_line")
         controller_line_ids = controller_line.search_read([("id", "in", self.analysis["controller_line_ids"])])
 
         if controller_line_ids:
+            if self.type == "saas":
+                _logger.warning("Tried to generate a controller for a saas project, ignored.")
+                return
+
             cfg = self.export_config.config["controller"]
             self.generate_template({"controllers": controller_line_ids}, cfg)
 

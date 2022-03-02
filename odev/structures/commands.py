@@ -999,7 +999,7 @@ class ExportCommand(Command, ABC, Template):
         {
             "aliases": ["--path"],
             "default": ".",
-            "help": "Path of the folder to create the module (default=CWD)",
+            "help": "Path of the folder to create the module (magically generated if clone failed)",
         },
         {
             "aliases": ["--name"],
