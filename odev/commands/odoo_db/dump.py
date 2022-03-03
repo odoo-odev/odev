@@ -306,7 +306,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
                     raise SHDatabaseTooLarge(f"Downloading large dumps is not supported for {branch_mode} databases")
 
         elif platform == "saas":
-            dump_url = f"{self.url}/saas_worker/dump.{ext}"
+            dump_url = f"{self.source}/saas_worker/dump.{ext}"
 
         return dump_url
 
