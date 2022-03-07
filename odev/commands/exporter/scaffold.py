@@ -182,6 +182,14 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
         github_user = CredentialsHelper().get("github.user", "GitHub username:")
 
+        if github_user:
+            gh_user_part = re.split("[-@]", github_user)
+
+            if gh_user_part:
+                github_user = gh_user_part[0]
+
+        domain = self.url_info.subdomain.replace("-", "_").lower()
+
         _logger.info(
             "\n\t".join(
                 [
@@ -189,7 +197,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                     f"cd {os.path.join(self.args.path)}",
                     "git init",
                     f"git remote add origin {remote_git}",
-                    f"git checkout -b {self.export_config.version}-{self.analysis['task_id']}-{github_user}",
+                    f"git checkout -b {self.export_config.version}-{domain}-{self.analysis['task_id']}-{github_user}",
                     "git submodule add git@github.com:odoo-ps/psbe-internal.git"
                     if self.analysis["integration_line_ids"]
                     else "",
