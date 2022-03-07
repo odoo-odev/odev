@@ -66,6 +66,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
 
         if self.mode == "online":
             self.source = self.sanitize_url(f"""{'https://' if not re_http.match(args.source) else ''}{args.source}""")
+            self.database = args.database
         else:
             self.database = args.source
 
