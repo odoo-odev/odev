@@ -251,7 +251,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             sh_database = self._get_response_data(res, re_database, "database name")
             sh_build = sh_database.split("-")[-1]
             sh_path = f"/home/odoo/backup.daily/{sh_database}_daily.{ext}"
-            ssh_url = f"{sh_build}@{self.url.split('/')[2]}"
+            ssh_url = f"{sh_build}@{self.source.split('/')[2]}"
 
             with SSHClient(url=ssh_url) as ssh:
                 _logger.info(f"Downloading dump from {ssh_url}:{sh_path} to {destfile}...")
