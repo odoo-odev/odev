@@ -61,7 +61,7 @@ def get_odoo_version(version: str) -> str:
     match = re.match(r"(?:saas[-~+])?(\d+)\.(?:saas[-~+])?(\d+)", version)
     if not match:
         raise InvalidVersion(version)
-    return (".saas~" if "saas" in version else ".").join(match.groups())
+    return f"{'saas~' if 'saas' in version else ''}{'.'.join(match.groups())}"
 
 
 def parse_odoo_version(version: str) -> Version:
