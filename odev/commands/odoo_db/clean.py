@@ -30,11 +30,11 @@ class CleanCommand(commands.LocalDatabaseCommand):
     aliases = ["cl"]
     queries = [
         """
-        UPDATE res_users SET login='admin',password='admin'
+        UPDATE res_users SET login='admin',password='admin', totp_secret=NULL
         WHERE id IN (SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 1)
         """,
         """
-        UPDATE res_users SET password='odoo'
+        UPDATE res_users SET password='odoo', totp_secret=NULL
         WHERE login != 'admin' AND password IS NOT NULL AND id IN (
             SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 50
         )
