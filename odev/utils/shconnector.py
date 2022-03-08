@@ -149,9 +149,13 @@ class ShConnector(object):
         assert self.session is not None
         return self.session.cookies.get("session_id", domain="www.odoo.sh")
 
-    def jsonrpc(self, url, params=None, method="call", version="2.0", allow_empty=True, retry=False):
+    def jsonrpc(self, url, params=None, method="call", version="2.0", allow_empty=True, retry=None):
         if params is None:
             params = {}
+        if retry is None:
+            retry = 3
+        if retry is not None:
+            retry -= 1
         data = {
             "jsonrpc": version,
             "method": method,
@@ -163,8 +167,8 @@ class ShConnector(object):
             resp = self.session.post(url=url, json=data)
             resp_data = resp.json()
         except Exception:  # FIXME: too broad?
-            # probably too hardcore
-            if retry:
+            if retry and retry > 0:
+                _logger.debug(f"Connection to SH failed, {retry} attempts left", exc_info=True)
                 return self.jsonrpc(url, params, method=method, version=version, retry=retry)
             else:
                 _logger.exception(data)
@@ -183,7 +187,7 @@ class ShConnector(object):
 
         return resp_data["result"]
 
-    def call_kw(self, model, method, args, kwargs=None, retry=False):
+    def call_kw(self, model, method, args, kwargs=None, retry=None):
         if kwargs is None:
             kwargs = {}
         url = f"https://www.odoo.sh/web/dataset/call_kw/{model}/{method}"

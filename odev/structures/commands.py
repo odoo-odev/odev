@@ -907,7 +907,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
         start_time: float = time.monotonic()
         tracking_id: Optional[int] = None
         last_message = "Waiting for SH build to appear..."
-        poll_interval: float = 2.0
+        poll_interval: float = 4.0
         pbar: Optional[SpinnerBar]
         pbar_context: Union[ContextManager, SpinnerBar]
         loop: Iterator
