@@ -30,14 +30,23 @@ class CleanCommand(commands.LocalDatabaseCommand):
     aliases = ["cl"]
     queries = [
         """
-        UPDATE res_users SET login='admin',password='admin', totp_secret=NULL
+        UPDATE res_users SET login='admin',password='admin'
         WHERE id IN (SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 1)
         """,
         """
-        UPDATE res_users SET password='odoo', totp_secret=NULL
+        UPDATE res_users SET password='odoo'
         WHERE login != 'admin' AND password IS NOT NULL AND id IN (
             SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 50
         )
+        """,
+        """
+        DO $$ BEGIN IF (EXISTS (
+            SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'res_users' AND column_name='totp_secret'
+            ))
+            THEN UPDATE res_users SET totp_secret = NULL AND id IN (
+                SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 51
+            );
+        END IF; END; $$
         """,
         "DELETE FROM ir_config_parameter where key ='database.enterprise_code'",
         "DELETE FROM ir_config_parameter WHERE key='report.url'",
@@ -92,6 +101,6 @@ class CleanCommand(commands.LocalDatabaseCommand):
         self.config["databases"].set(self.database, "clean", True)
 
         _logger.info("Login to the administrator account with the credentials 'admin:admin'")
-        _logger.info("Login to any other account with their email address and the password 'odoo'")
+        _logger.info("Login to the first 50 users with their email address and the password 'odoo'")
 
         return 0
