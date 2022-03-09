@@ -56,8 +56,32 @@ UPGRADE_STEPS: Sequence[str] = [
 RUNNER_SCRIPT: str = """
 import os
 import re
+import sys
 from types import ModuleType
 from typing import List, Any, Union, Optional
+
+
+# restore stdin to terminal
+sys.stdin.close()
+sys.stdin = open(os.ctermid())
+
+
+# --- START PATCH subprocess.Popen to set stdin to tty --- #
+
+from subprocess import Popen
+
+Popen___init____orig = Popen.__init__
+
+
+def Popen___init____patched(*args, stdin=None, **kwargs):
+    if stdin is None:
+        stdin = sys.stdin
+    Popen___init____orig(*args, stdin=stdin, **kwargs)
+
+
+Popen.__init__ = Popen___init____patched
+
+# --- END PATCH --- #
 
 
 home_path: str = os.environ["UPGRADE_HOME_PATH"]  # required
