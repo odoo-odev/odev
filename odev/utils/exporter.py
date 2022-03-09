@@ -21,7 +21,7 @@ class Config:
 
         self._parse_json()
 
-        self.all_models = [x for x in self.config["base_model"]]
+        self.all_models = list(self.config["base_model"])
         self.included_models = [x for x, y in self.config["base_model"].items() if "parent" in y]
 
     def _parse_json(self):

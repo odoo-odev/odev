@@ -133,10 +133,10 @@ class QuickStartCommand(
                 shutil.rmtree(TMP_DIR)
 
         if mode == "url":
-            clone.CloneCommand.run_with(**self.args.__dict__, url=self.subarg)
+            clone.CloneCommand.run_with(**dict(self.args.__dict__, url=self.subarg))
 
         if self.args.task_id:
             self.args.path = self.globals_context.get("repo_git_path", self.args.path)
-            result = result + scaffold.ScaffoldCommand.run_with(**self.args.__dict__)
+            result += scaffold.ScaffoldCommand.run_with(**self.args.__dict__)
 
         return result

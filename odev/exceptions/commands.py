@@ -27,3 +27,23 @@ class InvalidArgument(CommandException):
 
 class InvalidQuery(CommandException):
     """Raised when an error occurred while running SQL queries on a database."""
+
+
+class InvalidFileArgument(InvalidArgument):
+    """Raised when a file passed as an argument cannot be used."""
+
+    def __init__(
+        self,
+        message: Optional[str] = None,
+        file: Optional[str] = None,
+        *args: List[Any],
+        **kwargs: MutableMapping[str, Any],
+    ) -> None:
+        if message is None:
+            message = "Invalid file content or format"
+
+        if file and file not in message:
+            message += f": {file}"
+
+        super().__init__(message, *args, **kwargs)
+        self.file = file

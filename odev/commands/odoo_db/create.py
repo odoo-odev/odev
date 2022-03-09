@@ -45,11 +45,16 @@ class CreateCommand(commands.LocalDatabaseCommand):
             raise InvalidDatabase(f"Database {self.database} already exists {message}")
 
         _logger.info(f"Creating database {self.database}")
-        query = f"""CREATE DATABASE "{self.database}";"""
 
         if self.template and self.db_exists_all(database=self.template):
             self.ensure_stopped(database=self.template)
-            query = f"""CREATE DATABASE "{self.database}" WITH TEMPLATE "{self.template}";"""
+
+        query = f"""
+            CREATE DATABASE "{self.database}"
+                WITH TEMPLATE "{self.template or 'template0'}"
+                LC_COLLATE 'C'
+                ENCODING 'unicode';
+        """
 
         result = self.run_queries(query, database=DEFAULT_DATABASE)
 

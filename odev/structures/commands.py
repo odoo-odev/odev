@@ -156,6 +156,11 @@ class BaseCommand(ABC):
 
     is_abstract: ClassVar[bool] = False
 
+    capture_output: bool = False
+    """
+    If True, return the output of commands executed through `run_with`.
+    """
+
     _globals_context: ClassVar[MutableMapping[str, Any]] = {}
 
     @property
@@ -180,6 +185,9 @@ class BaseCommand(ABC):
 
         # Raise errors unless explicitly disabled through `run_with()` with `do_raise=False`
         self.args.do_raise = "do_raise" not in self.args or self.args.do_raise
+
+        # Capture subprocesses output
+        self.args.capture_output = "capture_output" in self.args and self.args.capture_output
 
         if not logging.interactive and not logging.assume_prompted:
             _logger.info(f"""Assuming '{'yes' if logging.assume_yes else 'no'}' for all confirmation prompts""")
@@ -266,12 +274,18 @@ class BaseCommand(ABC):
             parser.add_argument(*aliases, **params)
 
     @classmethod
-    def run_with(cls, *args, do_raise: bool = True, **kwargs) -> Any:
+    def run_with(cls, *args, do_raise: bool = True, capture_output: bool = False, **kwargs) -> int:
         """
         Runs the command directly with the provided arguments, bypassing parsers
         """
         # TODO: automatically fill missing args with None?
-        res = cls(Namespace(**dict(*args, **kwargs), do_raise=do_raise)).run()
+        res = cls(
+            Namespace(
+                **dict(*args, **kwargs),
+                do_raise=do_raise,
+                capture_output=capture_output,
+            )
+        ).run()
 
         if not do_raise and res:
             res = 0

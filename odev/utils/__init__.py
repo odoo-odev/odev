@@ -11,3 +11,4 @@ from . import secrets
 from . import shconnector
 from . import signal
 from . import spinner
+from . import rpc

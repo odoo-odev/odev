@@ -17,8 +17,15 @@ from signal import SIGINT, SIGTERM, signal
 from subprocess import CalledProcessError
 
 from git.exc import GitCommandError
+from odoolib import JsonRPCException
 
-from odev.exceptions.commands import CommandAborted, CommandMissing, InvalidArgument, InvalidQuery
+from odev.exceptions.commands import (
+    CommandAborted,
+    CommandMissing,
+    InvalidArgument,
+    InvalidFileArgument,
+    InvalidQuery,
+)
 from odev.exceptions.odoo import (
     InvalidDatabase,
     InvalidOdooDatabase,
@@ -99,9 +106,12 @@ def main():  # noqa: C901 - Complexity
     except CommandMissing as e:
         _logger.error(str(e))
         code = 101
-    except InvalidArgument as e:
+    except InvalidFileArgument as e:
         _logger.error(str(e))
         code = 102
+    except InvalidArgument as e:
+        _logger.error(str(e))
+        code = 103
 
     # Commands
 
@@ -135,6 +145,20 @@ def main():  # noqa: C901 - Complexity
     except MissingOdooDependencies as e:
         _logger.error(str(e))
         code = 402
+
+    # Odoolib RPC
+
+    except JsonRPCException as e:
+        indent = " " * 5
+        traceback = indent + e.error["data"]["debug"].replace("\n", f"\n{indent}")
+        _logger.error(f"An error occurred during RPC call:\n{traceback}")
+        code = 501
+
+    # OS and filesystem
+
+    except FileNotFoundError as e:
+        _logger.error(f"{e.strerror}: {e.filename}")
+        code = e.errno
 
     # ============================================================================== #
     # FIXME: implement custom exceptions to catch expected errors and graceful exit. #

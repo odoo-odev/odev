@@ -1,14 +1,23 @@
+import ast
+import glob
 import os
 import re
 import subprocess
 from datetime import datetime, timedelta
 from subprocess import DEVNULL
-from typing import List, Mapping, Optional
+from typing import Any, List, Mapping, Optional
 
 import requests
 from packaging.version import Version
 
-from odev.constants import DEFAULT_DATETIME_FORMAT, ODOO_MANIFEST_NAMES, ODOO_MASTER_REPO, RE_ODOO_DBNAME
+from odev.constants import (
+    DEFAULT_DATETIME_FORMAT,
+    ODOO_MANIFEST_NAMES,
+    ODOO_MASTER_REPO,
+    ODOO_REPOSITORIES,
+    ODOO_UPGRADE_REPOSITORIES,
+    RE_ODOO_DBNAME,
+)
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
 from odev.utils import logging
 from odev.utils.config import ConfigManager
@@ -21,17 +30,33 @@ from odev.utils.signal import capture_signals
 _logger = logging.getLogger(__name__)
 
 
+def is_really_module(path: str, name: str) -> bool:
+    return any(os.path.isfile(os.path.join(path, name, mname)) for mname in ODOO_MANIFEST_NAMES)
+
+
+def get_manifest(path: str, module: str) -> Optional[Mapping[str, Any]]:
+    """
+    Get the content of the manifest of an Odoo module
+    and parse its content to a usable dict.
+    """
+    for manifest_name in ODOO_MANIFEST_NAMES:
+        manifest_path = os.path.join(path, module, manifest_name)
+
+        if not os.path.isfile(manifest_path):
+            continue
+
+        with open(manifest_path) as manifest:
+            return ast.literal_eval(manifest.read())
+
+    return {}
+
+
 def is_addon_path(path):
     def clean(name):
         name = os.path.basename(name)
         return name
 
-    def is_really_module(name):
-        for mname in ODOO_MANIFEST_NAMES:
-            if os.path.isfile(os.path.join(path, name, mname)):
-                return True
-
-    return any(clean(name) for name in os.listdir(path) if is_really_module(name))
+    return any(clean(name) for name in os.listdir(path) if is_really_module(path, name))
 
 
 def is_saas_db(url):
@@ -127,7 +152,7 @@ def prepare_odoobin(
     """
     venv_name = venv_name or "venv"
     branch: str = branch_from_version(version)
-    available_version = get_worktree_list(repos_path + ODOO_MASTER_REPO)
+    available_version = get_worktree_list(repos_path + ODOO_MASTER_REPO, ODOO_REPOSITORIES)
 
     need_pull, last_update = _need_pull(version)
 
@@ -153,11 +178,11 @@ def prepare_odoobin(
     if not do_pull:
         return
 
-    for pull_repo in ("odoo", "enterprise", "design-themes"):
+    for pull_repo in ODOO_REPOSITORIES:
         do_pull |= worktree_clone_or_pull(version_path, pull_repo, branch, skip_prompt=do_pull)
 
     if upgrade:
-        for pull_repo in ("upgrade", "upgrade-specific", "upgrade-platform"):
+        for pull_repo in ODOO_UPGRADE_REPOSITORIES:
             do_pull |= git_clone_or_pull(repos_path, pull_repo, skip_prompt=do_pull)
 
 
@@ -185,21 +210,20 @@ def prepare_venv(repos_path: str, version: str, venv_name: str):
 
 
 def prepare_requirements(repos_path: str, version: str, venv_name="venv", addons: Optional[List[str]] = None):
-    if addons is None:
-        addons = []
-
     version_path: str = repos_version_path(repos_path, version)
 
     venv_python: str = f"{version_path}/{venv_name}/bin/python"
 
     _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
-    for addon_path in addons + [os.path.join(version_path, "odoo")]:
+    install_packages(packages="pip setuptools pudb ipdb websocket-client", python_bin=venv_python)
+
+    all_addons = [os.path.join(version_path, "odoo")] + list_submodule_addons(addons or [])
+
+    for addon_path in all_addons:
         try:
             install_packages(requirements_dir=addon_path, python_bin=venv_python)
         except FileNotFoundError:
             continue
-
-    install_packages(packages="pudb ipdb", python_bin=venv_python)
 
 
 def _need_pull(version: str):
@@ -210,3 +234,16 @@ def _need_pull(version: str):
     need_pull = (datetime.today() - datetime.strptime(last_update, DEFAULT_DATETIME_FORMAT)).days > int(limit)
 
     return need_pull, last_update
+
+
+def list_submodule_addons(paths: List[str]) -> List[str]:
+    submodule_addons: List[str] = []
+
+    for addon in paths:
+        submodule_addons += [
+            path
+            for path in glob.iglob(os.path.join(addon, "**/**"), recursive=True)
+            if os.path.isdir(path) and is_addon_path(path)
+        ]
+
+    return list({os.path.normpath(path) for path in paths + submodule_addons})

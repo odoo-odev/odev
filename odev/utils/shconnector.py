@@ -111,7 +111,9 @@ class ShConnector(object):
             users: Sequence[Mapping] = self.jsonrpc(
                 "https://www.odoo.sh/support/json/repo_users", {"repository_id": repo["id"]}
             )
-            matching_users: List[Mapping] = [user for user in users if user.get("username") == self.github_user]
+            matching_users: List[Mapping] = [
+                user for user in users if user.get("username") == self.github_user
+            ] or list(users[:1])
             if len(matching_users) == 1:
                 [user] = matching_users
                 matching_repos_users.append((repo, user))
@@ -351,7 +353,7 @@ class ShConnector(object):
             ],
         )
 
-    def get_prod(self):
+    def get_prod(self) -> List[Mapping[str, Any]]:
         """
         Returns prod branch
         """

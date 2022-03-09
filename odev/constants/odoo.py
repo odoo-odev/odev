@@ -1,7 +1,7 @@
-ODOO_MANIFEST_NAMES = (
+ODOO_MANIFEST_NAMES = [
     "__manifest__.py",
     "__openerp__.py",
-)
+]
 
 ODOO_ADDON_PATHS = [
     "/enterprise",
@@ -10,5 +10,16 @@ ODOO_ADDON_PATHS = [
     "/odoo/addons",
 ]
 
+ODOO_REPOSITORIES = [
+    "odoo",
+    "enterprise",
+    "design-themes",
+]
 
-ODOO_MASTER_REPO = "/master/odoo"
+ODOO_UPGRADE_REPOSITORIES = [
+    "upgrade",
+    "upgrade-specific",
+    "upgrade-platform",
+]
+
+ODOO_MASTER_REPO = "/master/"

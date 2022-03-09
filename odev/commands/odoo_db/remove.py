@@ -48,7 +48,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         keep_filestore = self.keep_template
         dbs = [self.database]
         queries = [f"""DROP DATABASE "{self.database}";"""]
-        info_text = f"Deleting PSQL database {self.database}"
+        info_text = f"Dropping PSQL database {self.database}"
         template_db_name = f"{self.database}{DB_TEMPLATE_SUFFIX}"
 
         if not self.keep_template and self.db_exists(template_db_name):
@@ -65,10 +65,10 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         with_filestore = " and his filestore" if not keep_filestore else ""
 
         _logger.warning(
-            f"You are about to delete the database {self.database}{with_filestore}." " This action is irreversible."
+            f"You are about to delete the database {self.database}{with_filestore}. This action is irreversible."
         )
 
-        if not _logger.confirm(f"Delete database `{self.database}`{with_filestore}?"):
+        if not _logger.confirm(f"Delete database {self.database}{with_filestore}?"):
             raise CommandAborted()
 
         _logger.info(info_text)
@@ -82,7 +82,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         if not result or self.db_exists_all():
             return 1
 
-        _logger.info("Deleted database")
+        _logger.debug(f"Dropped database {self.database}{with_filestore}")
 
         if not keep_filestore:
             filestore = self.db_filestore()
@@ -95,8 +95,6 @@ class RemoveCommand(commands.LocalDatabaseCommand):
                     shutil.rmtree(filestore)
                 except Exception as exc:
                     _logger.warning(f"Error while deleting filestore: {exc}")
-                else:
-                    _logger.info("Deleted filestore from disk")
 
         for db in dbs:
             if db in self.config["databases"]:

@@ -1,7 +1,14 @@
 import os
 import re
 from argparse import Namespace
-from typing import Any
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+)
 
 import Levenshtein as lev
 import tldextract
@@ -10,7 +17,7 @@ from giturlparse import parse
 
 from odev.structures import commands
 from odev.utils import logging
-from odev.utils.github import git_clone, git_pull
+from odev.utils.github import git_clone, git_pull, is_git_repo
 from odev.utils.odoo import is_saas_db
 from odev.utils.shconnector import ShConnector, get_sh_connector
 
@@ -52,8 +59,6 @@ class CloneCommand(commands.Command):
         self.url_info = no_cache_extract(self.args.url)
 
     def run(self):
-        repos = []
-
         is_github_url = self.url_info.domain == "github"
         is_saas_url = is_github_url or is_saas_db(self.args.url)
 
@@ -61,44 +66,50 @@ class CloneCommand(commands.Command):
 
         _logger.info(f"Trying to {clone_or_find} on github for {self.args.url}")
 
-        if is_github_url:
+        repo = self.select_repo("github" if is_github_url else ("saas" if is_saas_url else "sh"))
+        self.clone(repo)
+        return 0
+
+    def select_repo(self, url_type: str, silent: bool = False) -> Dict[str, Any]:
+        assert url_type in ["github", "saas", "sh"]
+        repo_type = "repository"
+
+        if url_type == "github":
             repo: Any = parse(self.args.url)
             repos = [{"repo": f"{repo.owner}/{repo.repo}", "organization": repo.owner, "branch": self.args.branch}]
-
-        elif is_saas_url:
+        elif url_type == "saas":
+            repo_type = "branch"
             repos = self._get_saas_repo()
-        else:
+        else:  # url_type == "sh"
             repos = self._get_sh_repo()
 
+        if not repos:
+            if not silent:
+                _logger.warning(f"No {repo_type} found for {self.args.url}")
+            return {}
+
         if len(repos) > 1:
-            text = f'Found multiple {"branch" if is_saas_url else "repository"} for database : {self.args.url} :'
+            text = f"Found multiple {repo_type} for database : {self.args.url} :"
             repos = sorted(repos[0:MAX_CHOICE_NUMBER], key=lambda r: r["branch"], reverse=True)
 
             for index, ref in enumerate(repos):
-                text = text + f"\n  {str(index + 1)}) {ref['branch'] or ref['db_name']} ({str(ref['repo'])})"
+                text += f"\n  {str(index + 1)}) {ref['branch'] or ref['db_name']} ({str(ref['repo'])})"
 
             _logger.info(text)
             choice = _logger.ask("Please choose the correct one ? ", "1", list(map(str, range(1, MAX_CHOICE_NUMBER))))
 
             repos = [repos[int(choice) - 1]]
 
-        if not repos:
-            _logger.warning(f'No {"branch" if is_saas_url else "repository"} found for database : {self.args.url}')
-            return 1
+        return repos[0]
 
-        self.clone(repos[0])
-
-        return 0
-
-    def _get_saas_repo(self):
+    def _get_saas_repo(self) -> List[Dict[str, Any]]:
         # To use PyGithub we need to be inside a repository
         odev_path = self.config["odev"].get("paths", "odev")
         odev_repo = Repo(odev_path)
         saas_repo = (self.config["odev"].get("repos", "saas_repos") or "").split(",")
-        repos = []
+        repos: List[Dict[str, Any]] = []
 
         for ps_repo in saas_repo:
-            # TODO: Use giturlparse ?
             organization = ps_repo.split("/")[0]
             branch_list = odev_repo.git.ls_remote("--heads", f"git@github.com:{ps_repo}.git")
 
@@ -125,26 +136,42 @@ class CloneCommand(commands.Command):
 
         return repos
 
-    def _get_sh_repo(self):
-        sh_connector: ShConnector = get_sh_connector()
+    def __filter_repos_by_name(
+        self, key: str, pattern: re.Pattern, repos: Optional[Sequence[Mapping[str, Any]]] = None
+    ) -> List[Mapping[str, Any]]:
+        repos = repos or get_sh_connector().repos
+        return [repo for repo in repos if pattern.match(repo[key])]
+
+    def _get_sh_repo(self) -> List[Dict[str, Any]]:
+        sh_connector = get_sh_connector()
 
         if not sh_connector.repos:
-            _logger.error("Can't retrieve the repo list from odoo.sh support page")
+            _logger.error("Can't retrieve the repositories list from Odoo SH support page")
 
-        repos = [
+        sh_repos = self.__filter_repos_by_name(
+            "full_name",
+            re.compile(rf"[a-z0-9\-]+\/(ps(ae|hk|be|us)?\-)?{self.url_info.subdomain}$", re.IGNORECASE),
+            sh_connector.repos,
+        ) or self.__filter_repos_by_name(
+            "project_name",
+            re.compile(re.escape(self.url_info.subdomain), re.IGNORECASE),
+            sh_connector.repos,
+        )
+
+        repos: List[Dict[str, Any]] = [
             {
-                "repo": f"{x['full_name']}",
-                "organization": x["full_name"].split("/")[0],
+                "repo": repo["full_name"],
+                "organization": repo["full_name"].split("/")[0],
                 "branch": "",
-                "db_name": x["project_name"],
-                "levenshtein": lev.distance(self.url_info.subdomain, x["project_name"]),  # type: ignore
+                "db_name": repo["project_name"],
+                "levenshtein": lev.distance(self.url_info.subdomain, repo["project_name"]),  # type: ignore
             }
-            for x in sh_connector.repos
+            for repo in sh_repos
         ]
 
-        return self._filter(repos)
+        return self._filter(repos) if len(repos) > 1 else repos
 
-    def _filter(self, repos):
+    def _filter(self, repos) -> List[Dict[str, Any]]:
         repos_match_lev = []
         repos = sorted(repos, key=lambda b: b["levenshtein"])
 
@@ -156,7 +183,7 @@ class CloneCommand(commands.Command):
 
         return repos_match_lev
 
-    def clone(self, repo):
+    def clone(self, repo: Mapping[str, Any]):
         dir_name = ""
         devs_path = self.config["odev"].get("paths", "dev")
         parent_path = os.path.join(devs_path, repo["organization"])
@@ -167,16 +194,19 @@ class CloneCommand(commands.Command):
             repo_path = os.path.join(repo_path, repo["branch"])
             dir_name = repo["branch"]
 
-        type_repo = f"branch {repo['branch']} from" if repo["branch"] else "repo"
-
-        if os.path.exists(repo_path):
-            if _logger.confirm(f"The {type_repo} {repo['repo']} already exist, do you to pull ?"):
-                git_pull(repo_path, repo["branch"])
-        else:
-
-            _logger.info(f"The {type_repo} {repo['repo']} will lbe cloned into {devs_path}")
-            git_clone(
-                parent_path, repo["repo"], repo["branch"], organization=repo["organization"], repo_dir_name=dir_name
-            )
-
         self.globals_context["repo_git_path"] = repo_path
+
+        type_repo = f"branch {repo['branch']} from" if repo["branch"] else "repository"
+
+        if is_git_repo(repo_path):
+            if _logger.confirm(f"The {type_repo} {repo['repo']} already exists, do you want to pull changes now?"):
+                git_pull(repo_path, repo["branch"], repo["repo"])
+        else:
+            _logger.info(f"The {type_repo} {repo['repo']} will be cloned to {repo_path}")
+            git_clone(
+                parent_path,
+                repo["repo"],
+                repo["branch"],
+                organization=repo["organization"],
+                repo_dir_name=dir_name,
+            )

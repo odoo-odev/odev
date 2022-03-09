@@ -1,6 +1,6 @@
 from argparse import Namespace
 
-from odev.constants import ODOO_MASTER_REPO
+from odev.constants import ODOO_MASTER_REPO, ODOO_REPOSITORIES
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
 from odev.utils import logging, odoo
@@ -39,7 +39,7 @@ class PullCommand(commands.Command):
     def run(self):
         config = ConfigManager("odev")
         odoo_path = config.get("paths", "odoo")
-        odoo_version = get_worktree_list(odoo_path + ODOO_MASTER_REPO)
+        odoo_version = get_worktree_list(odoo_path + ODOO_MASTER_REPO, ODOO_REPOSITORIES)
 
         if self.args.version:
             try:

@@ -1,16 +1,19 @@
 """Python and venv-related utilities"""
 
 import os
+import re
 import subprocess
 import sys
-from subprocess import DEVNULL
-from typing import Iterable, Optional, Union
+from typing import Iterable, List, Optional, Union
 
 from odev.utils import logging
 from odev.utils.signal import capture_signals
 
 
 _logger = logging.getLogger(__name__)
+
+
+PIP_ERROR_TAG = "ERROR: "
 
 
 def install_packages(
@@ -55,4 +58,10 @@ def install_packages(
     _logger.log(log_level, log_msg)
 
     with capture_signals():
-        subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
+        pip_result = subprocess.getoutput(command)
+
+    pip_errors: List[str] = re.findall(rf"^{PIP_ERROR_TAG}", pip_result)
+
+    for pip_error in pip_errors:
+        msg = pip_error[len(PIP_ERROR_TAG) :]
+        _logger.warning(msg[0].capitalize() + msg[1:])

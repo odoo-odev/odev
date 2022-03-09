@@ -1,6 +1,7 @@
 """Initializes an empty PostgreSQL database for a specific Odoo version."""
 
 import os
+import re
 import shlex
 import subprocess
 from argparse import Namespace
@@ -49,6 +50,7 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
         super().__init__(args)
         self.version = args.version
         self.additional_args = args.args
+        self.args.addons = self.args.addons if "addons" in self.args and self.args.addons else []
 
     def run(self):
         """
@@ -73,32 +75,41 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
 
         odoo.prepare_odoobin(repos_path, version, skip_prompt=self.args.pull)
 
-        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS]
+        addons = [version_path + addon_path for addon_path in ODOO_ADDON_PATHS] + self.args.addons
+        addons = [path for path in addons if odoo.is_addon_path(path)]
         odoo.prepare_requirements(repos_path, version, addons=addons)
 
         python_exec = os.path.join(version_path, "venv/bin/python")
         addons_path = ",".join(addons)
+
+        if not any(re.compile(r"^(-i|--install)").match(arg) for arg in self.additional_args):
+            self.additional_args += ["-i", "base"]
+
         command = shlex.join(
             [
                 python_exec,
                 odoobin,
                 *("-d", self.database),
                 f"--addons-path={addons_path}",
-                *("-i", "base"),
                 "--stop-after-init",
                 *self.additional_args,
             ]
         )
         _logger.info(f"Running: {command}")
 
+        result = 0
+
         with capture_signals():
-            subprocess.run(command, shell=True, check=True)
+            if self.capture_output:
+                self.globals_context["init_result"] = subprocess.getoutput(command)
+            else:
+                subprocess.run(command, shell=True, check=True)
 
-        result = self.run_queries(self.queries)
+        result_queries = self.run_queries(self.queries)
 
-        if not result:
+        if not result_queries:
             raise InvalidQuery(f"An error occurred while setting up database {self.database}")
 
         self.config["databases"].set(self.database, "version_clean", version)
 
-        return 0
+        return result

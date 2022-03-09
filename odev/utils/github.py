@@ -4,16 +4,20 @@ import re
 from datetime import datetime, timedelta
 from functools import partial
 from logging import getLevelName
-from typing import Callable, Optional, Set
+from typing import (
+    Callable,
+    List,
+    Optional,
+    Set,
+    Union,
+)
 
 import git
 from git import (
     GitCommandError,
-    Head,
     InvalidGitRepositoryError,
     NoSuchPathError,
     Remote,
-    RemoteReference,
     Repo,
 )
 from github import Github
@@ -96,11 +100,15 @@ def git_clone(
         repo_name = repo_dir_name
 
     _logger.info(f"Cloning {title or repo_name}" + (f" on branch {branch}" if branch else ""))
+    clone_options: List[str] = ["--recurse-submodules"]
+
+    if branch:
+        clone_options += [f"--branch {branch}"]
 
     Repo.clone_from(
         f"git@github.com:{url_path}.git",
         f"{parent_dir}/{repo_name}",
-        multi_options=[f"--branch {branch}"] if branch else None,
+        multi_options=clone_options,
     )
 
 
@@ -352,13 +360,23 @@ def self_update() -> bool:
     return did_update
 
 
-def get_worktree_list(odoo_path):
-    if not is_git_repo(odoo_path):
-        return []
+def get_worktree_list(odoo_path: str, repos: Union[str, List[str]]) -> List[str]:
+    if isinstance(repos, str):
+        repos = [repos]
 
-    repo = git.Repo(odoo_path)
-    _logger.debug(f"Launching git prune on {odoo_path}")
-    repo.git.worktree("prune")
-    worktree_list = repo.git.worktree("list", "--porcelain")
+    repos = [os.path.join(odoo_path, repo) for repo in repos if is_git_repo(os.path.join(odoo_path, repo))]
 
-    return [os.path.basename(b) for b in worktree_list.split("\n") if "branch" in b and "master" not in b]
+    re_worktree_versions = re.compile(r"\nbranch\srefs/heads/([^(master)\n]+)")
+    all_versions: Set[str] = set()
+    installed_versions: Set[str] = set()
+
+    for repo_path in repos:
+        repo = git.Repo(repo_path)
+        _logger.debug(f"Launching git prune on {repo_path}")
+        repo.git.worktree("prune")
+        worktree_list = repo.git.worktree("list", "--porcelain")
+        worktree_versions = set(re_worktree_versions.findall(worktree_list))
+        all_versions |= worktree_versions
+        installed_versions = all_versions & worktree_versions
+
+    return list(installed_versions)

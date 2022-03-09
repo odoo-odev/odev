@@ -1,6 +1,7 @@
 """Runs a local Odoo database."""
 
 import os
+import re
 import shlex
 import subprocess
 from argparse import Namespace
@@ -8,7 +9,7 @@ from datetime import datetime
 
 from odev.commands.odoo_db import remove
 from odev.constants import DB_TEMPLATE_SUFFIX, ODOO_ADDON_PATHS
-from odev.exceptions.odoo import InvalidDatabase, RunningOdooDatabase
+from odev.exceptions.odoo import RunningOdooDatabase
 from odev.structures import actions, commands
 from odev.utils import logging, odoo
 from odev.utils.signal import capture_signals
@@ -132,8 +133,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
         addons = [path for path in addons if odoo.is_addon_path(path)]
 
         if (
-            "-i" in self.additional_args
-            or "-u" in self.additional_args
+            any(re.compile(r"^(-i|--install|-u|--update)").match(arg) for arg in self.additional_args)
             or not self.config["databases"].get(self.database, "last_run", False)
             or self.args.alt_venv
         ):

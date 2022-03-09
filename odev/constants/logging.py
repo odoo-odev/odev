@@ -64,6 +64,7 @@ THEMES = {
             "odev.commands.odoo_sh.sh_rebuild": term.blueviolet,
             "odev.commands.odoo_sh.sh_upgrade": term.mediumpurple1,
             "odev.commands.odoo_sh.upload": term.darkviolet,
+            "odev.commands.odoo_sh.sh_monitor": term.lightseagreen,
             # Utils
             "odev.utils.github": term.steelblue2,
         },
@@ -118,6 +119,7 @@ THEMES = {
             "odev.commands.odoo_sh.sh_rebuild": term.on_blueviolet,
             "odev.commands.odoo_sh.sh_upgrade": term.on_mediumpurple1,
             "odev.commands.odoo_sh.upload": term.on_darkviolet,
+            "odev.commands.odoo_sh.sh_monitor": term.lightseagreen,
             # Utils
             "odev.utils.github": term.on_steelblue2,
         },
