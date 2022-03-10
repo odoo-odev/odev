@@ -273,7 +273,7 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.BaseCommand):
         # Check Assignations
         # -------------------------------------------------------------~
 
-        is_assigned = self._rpc_read(["project_owner"]).get("project_owner")
+        is_assigned = self._rpc_read(["project_owner_id"]).get("project_owner_id")
 
         if self.args.filter_assigned and not is_assigned:
             _logger.warning("Project is not assigned, skipping")
