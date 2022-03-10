@@ -56,7 +56,9 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         self.module_name = args.name
 
         no_cache_extract = tldextract.TLDExtract(cache_dir=False)
-        self.url_info = no_cache_extract(args.source)
+
+        url_info = no_cache_extract(args.source) if "source" in self.args else None
+        self.database = url_info.subdomain if url_info else self.args.database or "[CLIENT_NAME]"
 
         connection = PSTOOLS_DB[self.args.env]
         self.init_connection(connection["url"], connection["db"], PSTOOLS_USER, PSTOOLS_PASSWORD)
@@ -135,15 +137,16 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         saas_repo_name = REPO_NAME.get(self.analysis["company_id"][0], "psbe-custom")
         countries_prefix = {id: country.split("-")[0] for id, country in REPO_NAME.items()}
         country_prefix = countries_prefix.get(self.analysis["company_id"][0], "psbe")
-        db_name = self.url_info.subdomain or self.args.database
         branch_name = repo_name = ""
 
         if self.type == "saas":
             repo_name = saas_repo_name
-            branch_name = f"{self.analysis['version'][1]}-{db_name}"
+            branch_name = f"{self.analysis['version'][1]}-{self.database}"
         else:
             repo_name = (
-                f"{country_prefix}-{db_name}" if not [c for c in countries_prefix.values() if c in db_name] else db_name
+                f"{country_prefix}-{self.database}"
+                if not [c for c in countries_prefix.values() if c in self.database]
+                else self.database
             )
 
         return os.path.join(self.config["odev"].get("paths", "dev"), "odoo-ps", repo_name, branch_name)
@@ -188,7 +191,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             if gh_user_part:
                 github_user = gh_user_part[0]
 
-        domain = self.url_info.subdomain.replace("-", "_").lower()
+        domain = self.database.replace("-", "_").lower()
 
         _logger.info(
             "\n\t".join(
