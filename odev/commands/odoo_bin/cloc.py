@@ -1,3 +1,5 @@
+import csv
+import io
 import os
 import re
 import shlex
@@ -22,6 +24,15 @@ class ClocCommand(run.RunCommand):
 
     name = "cloc"
     odoobin_subcommand = "cloc"
+
+    arguments = [
+        {
+            "aliases": ["--csv"],
+            "dest": "csv",
+            "action": "store_true",
+            "help": "Format output as csv",
+        },
+    ]
 
     def run(self):
         self.check_database()
@@ -56,7 +67,8 @@ class ClocCommand(run.RunCommand):
             command_args.insert(2, self.odoobin_subcommand)
 
         command = shlex.join(command_args)
-        _logger.info(f"Running: {command}")
+        if not self.args.csv:
+            _logger.info(f"Running: {command}")
         result = subprocess.getoutput(command)
 
         split = re.split(r"\n-+", result)
@@ -70,18 +82,27 @@ class ClocCommand(run.RunCommand):
             + split_lines[i + 1 : i + 4]
             for i in range(0, len(split_lines), 4)
         ] + [["", *split_totals]]
+        if not self.args.csv:
+            table = Texttable()
+            table.set_deco(Texttable.HEADER)
+            table.set_max_width(term.width - 4)
+            table.set_header_align(table_align)
+            table.set_cols_align(table_align)
+            table.add_rows([table_headers] + table_rows)
 
-        table = Texttable()
-        table.set_deco(Texttable.HEADER)
-        table.set_max_width(term.width - 4)
-        table.set_header_align(table_align)
-        table.set_cols_align(table_align)
-        table.add_rows([table_headers] + table_rows)
+            table_text = table.draw() or ""
+            table_separator = (re.search(r"\n(=+)\n", table_text) or [])[0].strip()
+            table_text_split = table_text.replace(table_separator, term.snow4(table_separator)).split("\n")
+            table_text_split.insert(len(table_text_split) - 1, term.snow4(table_separator.replace("=", "-")))
 
-        table_text = table.draw() or ""
-        table_separator = (re.search(r"\n(=+)\n", table_text) or [])[0].strip()
-        table_text_split = table_text.replace(table_separator, term.snow4(table_separator)).split("\n")
-        table_text_split.insert(len(table_text_split) - 1, term.snow4(table_separator.replace("=", "-")))
+            print("\n" + indent("\n".join(table_text_split), " " * 2), end="")
+        else:
+            output_buffer = io.StringIO()
+            writer = csv.DictWriter(output_buffer, table_headers)
+            writer.writeheader()
+            dict_rows = ({colname: value for colname, value in zip(table_headers, values)} for values in table_rows)
+            writer.writerows(dict_rows)
+            for line in output_buffer.getvalue().splitlines():
+                print(line)
 
-        print("\n" + indent("\n".join(table_text_split), " " * 2), end="")
         return 0
