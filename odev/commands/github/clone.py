@@ -67,7 +67,10 @@ class CloneCommand(commands.Command):
         _logger.info(f"Trying to {clone_or_find} on github for {self.args.url}")
 
         repo = self.select_repo("github" if is_github_url else ("saas" if is_saas_url else "sh"))
-        self.clone(repo)
+
+        if repo:
+            self.clone(repo)
+
         return 0
 
     def select_repo(self, url_type: str, silent: bool = False) -> Dict[str, Any]:
