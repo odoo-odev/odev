@@ -13,6 +13,8 @@ from typing import (
 )
 
 import git
+import git.repo.base
+import git.repo.fun
 from git import (
     GitCommandError,
     InvalidGitRepositoryError,
@@ -20,6 +22,7 @@ from git import (
     Remote,
     Repo,
 )
+from git.types import PathLike
 from github import Github
 
 from odev.constants import DEFAULT_DATETIME_FORMAT
@@ -34,6 +37,34 @@ _logger = logging.getLogger(__name__)
 
 
 _just_fetched_repos: Set[str] = set()
+
+
+# --- PATCH GitPython to enable relative paths in worktrees --- #
+
+_find_worktree_git_dir__original = git.repo.fun.find_worktree_git_dir
+
+
+def _find_worktree_git_dir__patched(dotgit: PathLike) -> Optional[str]:
+    """
+    Patched version of :func:`git.repo.fun.find_worktree_git_dir` that fixes relative
+    ``gitdir`` paths specifications in ``.git`` from worktrees.
+    The original version returns the relative path which gets then normalized to cwd
+    instead of the ``.git`` parent path, generating a wrong worktree path, therefore
+    failing to load ``commondir``, basically not finding the original ``.git`` dir.
+    """
+    value: Optional[str] = _find_worktree_git_dir__original(dotgit)
+
+    if value and not os.path.isabs(value):
+        curpath = os.path.dirname(dotgit)
+        value = os.path.abspath(os.path.join(curpath, value))
+
+    return value
+
+
+git.repo.fun.find_worktree_git_dir = _find_worktree_git_dir__patched
+git.repo.base.find_worktree_git_dir = _find_worktree_git_dir__patched  # direct import
+
+# --- PATCH END --- #
 
 
 def get_github(token: Optional[str] = None) -> Github:
