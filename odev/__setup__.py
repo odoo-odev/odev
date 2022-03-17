@@ -104,14 +104,6 @@ def run():
                 odev_config.set("paths", key, path)
                 mkdir(path)
 
-        # TODO: https://github.com/copier-org/copier/issues/574
-        # Waiting for 5.1.1 release or copier 6
-        _logger.warning(
-            f"""
-Due to a dependency problem you should upgrade Jinja by yourself.
-
-{sys.argv[0]} install Jinja2 --upgrade"""
-        )
         _logger.success("All set, enjoy!")
 
     except Exception as exception:

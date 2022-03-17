@@ -12,6 +12,7 @@ imgkit>=1,<2
 isort>=5.8,<6
 Jinja2>=2.11,<3
 lxml>=4.6.3,<5
+MarkupSafe==2.0.0
 odoo-client-lib>=1.2.2,<2
 packaging==20.9
 paramiko>=2.7.2,<3
