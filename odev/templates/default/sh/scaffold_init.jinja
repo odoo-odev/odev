@@ -3,7 +3,7 @@ from migrations import util
 {%endif-%}
 {%- for class_name in data.class %}
 from . import {{class_name}}
-{%-endfor%}
+{%endfor%}
 {%- if data.pre_init_hook | length or data.post_init_hook | length or data.uninstall | length -%}
 import logging
 
