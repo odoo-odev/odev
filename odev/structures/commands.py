@@ -1100,7 +1100,7 @@ class ExportCommand(Command, ABC, Template):
             "description": "",
             "category": [0, ""],
             "author": "Odoo PS",
-            "website": "http://www.odoo.com",
+            "website": "https://www.odoo.com",
             "license": "OEEL-1",
             "version": self._get_version(),
             "depends": set(),
