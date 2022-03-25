@@ -369,16 +369,6 @@ class ShConnector(object):
             ],
         )
 
-    def get_project_info(self):
-        return self.call_kw(
-            "paas.repository",
-            "search_read",
-            [
-                [["name", "=", self.repo]],
-                [],
-            ],
-        )
-
     def get_build_ssh(self, branch, build_id=None, commit=None):
         """
         Returns ssh

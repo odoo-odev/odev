@@ -22,7 +22,7 @@ from typing import (
 
 from github import PullRequestMergeStatus
 
-from odev.exceptions import BuildCompleteException, BuildWarning
+from odev.exceptions import BuildCompleteException, BuildWarning, OdooSHException
 from odev.exceptions.commands import CommandAborted
 from odev.structures import commands
 from odev.structures.actions import CommaSplitAction
@@ -390,8 +390,10 @@ class OdooSHUpgradeMergeCommand(OdooSHUpgradeBuildCommand, commands.GitHubComman
     def __init__(self, args: Namespace):
         super().__init__(args)
 
-        project_info: Mapping[str, Any]
-        [project_info] = self.sh_connector.get_project_info()
+        project_info: Optional[Mapping[str, Any]]
+        project_info = self.sh_connector.project_info()
+        if project_info is None:
+            raise OdooSHException(f"Failed getting SH project info for {self.sh_repo}")
         self.repo = self.github.get_repo(project_info["full_name"])
         self.pull_request = self.repo.get_pull(args.pull_request)
         if self.pull_request.merged or not self.pull_request.mergeable:
