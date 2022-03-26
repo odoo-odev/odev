@@ -6,7 +6,7 @@ copier>=5.1,<6
 decorator>=5.1.0
 enlighten>=1,<2
 GitPython>=3,<4
-giturlparse.py==0.0.5
+giturlparse==0.10
 html5lib>=1,<2
 imgkit>=1,<2
 isort>=5.8,<6

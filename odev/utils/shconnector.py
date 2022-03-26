@@ -369,6 +369,48 @@ class ShConnector(object):
             ],
         )
 
+    def get_submodules(self) -> List[Mapping[str, Any]]:
+        """
+        Return information about the SH project submodules.
+        """
+        return self.call_kw(
+            "paas.repository.submodule",
+            "search_read",
+            [
+                [
+                    ["repository_id.name", "=", self.repo],
+                ],
+                [],
+            ],
+        )
+
+    def add_submodule(self, url: str) -> Mapping[str, Any]:
+        """
+        Add a new submodule to the SH project with the given URL.
+        """
+        project_info: Optional[Mapping[str, Any]] = self.project_info()
+        if not project_info:
+            raise ValueError(f'Couldn\'t get repo info for "{self.repo}"')
+
+        submodule_id: int
+        submodule_id = self.call_kw(
+            "paas.repository.submodule",
+            "create",
+            [
+                {
+                    "name": url,
+                    "repository_id": project_info["id"],
+                }
+            ],
+        )
+        submodule_data: Mapping[str, Any]
+        [submodule_data] = self.call_kw(
+            "paas.repository.submodule",
+            "read",
+            [submodule_id, []],
+        )
+        return submodule_data
+
     def get_build_ssh(self, branch, build_id=None, commit=None):
         """
         Returns ssh
