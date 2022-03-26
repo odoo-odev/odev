@@ -741,8 +741,8 @@ class OdooUpgradeRepoMixin(Command, ABC):
             "help": "Local path of the `upgrade` repository clone",
         },
         {
-            "aliases": ["--psbe-upgrade-repo-path"],
-            "help": "Local path of the `psbe-custom-upgrade` repository clone ",
+            "aliases": ["--custom-util-repo-path", "--psbe-upgrade-repo-path"],
+            "help": "Local path of the `custom-util` repository clone",
         },
     ]
 
@@ -752,6 +752,8 @@ class OdooUpgradeRepoMixin(Command, ABC):
         Updates config if args are present
         """
         config = ConfigManager("odev")
+        # TODO: can we clone these automatically instead?
+        # TODO: rename psbe_upgrade_repo_path to custom_util_path
         upgrade_repo_parameter_to_path_keys = {"upgrade_repo_path", "psbe_upgrade_repo_path"}
         upgrade_repo_parameter_to_path: Dict[str, str] = {}
 
@@ -786,8 +788,8 @@ class OdooSHDatabaseCommand(OdooComCliMixin, Command, ABC):
 
     arguments = [
         {
-            "aliases": ["repo"],
-            "metavar": "REPO",
+            "aliases": ["project"],
+            "metavar": "SH_PROJECT",
             "help": "the name of the SH project / github repo, eg. psbe-client",
         },
         {
@@ -799,9 +801,9 @@ class OdooSHDatabaseCommand(OdooComCliMixin, Command, ABC):
     def __init__(self, args: Namespace):
         super().__init__(args)
 
-        if not args.repo:
+        if not args.project:
             raise ValueError("Invalid SH project / repo")
-        self.sh_repo: str = args.repo
+        self.sh_repo: str = args.project
 
         self.github_user: str = args.github_user
 
@@ -829,7 +831,7 @@ class OdooSHBranchCommand(OdooSHDatabaseCommand, ABC):
     arguments = [
         {
             "name": "branch",
-            "metavar": "BRANCH",
+            "metavar": "SH_BRANCH",
             "help": "Name of the Odoo SH or GitHub branch to target",
         },
     ]
