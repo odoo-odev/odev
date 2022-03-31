@@ -20,11 +20,23 @@ class RemoveCommand(commands.LocalDatabaseCommand):
 
     name = "remove"
     aliases = ["rm", "del"]
-    keep_template = False
+    arguments = [
+        {
+            "aliases": ["--keep-filestore"],
+            "action": "store_true",
+            "help": "Do not delete the filestore for the db",
+        },
+        {
+            "aliases": ["--keep-template"],
+            "action": "store_true",
+            "help": "Preserve the associated template db. Implies --keep-filestore",
+        },
+    ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)
-        self.keep_template = "keep_template" in args
+        self.keep_template: bool = args.keep_template
+        self.keep_filestore: bool = self.keep_template or args.keep_filestore
 
     def run(self):
         """
@@ -45,7 +57,6 @@ class RemoveCommand(commands.LocalDatabaseCommand):
             _logger.info(f"Deleted specific virtual env {self.database}")
             shutil.rmtree(venv_path)
 
-        keep_filestore = self.keep_template
         dbs = [self.database]
         queries = [f"""DROP DATABASE "{self.database}";"""]
         info_text = f"Dropping PSQL database {self.database}"
@@ -60,9 +71,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
                 dbs.append(template_db_name)
                 info_text += " and his template"
 
-            keep_filestore = not confirm
-
-        with_filestore = " and his filestore" if not keep_filestore else ""
+        with_filestore = " and its filestore" if not self.keep_filestore else ""
 
         _logger.warning(
             f"You are about to delete the database {self.database}{with_filestore}. This action is irreversible."
@@ -84,7 +93,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
 
         _logger.debug(f"Dropped database {self.database}{with_filestore}")
 
-        if not keep_filestore:
+        if not self.keep_filestore:
             filestore = self.db_filestore()
 
             if not os.path.exists(filestore):

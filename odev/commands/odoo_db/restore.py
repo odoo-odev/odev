@@ -115,9 +115,7 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
 
             q = f"A template with the same name `{template_db_name}` already exist do you want to delete it ?"
             if self.db_exists(template_db_name) and _logger.confirm(q):
-                arg = self.args.__dict__.copy()
-                arg["database"] = template_db_name
-                remove.RemoveCommand.run_with(**arg, keep_template=True)
+                remove.RemoveCommand.run_with(**dict(self.args.__dict__, database=template_db_name, keep_template=True))
 
             _logger.info(f"Creating template : {template_db_name}")
             self.run_queries(f'CREATE DATABASE "{template_db_name}" WITH TEMPLATE "{self.database}"')

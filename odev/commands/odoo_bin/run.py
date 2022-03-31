@@ -99,7 +99,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
 
             if self.db_exists(self.database):
                 _logger.info("The old database will be deleted to restore the template")
-                remove.RemoveCommand.run_with(**self.args.__dict__, keep_template=bool(self.args.from_template))
+                remove.RemoveCommand.run_with(**dict(self.args.__dict__, keep_template=bool(self.args.from_template)))
 
             _logger.warning(f"Restoring the template {template_db_name}")
             self.run_queries(
