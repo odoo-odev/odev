@@ -45,12 +45,9 @@ class VSCodeDebugConfigCommand(commands.LocalDatabaseCommand, commands.OdooUpgra
         self.check_database()
 
         kwargs = {}
-        for key, directory in self.get_upgrade_repo_paths(self.args).items():
-            if not directory:
-                continue
-            migrations_dir = os.path.join(directory, "migrations")
-            if self.validate(migrations_dir):
-                kwargs[key] = directory
+        for key, upgrade_directory in self.get_upgrade_repo_paths(self.args).items():
+            if self.validate(upgrade_directory):
+                kwargs[key] = upgrade_directory
 
         kwargs.update(version=self.db_version_clean())
 
@@ -64,16 +61,16 @@ class VSCodeDebugConfigCommand(commands.LocalDatabaseCommand, commands.OdooUpgra
             if not _logger.confirm("Would you like to overwrite the existing VSCode debug configuration?"):
                 return
         with open(output_path, "w") as file:
-            file.write(self.render_debug_template(repo_path, self.args.database, **kwargs))
+            file.write(self.render_debug_template(repo_path, **kwargs))
 
         _logger.info(f"Success. Wrote config to {output_path}")
 
-    def render_debug_template(self, repo_path, database, **kwargs):
+    def render_debug_template(self, repo_path, **kwargs):
         """
         Converts data (into strings) and generates config from template
         """
         render_kwargs = {
-            "database": database,
+            "database": self.args.database,
             "custom_repo_dir": repo_path,
         }
 
@@ -82,15 +79,18 @@ class VSCodeDebugConfigCommand(commands.LocalDatabaseCommand, commands.OdooUpgra
         )
         render_kwargs.update(custom_modules_str=",".join(custom_modules_to_update))
 
-        upgrade_repo_keys = {"upgrade_migrations_dir", "custom_upgrade_migrations_dir"}
-        if kwargs.keys() & upgrade_repo_keys:
+        upgrade_repo_keys_in_kwargs = kwargs.keys() & {
+            "upgrade_repo_path",
+            "psbe_upgrade_repo_path",
+        }
+        if upgrade_repo_keys_in_kwargs:
             render_kwargs.update(
                 upgrade_paths_str=",".join(
-                    kwargs.get(upgrade_repo, "") for upgrade_repo in (upgrade_repo_keys & kwargs.keys())
+                    os.path.join(kwargs[upgrade_repo], "migrations") for upgrade_repo in upgrade_repo_keys_in_kwargs
                 )
             )
 
-        repos_path = self.config["odev"].get("paths", "odoo")
+        repos_path = self.config["odev"].get("paths", "odoo", "/")
         version = kwargs.get("version")
         assert version is not None
         version_path = odoo.repos_version_path(repos_path, version)

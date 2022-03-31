@@ -23,14 +23,14 @@
                 //"{{ custom_modules_str }}",
                 "-d",
                 "{{ database }}",
-                "--limit-time-real", "0",
-                "--limit-time-cpu", "0",
-{%- if upgrade_migrations_dir or custom_upgrade_migrations_dir %}
-                "--upgrade-path="{{ upgrade_paths_str }}"
+{%- if upgrade_paths_str %}
+                "--upgrade-path={{ upgrade_paths_str }}",
 {%- endif %}
+                "--limit-time-real", "0",
+                "--limit-time-cpu", "0"
             ],
             "console": "{{"externalTerminal" if shell else "integratedTerminal"}}"
-        },
+        }{{ ", " if not loop.last else "" }}
 {%- endfor %}
     ]
 }
