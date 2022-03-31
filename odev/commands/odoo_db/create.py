@@ -1,9 +1,10 @@
 """Creates a new empty PostgreSQL database (not Odoo-initialized)."""
-
+import os
+import shutil
 from argparse import Namespace
 
 from odev.constants import DEFAULT_DATABASE
-from odev.exceptions import InvalidDatabase
+from odev.exceptions import CommandAborted, InvalidDatabase
 from odev.structures import commands
 from odev.utils import logging
 
@@ -25,11 +26,19 @@ class CreateCommand(commands.LocalDatabaseCommand):
             "nargs": "?",
             "help": "Name of an existing PostgreSQL database to copy",
         },
+        {
+            "name": "copy_filestore",
+            "dest": "copy_filestore",
+            "aliases": ["--no-filestore"],
+            "action": "store_false",
+            "help": "Do not copy the filestore from the template",
+        },
     ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.template = args.template or None
+        self.copy_filestore = args.copy_filestore
 
     def run(self):
         """
@@ -60,6 +69,25 @@ class CreateCommand(commands.LocalDatabaseCommand):
 
         if not result or not self.db_exists_all(self.database):
             raise InvalidDatabase(f"Database {self.database} could not be created")
+
+        if self.template and self.copy_filestore:
+            filestore = self.db_filestore()
+            template_filestore = self.db_filestore(self.template)
+
+            if not os.path.exists(template_filestore):
+                _logger.info("Template filestore not found, no action taken")
+            else:
+                if os.path.exists(filestore):
+                    if not _logger.confirm(f"The new filestore path already exists: `{filestore}`\nOverwrite it?"):
+                        raise CommandAborted
+                    _logger.info(f"Deleting previous filestore in `{filestore}`")
+                    shutil.rmtree(filestore)
+
+                _logger.info(f"Copying template filestore to `{filestore}`")
+                try:
+                    shutil.copytree(template_filestore, filestore)
+                except Exception as exc:
+                    _logger.warning(f"Error while copying filestore: {exc}")
 
         _logger.info(f"Created database {self.database}")
         return 0
