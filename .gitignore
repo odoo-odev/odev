@@ -4,3 +4,5 @@ __pycache__
 .history
 .mypy_cache
 .pytest_cache
+.coverage
+.github

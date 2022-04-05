@@ -3,7 +3,7 @@ default_language_version:
     python: python3.8
 default_stages: [commit]
 fail_fast: false
-exclude: ^(\.vscode/)
+exclude: ^(\.vscode|\.github)
 
 repos:
     - repo: https://github.com/pre-commit/mirrors-prettier
@@ -19,7 +19,7 @@ repos:
             files: \.(py|html|json|md|toml|xml|yaml|yml)$
 
     - repo: https://github.com/psf/black
-      rev: 22.1.0
+      rev: 22.3.0
       hooks:
           - id: black
             files: \.pyi?$

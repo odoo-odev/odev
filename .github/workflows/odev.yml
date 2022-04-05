@@ -1,0 +1,69 @@
+name: odev
+
+on:
+  pull_request:
+    branches:
+      - odev
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v3
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest coverage
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          pre-commit install
+
+      - name: Run pre-commit
+        run: |
+          git switch -C ${{ github.base_ref }} --track origin/${{ github.base_ref }}
+          git switch -C ${{ github.head_ref }} --track origin/${{ github.head_ref }}
+          pre-commit run --from-ref ${{ github.base_ref }} --to-ref ${{ github.head_ref }}
+
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v3
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest coverage
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Test with pytest
+        run: coverage run -m pytest
+
+      - name: Print coverage
+        run: coverage report
+
+      - name: Check coverage
+        continue-on-error: true
+        run: |
+          COV_POST=`coverage report --precision=2 | awk '$1 == "TOTAL" {print $NF+0}'`
+          if (( $(echo "$COV_POST" | awk '{print ($1 < 100)}') )); then
+            echo "::warning::Test coverage is below 100%! coverage: $COV_POST%"
+          fi
+          git switch -C ${{ github.base_ref }} --track origin/${{ github.base_ref }}
+          coverage run -m pytest
+          COV_PRE=`coverage report --precision=2 | awk '$1 == "TOTAL" {print $NF+0}'`
+          if (( $(echo "$COV_POST $COV_PRE" | awk '{print ($1 < $2)}') )); then
+            echo "::warning::Test coverage decreased! before: $COV_PRE%, now: $COV_POST%"
+          fi
