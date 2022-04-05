@@ -11,7 +11,13 @@ import textwrap
 import time
 import urllib.parse
 from abc import ABC, abstractmethod
-from argparse import REMAINDER, ArgumentParser, Namespace, RawTextHelpFormatter
+from argparse import (
+    REMAINDER,
+    SUPPRESS,
+    ArgumentParser,
+    Namespace,
+    RawTextHelpFormatter,
+)
 from collections import defaultdict
 from contextlib import nullcontext
 from pathlib import Path
@@ -221,18 +227,24 @@ class BaseCommand(ABC):
             parser.add_argument(*aliases, **params)
 
     @classmethod
-    def run_with(cls, *args, do_raise: bool = True, capture_output: bool = False, **kwargs) -> int:
+    def run_with(cls, do_raise: bool = True, capture_output: bool = False, **kwargs) -> int:
         """
         Runs the command directly with the provided arguments, bypassing parsers
         """
-        # TODO: automatically fill missing args with None?
-        res = cls(
-            Namespace(
-                **dict(*args, **kwargs),
-                do_raise=do_raise,
-                capture_output=capture_output,
-            )
-        ).run()
+        parser: ArgumentParser = cls.prepare_parser()
+        default_args: MutableMapping[str, Any] = dict(
+            parser._defaults,
+            **{
+                action.dest: action.default
+                for action in parser._actions
+                if action.dest is not SUPPRESS and action.default is not SUPPRESS
+            },
+        )
+        args: MutableMapping[str, Any] = dict(
+            {**default_args, **kwargs}, do_raise=do_raise, capture_output=capture_output
+        )
+
+        res = cls(Namespace(**args)).run()
 
         if not do_raise and res:
             res = 0
