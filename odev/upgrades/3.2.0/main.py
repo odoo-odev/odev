@@ -16,7 +16,7 @@ def run() -> None:
     restart: bool = False
 
     if "giturlparse.py" in pip_freeze():
-        subprocess.run(f"{pip_cmd} uninstall -y giturlparse.py", shell=True)
+        subprocess.run(f"{pip_cmd} uninstall -y giturlparse.py giturlparse", shell=True)
         restart |= True
 
     if "giturlparse" not in pip_freeze():
