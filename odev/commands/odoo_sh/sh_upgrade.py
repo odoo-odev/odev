@@ -80,9 +80,6 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgrad
         },
     ]
 
-    upgrade_repo_path: Optional[str] = None
-    psbe_upgrade_repo_path: Optional[str] = None
-
     def __init__(self, args: Namespace):
         for key, directory in self.get_upgrade_repo_paths(args).items():
             setattr(self, key, directory)
@@ -94,7 +91,7 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgrad
 
         self.remote_util_path: str = os.path.join(self.remote_upgrade_dir, REMOTE_UTIL_RELPATH)
         self.remote_psbe_upgrade_path: str = os.path.join(
-            self.remote_upgrade_dir, os.path.basename(self.psbe_upgrade_repo_path or "")
+            self.remote_upgrade_dir, os.path.basename(self.custom_util_repo_path or "")
         )
         self.remote_psbe_migrations_path: str = os.path.join(self.remote_psbe_upgrade_path, PSBE_MIGRATIONS_RELPATH)
         self._prepared_upgrade_paths: Set[str] = set()
@@ -132,16 +129,16 @@ class OdooSHUpgradeBaseCommand(commands.OdooSHBranchCommand, commands.OdooUpgrad
         self.paths_to_cleanup.append(self.remote_upgrade_dir)
 
         assert self.upgrade_repo_path is not None
-        assert self.psbe_upgrade_repo_path is not None
+        assert self.custom_util_repo_path is not None
 
         self._prepare_upgrade_path_files(
             os.path.join(self.upgrade_repo_path, UPGRADE_UTIL_RELPATH),
-            os.path.join(self.psbe_upgrade_repo_path, PSBE_UPGRADE_BASE_RELPATH),
+            os.path.join(self.custom_util_repo_path, PSBE_UPGRADE_BASE_RELPATH),
             dest=self.remote_util_path,
             dest_as_dir=True,
         )
         self._prepare_upgrade_path_files(
-            os.path.join(self.psbe_upgrade_repo_path, PSBE_MIGRATIONS_RELPATH) + "/",
+            os.path.join(self.custom_util_repo_path, PSBE_MIGRATIONS_RELPATH) + "/",
             dest=self.remote_psbe_upgrade_path,
             dest_as_dir=True,
         )

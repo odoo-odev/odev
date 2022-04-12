@@ -746,6 +746,9 @@ class OdooUpgradeRepoMixin(Command, ABC):
         },
     ]
 
+    upgrade_repo_path: Optional[str] = None
+    custom_util_repo_path: Optional[str] = None
+
     def get_upgrade_repo_paths(self, args: Namespace) -> Dict[str, str]:
         """
         Extracts the upgrade (custom) upgrade repository paths from args or config
@@ -753,8 +756,7 @@ class OdooUpgradeRepoMixin(Command, ABC):
         """
         config = ConfigManager("odev")
         # TODO: can we clone these automatically instead?
-        # TODO: rename psbe_upgrade_repo_path to custom_util_path
-        upgrade_repo_parameter_to_path_keys = {"upgrade_repo_path", "psbe_upgrade_repo_path"}
+        upgrade_repo_parameter_to_path_keys = {"upgrade_repo_path", "custom_util_repo_path"}
         upgrade_repo_parameter_to_path: Dict[str, str] = {}
 
         for upgrade_repo_parameter in upgrade_repo_parameter_to_path_keys:

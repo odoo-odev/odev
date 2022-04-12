@@ -81,7 +81,7 @@ class VSCodeDebugConfigCommand(commands.LocalDatabaseCommand, commands.OdooUpgra
 
         upgrade_repo_keys_in_kwargs = kwargs.keys() & {
             "upgrade_repo_path",
-            "psbe_upgrade_repo_path",
+            "custom_util_repo_path",
         }
         if upgrade_repo_keys_in_kwargs:
             render_kwargs.update(
