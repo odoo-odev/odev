@@ -23,3 +23,9 @@ ODOO_UPGRADE_REPOSITORIES = [
 ]
 
 ODOO_MASTER_REPO = "/master/"
+
+PRE_11_SAAS_TO_MAJOR_VERSIONS = {
+    saas_version: major_version
+    for major_version, (saas_v_start, saas_v_end) in {7: (1, 5), 8: (6, 6), 9: (7, 13), 10: (14, 18)}.items()
+    for saas_version in range(saas_v_start, saas_v_end + 1)
+}

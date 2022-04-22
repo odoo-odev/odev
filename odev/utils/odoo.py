@@ -16,6 +16,7 @@ from odev.constants import (
     ODOO_MASTER_REPO,
     ODOO_REPOSITORIES,
     ODOO_UPGRADE_REPOSITORIES,
+    PRE_11_SAAS_TO_MAJOR_VERSIONS,
     RE_ODOO_DBNAME,
 )
 from odev.exceptions import InvalidOdooDatabase, InvalidVersion
@@ -83,10 +84,29 @@ def get_odoo_version(version: str) -> str:
     """
     Converts a loose version string into a valid Odoo version
     """
-    match = re.match(r"(?:saas[-~+])?(\d+)\.(?:saas[-~+])?(\d+)", version)
+
+    def v_match(v):
+        return re.match(r"(?:saas[-~+])?(\d+)\.(?:saas[-~+])?(\d+)", v)
+
+    match = v_match(version)
+    if not match and "saas" in version:
+        minor_match = re.search(r"[~-](\d+)", version)
+        if minor_match:
+            major_version = PRE_11_SAAS_TO_MAJOR_VERSIONS.get(int(minor_match.group(1)))
+            if major_version is not None:
+                match = v_match(f"{major_version}.{version}")
     if not match:
         raise InvalidVersion(version)
-    return f"{'saas~' if 'saas' in version else ''}{'.'.join(match.groups())}"
+
+    joined_version = ".".join(match.groups())
+    parsed_version = Version(joined_version)
+    if "saas" not in version and (parsed_version.minor == 0 or joined_version == "6.1"):
+        return joined_version
+    else:
+        if parsed_version.major <= 10:
+            return f"{parsed_version.major}.saas~{parsed_version.minor}"
+        else:
+            return f"saas~{parsed_version.major}.{parsed_version.minor}"
 
 
 def parse_odoo_version(version: str) -> Version:
@@ -121,14 +141,18 @@ def get_python_version(odoo_version: str) -> str:
 
 def branch_from_version(version: str) -> str:
     if "saas" in version:
-        return "".join(version.partition("saas")[1:]).replace("saas~", "saas-")
+        parsed_version: Version = parse_odoo_version(version)
+        if parsed_version.major <= 10:
+            return f"saas-{parsed_version.minor}"
+        else:
+            return "".join(version.partition("saas")[1:]).replace("saas~", "saas-")
     return version
 
 
 def version_from_branch(version: str) -> str:
-    if "saas" in version:
-        return "".join(version.partition("saas")[1:]).replace("saas-", "saas~")
-    return version
+    if version == "master":
+        return version
+    return get_odoo_version(version)
 
 
 def repos_version_path(repos_path: str, version: str) -> str:
