@@ -108,7 +108,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
 
         self.check_database()
 
-        if self.db_runs():
+        if self.db_runs() and self.name == "run":
             raise RunningOdooDatabase(f"Database {self.database} is already running")
 
         if not self.addons:
