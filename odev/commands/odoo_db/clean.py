@@ -95,15 +95,21 @@ class CleanCommand(commands.LocalDatabaseCommand):
 
         self.ensure_stopped()
 
-        queries_file = os.path.join(ODEV_CONFIG_DIR, "clean_queries.sql")
+        version = self.db_version_clean()
 
-        try:
-            with open(queries_file, "r") as clean_queries:
-                for query in [q.strip() for q in clean_queries.read().split(";") if q.strip()]:
-                    _logger.debug(f"Query added to the list : {query}")
-                    self.queries.append(query)
-        except FileNotFoundError:
-            pass
+        queries_files = [
+            os.path.join(ODEV_CONFIG_DIR, "clean_queries.sql"),
+            os.path.join(ODEV_CONFIG_DIR, f"clean_queries_{version}.sql"),
+        ]
+
+        for queries_file in queries_files:
+            try:
+                with open(queries_file, "r") as clean_queries:
+                    for query in [q.strip() for q in clean_queries.read().split(";") if q.strip()]:
+                        _logger.debug(f"Query added to the list : {query}")
+                        self.queries.append(query)
+            except FileNotFoundError:
+                pass
 
         _logger.info(f"Cleaning database {self.database}")
         result = self.run_queries(self.queries)
