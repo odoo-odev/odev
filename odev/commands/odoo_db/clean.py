@@ -17,7 +17,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
     """
     Render a local Odoo database suitable for development:
       - Disable automated and scheduled actions
-      - Disable mails
+      - Disable existing mail servers and create a localhost outgoing mailserver (Mailhog)
       - Set credentials for Administrator user to admin:admin
       - Set password for the first 50 users to odoo
       - Extend database validity to December 2050 and remove enterprise code
@@ -66,14 +66,27 @@ class CleanCommand(commands.LocalDatabaseCommand):
 
         expiration_date = "2050-12-12"
 
+        version = self.db_version_parsed()
+
         # The database expiration date became a datetime object in version 15.0,
         # as opposed to a date object in previous versions
-        if self.db_version_parsed() >= Version("15.0"):
+        if version >= Version("15.0"):
             expiration_date += " 00:00:00"
 
         self.queries.append(
             f"UPDATE ir_config_parameter SET value='{expiration_date}' WHERE key='database.expiration_date'",
         )
+
+        if version <= Version("14.0"):
+            self.queries.append(
+                """INSERT INTO ir_mail_server (name, smtp_host, smtp_port, smtp_encryption, active)
+                VALUES ('Mailhog', 'localhost', 1025, 'none', 't')""",
+            )
+        else:
+            self.queries.append(
+                """INSERT INTO ir_mail_server (name, smtp_host, smtp_port, smtp_authentication, smtp_encryption, active)
+                VALUES ('Mailhog', 'localhost', 1025, 'login', 'none', 't')""",
+            )
 
     def run(self):
         """
@@ -102,5 +115,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
 
         _logger.info("Login to the administrator account with the credentials 'admin:admin'")
         _logger.info("Login to the first 50 users with their email address and the password 'odoo'")
+        _logger.info("An external mail server to localhost:1025 has been created")
+        _logger.info("You can view outgoing emails using https://github.com/mailhog/MailHog")
 
         return 0
