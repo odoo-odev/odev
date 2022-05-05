@@ -1,17 +1,13 @@
 import csv
 import io
-import os
 import re
-import shlex
-import subprocess
+from subprocess import CompletedProcess
 from textwrap import indent
 
-from packaging.version import Version
 from texttable import Texttable
 
 from odev.commands.odoo_bin import run
-from odev.constants import ODOO_ADDON_PATHS, OPENERP_ADDON_PATHS
-from odev.utils import logging, odoo
+from odev.utils import logging
 from odev.utils.logging import term
 
 
@@ -44,37 +40,8 @@ class ClocCommand(run.RunCommand):
                 "Will try adding the current directory, otherwise will run as enterprise\n",
             )
 
-        # FIXME: DRY "run odoo-bin code" across run/init/cloc commands
-
-        version = self.db_version_clean()
-        pre_openerp_refactor = self.db_version_parsed() >= Version("9.13")
-
-        repos_path = self.config["odev"].get("paths", "odoo")
-        version_path = odoo.repos_version_path(repos_path, version)
-        odoobin = os.path.join(version_path, ("odoo/odoo-bin" if pre_openerp_refactor else "odoo/odoo.py"))
-
-        common_addons = ODOO_ADDON_PATHS if pre_openerp_refactor else OPENERP_ADDON_PATHS
-        addons = [version_path + addon_path for addon_path in common_addons]
-        addons += [os.getcwd(), *self.addons]
-        addons = [path for path in addons if odoo.is_addon_path(path)]
-
-        python_exec = os.path.join(version_path, "venv/bin/python")
-        addons_path = ",".join(addons)
-        command_args = [
-            python_exec,
-            odoobin,
-            *("-d", self.database),
-            f"--addons-path={addons_path}",
-            *self.additional_args,
-        ]
-
-        if self.odoobin_subcommand:
-            command_args.insert(2, self.odoobin_subcommand)
-
-        command = shlex.join(command_args)
-        if not self.args.csv:
-            _logger.info(f"Running: {command}")
-        result = subprocess.getoutput(command)
+        odoo_result: CompletedProcess = self.run_odoo(print_cmdline=not self.args.csv)
+        result = odoo_result.stdout
 
         split = re.split(r"\n-+", result)
         split_lines = re.split(r"\s{2,}", split[~1].lstrip().replace("\n", " " * 2))

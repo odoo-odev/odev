@@ -4,10 +4,11 @@ import os
 import shutil
 from argparse import Namespace
 
-from odev.constants import DB_TEMPLATE_SUFFIX, DEFAULT_DATABASE
+from odev.constants import DB_TEMPLATE_SUFFIX, DEFAULT_DATABASE, DEFAULT_VENV_NAME
 from odev.exceptions import CommandAborted, InvalidDatabase, RunningOdooDatabase
 from odev.structures import commands
 from odev.utils import logging
+from odev.utils.odoo import get_venv_path
 
 
 _logger = logging.getLogger(__name__)
@@ -31,12 +32,18 @@ class RemoveCommand(commands.LocalDatabaseCommand):
             "action": "store_true",
             "help": "Preserve the associated template db. Implies --keep-filestore",
         },
+        {
+            "aliases": ["--keep-venv"],
+            "action": "store_true",
+            "help": "Do not delete the db-specific venv, if any",
+        },
     ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)
         self.keep_template: bool = args.keep_template
         self.keep_filestore: bool = self.keep_template or args.keep_filestore
+        self.keep_venv = args.keep_venv
 
     def run(self):
         """
@@ -49,13 +56,8 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         if self.db_runs():
             raise RunningOdooDatabase(f"Database {self.database} is running, please shut it down and retry")
 
+        is_odoo_db = self.is_odoo_db()
         version = self.db_version_clean()
-        odoo_path = self.config["odev"].get("paths", "odoo")
-        venv_path = os.path.join(odoo_path, version, self.database)
-
-        if os.path.isdir(venv_path) and self.database != "venv":
-            _logger.info(f"Deleted specific virtual env {self.database}")
-            shutil.rmtree(venv_path)
 
         dbs = [self.database]
         queries = [f"""DROP DATABASE "{self.database}";"""]
@@ -94,19 +96,34 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         _logger.debug(f"Dropped database {self.database}{with_filestore}")
 
         if not self.keep_filestore:
-            filestore = self.db_filestore()
+            self.remove_filestore()
 
-            if not os.path.exists(filestore):
-                _logger.info("Filestore not found, no action taken")
-            else:
-                try:
-                    _logger.info(f"Attempting to delete filestore in `{filestore}`")
-                    shutil.rmtree(filestore)
-                except Exception as exc:
-                    _logger.warning(f"Error while deleting filestore: {exc}")
+        if is_odoo_db and not self.keep_venv:
+            self.remove_specific_venv(version)
 
         for db in dbs:
             if db in self.config["databases"]:
                 self.config["databases"].delete(db)
 
         return 0
+
+    def remove_filestore(self):
+        filestore = self.db_filestore()
+        if not os.path.exists(filestore):
+            _logger.info("Filestore not found, no action taken")
+        else:
+            try:
+                _logger.info(f"Deleting filestore in `{filestore}`")
+                shutil.rmtree(filestore)
+            except Exception as exc:
+                _logger.warning(f"Error while deleting filestore: {exc}")
+
+    def remove_specific_venv(self, version: str):
+        venv_path: str = get_venv_path(self.config["odev"].get("paths", "odoo"), version, self.database)
+        assert not venv_path.endswith(DEFAULT_VENV_NAME)
+        if os.path.isdir(venv_path):
+            try:
+                _logger.info(f"Deleting database-specific venv in `{venv_path}`")
+                shutil.rmtree(venv_path)
+            except Exception as exc:
+                _logger.warning(f"Error while deleting database-specific venv: {exc}")

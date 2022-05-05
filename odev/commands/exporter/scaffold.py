@@ -40,12 +40,6 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             "aliases": ["task_id"],
             "help": "Ps-tools or Odoo.com task id to generate",
         },
-        {
-            "aliases": ["-e", "--env"],
-            "choices": ["prod", "staging"],
-            "default": "prod",
-            "help": "Default database to use (use staging for test)",
-        },
     ]
 
     analysis: Mapping[str, Any]

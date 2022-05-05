@@ -2,6 +2,7 @@ import ast
 import glob
 import os
 import re
+import shlex
 import subprocess
 from datetime import datetime, timedelta
 from subprocess import DEVNULL
@@ -12,10 +13,13 @@ from packaging.version import Version
 
 from odev.constants import (
     DEFAULT_DATETIME_FORMAT,
+    DEFAULT_VENV_NAME,
+    ODOO_ADDON_PATHS,
     ODOO_MANIFEST_NAMES,
     ODOO_MASTER_REPO,
     ODOO_REPOSITORIES,
     ODOO_UPGRADE_REPOSITORIES,
+    OPENERP_ADDON_PATHS,
     PRE_11_SAAS_TO_MAJOR_VERSIONS,
     RE_ODOO_DBNAME,
 )
@@ -52,12 +56,11 @@ def get_manifest(path: str, module: str) -> Optional[Mapping[str, Any]]:
     return {}
 
 
-def is_addon_path(path):
-    def clean(name):
-        name = os.path.basename(name)
-        return name
+def is_addon_path(path: str) -> bool:
+    if not os.path.isdir(path):
+        return False
 
-    return any(clean(name) for name in os.listdir(path) if is_really_module(path, name))
+    return any(os.path.basename(name) for name in os.listdir(path) if is_really_module(path, name))
 
 
 def is_saas_db(url):
@@ -174,9 +177,8 @@ def prepare_odoobin(
     - Ensures all the needed repositories are cloned and up-to-date
     - Prepare the correct virtual environment (unless ``venv`` is explicitly set False)
     """
-    venv_name = venv_name or "venv"
     branch: str = branch_from_version(version)
-    available_version = get_worktree_list(repos_path + ODOO_MASTER_REPO, ODOO_REPOSITORIES)
+    available_version = get_worktree_list(os.path.join(repos_path, ODOO_MASTER_REPO), ODOO_REPOSITORIES)
 
     need_pull, last_update = _need_pull(version)
 
@@ -196,7 +198,7 @@ def prepare_odoobin(
     version_path: str = repos_version_path(repos_path, version)
     mkdir(version_path, 0o777)
 
-    if venv or venv_name != "venv":
+    if venv:
         prepare_venv(repos_path, version, venv_name)
 
     if not do_pull:
@@ -210,14 +212,23 @@ def prepare_odoobin(
             do_pull |= git_clone_or_pull(repos_path, pull_repo, skip_prompt=do_pull)
 
 
-def prepare_venv(repos_path: str, version: str, venv_name: str):
-    version_path: str = repos_version_path(repos_path, version)
+def get_venv_name(venv_name: Optional[str] = None) -> str:
+    return f"venv.{venv_name}" if venv_name else DEFAULT_VENV_NAME
 
-    if not os.path.isdir(os.path.join(version_path, venv_name)):
+
+def get_venv_path(repos_path, version: str, venv_name: Optional[str] = None) -> str:
+    return os.path.join(repos_version_path(repos_path, version), get_venv_name(venv_name))
+
+
+def prepare_venv(repos_path: str, version: str, venv_name: Optional[str] = None, force_prepare: bool = False):
+    venv_path: str = get_venv_path(repos_path, version, venv_name)
+    venv_parent_dir, venv_name = os.path.split(venv_path)
+
+    if not os.path.isdir(venv_path) or force_prepare:
         py_version = get_python_version(version)
 
         try:
-            command = f'cd "{version_path}" && virtualenv --python={py_version} {venv_name}'
+            command = f'cd "{venv_parent_dir}" && virtualenv --python={py_version} {venv_name}'
             _logger.info(f"Creating virtual environment: Odoo {version} + Python {py_version} ({venv_name})")
             with capture_signals():
                 subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
@@ -236,24 +247,76 @@ def prepare_venv(repos_path: str, version: str, venv_name: str):
 def prepare_requirements(repos_path: str, version: str, venv_name="venv", addons: Optional[List[str]] = None):
     version_path: str = repos_version_path(repos_path, version)
 
-    venv_python: str = f"{version_path}/{venv_name}/bin/python"
+    python_bin: str = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
 
     _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
-    install_packages(packages="pip setuptools pudb ipdb websocket-client", python_bin=venv_python)
+    install_packages(packages="pip setuptools pudb ipdb websocket-client", python_bin=python_bin)
 
     all_addons = [os.path.join(version_path, "odoo")] + list_submodule_addons(addons or [])
 
     for addon_path in all_addons:
         try:
-            install_packages(requirements_dir=addon_path, python_bin=venv_python)
+            install_packages(requirements_dir=addon_path, python_bin=python_bin)
         except FileNotFoundError:
             continue
 
     if parse_odoo_version(version).major < 10:
         # fix broken psycopg2 requirement for obsolete C lib bindings
-        install_packages(packages="psycopg2==2.7.3.1", python_bin=venv_python)
+        install_packages(packages="psycopg2==2.7.3.1", python_bin=python_bin)
         # use lessc v3 for odoo < 10
         subprocess.run("npm install less@3.0.4 less-plugin-clean-css", cwd=version_path, shell=True)
+
+
+def run_odoo(
+    repos_path: str,
+    version: str,
+    database: str,
+    addons: Optional[List[str]] = None,
+    subcommand: Optional[str] = None,
+    additional_args: Optional[List[str]] = None,
+    venv_name: Optional[str] = None,
+    force_prepare_requirements: bool = False,
+    capture_output: bool = False,
+    skip_prompt: Optional[bool] = None,
+    print_cmdline: bool = True,
+) -> subprocess.CompletedProcess:
+    if addons is None:
+        addons = []
+    if additional_args is None:
+        additional_args = []
+
+    version = get_odoo_version(version)
+    post_openerp_refactor: bool = parse_odoo_version(version) >= Version("9.13")
+
+    version_path = repos_version_path(repos_path, version)
+    odoobin = os.path.join(version_path, ("odoo/odoo-bin" if post_openerp_refactor else "odoo/odoo.py"))
+
+    prepare_odoobin(repos_path, version, skip_prompt=skip_prompt, venv_name=venv_name)
+
+    standard_addons = ODOO_ADDON_PATHS if post_openerp_refactor else OPENERP_ADDON_PATHS
+    addons_paths = [os.path.join(version_path, addon_path) for addon_path in standard_addons]
+    addons_paths += [os.getcwd(), *addons]
+    addons_paths = [path for path in addons_paths if is_addon_path(path)]
+
+    if any(re.match(r"(-i|--install|-u|--update)", arg) for arg in additional_args) or force_prepare_requirements:
+        prepare_requirements(repos_path, version, venv_name=venv_name, addons=addons_paths)
+
+    python_exec = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
+    command_args = [
+        python_exec,
+        odoobin,
+        *([subcommand] if subcommand else []),
+        *["-d", database],
+        *["--addons-path", ",".join(addons_paths)],
+        *additional_args,
+    ]
+
+    command = shlex.join(command_args)
+    if print_cmdline:
+        _logger.info(f"Running: {command}")
+
+    with capture_signals():
+        return subprocess.run(command, shell=True, check=True, capture_output=capture_output)
 
 
 def _need_pull(version: str):

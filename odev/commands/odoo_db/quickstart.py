@@ -44,28 +44,26 @@ class QuickStartCommand(
     name = "quickstart"
     aliases = ["qs"]
 
-    odoobin_mixin_args = [x for x in commands.OdooBinMixin.arguments if x.get("name") == "args"]
-
-    arguments = (
-        [
-            {
-                "aliases": ["source"],
-                "metavar": "VERSION|PATH|URL",
-                "help": """
+    arguments = [
+        {
+            "aliases": ["source"],
+            "metavar": "VERSION|PATH|URL",
+            "help": """
             One of the following:
                 - an Odoo version number to create and init an empty database
                 - a path to a local dump file to restore to a new database
                 - a url to an Odoo SaaS or SH database to dump and restore locally
             """,
-            },
-            {
-                "aliases": ["--id", "--task"],
-                "dest": "task_id",
-                "help": "Scaffold the code for this task_id",
-            },
-        ]
-        + odoobin_mixin_args
-    )
+        },
+        # move positional args from OdooBinMixin after "source"
+        {"name": "addons"},
+        {"name": "args"},
+        {
+            "aliases": ["--id", "--task"],
+            "dest": "task_id",
+            "help": "Scaffold the code for this task_id",
+        },
+    ]
 
     def __init__(self, args: Namespace):
         super().__init__(args)

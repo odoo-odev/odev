@@ -4,6 +4,7 @@ import inspect
 import os
 import random
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,7 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
+    Tuple,
     Type,
     Union,
 )
@@ -63,8 +65,8 @@ from odev.exceptions import (
     InvalidOdooDatabase,
 )
 from odev.exceptions.commands import InvalidQuery
-from odev.structures.actions import OptionalStringAction
-from odev.utils import logging
+from odev.structures.actions import CommaSplitAction, OptionalStringAction
+from odev.utils import logging, odoo
 from odev.utils.config import ConfigManager
 from odev.utils.exporter import Config, odoo_field, odoo_model
 from odev.utils.github import get_github
@@ -701,13 +703,13 @@ class GitHubCommand(Command, ABC):
         self.github: Github = get_github(args.token)
 
 
-class OdooBinMixin(Command, ABC):
+class OdooBinMixin(LocalDatabaseCommand, ABC):
     arguments = [
         {
-            "aliases": ["--pull"],
-            "dest": "pull",
-            "action": "store_true",
-            "help": "Try to pull new version of Odoo,Enterprise,Design-themes and upgrades repos",
+            "name": "addons",
+            "action": CommaSplitAction,
+            "nargs": "?",
+            "help": "Comma-separated list of additional addon paths",
         },
         {
             "name": "args",
@@ -718,7 +720,95 @@ class OdooBinMixin(Command, ABC):
             for the list of available arguments
             """,
         },
+        {
+            "aliases": ["--pull"],
+            "dest": "pull",
+            "action": "store_true",
+            "help": "Pull the new versions of Odoo Community, Enterprise, Design-Themes and Upgrades repositories",
+        },
+        {
+            "aliases": ["--venv"],
+            "dest": "alt_venv",
+            "action": "store_true",
+            "help": "Create an alternative venv (database name)",
+        },
+        {
+            "aliases": ["-s", "--save"],
+            "dest": "save",
+            "action": "store_true",
+            "help": "Save the current db cli arguments for the next runs",
+        },
     ]
+
+    odoobin_subcommand: ClassVar[Optional[str]] = None
+    """
+    Optional subcommand to pass to `odoo-bin` at execution time.
+    """
+
+    use_config_args: bool = False
+    """
+    Whether to load (and save if `--save`) cli arguments and addons saved in the database's config.
+    """
+
+    always_save_config_args: bool = False
+    """
+    Whether to always save (ie. overwrite) arguments and addons to the database's config.
+    """
+
+    def __init__(self, args: Namespace):
+        super().__init__(args)
+
+        self.config_args_key: str = f"args_{self.name}"
+        self.config_addons_key: str = "addons"
+
+        self.addons: List[str] = args.addons or []
+        self.additional_args: List[str] = args.args
+
+        if self.use_config_args:
+            config_args, config_addons = self.load_db_config_cli_args()
+
+            save_confirm_msg = "Arguments have already been saved for this database, do you want to override them?"
+            if self.always_save_config_args or (
+                args.save and (not (config_args or config_addons) or _logger.confirm(save_confirm_msg))
+            ):
+                self.save_db_config_cli_args()
+
+    def load_db_config_cli_args(self) -> Tuple[List[str], List[str]]:
+        config_args: List[str] = shlex.split(self.config["databases"].get(self.database, self.config_args_key, ""))
+        config_addons: List[str] = self.config["databases"].get(self.database, self.config_addons_key, "").split(",")
+
+        self.addons = self.addons or config_addons + (
+            [config_args.pop(0)] if config_args and is_addon_path(config_args[0]) else []
+        )
+        self.additional_args = self.additional_args or config_args
+
+        return config_args, config_addons
+
+    def save_db_config_cli_args(self) -> None:
+        with self.config["databases"] as dbs_config:
+            db_cfg_section = dbs_config[self.database]
+            db_cfg_section[self.config_args_key] = shlex.join(self.additional_args)
+            db_cfg_section[self.config_addons_key] = ",".join(self.addons)
+
+    def run_odoo(self, **kwargs) -> subprocess.CompletedProcess:
+        repos_path: str = self.config["odev"].get("paths", "odoo")
+        version: str = kwargs.pop("version", None) or self.db_version_clean()
+        venv_name: Optional[str] = (
+            self.database
+            if self.args.alt_venv or os.path.isdir(odoo.get_venv_path(repos_path, version, self.database))
+            else None
+        )
+        default_args = {
+            "repos_path": repos_path,
+            "version": version,
+            "database": self.database,
+            "addons": self.addons,
+            "subcommand": self.odoobin_subcommand,
+            "additional_args": self.additional_args,
+            "venv_name": venv_name,
+            "skip_prompt": self.args.pull,
+        }
+        return odoo.run_odoo(**{**default_args, **kwargs})
 
 
 # TODO: reuse this mixin for all commands that use odoo.com credentials (dump... uhh... just dump)

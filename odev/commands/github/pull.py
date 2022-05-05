@@ -1,3 +1,4 @@
+import os
 from argparse import Namespace
 
 from odev.constants import ODOO_MASTER_REPO, ODOO_REPOSITORIES
@@ -38,8 +39,8 @@ class PullCommand(commands.Command):
 
     def run(self):
         config = ConfigManager("odev")
-        odoo_path = config.get("paths", "odoo")
-        odoo_version = get_worktree_list(odoo_path + ODOO_MASTER_REPO, ODOO_REPOSITORIES)
+        repos_path = config.get("paths", "odoo")
+        odoo_version = get_worktree_list(os.path.join(repos_path, ODOO_MASTER_REPO), ODOO_REPOSITORIES)
 
         if self.args.version:
             try:
@@ -52,4 +53,4 @@ class PullCommand(commands.Command):
         for version in odoo_version:
             version = version_from_branch(version)
 
-            prepare_odoobin(odoo_path, version, venv=False, upgrade=False, skip_prompt=self.args.force)
+            prepare_odoobin(repos_path, version, venv=False, upgrade=False, skip_prompt=self.args.force)

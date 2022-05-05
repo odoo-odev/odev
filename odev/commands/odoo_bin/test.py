@@ -1,4 +1,3 @@
-import shlex
 from argparse import Namespace
 
 from odev.commands.odoo_bin import run
@@ -22,7 +21,7 @@ class TestCommand(run.RunCommand):
             for more information on test tags
             """,
         },
-        {"name": "args"},  # moves `args` from RunCommand last
+        {"name": "args"},  # moves positional "args" from RunCommand after "tags"
     ]
 
     def __init__(self, args: Namespace):
@@ -39,12 +38,8 @@ class TestCommand(run.RunCommand):
             else:
                 self.additional_args.append(f"""{TEST_TAGS}={','.join(args.tags)}""")
 
-            if self.force_save_args:
-                self.config["databases"].set(
-                    self.database,
-                    self.config_args_key,
-                    shlex.join([*self.addons, *self.additional_args]),
-                )
+            if args.save:
+                self.save_db_config_cli_args()
 
 
 TEST_ENABLE = "--test-enable"
