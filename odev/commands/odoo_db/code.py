@@ -46,7 +46,7 @@ class VSCodeDebugConfigCommand(commands.LocalDatabaseCommand, commands.OdooUpgra
 
         kwargs = {}
         for key, upgrade_directory in self.get_upgrade_repo_paths(self.args).items():
-            if self.validate(upgrade_directory):
+            if upgrade_directory and self.validate(upgrade_directory):
                 kwargs[key] = upgrade_directory
 
         kwargs.update(version=self.db_version_clean())
