@@ -1,26 +1,27 @@
 """Set up a new submodule on odoo.sh, Github, and in a local repo"""
 
 import os.path
+import re
 from argparse import Namespace
-from contextlib import contextmanager, nullcontext
+from contextlib import nullcontext
 from typing import (
     Any,
+    ClassVar,
     ContextManager,
-    Iterator,
     List,
     Mapping,
     Optional,
-    Set,
-    Union,
+    Tuple,
 )
 
 import giturlparse
-from git import CommandError, GitError, Repo, Submodule
+from git import Repo, Submodule
 from github import Repository, RepositoryKey
 
 from odev.exceptions import GitException, InvalidArgument, OdooSHException
 from odev.structures import commands
 from odev.utils import github, logging
+from odev.utils.github import GitCommitContext
 
 
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -72,9 +73,23 @@ class OdooSHSubmoduleCommand(commands.OdooSHDatabaseCommand, commands.GitHubComm
         {
             "name": "commit",
             "aliases": ["--commit"],
+            "nargs": "?",
+            "default": None,  # no arg passed
+            "const": True,  # no value passed
             "help": "Commit to the local repo after preparing the submodule with the given message",
         },
+        {
+            "name": "update",
+            "aliases": ["--update"],
+            "nargs": "?",
+            "default": None,  # no arg passed
+            "const": True,  # no value passed
+            "help": "If the submodule exists locally, update it from remote with the given commit message",
+        },
     ]
+
+    default_commit_msg: ClassVar[Optional[str]] = "[ADD] add `{module_name}` submodule"
+    default_update_msg: ClassVar[Optional[str]] = "[IMP] update `{module_name}` submodule to {module_commit}"
 
     def __init__(self, args: Namespace):
         super().__init__(args)
@@ -95,8 +110,16 @@ class OdooSHSubmoduleCommand(commands.OdooSHDatabaseCommand, commands.GitHubComm
         self.local_repo_path: Optional[str] = None if args.no_local else args.repo_path
         if not github.is_git_repo(self.local_repo_path):
             raise GitException(f"Path '{self.local_repo_path}' is not a valid git repo")
-        self.commit_msg: Optional[str] = None if args.no_local else args.commit
-        self.dont_commit: bool = not self.commit_msg
+
+        self.to_commit: bool = bool(args.commit)
+        if args.commit in (True, None):
+            args.commit = self.default_commit_msg
+        self.commit_msg: Optional[str] = args.commit
+
+        self.to_update: bool = bool(args.update)
+        if args.update in (True, None):
+            args.update = self.default_update_msg
+        self.update_msg: Optional[str] = args.update
 
     def _create_sh_submodule(self) -> Mapping[str, Any]:
         _logger.debug(f'Fetching existing submodules configured in SH for "{self.sh_repo}"')
@@ -138,7 +161,7 @@ class OdooSHSubmoduleCommand(commands.OdooSHDatabaseCommand, commands.GitHubComm
         assert github_key is not None
         return github_key
 
-    def _add_local_submodule(self, repo: Repo, paths_to_commit: Set[str]) -> Submodule:
+    def _add_local_submodule(self, repo: Repo, commit_context: Optional[GitCommitContext]) -> Tuple[Submodule, bool]:
         matching_submodules: List[Submodule] = [
             submodule
             for submodule in repo.submodules
@@ -166,62 +189,113 @@ class OdooSHSubmoduleCommand(commands.OdooSHDatabaseCommand, commands.GitHubComm
                 branch=self.module_branch,
             )
 
-        paths_to_commit |= {".gitmodules", git_submodule.path}
+        git_submodule.update(init=True)
 
-        return git_submodule
+        just_added: bool = not matching_submodules
 
-    # TODO: consider moving to utils.github ?
-    @contextmanager
-    def _git_commit_context(
-        self, repo: Union[str, Repo], message: str, stash: bool = True, ignore_empty: bool = True
-    ) -> Iterator[Set[str]]:
-        if isinstance(repo, str):
-            repo = Repo(self.local_repo_path)
+        if just_added and commit_context is not None:
+            commit_context.add(".gitmodules", git_submodule.path)
 
-        assert isinstance(repo, Repo)
+        return git_submodule, just_added
 
-        if stash:
-            _logger.debug("Stashing non-submodule related changes")
-            stash_msg: str = repo.git.stash("push")
-            if "No local changes to save".lower() in stash_msg.lower():
-                stash = False
+    def _update_local_submodule(self, git_submodule: Submodule, commit_context: Optional[GitCommitContext]) -> bool:
+        if not self.to_update:
+            if _logger.confirm(
+                "The submodule already exists in the local repo. Do you want to update it to the latest version?"
+            ):
+                self.to_update = True
+                if commit_context is not None:
+                    if not self.update_msg and self.default_update_msg:
+                        self.update_msg = self.default_update_msg
+                    if not self.update_msg:
+                        self.update_msg = _logger.ask("Specify a commit message for the submodule update:")
+                        if not self.update_msg:
+                            raise InvalidArgument("Cannot commit without a message")
 
-        paths_to_commit: Set[str] = set()
-        yield paths_to_commit
+        if not self.to_update:
+            return False
 
-        for path in paths_to_commit:
-            repo.git.add(path)
-        paths_to_commit.clear()
+        submodule_repo: Repo = git_submodule.module()
+        if submodule_repo.head.is_detached:
+            # find main branch on remote and switch to it
+            remote_details: str = submodule_repo.git.remote("show", submodule_repo.remotes[0].name)
+            match: Optional[re.Match] = re.search(r"^\s*HEAD branch:\s*([^\s]+)", remote_details, flags=re.M)
+            if not match:
+                _logger.error("Couldn't determine main remote branch for submodule repo")
+                return False
+            main_branch: str = match.group(1)
+            submodule_repo.git.switch(main_branch)
 
-        try:
-            repo.git.commit("-m", message)
-        except CommandError as exc:
-            if ignore_empty and "nothing added to commit" in str(exc):
-                _logger.debug("Nothing to commit for changes in local repo")
-            else:
-                raise
+        sha_before: str = git_submodule.hexsha
+        git_submodule.update(to_latest_revision=True)
+        sha_after: str = submodule_repo.head.commit.hexsha
 
-        if stash:
-            _logger.debug("Un-stashing previous non-submodule related changes")
-            repo.git.stash("pop")
+        updated: bool = sha_after != sha_before
+
+        if updated:
+            if commit_context is not None:
+                commit_context.add(git_submodule.path)
+            _logger.info(f'Updated "{self.module_name}" submodule to commit {sha_after[:7]}')
+        else:
+            _logger.info("Submodule already up to date, nothing to do")
+
+        return updated
+
+    def _conditional_commit_context(self, *args, **kwargs) -> ContextManager[Optional[GitCommitContext]]:
+        return GitCommitContext(*args, **kwargs) if self.to_commit else nullcontext()
+
+    def _format_commit_msg(self, msg_template: Optional[str], **values) -> str:
+        if not msg_template:
+            return ""
+        return msg_template.format(
+            module_url=self.module_url,
+            module_path=self.module_path,
+            module_name=self.module_name,
+            module_branch=self.module_branch,
+            module_url_domain=self.module_url_parsed.domain,
+            module_url_repo=self.module_url_parsed.repo,
+            module_url_owner=self.module_url_parsed.owner,
+            module_url_platform=self.module_url_parsed.platform,
+            module_url_protocol=self.module_url_parsed.protocol,
+            **values,
+        )
 
     def _process_local_repo(self) -> None:
         assert self.local_repo_path
 
         repo: Repo = Repo(self.local_repo_path)
 
-        commit_context: ContextManager[Set[str]]
-        if not self.dont_commit:
-            commit_context = self._git_commit_context(repo, self.commit_msg)
-        else:
-            commit_context = nullcontext(set())
+        commit_context: Optional[GitCommitContext]
+        git_submodule: Submodule
+        just_added: bool
+        updated: bool = False
+        log_msg_type: Optional[str] = None
+        with self._conditional_commit_context(repo) as commit_context:
+            git_submodule, just_added = self._add_local_submodule(repo, commit_context)
 
-        paths_to_commit: Set[str]
-        with commit_context as paths_to_commit:
-            git_submodule: Submodule = self._add_local_submodule(repo, paths_to_commit)
+            if not just_added:
+                updated = self._update_local_submodule(git_submodule, commit_context)
 
-        if not self.dont_commit:
-            _logger.info(f'Created commit for new "{git_submodule.name}" submodule: {self.commit_msg}')
+            if commit_context is not None:
+                commit_msg_template: Optional[str] = None
+                extra_values: Mapping[str, Any]
+                if just_added:
+                    commit_msg_template = self.commit_msg
+                    extra_values = {"module_commit": git_submodule.hexsha}
+                    log_msg_type = "added"
+                elif updated:
+                    commit_msg_template = self.update_msg
+                    extra_values = {
+                        "module_commit": git_submodule.module().head.commit.hexsha[:7],
+                        "module_commit_before": git_submodule.hexsha,
+                    }
+                    log_msg_type = "updated"
+                if commit_msg_template:
+                    commit_msg = self._format_commit_msg(commit_msg_template, **extra_values)
+                    commit_context.message = commit_msg
+
+        if log_msg_type:
+            _logger.info(f'Created commit for {log_msg_type} "{git_submodule.name}" submodule: {commit_msg}')
 
     def run(self) -> int:
         sh_submodule: Mapping[str, Any] = self._create_sh_submodule()

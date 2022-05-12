@@ -6,6 +6,7 @@ from functools import partial
 from logging import getLevelName
 from typing import (
     Callable,
+    ContextManager,
     List,
     Optional,
     Set,
@@ -16,6 +17,7 @@ import git
 import git.repo.base
 import git.repo.fun
 from git import (
+    CommandError,
     GitCommandError,
     InvalidGitRepositoryError,
     NoSuchPathError,
@@ -411,3 +413,58 @@ def get_worktree_list(odoo_path: str, repos: Union[str, List[str]]) -> List[str]
         installed_versions = all_versions & worktree_versions
 
     return list(installed_versions)
+
+
+class GitCommitContext(ContextManager["GitCommitContext"]):
+    def __init__(
+        self, repo: Union[str, Repo], message: Optional[str] = None, stash: bool = True, ignore_empty: bool = True
+    ):
+        if isinstance(repo, str):
+            repo = Repo(repo)
+        assert isinstance(repo, Repo)
+
+        self.repo: Repo = repo
+        self.message: Optional[str] = message
+        self._stash: bool = stash
+        self._ignore_empty: bool = ignore_empty
+
+        self._paths_to_commit: Set[str] = set()
+
+    def __enter__(self) -> "GitCommitContext":
+        if self._stash:
+            _logger.debug("Stashing non-submodule related changes")
+            stash_msg: str = self.repo.git.stash("push")
+            if "No local changes to save".lower() in stash_msg.lower():
+                self._stash = False
+
+        return self
+
+    def add(self, *paths: str) -> None:
+        self._paths_to_commit.update(paths)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if any((exc_type, exc_val, exc_tb)):
+            return
+
+        if not self._paths_to_commit:
+            _logger.debug("No paths set to commit, skipping")
+            return
+
+        if not self.message:
+            raise ValueError("Did not specify a commit message")
+
+        for path in self._paths_to_commit:
+            self.repo.git.add(path)
+        self._paths_to_commit.clear()
+
+        try:
+            self.repo.git.commit("-m", self.message)
+        except CommandError as exc:
+            if self._ignore_empty and "nothing added to commit" in str(exc):
+                _logger.debug("Nothing to commit for changes in local repo")
+            else:
+                raise
+
+        if self._stash:
+            _logger.debug("Un-stashing previous non-submodule related changes")
+            self.repo.git.stash("pop")
