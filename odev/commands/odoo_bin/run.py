@@ -134,7 +134,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
 
         if (
             any(re.compile(r"^(-i|--install|-u|--update)").match(arg) for arg in self.additional_args)
-            or not self.config["databases"].get(self.database, "last_run", False)
+            or not self.config["databases"].get(self.database, "lastrun", False)
             or self.args.alt_venv
         ):
             odoo.prepare_requirements(repos_path, version, venv_name=venv_name, addons=addons)
