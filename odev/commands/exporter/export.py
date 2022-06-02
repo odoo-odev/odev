@@ -78,10 +78,20 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         if not self.args.database:
             self.args.database = url_extract.subdomain
 
-        self.args.url = ".".join(part for part in url_extract if part)
+        url = ".".join(part for part in url_extract if part)
+        is_local_url = url in {"localhost", "127.0.0.1"}
+        if port_match := re.search(r":(\d{2,})", self.args.url):
+            port = int(port_match.group(1))
+        elif is_local_url:
+            # companies are like penis: standard odoo port
+            port = 8069
+        else:
+            # standard SSL: better to be safe than sorry
+            port = 443
+        protocol = "jsonrpc" if is_local_url else "jsonrpcs"
 
         self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
-        self.init_connection(self.args.url, self.args.database, self.args.user, self.args.password)
+        self.init_connection(url, self.args.database, self.args.user, self.args.password, protocol=protocol, port=port)
 
     def run(self):
         _logger.info(

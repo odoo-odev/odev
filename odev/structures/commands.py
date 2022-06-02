@@ -1152,9 +1152,9 @@ class ExportCommand(Command, ABC, Template):
             "end_migrate": {"lines": []},
         }
 
-    def init_connection(self, hostname, database, login, password):
+    def init_connection(self, hostname, database, login, password, protocol="jsonrpcs", port=443):
         self.connection = odoolib.get_connection(
-            hostname=hostname, database=database, login=login, password=password, protocol="jsonrpcs", port=443
+            hostname=hostname, database=database, login=login, password=password, protocol=protocol, port=port
         )
 
     def safe_mkdir(self, path: str, module: str = "") -> str:
