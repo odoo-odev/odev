@@ -43,7 +43,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
         DO $$ BEGIN IF (EXISTS (
             SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'res_users' AND column_name='totp_secret'
             ))
-            THEN UPDATE res_users SET totp_secret = NULL AND id IN (
+            THEN UPDATE res_users SET totp_secret = NULL WHERE id IN (
                 SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 51
             );
         END IF; END; $$
