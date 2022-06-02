@@ -7,6 +7,7 @@ from xmlrpc.client import Fault as xmlrpc_Fault
 
 import lxml.etree as ET
 import tldextract
+from odoolib.main import JsonRPCException
 
 from odev.structures import actions, commands
 from odev.utils import logging
@@ -153,14 +154,17 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         model = self.connection.get_model(model_name)
         try:
             yield from model.read(ids)
-        except xmlrpc_Fault:
+        except (xmlrpc_Fault, JsonRPCException):
             _logger.warning("Error while reading ids at once, trying iterating")
             for id_ in ids:
                 try:
-                    yield self.xmlrpc.read(model_name, [id_])
-                except xmlrpc_Fault as exc:
-                    # TODO: Add the error to some custom report?
-                    _logger.warning(f'Error while reading "{model_name}" record id={id_}:\n' f"{exc.faultString}")
+                    yield model.read(model_name, [id_])
+                # TODO: Add the error to some custom report?
+                except (xmlrpc_Fault, JsonRPCException) as exc:
+                    _logger.warning(
+                        f'Error while reading "{model_name}" record id={id_}:\n'
+                        f"{exc.faultString if isinstance(exc, xmlrpc_Fault) else exc.error}"
+                    )
 
     # This method returns data related to one model and its children ( include_model )
     def get_data(self, cfg, model_name, domain, with_include=True, same_module=False, order=None):
@@ -205,7 +209,6 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 _logger.info(
                     f"Export : {self.module_name} {model_name} ({data['id']}) -> {imd['module']}.{imd['name']}"
                 )
-
                 # If model_name has child , override data with data from child
                 if "includes" in cfg and with_include:
                     self._includes_model(cfg, data)
