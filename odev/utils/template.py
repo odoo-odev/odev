@@ -65,7 +65,7 @@ class Template:
             }
         )
 
-        if "file_ext" in cfg and type(cfg["file_ext"]) == dict:
+        if "file_ext" in cfg and isinstance(cfg["file_ext"], dict):
             cfg["file_ext"] = cfg["file_ext"][self.type]
 
         file = self.write(self.render(data, cfg), cfg, data)

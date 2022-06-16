@@ -25,14 +25,14 @@ class Config:
         self.included_models = [x for x, y in self.config["base_model"].items() if "parent" in y]
 
     def _parse_json(self):
-        version = str(self.version) if str(self.version) in self.json else "default"
+        self.config_version = self.json.get(str(self.version), "default")
 
-        if "inherit" in self.json[version]:
-            self.config = self.json[self.json[version]["inherit"]]
+        if "inherit" in self.json[self.config_version]:
+            self.config = self.json[self.json[self.config_version]["inherit"]]
 
-            self._override_config(self.json[version], self.config)
+            self._override_config(self.json[self.config_version], self.config)
         else:
-            self.config = self.json[version]
+            self.config = self.json[self.config_version]
 
     def _override_config(self, config, override_config):
         for key in config.keys():

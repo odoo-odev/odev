@@ -59,16 +59,22 @@ from odev.exceptions import (
     BuildWarning,
     InvalidArgument,
     InvalidDatabase,
+    InvalidFileArgument,
     InvalidOdooDatabase,
-    InvalidVersion,
 )
 from odev.exceptions.commands import InvalidQuery
 from odev.structures.actions import OptionalStringAction
-from odev.utils import logging, odoo
+from odev.utils import logging
 from odev.utils.config import ConfigManager
 from odev.utils.exporter import Config, odoo_field, odoo_model
 from odev.utils.github import get_github
-from odev.utils.odoo import check_database_name, get_odoo_version, parse_odoo_version
+from odev.utils.odoo import (
+    check_database_name,
+    get_odoo_version,
+    is_addon_path,
+    is_really_module,
+    parse_odoo_version,
+)
 from odev.utils.os import mkdir
 from odev.utils.psql import PSQL
 from odev.utils.shconnector import ShConnector, get_sh_connector
@@ -1044,7 +1050,7 @@ class ExportCommand(Command, ABC, Template):
     arguments = [
         {
             "aliases": ["--path"],
-            "default": ".",
+            "default": os.getcwd(),
             "help": "Path of the folder to create the module (magically generated if clone failed)",
         },
         {
@@ -1088,6 +1094,7 @@ class ExportCommand(Command, ABC, Template):
             "type": str,
             "dest": "version",
             "help": "Odoo target version",
+            "default": "",
         },
         {
             "aliases": ["--platform", "--type"],
@@ -1115,13 +1122,8 @@ class ExportCommand(Command, ABC, Template):
     module_name = ""
 
     def __init__(self, args: Namespace):
-        self.type = args.type
+        self.type = args.type or "sh"
         super().__init__(args)
-
-        try:
-            self.version = odoo.parse_odoo_version(self.args.version or LAST_ODOO_VERSION)
-        except InvalidVersion as exc:
-            raise InvalidArgument(str(exc)) from exc
 
     def _init_config(self):
         super()._init_config()
@@ -1161,6 +1163,16 @@ class ExportCommand(Command, ABC, Template):
         module_path = os.path.join(path, module)
 
         if os.path.exists(module_path):
+            if module and not is_really_module(path, module) and os.listdir(module_path):
+                raise InvalidFileArgument(
+                    f"The folder {module_path} already exist and doesn't seem to be an Odoo module path"
+                )
+            elif not is_addon_path(path) and os.listdir(path):
+                raise InvalidFileArgument(f"The folder {module_path} already exist and is not empty")
+
+            if os.path.isdir(Path(module_path, "odev")):
+                raise InvalidFileArgument("Can't be launched without --path inside odev folder")
+
             if _logger.confirm(f"Module folder {module_path} already exist do you want to delete first ?"):
                 _logger.warning(f"Existing folder '{module_path}' successfully deleted")
                 shutil.rmtree(module_path)
@@ -1170,6 +1182,15 @@ class ExportCommand(Command, ABC, Template):
         _logger.debug(f"Folder {module_path} successfully created")
         mkdir(module_path)
         return module_path
+
+    def _check_version_match(self, arg_version, db_version):
+        if arg_version and arg_version != db_version:
+            if not _logger.confirm(
+                f"The version provided in argument ({arg_version})"
+                f" doesn't match the one from the analysis ({db_version})."
+                " Do you want to continue anyway ?"
+            ):
+                raise InvalidArgument("Command aborted because the version didn't match")
 
     def _check_and_add_migrate(self, data_type, model, field=None):
         if data_type == "model" and model[:2] == "x_":

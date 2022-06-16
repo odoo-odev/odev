@@ -8,9 +8,12 @@ from xmlrpc.client import Fault as xmlrpc_Fault
 import lxml.etree as ET
 import tldextract
 from odoolib.main import JsonRPCException
+from packaging.version import Version
 
+from odev.constants import LAST_ODOO_VERSION
+from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import actions, commands
-from odev.utils import logging
+from odev.utils import logging, odoo
 from odev.utils.exporter import Config
 
 
@@ -91,14 +94,25 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             port = 443
         protocol = "jsonrpc" if is_local_url else "jsonrpcs"
 
-        self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
         self.init_connection(url, self.args.database, self.args.user, self.args.password, protocol=protocol, port=port)
+
+        try:
+            db_version = odoo.get_odoo_version(self.get_db_base_version())
+            self.version = Version(odoo.get_odoo_version(self.args.version or db_version or LAST_ODOO_VERSION))
+
+            self._check_version_match(self.args.version, db_version)
+
+        except InvalidVersion as exc:
+            raise InvalidArgument(str(exc)) from exc
+
+        self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
 
     def run(self):
         _logger.info(
             f"Starting the export of {','.join(self.args.modules)} from "
             f"{self.args.url} into "
             f"{'xml' if self.args.type == 'saas' else 'python'} module(s)"
+            f" in v {str(self.version)} ( using config: {str(self.export_config.config_version)} )"
         )
         _logger.info("All the data (from specific models) without an XmlId will also be exported")
 
@@ -111,6 +125,15 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         _logger.success(f"Export completed successfully into {self.args.path}!")
 
         return 0
+
+    def get_db_base_version(self):
+        ir_model_data = self.connection.get_model("ir.module.module")
+        db_base_version = ir_model_data.search_read([("name", "=", "base")], fields=["latest_version"])
+
+        if db_base_version:
+            version = db_base_version[0].get("latest_version", False)
+
+        return version
 
     def export(self):
         self.safe_mkdir(self.args.path)
@@ -172,7 +195,7 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
         # If there is a exclude_domain add it to the domain
         if "exclude_domain" in cfg:
-            domain.append(eval(cfg["exclude_domain"])[0])
+            domain.append(eval(cfg["exclude_domain"]))
 
         # Define order passed to the xmlrpc class
         order = cfg.get("order", order) or {}

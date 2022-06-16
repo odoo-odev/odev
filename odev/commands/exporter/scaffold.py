@@ -11,6 +11,7 @@ from packaging.version import Version
 from pre_commit.commands.install_uninstall import install
 
 from odev.constants import LAST_ODOO_VERSION, PSTOOLS_DB, PSTOOLS_PASSWORD, PSTOOLS_USER
+from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.credentials import CredentialsHelper
@@ -64,11 +65,16 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         self.init_connection(connection["url"], connection["db"], PSTOOLS_USER, PSTOOLS_PASSWORD)
 
     def run(self):
-        _logger.info(f"Generate scaffold code for analysis : {self.args.task_id}")
 
         try:
             self.analysis = self.get_analysis()
             self._init_config()
+
+            _logger.info(
+                f"Generate scaffold code for analysis : {self.args.task_id}"
+                f" into {'xml' if self.args.type == 'saas' else 'python'} module(s)"
+                f" in v {str(self.version)} ( using config: {str(self.export_config.config_version)} )"
+            )
 
             if self.args.path == ".":
                 _logger.info("Trying to generate a logical addons-path")
@@ -118,12 +124,19 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
             return analysis_ids[int(index) - 1]
 
     def _init_config(self) -> None:
+        try:
+            self.version = Version(
+                odoo.get_odoo_version(self.args.version or self.analysis["version"][1] or LAST_ODOO_VERSION)
+            )
+
+            self._check_version_match(self.args.version, self.analysis["version"][1])
+
+        except InvalidVersion as exc:
+            raise InvalidArgument(str(exc)) from exc
+
         self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
 
         super()._init_config()
-
-        if not self.version:
-            self.version = Version(odoo.get_odoo_version(self.analysis["version"][1] or LAST_ODOO_VERSION))
 
         if not self.args.type:
             self.type = "saas" if self.analysis["platform"] == "saas" else "sh"
