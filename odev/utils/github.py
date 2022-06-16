@@ -399,7 +399,7 @@ def get_worktree_list(odoo_path: str, repos: Union[str, List[str]]) -> List[str]
 
     repos = [os.path.join(odoo_path, repo) for repo in repos if is_git_repo(os.path.join(odoo_path, repo))]
 
-    re_worktree_versions = re.compile(r"\nbranch\srefs/heads/([^(master)\n]+)")
+    re_worktree_versions = re.compile(r"\nbranch\srefs/heads/((?!master)[^\n]+)")
     all_versions: Set[str] = set()
     installed_versions: Set[str] = set()
 
