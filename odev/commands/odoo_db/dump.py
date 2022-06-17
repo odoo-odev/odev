@@ -57,6 +57,12 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             "nargs": "?",
             "help": "Directory to which the dumped file will be saved once downloaded",
         },
+        {
+            "aliases": ["-x", "--no-extract"],
+            "dest": "extract",
+            "action": "store_false",
+            "help": "Don't extract dump.sql from the compressed dump file once downloaded",
+        },
     ]
 
     def __init__(self, args: Namespace):
@@ -69,6 +75,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             self.database = args.database
         else:
             self.database = args.source
+        self.extract = args.extract
 
     def sanitize_url(self, url, remove_after=".odoo.com"):
         return url[: url.index(remove_after) + len(remove_after)]
@@ -262,7 +269,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
 
         self._check_dump(destfile)
 
-        if ext == "sql.gz":
+        if ext == "sql.gz" and self.extract:
             _logger.info(f"Extracting `{base_dump_filename}.sql`")
             with gzip.open(destfile, "rb") as f_in:
                 with open(f"{base_dump_filename}.sql", "wb") as f_out:
