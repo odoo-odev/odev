@@ -70,24 +70,30 @@ class CreateCommand(commands.LocalDatabaseCommand):
         if not result or not self.db_exists_all(self.database):
             raise InvalidDatabase(f"Database {self.database} could not be created")
 
-        if self.template and self.copy_filestore:
-            filestore = self.db_filestore()
-            template_filestore = self.db_filestore(self.template)
+        if self.template:
+            db_config = self.config["databases"]
+            if self.template in db_config:
+                db_config[self.database] = db_config[self.template]
+                db_config.save()
 
-            if not os.path.exists(template_filestore):
-                _logger.info("Template filestore not found, no action taken")
-            else:
-                if os.path.exists(filestore):
-                    if not _logger.confirm(f"The new filestore path already exists: `{filestore}`\nOverwrite it?"):
-                        raise CommandAborted
-                    _logger.info(f"Deleting previous filestore in `{filestore}`")
-                    shutil.rmtree(filestore)
+            if self.copy_filestore:
+                filestore = self.db_filestore()
+                template_filestore = self.db_filestore(self.template)
 
-                _logger.info(f"Copying template filestore to `{filestore}`")
-                try:
-                    shutil.copytree(template_filestore, filestore)
-                except Exception as exc:
-                    _logger.warning(f"Error while copying filestore: {exc}")
+                if not os.path.exists(template_filestore):
+                    _logger.info("Template filestore not found, no action taken")
+                else:
+                    if os.path.exists(filestore):
+                        if not _logger.confirm(f"The new filestore path already exists: `{filestore}`\nOverwrite it?"):
+                            raise CommandAborted
+                        _logger.info(f"Deleting previous filestore in `{filestore}`")
+                        shutil.rmtree(filestore)
+
+                    _logger.info(f"Copying template filestore to `{filestore}`")
+                    try:
+                        shutil.copytree(template_filestore, filestore)
+                    except Exception as exc:
+                        _logger.warning(f"Error while copying filestore: {exc}")
 
         _logger.info(f"Created database {self.database}")
         return 0

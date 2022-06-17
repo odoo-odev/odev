@@ -90,5 +90,6 @@ class RenameCommand(commands.LocalDatabaseCommand):
         db_config = self.config["databases"]
         db_config[name_new] = db_config[name_old]
         del db_config[name_old]
+        db_config.save()
 
         return 0
