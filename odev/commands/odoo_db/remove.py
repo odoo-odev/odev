@@ -51,6 +51,10 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         """
 
         if not self.db_exists_all():
+            if _logger.confirm(f"Database {self.database} does not exist, do you still want to delete its filestore ?"):
+                self.remove_filestore()
+                self.remove_configuration()
+                return 0
             raise InvalidDatabase(f"Database {self.database} does not exist")
 
         if self.db_runs():
@@ -101,11 +105,14 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         if is_odoo_db and not self.keep_venv:
             self.remove_specific_venv(version)
 
-        for db in dbs:
-            if db in self.config["databases"]:
-                self.config["databases"].delete(db)
+        self.remove_configuration(dbs)
 
         return 0
+
+    def remove_configuration(self, databases=None):
+        for db in databases or [self.database]:
+            if db in self.config["databases"]:
+                self.config["databases"].delete(db)
 
     def remove_filestore(self):
         filestore = self.db_filestore()
