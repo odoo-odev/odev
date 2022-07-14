@@ -50,6 +50,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
         """,
         "DELETE FROM ir_config_parameter where key ='database.enterprise_code'",
         "DELETE FROM ir_config_parameter WHERE key='report.url'",
+        "DELETE FROM ir_config_parameter WHERE key='auth_totp.policy'",
         "UPDATE ir_config_parameter SET value='http://localhost:8069' WHERE key='web.base.url'",
         "UPDATE ir_cron SET active='False'",
         "DELETE FROM fetchmail_server",
