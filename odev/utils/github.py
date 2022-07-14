@@ -1,6 +1,7 @@
 import os
 import os.path
 import re
+import sys
 from datetime import datetime, timedelta
 from functools import partial
 from logging import getLevelName
@@ -362,6 +363,9 @@ def self_update() -> bool:
 
     :return: True if updates were pulled, False otherwise
     """
+    if not sys.stdout.isatty() or not sys.stdin.isatty():
+        return False
+
     config = ConfigManager("odev")
     odev_path = config.get("paths", "odev")
 

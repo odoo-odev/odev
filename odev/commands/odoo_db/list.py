@@ -69,6 +69,12 @@ class ListCommand(commands.LocalDatabaseCommand):
             "action": "store_true",
             "help": "Display all fields",
         },
+        {
+            "aliases": ["-1", "--one-column"],
+            "dest": "one_column",
+            "action": "store_true",
+            "help": "List databases one per line - useful for parsing",
+        },
     ]
 
     def __init__(self, args: Namespace):
@@ -102,6 +108,10 @@ class ListCommand(commands.LocalDatabaseCommand):
         """
 
         databases = self._get_databases_list()
+
+        if self.args.one_column:
+            print("\n".join(databases))
+            return 0
 
         if not databases:
             _logger.debug("No databases to show")

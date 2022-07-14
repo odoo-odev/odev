@@ -22,6 +22,12 @@ class HelpCommand(commands.Command):
             "nargs": "?",
             "help": "Get help about a specific command",
         },
+        {
+            "aliases": ["-1", "--one_column"],
+            "dest": "one_column",
+            "action": "store_true",
+            "help": "List command names one per line - useful for parsing",
+        },
     ]
 
     def run(self):
@@ -31,7 +37,9 @@ class HelpCommand(commands.Command):
 
         assert self.registry
 
-        if self.args.command:
+        if self.args.one_column:
+            message = "\n".join([c.name for c in sorted(set(self.registry.commands.values()), key=lambda c: c.name)])
+        elif self.args.command:
             command = self.registry.get_command([self.args.command])
             parser = command.prepare_parser()
 
