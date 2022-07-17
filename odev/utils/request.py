@@ -3,7 +3,7 @@ import requests
 from odev.utils.signal import capture_signals
 
 
-def get(url, params=None, cookies=None, headers=None, follow_redirects=True):
+def get(url, params=None, cookies=None, headers=None, follow_redirects=True, stream=False):
     with capture_signals():
         return requests.get(
             url=url,
@@ -11,6 +11,7 @@ def get(url, params=None, cookies=None, headers=None, follow_redirects=True):
             cookies=cookies or {},
             allow_redirects=follow_redirects,
             headers=headers or {},
+            stream=stream,
         )
 
 

@@ -1,15 +1,15 @@
 """Downloads a dump from a SaaS or SH database."""
 
-import gzip
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 from zipfile import ZipFile
+
+import enlighten
 
 from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarge
 from odev.structures import commands
@@ -143,73 +143,17 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
         _logger.success(f"Dump {zip_path} successfully created")
 
     def dump_online(self):
-        # ---------------------------------------------------------------------
-        # Find out on which platform the database is running (SaaS or SH)
-        # ---------------------------------------------------------------------
         _logger.info(f"Logging you in to {self.source} support console")
-
-        support_url = f"{self.source}/_odoo/support"
-        support_login_url = f"{support_url}/login"
-
-        res = request.get(support_login_url)
-        platform = "saas"
-
-        if not self._check_response_status(res):
-            # Retry without '/login' as the support page on odoo.sh is not database-dependant
-            res = request.get(support_url)
-            if not self._check_response_status(res):
-                raise SHConnectionError(
-                    f"Error fetching webpage, check the URL and try again [{res.status_code} - {res.reason}]"
-                )
-            platform = "sh"
-
-        assert platform in ("saas", "sh")
-
-        # ---------------------------------------------------------------------
-        # Login to the support page
-        # ---------------------------------------------------------------------
 
         with CredentialsHelper() as creds:
             login = creds.get("odoo.login", "Odoo login:", self.login)
-            passwd = creds.secret("odoo.passwd", f"Odoo password for {login}:", self.password)
 
-        reason = self.args.reason or _logger.ask("Reason (optional):")
+        filestore = _logger.confirm("Do you want to include the filestore?")
+        ext = "zip" if filestore else "sql.gz"
 
-        login_url = support_login_url if platform == "saas" else res.history[-1].headers.get("Location")
-
-        res = request.post(
-            login_url,
-            data={
-                "login": login,
-                "password": passwd,
-                "reason": reason,
-                "csrf_token": self._get_response_data(res, re_csrf, "CSRF token"),
-            },
-            cookies={"session_id": res.cookies.get("session_id")},
-            follow_redirects=False,
-        )
-
-        self._check_session(res)
-
-        if platform == "sh":
-            redirect = self._get_response_data(res, re_redirect, "redirect path")
-            login_url = res.headers.get("Location")
-            support_url = f"https://www.odoo.sh{redirect}"
-
-        res = request.get(support_url, cookies={"session_id": res.cookies.get("session_id")})
-        _logger.success(f"Successfully logged-in to {login_url}")
-
-        # ---------------------------------------------------------------------
-        # Get the link the the dump file and download it
-        # ---------------------------------------------------------------------
-
-        database_name = self.database or self._get_response_data(res, re_database, "database name")
+        database_name = self.database or self.source.split("/")[-1].replace(".odoo.com", "")
 
         _logger.info(f"About to download dump file for {database_name}")
-
-        ext = "dump" if platform == "saas" else "sql.gz"
-        if _logger.confirm("Do you want to include the filestore?"):
-            ext = "zip"
 
         destdir = self.destination or os.path.join(self.config["odev"].get("paths", "dump"), database_name)
         destdir += "/" if not re_directory.search(destdir) else ""
@@ -226,12 +170,102 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
                 f"The file {destfile} already exists, "
                 f"indicating that you most probably already dumped this database today",
             )
-            overwrite = _logger.confirm("Do you wish to overwrite this file?")
-            if not overwrite:
-                raise CommandAborted()
+            if _logger.confirm("Do you wish to use the already downloaded dump ?"):
+                # self.argv is present if the dump command is called directly from the command line
+                if self.argv:
+                    raise CommandAborted()
+                else:
+                    return 0
 
-        dump_url = self._get_dump_url_for_platform(res, platform, ext)
+        res = request.get(f"{self.source}/_odoo/support/login")
+        if not self._check_response_status(res):
+            destfile = self.dump_sh(login, destfile, ext)
+        else:
+            destfile = self.dump_saas(login, destfile, ext)
 
+        self._check_dump(destfile)
+
+        _logger.success("Successfully downloaded dump file")
+
+        return 0
+
+    def dump_saas(self, login, destfile, ext):
+        dump_url = f"{self.source}/saas_worker/dump.{ext}"
+
+        _logger.info(f"Downloading dump from {dump_url} to {destfile}...")
+        _logger.warning("This may take a while, please be patient...")
+        with CredentialsHelper() as creds:
+            api_key = creds.secret(
+                "odoo.api_key",
+                f"Odoo api key for {login} (make sure debug mode is active on odoo.com to generate the key):",
+            )
+            params = {"support-login": login, "support-pass": api_key}
+            with request.get(dump_url, params, stream=True) as response:
+                content_length = int(response.headers.get("Content-Length", False))
+                bar_format = (
+                    "{desc}{desc_pad}{percentage:3.0f}%|{bar}| "
+                    "{count:!.2j}{unit} / {total:!.2j}{unit} [{elapsed}<{eta}, {rate:!.2j}{unit}/s]"
+                )
+                with open(destfile, "wb") as file, enlighten.get_manager(set_scroll=False) as manager, manager.counter(
+                    total=float(content_length),
+                    desc="downloading",
+                    unit="B",
+                    bar_format=bar_format,
+                ) as pbar:
+                    for block in response.iter_content(1024):
+                        file.write(block)
+                        pbar.update(float(len(block)))
+            return destfile
+
+    def dump_sh(self, login, destfile, ext):
+
+        res = request.get(f"{self.source}/_odoo/support")
+        if not self._check_response_status(res):
+            raise SHConnectionError(
+                f"Error fetching webpage, check the URL and try again [{res.status_code} - {res.reason}]"
+            )
+
+        login_url = res.history[-1].headers.get("Location")
+        with CredentialsHelper() as creds:
+            passwd = creds.secret("odoo.passwd", f"Odoo password for {login}:", self.password)
+            res = request.post(
+                login_url,
+                data={
+                    "login": login,
+                    "password": passwd,
+                    "csrf_token": self._get_response_data(res, re_csrf, "CSRF token"),
+                },
+                cookies={"session_id": res.cookies.get("session_id")},
+                follow_redirects=False,
+            )
+            self._check_session(res)
+
+        redirect = self._get_response_data(res, re_redirect, "redirect path")
+        login_url = res.headers.get("Location")
+        support_url = f"https://www.odoo.sh{redirect}"
+
+        res = request.get(support_url, cookies={"session_id": res.cookies.get("session_id")})
+        _logger.success(f"Successfully logged-in to {login_url}")
+
+        # ---------------------------------------------------------------------
+        # Get the link the the dump file and download it
+        # ---------------------------------------------------------------------
+
+        token = self._get_response_data(res, re_sh_token, "Odoo SH token")
+        dump_url = False
+        try:
+            dump_url = self._get_response_data(res, re_sh_dump, "dump URL")
+            dump_url = f"{dump_url}.{ext}?token={token}"
+        except SHConnectionError:
+            _logger.warning(
+                "This database cannot be downloaded automatically through the support page, "
+                "likely because it is too big to be dumped"
+            )
+
+            branch_mode = self._get_response_data(res, re_sh_mode, "environment")
+
+            if branch_mode != "production":
+                raise SHDatabaseTooLarge(f"Downloading large dumps is not supported for {branch_mode} databases")
         if dump_url:
             if not re_http.match(dump_url):
                 dump_url = "https://" + dump_url
@@ -239,26 +273,31 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             _logger.info(f"Downloading dump from {dump_url} to {destfile}...")
             _logger.warning("This may take a while, please be patient...")
 
-            res = request.get(dump_url, cookies={"session_id": res.cookies.get("session_id")})
+            with request.get(dump_url, cookies={"session_id": res.cookies.get("session_id")}, stream=True) as response:
+                if not self._check_response_status(response):
+                    _logger.warning(
+                        "This database cannot be downloaded automatically, "
+                        "maybe it is too big to be dumped in which case "
+                        "please contact the SaaS Support team and ask them for a dump of the database"
+                    )
 
-            if not self._check_response_status(res):
-                _logger.warning(
-                    "This database cannot be downloaded automatically, "
-                    "maybe it is too big to be dumped in which case "
-                    "please contact the SaaS Support team and ask them for a dump of the database"
-                )
+                    raise SHDatabaseTooLarge(f"Error downloading dump from {dump_url}")
 
-                raise SHDatabaseTooLarge(f"Error downloading dump from {dump_url}")
+                with open(destfile, "wb") as file, enlighten.get_manager(set_scroll=False) as manager, manager.counter(
+                    desc="downloading",
+                    unit="B",
+                    bar_format="{desc}{count:!.2j}{unit} [{elapsed}, {rate:!.2j}{unit}/s]",
+                ) as pbar:
+                    block_size = 1024
+                    for block in response.iter_content(block_size):
+                        file.write(block)
+                        pbar.update(block_size)
 
-            with open(destfile, "wb") as file:
-                file.write(res.content)
-
-        elif _logger.confirm(f"Do you want to download the last daily backup for {database_name}?"):
-            ext = "sql.gz"
-            destfile = f"{base_dump_filename}.{ext}"
+        elif _logger.confirm("Do you want to download the last daily backup for the database ?"):
+            destfile = re.sub(".zip$", ".sql.gz", destfile)
             sh_database = self._get_response_data(res, re_database, "database name")
             sh_build = sh_database.split("-")[-1]
-            sh_path = f"/home/odoo/backup.daily/{sh_database}_daily.{ext}"
+            sh_path = f"/home/odoo/backup.daily/{sh_database}_daily.sql.gz"
             ssh_url = f"{sh_build}@{self.source.split('/')[2]}"
 
             with SSHClient(url=ssh_url) as ssh:
@@ -267,17 +306,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
 
                 res = ssh.download(sh_path, destfile)
 
-        self._check_dump(destfile)
-
-        if ext == "sql.gz" and self.extract:
-            _logger.info(f"Extracting `{base_dump_filename}.sql`")
-            with gzip.open(destfile, "rb") as f_in:
-                with open(f"{base_dump_filename}.sql", "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-
-        _logger.success("Successfully downloaded dump file")
-
-        return 0
+        return destfile
 
     def _check_session(self, res):
         if not self._check_response_status(res) or "Location" not in res.headers:
@@ -293,30 +322,6 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             raise SHConnectionError(f"Error fetching {token_name} in {res.url}")
 
         return match[~0]
-
-    def _get_dump_url_for_platform(self, res, platform, ext):
-        dump_url = None
-
-        if platform == "sh":
-            token = self._get_response_data(res, re_sh_token, "Odoo SH token")
-            try:
-                dump_url = self._get_response_data(res, re_sh_dump, "dump URL")
-                dump_url = f"{dump_url}.{ext}?token={token}"
-            except SHConnectionError:
-                _logger.warning(
-                    "This database cannot be downloaded automatically through the support page, "
-                    "likely because it is too big to be dumped"
-                )
-
-                branch_mode = self._get_response_data(res, re_sh_mode, "environment")
-
-                if branch_mode != "production":
-                    raise SHDatabaseTooLarge(f"Downloading large dumps is not supported for {branch_mode} databases")
-
-        elif platform == "saas":
-            dump_url = f"{self.source}/saas_worker/dump.{ext}"
-
-        return dump_url
 
     def _check_dump(self, path):
         if not os.path.isfile(path):

@@ -2,7 +2,6 @@
 
 import os
 import re
-import shutil
 from argparse import Namespace
 from datetime import datetime
 
@@ -98,7 +97,7 @@ class QuickStartCommand(
                     timestamp = datetime.now().strftime("%Y%m%d")
                     basename = f"{timestamp}_{self.database}.dump"
 
-                    possible_ext = ("zip", "dump", "sql")
+                    possible_ext = ("zip", "sql.gz")
                     for ext in possible_ext:
                         filename = os.path.extsep.join((basename, ext))
                         filepath = os.path.join(TMP_DIR, filename)
@@ -125,10 +124,6 @@ class QuickStartCommand(
             if result:
                 _logger.error("Cleaning up files and removing database")
                 remove.RemoveCommand.run_with(**self.args.__dict__)
-
-        finally:
-            if os.path.isdir(TMP_DIR):
-                shutil.rmtree(TMP_DIR)
 
         if mode == "url":
             clone.CloneCommand.run_with(**dict(self.args.__dict__, url=self.subarg))
