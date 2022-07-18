@@ -20,7 +20,6 @@ from odev.constants import DB_TEMPLATE_SUFFIX
 from odev.exceptions import RunningOdooDatabase
 from odev.structures import commands, database
 from odev.utils import logging
-from odev.utils.signal import capture_signals
 
 
 _logger = logging.getLogger(__name__)
@@ -194,7 +193,7 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
             members = {entry.filename for entry in infolist}
 
             if "dump.sql" not in members:
-                raise Exception(f"{self.dump_path} contains no `dump.sql`")
+                raise ValueError(f"{self.dump_path} contains no `dump.sql`")
             psql_zip(self.database, dumpzip, "dump.sql")
 
             filestore_re = re.compile(r"^filestore/(.+)$")
