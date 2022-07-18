@@ -4,7 +4,7 @@ black>=20.8b1
 blessed>=1,<2
 copier>=5.1,<6
 decorator>=5.1.0
-enlighten>=1,<2
+enlighten>=1.9,<2
 GitPython>=3,<4
 giturlparse==0.10
 html5lib>=1,<2
