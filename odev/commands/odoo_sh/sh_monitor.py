@@ -107,6 +107,7 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
 
         self.ps_tools_user: Optional[str] = None
         self.ps_tools_api_key: Optional[str] = None
+        self.ps_tools_company_id: Optional[str] = None
         self.ps_tools_url: Optional[str] = None
         self.ps_tools_database: Optional[str] = None
         self._init_ps_tools()
@@ -139,6 +140,11 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
                 "pstools.api",
                 "PS-Tools API Key:",
                 self.ps_tools_api_key,
+            )
+            self.ps_tools_company_id = credentials.get(
+                "pstools.company_id",
+                "PS-Tools company ID:",
+                self.ps_tools_company_id,
             )
 
     def _cloc_module(self, path: str, name: str, version: str) -> int:
@@ -266,6 +272,7 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
                 "version": project_info["odoo_branch"],
                 "sh_info": json.dumps(project_info, sort_keys=True, indent=4),
                 "status": "testing",
+                "company_id": self.ps_tools_company_id,
             }
         )
 
