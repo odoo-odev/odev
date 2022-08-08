@@ -868,19 +868,20 @@ class OdooUpgradeRepoMixin(Command, ABC):
         upgrade_repo_parameter_to_path: Dict[str, str] = {}
 
         for upgrade_repo_parameter in upgrade_repo_parameter_to_path_keys:
-            args_repo_path: str = getattr(args, upgrade_repo_parameter)
-            if args_repo_path and self.validate(args_repo_path):
+            try:
+                args_repo_path: str = getattr(args, upgrade_repo_parameter)
+                self.validate(args_repo_path)
                 path = os.path.realpath(os.path.normpath(args_repo_path))
                 upgrade_repo_parameter_to_path[upgrade_repo_parameter] = path
                 config.set("paths", upgrade_repo_parameter, path)
-            else:
+            except (AttributeError, ValueError):
                 upgrade_repo_parameter_to_path[upgrade_repo_parameter] = config.get("paths", upgrade_repo_parameter)
 
         return upgrade_repo_parameter_to_path
 
     @staticmethod
-    def validate(path: str) -> bool:
-        if not os.path.exists(path):
+    def validate(path: Optional[str]) -> bool:
+        if not path or not os.path.exists(path):
             raise ValueError(f"Path doesn't exist: {path}")
         else:
             return True
