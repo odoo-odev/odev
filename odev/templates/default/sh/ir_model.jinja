@@ -114,9 +114,9 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
 
         {%-if field.ondelete -%}
             {%- if field.ondelete is string -%}
-                {{field_param.append("on_delete="+field.ondelete) or ""}}
+                {{field_param.append("ondelete="+field.ondelete) or ""}}
             {%- else -%}
-                {{field_param.append("on_delete="+field.ondelete | string) or ""}}
+                {{field_param.append("ondelete="+field.ondelete | string) or ""}}
             {%- endif -%}
         {%-endif-%}
         {{ field_param|join(', ') }})
