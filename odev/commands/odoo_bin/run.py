@@ -1,6 +1,5 @@
 """Runs a local Odoo database."""
 
-from datetime import datetime
 
 from odev.commands.odoo_db import remove
 from odev.constants import DB_TEMPLATE_SUFFIX
@@ -57,19 +56,11 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
                 "Will try adding the current directory, otherwise will run as enterprise",
             )
 
-        force_prepare_requirements: bool = (
-            not self.config["databases"].get(self.database, "lastrun") or self.args.alt_venv
-        )
         self.run_odoo(
             subcommand=self.odoobin_subcommand,
             additional_args=self.additional_args,
-            force_prepare_requirements=force_prepare_requirements,
-        )
-
-        self.config["databases"].set(
-            self.database,
-            "lastrun",
-            datetime.now().strftime("%a %d %B %Y, %H:%M:%S"),
+            venv_name=self.args.alt_venv,
+            check_last_run=True,
         )
 
         return 0

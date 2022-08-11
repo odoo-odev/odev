@@ -21,6 +21,7 @@ from argparse import (
 )
 from collections import defaultdict
 from contextlib import nullcontext
+from datetime import datetime
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -790,9 +791,12 @@ class OdooBinMixin(LocalDatabaseCommand, ABC):
             db_cfg_section[self.config_args_key] = shlex.join(self.additional_args)
             db_cfg_section[self.config_addons_key] = ",".join(self.addons)
 
-    def run_odoo(self, **kwargs) -> subprocess.CompletedProcess:
+    def run_odoo(
+        self, check_last_run: bool = False, set_last_run: bool = True, **kwargs
+    ) -> subprocess.CompletedProcess:
         repos_path: str = self.config["odev"].get("paths", "odoo")
         version: str = kwargs.pop("version", None) or self.db_version_clean()
+        database = kwargs.pop("database", self.database)
         venv_name: Optional[str] = (
             self.database
             if self.args.alt_venv or os.path.isdir(odoo.get_venv_path(repos_path, version, self.database))
@@ -801,14 +805,25 @@ class OdooBinMixin(LocalDatabaseCommand, ABC):
         default_args = {
             "repos_path": repos_path,
             "version": version,
-            "database": self.database,
+            "database": database,
             "addons": self.addons,
             "subcommand": self.odoobin_subcommand,
             "additional_args": self.additional_args,
             "venv_name": venv_name,
             "skip_prompt": self.args.pull,
         }
-        return odoo.run_odoo(**{**default_args, **kwargs})
+
+        with self.config["databases"] as dbs_config:
+            if check_last_run:
+                last_run: Optional[str] = dbs_config.get(database, "last_run")
+                default_args["last_run"] = datetime.fromisoformat(last_run) if last_run else datetime.now()
+
+            result = odoo.run_odoo(**{**default_args, **kwargs})
+
+            if set_last_run:
+                dbs_config[database]["last_run"] = datetime.now().isoformat()
+
+        return result
 
 
 # TODO: reuse this mixin for all commands that use odoo.com credentials (dump... uhh... just dump)

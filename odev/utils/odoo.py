@@ -244,16 +244,31 @@ def prepare_venv(repos_path: str, version: str, venv_name: Optional[str] = None,
             )
 
 
-def prepare_requirements(repos_path: str, version: str, venv_name="venv", addons: Optional[List[str]] = None):
+def prepare_requirements(
+    repos_path: str,
+    version: str,
+    venv_name="venv",
+    addons: Optional[List[str]] = None,
+    last_run: Optional[datetime] = None,
+):
     version_path: str = repos_version_path(repos_path, version)
 
     python_bin: str = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
 
-    _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
-    install_packages(packages="pip setuptools pudb ipdb websocket-client", python_bin=python_bin)
-
     all_addons = [os.path.join(version_path, "odoo")] + list_submodule_addons(addons or [])
 
+    if last_run:
+        requirements_files = [
+            req_path for path in all_addons if os.path.isfile(req_path := os.path.join(path, "requirements.txt"))
+        ]
+
+        if not all(
+            [os.path.getmtime(requirement_file) > last_run.timestamp() for requirement_file in requirements_files]
+        ):
+            return
+
+    _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
+    install_packages(packages="pip setuptools pudb ipdb websocket-client", python_bin=python_bin)
     for addon_path in all_addons:
         try:
             install_packages(requirements_dir=addon_path, python_bin=python_bin)
@@ -275,10 +290,10 @@ def run_odoo(
     subcommand: Optional[str] = None,
     additional_args: Optional[List[str]] = None,
     venv_name: Optional[str] = None,
-    force_prepare_requirements: bool = False,
     capture_output: bool = False,
     skip_prompt: Optional[bool] = None,
     print_cmdline: bool = True,
+    last_run: Optional[datetime] = None,
 ) -> subprocess.CompletedProcess:
     if addons is None:
         addons = []
@@ -298,8 +313,7 @@ def run_odoo(
     addons_paths += [os.getcwd(), *addons]
     addons_paths = [path for path in addons_paths if is_addon_path(path)]
 
-    if any(re.match(r"(-i|--install|-u|--update)", arg) for arg in additional_args) or force_prepare_requirements:
-        prepare_requirements(repos_path, version, venv_name=venv_name, addons=addons_paths)
+    prepare_requirements(repos_path, version, venv_name=venv_name, addons=addons_paths, last_run=last_run)
 
     python_exec = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
     command_args = [

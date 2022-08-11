@@ -74,6 +74,6 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
         if not result_queries:
             raise InvalidQuery(f"An error occurred while setting up database {self.database}")
 
-        self.config["databases"].set(self.database, "version_clean", self.version)
+        self.config["databases"].load().set(self.database, "version_clean", self.version)
 
         return 0

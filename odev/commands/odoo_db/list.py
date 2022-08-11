@@ -181,7 +181,7 @@ class ListCommand(commands.LocalDatabaseCommand):
                 table_row.append(sizeof(self.db_filestore_size(database)))
 
             if self.args.all or self.args.last_run:
-                table_row.append(self.config["databases"].get(database, "lastrun", "Never"))
+                table_row.append(self.config["databases"].get(database, "last_run", "Never"))
 
             table_rows.append(table_row)
 
