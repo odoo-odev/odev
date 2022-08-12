@@ -480,14 +480,14 @@ for rec in records:
                 view_types = view["view_type"] or [41]  # 41 : Form
 
                 for type_view in view_types:
-                    xml_id = view["view"] or (view["model"] + "_" + all_view_types[type_view])
-                    uniq_key = odoo_field_name(f"{view['model']}_{xml_id}_{str(type_view)}")
+                    xml_id = view["view"] or (view.get("model", "") or "" + "_" + all_view_types[type_view])
+                    uniq_key = odoo_field_name(f'{view.get("model", "") or ""}_{xml_id}_{str(type_view)}')
 
                     if uniq_key not in views:
                         data = {
                             "xml_id": odoo_field_name(xml_id),
                             "name": xml_id.replace(".", " ").replace("_", " ").capitalize(),
-                            "model": odoo_model(view["model"]),
+                            "model": odoo_model(view.get("model", "") or ""),
                             "inherit_id": [{"xml_id": odoo_field_name(xml_id)}],
                             "arch": "",
                             "description": [f"{view['description'] or ''} {view['field'] or ''}"],
