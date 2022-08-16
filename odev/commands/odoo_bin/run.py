@@ -59,7 +59,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
         self.run_odoo(
             subcommand=self.odoobin_subcommand,
             additional_args=self.additional_args,
-            venv_name=self.args.alt_venv,
+            venv_name=self.args.alt_venv and self.args.database,
             check_last_run=True,
         )
 
