@@ -149,7 +149,12 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
         if ext == ".dump":
             pg_restore(self.database, self.dump_path)
         elif ext == ".sql":
-            psql_plain(self.database, self.dump_path)
+            try:
+                # try to import as a plain SQL file
+                psql_plain(self.database, self.dump_path)
+            except Exception:
+                # must be a pg_dump sql generated file
+                pg_restore(self.database, self.dump_path)
         elif ext == ".gz":
             psql_gz(self.database, self.dump_path)
         elif ext == ".zip":
