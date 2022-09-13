@@ -14,6 +14,7 @@ from odev.constants import LAST_ODOO_VERSION, PSTOOLS_DB, PSTOOLS_PASSWORD, PSTO
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
 from odev.utils import logging
+from odev.utils.config import ConfigManager
 from odev.utils.credentials import CredentialsHelper
 from odev.utils.exporter import Config, odoo_field, odoo_field_name, odoo_model
 from odev.utils.github import is_git_repo
@@ -48,6 +49,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
     def __init__(self, args: Namespace):
         super().__init__(args)
+        self.no_pre_commit = bool(ConfigManager("odev").get("flags", "no_pre_commit"))
 
         self.module_name = args.name
 
@@ -76,8 +78,9 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 self.args.path = self._get_default_path()
 
             self.export()
-
-            if is_git_repo(self.args.path):
+            if not is_git_repo(self.args.path):
+                self.print_info()
+            elif not self.no_pre_commit:
                 _logger.info("Pre-commit hook installation")
                 install(
                     config_file=C.CONFIG_FILE,
@@ -85,8 +88,6 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                     hook_types=["pre-commit"],
                     git_dir=Path(self.args.path, ".git"),
                 )
-            else:
-                self.print_info()
         except Exception as exception:
             _logger.error(exception)
             return 1

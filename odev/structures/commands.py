@@ -1374,8 +1374,7 @@ class ExportCommand(Command, ABC, Template):
         self.generate_template({"module_name": self.module_name.replace("_", "").title()}, cfg)
 
         odoo_version = self._get_version(True)
-
-        if odoo_version >= Version("13.0"):
+        if not self.no_pre_commit and odoo_version >= Version("13.0"):
             copy(
                 "git@github.com:odoo-ps/psbe-ps-tech-tools.git",
                 dst_path=self.args.path,
