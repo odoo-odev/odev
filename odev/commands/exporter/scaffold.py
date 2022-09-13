@@ -13,10 +13,11 @@ from pre_commit.commands.install_uninstall import install
 from odev.constants import LAST_ODOO_VERSION, PSTOOLS_DB, PSTOOLS_PASSWORD, PSTOOLS_USER
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
-from odev.utils import logging, odoo
+from odev.utils import logging
 from odev.utils.credentials import CredentialsHelper
 from odev.utils.exporter import Config, odoo_field, odoo_field_name, odoo_model
 from odev.utils.github import is_git_repo
+from odev.utils.odoo import parse_odoo_version
 
 
 _logger = logging.getLogger(__name__)
@@ -119,12 +120,8 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
     def _init_config(self) -> None:
         try:
-            self.version = Version(
-                odoo.get_odoo_version(self.args.version or self.analysis["version"][1] or LAST_ODOO_VERSION)
-            )
-
+            self.version = parse_odoo_version(self.args.version or self.analysis["version"][1] or LAST_ODOO_VERSION)
             self._check_version_match(self.args.version, self.analysis["version"][1])
-
         except InvalidVersion as exc:
             raise InvalidArgument(str(exc)) from exc
 
