@@ -12,6 +12,7 @@ from odev.constants import ODOO_MANIFEST_NAMES
 from odev.exceptions import InvalidOdooModule, MissingOdooDependencies
 from odev.structures import commands
 from odev.utils import logging
+from odev.utils.odoo import sanitize_url
 from odev.utils.signal import capture_signals
 
 
@@ -81,15 +82,12 @@ class DeployCommand(commands.LocalDatabaseCommand):
 
         super().__init__(args)
         self.path = args.path
-        self.url = args.url and self.sanitize_url(f"{'https://' if not re_url.match(args.url) else ''}{args.url}")
+        self.url = args.url and sanitize_url(args.url)
         self.login = args.login or _logger.ask('Login (blank for "admin"):')
         self.password = args.password or _logger.password('Password (blank for "admin"):')
 
         if not self.database and args.database:
             self.database: str = args.database
-
-    def sanitize_url(self, url, remove_after=".odoo.com"):
-        return url[: url.index(remove_after) + len(remove_after)]
 
     def run(self):
         """

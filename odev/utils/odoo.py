@@ -65,9 +65,8 @@ def is_addon_path(path: str) -> bool:
 
 def is_saas_db(url):
     session = requests.Session()
-    url = url + "/" if not url.endswith("/") else url
-
-    resp = session.get(url + "saas_worker/noop", allow_redirects=False)
+    url = sanitize_url(url)
+    resp = session.get(f"{url}/saas_worker/noop", allow_redirects=False)
 
     return resp.status_code == 200
 
@@ -354,3 +353,9 @@ def list_submodule_addons(paths: List[str]) -> List[str]:
         ]
 
     return list({os.path.normpath(path) for path in paths + submodule_addons})
+
+
+def sanitize_url(url, remove_after=".odoo.com"):
+    re_http = re.compile(r"^https?://")
+    url_https = f"""{'https://' if not re_http.match(url) else ''}{url}"""
+    return url_https[: url_https.index(remove_after) + len(remove_after)]

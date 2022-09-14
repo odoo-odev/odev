@@ -15,6 +15,7 @@ from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarg
 from odev.structures import commands
 from odev.utils import logging, request
 from odev.utils.credentials import CredentialsHelper
+from odev.utils.odoo import sanitize_url
 from odev.utils.os import mkdir
 from odev.utils.ssh import SSHClient
 
@@ -71,14 +72,11 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
         self.mode = "online" if re_url.match(args.source) else "local"
 
         if self.mode == "online":
-            self.source = self.sanitize_url(f"""{'https://' if not re_http.match(args.source) else ''}{args.source}""")
+            self.source = sanitize_url(args.source)
             self.database = args.database
         else:
             self.database = args.source
         self.extract = args.extract
-
-    def sanitize_url(self, url, remove_after=".odoo.com"):
-        return url[: url.index(remove_after) + len(remove_after)]
 
     def _check_response_status(self, res):
         return 200 <= res.status_code < 400
