@@ -56,11 +56,15 @@ def get_manifest(path: str, module: str) -> Optional[Mapping[str, Any]]:
     return {}
 
 
+def list_modules(path: str) -> List[str]:
+    return [os.path.basename(name) for name in os.listdir(path) if is_really_module(path, name)]
+
+
 def is_addon_path(path: str) -> bool:
     if not os.path.isdir(path):
         return False
 
-    return any(os.path.basename(name) for name in os.listdir(path) if is_really_module(path, name))
+    return any(list_modules(path))
 
 
 def is_saas_db(url):

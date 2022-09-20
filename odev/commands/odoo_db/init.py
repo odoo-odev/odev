@@ -1,10 +1,11 @@
 """Initializes an empty PostgreSQL database for a specific Odoo version."""
 
+import os
 import re
 from argparse import Namespace
 from subprocess import CompletedProcess
 
-from odev.exceptions import InvalidArgument, InvalidQuery, InvalidVersion
+from odev.exceptions import CommandException, InvalidArgument, InvalidQuery, InvalidVersion
 from odev.structures import commands, database
 from odev.utils import logging, odoo
 
@@ -21,10 +22,17 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
 
     arguments = [
         {
-            "name": "version",
-            "help": "Odoo version to use; must match an Odoo community branch",
+            "aliases": ["source"],
+            "nargs": "?",
+            "metavar": "VERSION|PATH",
+            "help": """
+            One of the following:
+                - an Odoo version number to create and init an empty database
+                - a path to an Odoo repo, all modules in there will be installed
+            If nothing is specified, it's assumed the current directory is the Odoo repository.
+            """,
         },
-        # move positional args from OdooBinMixin after "version"
+        # move positional args from OdooBinMixin after "source"
         {"name": "addons"},
         {"name": "args"},
     ]
@@ -47,9 +55,11 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
         super().__init__(args)
 
         try:
-            self.version = odoo.get_odoo_version(args.version)
-        except InvalidVersion as exc:
-            raise InvalidArgument(str(exc)) from exc
+            self.version = odoo.get_odoo_version(args.source or "")
+            self.mode = "version"
+        except InvalidVersion:
+            self.path = args.source or os.getcwd()
+            self.mode = "path"
 
         if not any(re.match(r"(-i|--install)", arg) for arg in self.additional_args):
             self.additional_args += ["-i", "base"]
@@ -64,6 +74,21 @@ class InitCommand(database.DBExistsCommandMixin, commands.OdooBinMixin):
         if self.db_exists():
             _logger.info(f"Database {self.database} is already initialized")
             return 0
+        if self.mode == "path":
+            if not odoo.is_addon_path(self.path):
+                raise InvalidArgument(f"{self.path} is not a valid Odoo repository")
+            self.addons.append(self.path)
+            modules = odoo.list_modules(self.path)
+            # Assume any module has the correct version
+            try:
+                self.version = odoo.get_odoo_version(odoo.get_manifest(self.path, modules[0])["version"])
+            except InvalidVersion:
+                raise CommandException(f"The version number on {modules[0]} is not correct")
+            # Look for init argument, next one will be the list of modules to install
+            for i, arg in enumerate(self.additional_args):
+                if re.match(r"(-i|--install)", arg):
+                    self.additional_args[i + 1] += f",{','.join(modules)}"
+                    break
 
         odoo_result: CompletedProcess = self.run_odoo(version=self.version, capture_output=self.capture_output)
         if self.capture_output:
