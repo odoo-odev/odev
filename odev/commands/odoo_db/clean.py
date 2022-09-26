@@ -78,16 +78,16 @@ class CleanCommand(commands.LocalDatabaseCommand):
             f"UPDATE ir_config_parameter SET value='{expiration_date}' WHERE key='database.expiration_date'",
         )
 
-        if version <= Version("14.0"):
-            self.queries.append(
-                """INSERT INTO ir_mail_server (name, smtp_host, smtp_port, smtp_encryption, active)
-                VALUES ('Mailhog', 'localhost', 1025, 'none', 't')""",
-            )
-        else:
-            self.queries.append(
-                """INSERT INTO ir_mail_server (name, smtp_host, smtp_port, smtp_authentication, smtp_encryption, active)
-                VALUES ('Mailhog', 'localhost', 1025, 'login', 'none', 't')""",
-            )
+        # Setup of a MailHog mail server for outgoing emails in a local environment;
+        # To be used with https://github.com/mailhog/MailHog
+        mailhog_columns = "name, smtp_host, smtp_port, smtp_encryption, active"
+        mailhog_values = "'MailHog', 'localhost', 1025, 'none', 't'"
+
+        if version >= Version("14.0"):
+            mailhog_columns += ", smtp_authentication"
+            mailhog_values += ", 'login'"
+
+        self.queries.append(f"INSERT INTO ir_mail_server ({mailhog_columns}) VALUES ({mailhog_values})")
 
     def run(self):
         """
