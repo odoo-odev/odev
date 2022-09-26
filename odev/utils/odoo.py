@@ -124,6 +124,7 @@ def parse_odoo_version(version: str) -> Version:
 def get_python_version(odoo_version: str) -> str:
     """Get the correct python version for the given odoo version"""
     odoo_python_versions: Mapping[int, str] = {
+        16: "3.10",
         15: "3.8",
         14: "3.7",
         13: "3.6",
