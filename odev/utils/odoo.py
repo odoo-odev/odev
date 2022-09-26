@@ -126,7 +126,7 @@ def get_python_version(odoo_version: str) -> str:
     odoo_python_versions: Mapping[int, str] = {
         16: "3.10",
         15: "3.8",
-        14: "3.7",
+        14: "3.8",
         13: "3.6",
         12: "3.6",
         11: "3.5",
