@@ -203,7 +203,7 @@ def prepare_odoobin(
     mkdir(version_path, 0o777)
 
     if venv:
-        prepare_venv(repos_path, version, venv_name)
+        prepare_repo_venv(repos_path, version, venv_name)
 
     if not do_pull:
         return
@@ -224,16 +224,23 @@ def get_venv_path(repos_path, version: str, venv_name: Optional[str] = None) -> 
     return os.path.join(repos_version_path(repos_path, version), get_venv_name(venv_name))
 
 
-def prepare_venv(repos_path: str, version: str, venv_name: Optional[str] = None, force_prepare: bool = False):
+def prepare_repo_venv(repos_path: str, version: str, venv_name: Optional[str] = None, force_prepare: bool = False):
     venv_path: str = get_venv_path(repos_path, version, venv_name)
     venv_parent_dir, venv_name = os.path.split(venv_path)
+    py_version = get_python_version(version)
+    prepare_venv(venv_parent_dir, py_version, venv_name, force_prepare)
 
+
+def prepare_venv(venv_parent_dir, py_version: str, venv_name=DEFAULT_VENV_NAME, force_prepare: bool = False):
+    """
+    Prepares a python virtual environment in venv_parent_dir/venv_name
+    """
+    venv_path = os.path.join(venv_parent_dir, venv_name)
     if not os.path.isdir(venv_path) or force_prepare:
-        py_version = get_python_version(version)
 
         try:
             command = f'cd "{venv_parent_dir}" && virtualenv --python={py_version} {venv_name}'
-            _logger.info(f"Creating virtual environment: Odoo {version} + Python {py_version} ({venv_name})")
+            _logger.info(f"Creating virtual environment: Python {py_version} ({venv_name})")
             with capture_signals():
                 subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
 
