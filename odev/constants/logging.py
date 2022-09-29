@@ -65,6 +65,8 @@ THEMES = {
             "odev.commands.odoo_sh.sh_upgrade": term.mediumpurple1,
             "odev.commands.odoo_sh.upload": term.darkviolet,
             "odev.commands.odoo_sh.sh_monitor": term.lightseagreen,
+            # Timesheet
+            "odev.commands.timesheet.timesheet": term.firebrick,
             # Utils
             "odev.utils.github": term.steelblue2,
         },

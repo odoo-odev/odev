@@ -16,7 +16,8 @@ if not __package__:
 from signal import SIGINT, SIGTERM, signal
 from subprocess import CalledProcessError
 
-from git.exc import GitCommandError
+import lxml.etree as et
+from git.exc import GitCommandError, InvalidGitRepositoryError
 from odoolib import JsonRPCException
 
 from odev.exceptions.commands import (
@@ -100,6 +101,9 @@ def main():  # noqa: C901 - Complexity
 
     except GitCommandError as e:
         code = handle_git_error(e)
+    except InvalidGitRepositoryError:
+        _logger.error("Invalid git repository")
+        code = 102
 
     # Commands registry
 
@@ -159,6 +163,12 @@ def main():  # noqa: C901 - Complexity
     except FileNotFoundError as e:
         _logger.error(f"{e.strerror}: {e.filename}")
         code = e.errno
+
+    # ET
+
+    except et.XMLSyntaxError as e:
+        _logger.error(f"Invalid XML: {e}")
+        code = e.code
 
     # ============================================================================== #
     # FIXME: implement custom exceptions to catch expected errors and graceful exit. #

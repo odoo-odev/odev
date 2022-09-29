@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+<xs:group name="projectElem">
+    <xs:choice>
+        <xs:element name="map">
+            <xs:complexType>
+                <xs:attribute name="from" type="xs:string" use="required" />
+                <xs:attribute name="to" type="xs:integer" use="required" />
+            </xs:complexType>
+        </xs:element>
+        <xs:element name="sub">
+            <xs:complexType>
+                <xs:attribute name="pattern" type="xs:string" use="required" />
+                <xs:attribute name="repl" type="xs:string" use="required" />
+            </xs:complexType>
+        </xs:element>
+        <xs:element name="scrap">
+            <xs:complexType>
+                <xs:attribute name="pattern" type="xs:string" use="required" />
+                <xs:attribute name="task" type="xs:integer" use="required" />
+                <xs:attribute name="description" type="xs:integer" use="optional" />
+            </xs:complexType>
+        </xs:element>
+    </xs:choice>
+</xs:group>
+
+<xs:element name="config">
+  <xs:complexType>
+    <xs:all>
+      <xs:element name="connections">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="connection" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:attribute name="name" type="xs:string" use="required" />
+                        <xs:attribute name="db" type="xs:string" use="required" />
+                        <xs:attribute name="url" type="xs:string" use="required" />
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="projects">
+        <xs:complexType>
+            <xs:choice>
+                <xs:element name="project" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:group ref="projectElem" minOccurs="0" maxOccurs="unbounded" />
+                        </xs:sequence>
+                        <xs:attribute name="name" type="xs:string" use="required" />
+                        <xs:attribute name="connection" type="xs:string" use="required" />
+                    </xs:complexType>
+                </xs:element>
+            </xs:choice>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="shortcuts">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="shortcut" minOccurs="0" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:attribute name="name" type="xs:string" use="required" />
+                        <xs:attribute name="connection" type="xs:string" use="required" />
+                        <xs:attribute name="id" type="xs:integer" use="required" />
+                        <xs:attribute name="description" type="xs:string" use="optional" />
+                        <xs:attribute name="mode" use="required">
+                            <xs:simpleType>
+                                <xs:restriction base="xs:string">
+                                    <xs:enumeration value="task"/>
+                                    <xs:enumeration value="project"/>
+                                </xs:restriction>
+                            </xs:simpleType>
+                        </xs:attribute>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="default" minOccurs="0" maxOccurs="1">
+          <xs:complexType>
+            <xs:attribute name="project" type="xs:string" use="optional" />
+            <xs:attribute name="description" type="xs:string" use="optional" />
+          </xs:complexType>
+      </xs:element>
+    </xs:all>
+  </xs:complexType>
+</xs:element>
+
+</xs:schema>
