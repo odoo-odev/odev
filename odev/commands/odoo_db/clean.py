@@ -83,7 +83,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
         mailhog_columns = "name, smtp_host, smtp_port, smtp_encryption, active"
         mailhog_values = "'MailHog', 'localhost', 1025, 'none', 't'"
 
-        if version >= Version("14.0"):
+        if version > Version("14.0"):
             mailhog_columns += ", smtp_authentication"
             mailhog_values += ", 'login'"
 
