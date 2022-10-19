@@ -282,7 +282,7 @@ def git_worktree_create(
         repo.git.worktree("add", worktree_branch, branch)
     except GitCommandError:
         worktree_realpath = os.path.abspath(os.path.realpath(worktree_branch))
-        if worktree_realpath not in git_worktrees(repo):
+        if worktree_realpath not in {os.path.abspath(os.path.realpath(path)) for path in git_worktrees(repo)}:
             raise
 
     return did_clone
