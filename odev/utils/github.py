@@ -2,12 +2,14 @@ import os
 import os.path
 import re
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
 from logging import getLevelName
 from typing import (
     Callable,
     ContextManager,
+    Dict,
     List,
     Optional,
     Set,
@@ -175,6 +177,72 @@ def git_clone_if_missing(
     return False
 
 
+@dataclass(frozen=True)
+class GitWorktree:
+    """Frozen dataclass representing a git worktree"""
+
+    repo: Repo
+    """The git repository"""
+
+    path: str
+    """The path of the worktree"""
+
+    branch: str
+    """The branch of the worktree"""
+
+    commit: str
+    """The commit of the worktree"""
+
+    bare: bool = False
+    """Whether the worktree is bare"""
+
+    detached: bool = False
+    """Whether the worktree is detached"""
+
+    locked: Union[bool, str] = False
+    """Whether the worktree is locked"""
+
+    prunable: Union[bool, str] = False
+    """Whether the worktree is prunable"""
+
+
+def git_worktrees(repo: Repo) -> Dict[str, GitWorktree]:
+    """
+    Parse the list of worktrees for the given repository.
+
+    :param repo: the git repository
+    :return: a dict of worktrees, indexed by their path
+    """
+    worktrees: Dict[str, GitWorktree] = {}
+    # worktree entries should start with "worktree" and will end with a blank line
+    for worktree_entry in repo.git.worktree("list", "--porcelain").split("\n\n"):
+        if not worktree_entry.strip().startswith("worktree"):
+            _logger.warning(f"Bad git worktree entry for repo {repo.working_dir}: {worktree_entry}")
+            continue
+
+        values = {}
+        for line in worktree_entry.strip().splitlines():
+            # worktree attribute lines will always at least contain a label, optionally a space and the value
+            label, *rest = line.strip().split(" ", 1)
+            labels_fields_map = {
+                "worktree": "path",
+                "HEAD": "commit",
+                **{n: n for n in ("branch", "bare", "detached", "locked", "prunable")},
+            }
+            field = labels_fields_map.get(label)
+            if field is None:
+                _logger.warning(
+                    f"Unknown git worktree attribute '{label}' for repo {repo.working_dir}: {worktree_entry}"
+                )
+                continue
+            values[field] = rest and rest[0] or True
+
+        worktree = GitWorktree(repo=repo, **values)  # type: ignore
+        worktrees[worktree.path] = worktree
+
+    return worktrees
+
+
 def git_worktree_create(
     parent_dir: str,
     repo_name: str,
@@ -208,13 +276,13 @@ def git_worktree_create(
 
     repo = Repo(os.path.join(main_parent, repo_name))
     worktree_branch = os.path.join(parent_dir, repo_name)
-    if "prunable gitdir" in repo.git.worktree("list", "--porcelain"):
+    if any(w.prunable for w in git_worktrees(repo).values()):
         repo.git.worktree("prune")
     try:
         repo.git.worktree("add", worktree_branch, branch)
     except GitCommandError:
         worktree_realpath = os.path.abspath(os.path.realpath(worktree_branch))
-        if worktree_realpath not in repo.git.worktree("list"):
+        if worktree_realpath not in git_worktrees(repo):
             raise
 
     return did_clone
