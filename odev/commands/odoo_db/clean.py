@@ -60,6 +60,12 @@ class CleanCommand(commands.LocalDatabaseCommand):
         "DELETE FROM ir_config_parameter WHERE key IN ('ocn.ocn_push_notification','odoo_ocn.project_id', 'ocn.uuid')",
         "UPDATE ir_module_module SET state='uninstalled' WHERE name ilike '%saas%'",
         "DELETE FROM ir_ui_view WHERE name ilike '%saas%'",
+        """DO $$ BEGIN IF (EXISTS (
+            SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'website' AND column_name='domain'
+            ))
+            THEN UPDATE website SET domain = NULL;
+        END IF; END; $$
+        """,
     ]
 
     def __init__(self, args: Namespace):
@@ -122,6 +128,7 @@ class CleanCommand(commands.LocalDatabaseCommand):
 
         _logger.info("Login to the administrator account with the credentials 'admin:admin'")
         _logger.info("Login to the first 50 users with their email address and the password 'odoo'")
+        _logger.info("Any website domains have been cleared for local testing")
         _logger.info("An external mail server to localhost:1025 has been created")
         _logger.info("You can view outgoing emails using https://github.com/mailhog/MailHog")
 
