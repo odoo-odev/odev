@@ -49,6 +49,7 @@ UPGRADE_STEPS: Sequence[str] = [
     "13.0",
     "14.0",
     "15.0",
+    "16.0",
 ]
 
 # upgrade-docker/upgrade.py runner script that patches hardcoded paths with prepared ones,
@@ -315,7 +316,10 @@ class UpgradeCommand(LocalDatabaseCommand):
                 _logger.info(f"Setting up upgrade venv for Odoo versions {venv_odoo_versions}")
                 command: str
                 for command in commands:
+                    # replace references to /home/odoo path to the temp home_path
                     command = re.sub(r"/home/odoo|~", str(home_path), command)
+                    # replace paths pointing to the venvs with their real path, to avoid temp paths being stored
+                    command = re.sub(re.escape(str(venvs_path)), str(odev_upgrade_venvs_path), command)
                     with capture_signals():
                         asyncio.run(run_subcommand_async(command))
                 last_venv_version = venv_version
