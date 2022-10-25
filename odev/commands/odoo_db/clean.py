@@ -30,8 +30,29 @@ class CleanCommand(commands.LocalDatabaseCommand):
     aliases = ["cl"]
     queries = [
         """
-        UPDATE res_users SET login='admin',password='admin'
-        WHERE id IN (SELECT id FROM res_users WHERE active='True' ORDER BY id ASC LIMIT 1)
+        -- find admin user and reset its login and password to 'admin'
+        WITH admin_candidates AS (
+            -- priority 1: user associated to `base.user_admin` xmlid
+            SELECT id, 1 as prio, active FROM res_users
+             WHERE id IN (SELECT res_id FROM ir_model_data
+                           WHERE model = 'res.users' AND (module, name) = ('base', 'user_admin'))
+             UNION
+            -- priority 2: user with login='admin'
+            SELECT id, 2 as prio, active FROM res_users
+             WHERE login = 'admin'
+             UNION
+            -- priority 3: users in the Administration/Settings group (`base.group_system`)
+            SELECT id, 3 as prio, active FROM res_users
+             WHERE id IN (SELECT uid FROM res_groups_users_rel
+                           WHERE gid IN (SELECT res_id FROM ir_model_data
+                                          WHERE model = 'res.groups' AND (module, name) = ('base', 'group_system')))
+             UNION
+            -- priority 99: any other user
+            SELECT id, 99 as prio, active FROM res_users
+        )
+        UPDATE res_users SET login='admin', password='admin'
+         WHERE id IN (SELECT id FROM admin_candidates
+                       WHERE active = TRUE ORDER BY prio ASC, id ASC LIMIT 1)
         """,
         """
         UPDATE res_users SET password='odoo'
