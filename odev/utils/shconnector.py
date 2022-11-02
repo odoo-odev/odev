@@ -79,11 +79,11 @@ class ShConnector(object):
         )
         login_data["csrf_token"] = self.extract_csrf_token(resp) or ""
 
-        resp = self.session.post("https://www.odoo.sh/web/login", data=login_data, headers=self.headers)
-        if resp.status_code != 200:
-            raise ShSessionError("Failed logging in to odoo.sh")
-
-        if impersonate_page_url not in resp.url:
+        login_page_url = "https://www.odoo.sh/web/login"
+        resp = self.session.post(login_page_url, data=login_data, headers=self.headers)
+        if resp.status_code != 200 or resp.url == login_page_url:
+            raise ShSessionError("Failed logging in to odoo.sh, bad credentials?")
+        elif impersonate_page_url not in resp.url:
             raise ShSessionError(f"Unexpected redirect for impersonation page, got: {resp.url}")
 
         self.impersonation_csrf_token = self.extract_csrf_token(resp)
