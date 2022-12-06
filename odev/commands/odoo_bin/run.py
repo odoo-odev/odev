@@ -25,6 +25,20 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
 
     name = "run"
 
+    arguments = [
+        {
+            "aliases": ["-fv", "--force-version"],
+            "type": str,
+            "dest": "force_version",
+            "metavar": "VERSION",
+            "help": """
+            Force running a specific Odoo version for the database.
+            Can be useful to manually run an upgrade to a newer Odoo version.
+            If not specified, the Odoo version to run is obtained from the database.
+            """,
+        },
+    ]
+
     use_config_args = True
 
     def run(self):
@@ -61,6 +75,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
             additional_args=self.additional_args,
             venv_name=self.args.alt_venv and self.args.database,
             check_last_run=True,
+            version=self.args.force_version,
         )
 
         return 0
