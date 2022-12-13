@@ -145,6 +145,12 @@ class UpgradeCommand(LocalDatabaseCommand):
     """
 
     name = "upgrade"
+    help = f"""
+        Upgrade a local Odoo database, running migration scripts between each major versions.
+        {logging.term.yellow}
+        DEPRECATED: this command requires access to confidential upgrade-platform code.
+                    Use test.upgrade.odoo.com server instead.{logging.term.normal}
+    """
     arguments = [
         {
             "aliases": ["target"],
@@ -163,6 +169,13 @@ class UpgradeCommand(LocalDatabaseCommand):
     ]
 
     def __init__(self, args: Namespace):
+        _logger.warning(
+            logging.term.yellow(
+                "DEPRECATED: this command requires access to confidential upgrade-platform code. "
+                "Use test.upgrade.odoo.com server instead."
+            )
+        )
+
         super().__init__(args)
 
         self.target: str = args.target
