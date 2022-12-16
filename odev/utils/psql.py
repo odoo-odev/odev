@@ -16,7 +16,7 @@ class PSQL:
     def __init__(self, database=None):
         self.database = database or self.fallback_database
         self.connection: Optional[psycopg2.connection] = None
-        self.cursor = None
+        self.cr = None
 
     def connect(self):
         """
@@ -24,7 +24,7 @@ class PSQL:
         """
         self.connection = psycopg2.connect(database=self.database)
         self.connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        self.cursor = self.connection.cursor()
+        self.cr = self.connection.cursor()
 
     def __enter__(self):
         self.connect()
@@ -37,17 +37,17 @@ class PSQL:
         if not isinstance(queries, list):
             queries = [queries]
 
-        queries = [(query.as_string(self.cursor) if isinstance(query, sql.Composable) else query) for query in queries]
+        queries = [(query.as_string(self.cr) if isinstance(query, sql.Composable) else query) for query in queries]
 
         try:
-            assert self.cursor
+            assert self.cr
 
             for query in queries:
                 assert isinstance(query, str)
-                self.cursor.execute(dedent(query).strip())
+                self.cr.execute(dedent(query).strip())
 
             if any(str(query).lower().startswith("select") for query in queries):
-                result = self.cursor.fetchall()
+                result = self.cr.fetchall()
             else:
                 result = True
         except Exception as e:  # FIXME: Too broad and non-descriptive
@@ -60,8 +60,8 @@ class PSQL:
         """
         Closes the connection to a local database.
         """
-        if self.cursor:
-            self.cursor.close()
+        if self.cr:
+            self.cr.close()
         if self.connection:
             self.connection.commit()
             self.connection.close()
