@@ -61,7 +61,7 @@ class RemoveCommand(commands.LocalDatabaseCommand):
             raise RunningOdooDatabase(f"Database {self.database} is running, please shut it down and retry")
 
         is_odoo_db = self.is_odoo_db()
-        version = self.db_version_clean()
+        version = is_odoo_db and self.db_version_clean()
 
         dbs = [self.database]
         queries = [f"""DROP DATABASE "{self.database}";"""]
@@ -82,6 +82,9 @@ class RemoveCommand(commands.LocalDatabaseCommand):
         _logger.warning(
             f"You are about to delete the database {self.database}{with_filestore}. This action is irreversible."
         )
+
+        if not is_odoo_db:
+            _logger.warning(f"Warning: {self.database} is not an Odoo database.")
 
         if not _logger.confirm(f"Delete database {self.database}{with_filestore}?"):
             raise CommandAborted()
