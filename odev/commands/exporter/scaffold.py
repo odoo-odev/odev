@@ -33,7 +33,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
     """
 
     name = "scaffold"
-    database_required = False
+    add_database_argument = False
     exporter_subcommand = "scaffold"
     version: Version
 

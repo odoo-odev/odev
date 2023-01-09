@@ -41,7 +41,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
     """
 
     name = "dump"
-    database_required = False
+    add_database_argument = False
     arguments = [
         {
             "aliases": ["source"],
@@ -73,9 +73,9 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
 
         if self.mode == "online":
             self.source = sanitize_url(args.source)
-            self.database = args.database
         else:
-            self.database = args.source
+            self.source = self.database = args.source
+
         self.extract = args.extract
 
     def _check_response_status(self, res):
@@ -91,54 +91,61 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             return self.dump_localdb()
 
     def dump_localdb(self):
-        if not self.db_exists(self.database):
-            _logger.error(f"Database {self.database} doesn't exist or is not a Odoo database")
+        if not self.db_exists(self.source):
+            _logger.error(f"Database {self.source} doesn't exist or is not a Odoo database")
             return 1
 
-        _logger.info(f"Generating dump for your local database {self.database}")
+        _logger.info(f"Generating dump for your local database {self.source}")
 
         is_db_clean = bool(
             self.run_queries("SELECT value FROM ir_config_parameter where key ='database.enterprise_code'")
         )
 
         timestamp = datetime.now().strftime("%Y%m%d")
-        zip_filename = f"{timestamp}-{self.database}{'_clean' if is_db_clean else ''}_dump.zip"
-        zip_path = Path(self.config["odev"].get("paths", "dumps"), zip_filename)
+        zip_filename = f"{timestamp}-{self.source}{'_clean' if is_db_clean else ''}_dump.zip"
+        zip_path = Path(self.destination or self.config["odev"].get("paths", "dump"))
+        zip_path_full = Path(zip_path, zip_filename)
 
-        if os.path.isfile(zip_path) and _logger.confirm(f"{zip_path} already exist do you want override it?"):
-            os.remove(zip_path)
+        if not os.path.isdir(zip_path):
+            os.mkdir(zip_path)
+            _logger.success(f"{zip_path} folder successfully created")
+        else:
+            if os.path.isfile(zip_path_full) and _logger.confirm(
+                f"{zip_path_full} already exist do you want override it?"
+            ):
+                os.remove(zip_path_full)
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             dump_path = os.path.join(tmpdirname, "dump.sql")
 
-            filestores_root = Path.home() / ".local/share/Odoo/filestore"
-            filestore_path = filestores_root / self.database
+            filestore_root = Path.home() / ".local/share/Odoo/filestore"
+            filestore_path = filestore_root / self.source
 
-            with ZipFile(zip_path, "w") as archive:
-                if os.path.isdir(filestore_path) and _logger.confirm("Do you want to include your local filestores?"):
+            with ZipFile(zip_path_full, "w") as archive:
+                if os.path.isdir(filestore_path) and _logger.confirm("Do you want to include your local filestore?"):
                     for root, dirs, files in os.walk(filestore_path):
 
-                        clean_root = f"filestores/{root[len(str(filestore_path)):]}"
+                        clean_root = f"filestore/{root[len(str(filestore_path)):]}"
 
                         for file in files:
                             archive.write(os.path.join(root, file), os.path.join(clean_root, file))
                         for directory in dirs:
                             archive.write(os.path.join(root, directory), os.path.join(clean_root, directory))
                 else:
-                    filestore_path = os.path.join(tmpdirname, "filestores")
+                    filestore_path = os.path.join(tmpdirname, "filestore")
 
                     os.mkdir(filestore_path)
-                    archive.write(filestore_path, "filestores")
+                    archive.write(filestore_path, "filestore")
 
                 subprocess.run(
-                    f"pg_dump -d {self.database} > {dump_path}", shell=True, check=True, stdout=subprocess.DEVNULL
+                    f"pg_dump -d {self.source} > {dump_path}", shell=True, check=True, stdout=subprocess.DEVNULL
                 )
                 archive.write(dump_path, "dump.sql")
 
         if not is_db_clean:
             _logger.warning("This is a cleaned database, don't use it on a production server")
 
-        _logger.success(f"Dump {zip_path} successfully created")
+        _logger.success(f"Dump {zip_path_full} successfully created")
 
     def dump_online(self):
         _logger.info(f"Logging you in to {self.source} support console")
@@ -149,7 +156,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
         filestore = _logger.confirm("Do you want to include the filestore?")
         ext = "zip" if filestore else "sql.gz"
 
-        database_name = self.database or self.source.split("/")[-1].replace(".odoo.com", "")
+        database_name = self.source.split("/")[-1].replace(".odoo.com", "")
 
         _logger.info(f"About to download dump file for {database_name}")
 

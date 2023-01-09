@@ -60,7 +60,7 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
 
     name = "sh-monitor"
     aliases = ["monitor", "mon"]
-    database_required = False
+    add_database_argument = False
 
     arguments = [
         {

@@ -36,7 +36,7 @@ class CloneCommand(commands.Command):
     """
 
     name = "clone"
-    database_required = False
+    add_database_argument = False
     arguments = [
         {
             "name": "url",
