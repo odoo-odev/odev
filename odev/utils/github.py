@@ -448,7 +448,7 @@ def self_update() -> bool:
     try:
         did_update: bool = git_pull(
             odev_path,
-            "odev",
+            "main",
             verbose=False,
             confirm_message_t=("An update is available for odev, do you want to download it now?"),
         )
