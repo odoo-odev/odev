@@ -89,7 +89,7 @@ class CreateCommand(commands.LocalDatabaseCommand):
                         _logger.info(f"Deleting previous filestore in `{filestore}`")
                         shutil.rmtree(filestore)
 
-                    _logger.info(f"Copying template filestore to `{filestore}`")
+                    _logger.info(f"Copying template filestore from `{template_filestore}`")
                     try:
                         shutil.copytree(template_filestore, filestore)
                     except Exception as exc:

@@ -1,7 +1,7 @@
 """Runs a local Odoo database."""
 
 
-from odev.commands.odoo_db import remove
+from odev.commands.odoo_db import create, remove
 from odev.constants import DB_TEMPLATE_SUFFIX
 from odev.exceptions.odoo import RunningOdooDatabase
 from odev.structures import commands
@@ -55,9 +55,7 @@ class RunCommand(commands.TemplateDBCommand, commands.OdooBinMixin):
                 remove.RemoveCommand.run_with(**dict(self.args.__dict__, keep_template=bool(self.args.from_template)))
 
             _logger.warning(f"Restoring the template {template_db_name}")
-            self.run_queries(
-                f'CREATE DATABASE "{self.database}" WITH TEMPLATE "{template_db_name}"', f"{template_db_name}"
-            )
+            create.CreateCommand.run_with(**dict(self.args.__dict__, template=template_db_name))
 
         self.check_database()
 
