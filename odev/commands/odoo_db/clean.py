@@ -74,7 +74,8 @@ class CleanCommand(commands.LocalDatabaseCommand):
         "DELETE FROM ir_config_parameter WHERE key='auth_totp.policy'",
         "UPDATE ir_config_parameter SET value='http://localhost:8069' WHERE key='web.base.url'",
         "UPDATE ir_cron SET active='False'",
-        "DELETE FROM fetchmail_server",
+        "DO $$ BEGIN IF (EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES  WHERE TABLE_NAME = 'fetchmail_server')) "
+        "THEN DELETE FROM fetchmail_server; END IF; END; $$",
         "DELETE FROM ir_mail_server",
         "DO $$ BEGIN IF (EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES  WHERE TABLE_NAME = 'auth_oauth_provider')) "
         "THEN UPDATE auth_oauth_provider SET enabled = false; END IF; END; $$",
