@@ -266,7 +266,7 @@ def prepare_requirements(
 
     python_bin: str = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
 
-    all_addons = [os.path.join(version_path, "odoo")] + list_submodule_addons(addons or [])
+    all_addons = [os.path.join(version_path, "odoo")] + addons
 
     if last_run:
         requirements_files = [
@@ -321,10 +321,9 @@ def run_odoo(
 
     standard_addons = ODOO_ADDON_PATHS if post_openerp_refactor else OPENERP_ADDON_PATHS
     addons_paths = [os.path.join(version_path, addon_path) for addon_path in standard_addons]
-    addons_paths += [os.getcwd(), *addons]
-    addons_paths = [path for path in addons_paths if is_addon_path(path)]
+    custom_addons_paths = list_submodule_addons([path for path in [os.getcwd(), *addons] if is_addon_path(path)])
 
-    prepare_requirements(repos_path, version, venv_name=venv_name, addons=addons_paths, last_run=last_run)
+    prepare_requirements(repos_path, version, venv_name=venv_name, addons=custom_addons_paths, last_run=last_run)
 
     python_exec = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
     command_args = [
@@ -332,7 +331,7 @@ def run_odoo(
         odoobin,
         *([subcommand] if subcommand else []),
         *["-d", database],
-        *["--addons-path", ",".join(addons_paths)],
+        *["--addons-path", ",".join(addons_paths + custom_addons_paths)],
         *additional_args,
     ]
 
@@ -358,11 +357,17 @@ def list_submodule_addons(paths: List[str]) -> List[str]:
     submodule_addons: List[str] = []
 
     for addon in paths:
-        submodule_addons += [
-            path
-            for path in glob.iglob(os.path.join(addon, "**/**"), recursive=True)
-            if os.path.isdir(path) and is_addon_path(path)
-        ]
+        addons_path: List[str] = []
+
+        for manifest in ODOO_MANIFEST_NAMES:
+            addons_path.extend(
+                [
+                    os.path.abspath(os.path.join(os.path.dirname(addon), ".."))
+                    for addon in glob.iglob(os.path.join(addon, f"**/**/{manifest}"), recursive=True)
+                ]
+            )
+
+        submodule_addons.extend([path for path in set(addons_path) if os.path.isdir(path) and is_addon_path(path)])
 
     return list({os.path.normpath(path) for path in paths + submodule_addons})
 
