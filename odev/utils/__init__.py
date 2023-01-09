@@ -3,7 +3,8 @@ from . import config
 from . import request
 from . import python
 from . import github
-from . import logging
+
+# from . import logging
 from . import odoo
 from . import os
 from . import pre_commit

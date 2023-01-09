@@ -12,7 +12,7 @@ from packaging.version import Version
 
 from odev.constants import LAST_ODOO_VERSION
 from odev.exceptions import InvalidArgument, InvalidVersion
-from odev.structures import actions, commands
+from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.exporter import Config, odoo_field
 

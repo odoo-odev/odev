@@ -69,7 +69,7 @@ from odev.exceptions import (
     RunningOdooDatabase,
 )
 from odev.exceptions.commands import InvalidQuery
-from odev.structures.actions import CommaSplitAction, OptionalStringAction
+from odev.common.actions import CommaSplitAction, OptionalStringAction
 from odev.utils import logging, odoo
 from odev.utils.config import ConfigManager
 from odev.utils.exporter import Config, odoo_field, odoo_model

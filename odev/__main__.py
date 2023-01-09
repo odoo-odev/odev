@@ -1,184 +1,58 @@
-#!/usr/bin/env python3
-
 import os
-import re
-import sys
-from types import FrameType
-from typing import Optional
+from signal import SIGINT, SIGTERM, signal
+
+from odev._version import __version__
+from odev.common import signal_handling as handlers
+from odev.common.logging import logging
 
 
 # Explicitly initialize relative imports if run directly
-if not __package__:
-    package_dir = os.path.dirname(os.path.realpath(__file__))
-    sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
-    __package__ = os.path.basename(package_dir)  # pylint: disable=redefined-builtin
+# if not __package__:
+#     package_dir = os.path.dirname(os.path.realpath(__file__))
+#     sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
+#     __package__ = os.path.basename(package_dir)  # pylint: disable=redefined-builtin
 
-from signal import SIGINT, SIGTERM, signal
-from subprocess import CalledProcessError
 
-import lxml.etree as et
-from git.exc import GitCommandError, InvalidGitRepositoryError
-from odoolib import JsonRPCException
-
-from odev.exceptions.commands import (
-    CommandAborted,
-    CommandMissing,
-    InvalidArgument,
-    InvalidFileArgument,
-    InvalidQuery,
-)
-from odev.exceptions.odoo import (
-    InvalidDatabase,
-    InvalidOdooDatabase,
-    InvalidOdooModule,
-    MissingOdooDependencies,
-    RunningOdooDatabase,
-)
-from odev.exceptions.odoo_sh import SHConnectionError, SHDatabaseTooLarge
-from odev.structures.registry import CommandRegistry
-from odev.utils import logging
-from odev.utils.github import handle_git_error, self_update
+# from odev.structures.registry import CommandRegistry
+# from odev.utils.github import self_update
 
 
 _logger = logging.getLogger(__name__)
 
-code = 0
+
+# --- Main entry method --------------------------------------------------------
 
 
-def signal_handler(signum: int, frame: Optional[FrameType]):
-    global code
-    print()  # Empty newline to make sure we're not writing next to a running prompt
-    _logger.warning(f"Received signal ({signum}), exiting...")
-    code = signum
-    exit(signum)
-
-
-def set_log_level():
-    # Set global log level before registering commands to support custom
-    # log-levels everywhere
-    re_loglevel = re.compile(r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)", re.IGNORECASE)
-    loglevel_match = re_loglevel.findall(" ".join(sys.argv))
-
-    # TODO: Default fall back to set INFO log level before arg parse.
-    logging.set_log_level(logging.logging.getLevelName(str(loglevel_match[~0]).upper()) if loglevel_match else "INFO")
-
-
-def main():  # noqa: C901 - Complexity
+def main():
     """
     Manages taking input from the user and calling the subsequent subcommands
     with the proper arguments as specified in the command line.
     """
-    global code
-
-    signal(SIGINT, signal_handler)
-    signal(SIGTERM, signal_handler)
-
     try:
+        _logger.debug(f"Starting odev version {__version__}")
+
+        # --- Handle signals and interrupts ------------------------------------
+        for sig in (SIGINT, SIGTERM):
+            signal(sig, handlers.signal_handler_exit)
+
+        _logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
-            _logger.error("This program should not be run as root user!")
-            sys.exit(1)
+            raise Exception("Odev should not be run as root")
 
-        set_log_level()
+        # Check for updates, apply them and restart the process with updated code
+        # if self_update():
+        #     os.execv(sys.argv[0], sys.argv)
 
-        if self_update():
-            # Restart the process with updated code
-            os.execv(sys.argv[0], sys.argv)
+        # registry = CommandRegistry()
+        # registry.run_upgrades()
+        # registry.load_commands()
+        # registry.handle()
 
-        registry = CommandRegistry()
-        registry.run_upgrades()
-        registry.load_commands()
-        code = registry.handle()
+    except KeyboardInterrupt:
+        handlers.signal_handler_exit(SIGINT, None)
 
-    # Process
+    except Exception:
+        _logger.exception("Execution failed due to an unhandled exception")
+        exit(1)
 
-    except CommandAborted as e:
-        _logger.info(e)
-        code = 0
-    except CalledProcessError as e:
-        code = e.returncode
-
-    # Git
-
-    except GitCommandError as e:
-        code = handle_git_error(e)
-    except InvalidGitRepositoryError:
-        _logger.error("Invalid git repository")
-        code = 102
-
-    # Commands registry
-
-    except CommandMissing as e:
-        _logger.error(str(e))
-        code = 101
-    except InvalidFileArgument as e:
-        _logger.error(str(e))
-        code = 102
-    except InvalidArgument as e:
-        _logger.error(str(e))
-        code = 103
-
-    # Commands
-
-    except InvalidDatabase as e:
-        _logger.error(str(e))
-        code = 201
-    except InvalidOdooDatabase as e:
-        _logger.error(str(e))
-        code = 202
-    except RunningOdooDatabase as e:
-        _logger.error(str(e))
-        code = 203
-    except InvalidQuery as e:
-        _logger.error(str(e))
-        code = 204
-
-    # Odoo SH
-
-    except SHConnectionError as e:
-        _logger.error(str(e))
-        code = 301
-    except SHDatabaseTooLarge as e:
-        _logger.error(str(e))
-        code = 302
-
-    # Odoo
-
-    except InvalidOdooModule as e:
-        _logger.error(str(e))
-        code = 401
-    except MissingOdooDependencies as e:
-        _logger.error(str(e))
-        code = 402
-
-    # Odoolib RPC
-
-    except JsonRPCException as e:
-        indent = " " * 5
-        traceback = indent + e.error["data"]["debug"].replace("\n", f"\n{indent}")
-        _logger.error(f"An error occurred during RPC call:\n{traceback}")
-        code = 501
-
-    # OS and filesystem
-
-    except FileNotFoundError as e:
-        _logger.error(f"{e.strerror}: {e.filename}")
-        code = e.errno
-
-    # ET
-
-    except et.XMLSyntaxError as e:
-        _logger.error(f"Invalid XML: {e}")
-        code = e.code
-
-    # ============================================================================== #
-    # FIXME: implement custom exceptions to catch expected errors and graceful exit. #
-    #        Keep raising on unexpected ones (that require code fix).                #
-    # ============================================================================== #
-
-    except Exception as e:
-        _logger.error(str(e))
-        code = 1
-        raise
-    finally:
-        if code not in (None, 0):
-            _logger.error(f"Exiting with code {code}")
+    _logger.debug("Execution completed successfully")

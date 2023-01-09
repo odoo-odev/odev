@@ -4,4 +4,4 @@ import odev.__setup__ as setup
 
 
 if __name__ == "__main__":
-    setup.run()
+    setup.main()

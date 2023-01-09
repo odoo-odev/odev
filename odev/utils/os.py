@@ -1,19 +1,3 @@
-"""
-Filesystem-specific utilities
-"""
-
-import os
-
-
-def mkdir(path: str, perm: int = 0o777):
-    """
-    Creates a directory on the filesystem and sets its permissions.
-    """
-
-    os.makedirs(path, perm, exist_ok=True)
-    os.chmod(path, perm)
-
-
 def sizeof(num, suffix="B"):
     """
     Formats a number to its human readable representation in bytes-units.

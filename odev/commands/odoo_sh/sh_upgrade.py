@@ -25,7 +25,7 @@ from github import PullRequestMergeStatus
 from odev.exceptions import BuildCompleteException, BuildWarning, OdooSHException
 from odev.exceptions.commands import CommandAborted
 from odev.structures import commands
-from odev.structures.actions import CommaSplitAction
+from odev.common.actions import CommaSplitAction
 from odev.utils import logging
 
 

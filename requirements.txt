@@ -10,6 +10,7 @@ GitPython>=3,<4
 giturlparse==0.10
 html5lib>=1,<2
 imgkit>=1,<2
+inquirerpy==0.3.4
 isort>=5.8,<6
 Jinja2>=2.11,<3
 lxml>=4.6.3,<5
@@ -22,6 +23,7 @@ psycopg2-binary>=2,<3
 PyGithub>=1,<2
 python-Levenshtein==0.12.2
 requests>=2,<3
+rich==12.6.*
 scp>=0.14.2,<1
 texttable>=1.6.4
 tldextract>=3.1,<4

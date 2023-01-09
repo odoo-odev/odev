@@ -1,6 +1,6 @@
 minimum_pre_commit_version: "2"
 default_language_version:
-    python: python3.8
+    python: python3
 default_stages: [commit]
 fail_fast: false
 exclude: ^(\.vscode|\.github)
@@ -97,7 +97,7 @@ repos:
                 - --keep-percent-format
 
     - repo: https://github.com/PyCQA/pylint
-      rev: v2.12.2
+      rev: v2.15.8
       hooks:
           - id: pylint
             exclude: /static/util\.py$
