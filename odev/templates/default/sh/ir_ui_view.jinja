@@ -1,4 +1,4 @@
-{% import "sh/utils_makro.jinja" as makro -%}
+{% import "utils_makro.jinja" as makro -%}
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo {%- if data.noupdate %} noupdate="1"{%-endif-%}>
     {% if data.type == "qweb" -%}
@@ -11,7 +11,7 @@
     <record id="{{data.xml_id | odoo_field }}" model="ir.ui.view">
         <field name="name">{{data.name | odoo_field | trim | e}}</field>
         {% if data.model -%}
-        <field name="model">{{data.model | odoo_field}}</field>
+        <field name="model">{{data.model | odoo_model}}</field>
         {% endif -%}
         {% if data.inherit_id -%}
         <field name="inherit_id" ref="{{data.inherit_id[0]['xml_id'] | odoo_field}}" />

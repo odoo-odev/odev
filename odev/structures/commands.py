@@ -1196,6 +1196,12 @@ class ExportCommand(Command, ABC, Template):
             "help": "Pretty Import off",
         },
         {
+            "aliases": ["--autoflake-off"],
+            "action": "store_true",
+            "dest": "autoflake_off",
+            "help": "Autoflake Import off",
+        },
+        {
             "aliases": ["--version"],
             "type": str,
             "dest": "version",

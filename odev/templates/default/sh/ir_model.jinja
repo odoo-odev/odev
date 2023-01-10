@@ -1,7 +1,7 @@
-{% import "sh/utils_makro.jinja" as makro -%}
+{% import "utils_makro.jinja" as makro -%}
 from odoo import models, fields, api, _
 {% if data['constraints'] | length -%}
-from odoo.exceptions import ValidationError
+#from odoo.exceptions import ValidationError
 {%- endif -%}
 {%- for lib in data.import %}
 {{lib}}
@@ -23,10 +23,10 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
     {%- if data.integration -%}
         {{inherit.append('"edi.integration"') or ""}}
     {%- endif -%}
-    {%- if data.is_mail_thread -%}
+    {%- if data.state != "base" and data.is_mail_thread -%}
         {{inherit.append('"mail.thread"') or ""}}
     {%- endif -%}
-    {%- if data.is_mail_activity -%}
+    {%- if data.state != "base" and data.is_mail_activity -%}
         {{inherit.append('"mail.activity.mixin"') or ""}}
     {%- endif -%}
     {%- if inherit %}
@@ -49,24 +49,24 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
         {%-if field.field_description -%}{{field_param.append('string="'+field.field_description+'"') or ""}}{%- endif -%}
 
         {%- if field.ttype in ('one2many', 'many2many', 'many2one') and field.relation != "" -%}
-            {{field_param.append("comodel_name='"+field.relation | odoo_model +"'") or ""}}
+            {{field_param.append("comodel_name='"+field.relation | lower | odoo_model +"'") or ""}}
         {%-endif-%}
 
         {%-if field.ttype == 'many2many'-%}
             {%- if field.relation_table -%}
-                {{field_param.append("relation='"+field.relation_table | odoo_field + "'") or ""}}
+                {{field_param.append("relation='"+field.relation_table | lower | odoo_field + "'") or ""}}
             {%- endif -%}
             {%-if field.column1 -%}
-                {{field_param.append("column1="+field.column1 | odoo_field) or ""}}
+                {{field_param.append("column1='"+field.column1 | odoo_field + "'") or ""}}
             {%-endif-%}
             {%-if field.column2 -%}
-                {{field_param.append("column2="+field.column2 | odoo_field) or ""}}
+                {{field_param.append("column2='"+field.column2 | odoo_field + "'") or ""}}
             {%-endif-%}
         {%-endif-%}
 
         {%-if field.ttype == 'one2many'-%}
             {%- if field.relation_field -%}
-                {{field_param.append("inverse_name='"+field.relation_field | odoo_field+"'") or ""}}
+                {{field_param.append("inverse_name='"+field.relation_field | lower | odoo_field+"'") or ""}}
             {%-endif-%}
         {%-endif-%}
 
@@ -77,7 +77,7 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
         {%-endif-%}
 
         {%-if field.compute -%}
-            {{field_param.append('compute="_compute_'+field.name | odoo_field+'"') or ""}}
+            {{field_param.append('compute="_compute_'+field.name | lower | odoo_field+'"') or ""}}
         {%- endif-%}
 
         {%-if field.default_value -%}
@@ -109,7 +109,7 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
         {%-endfor-%}
 
         {%-if field.related -%}
-            {{field_param.append("related='"+field.related | odoo_field+"'") or ""}}
+            {{field_param.append("related='"+field.related | lower | odoo_field+"'") or ""}}
         {%-endif-%}
 
         {%-if field.ondelete -%}
@@ -177,11 +177,15 @@ class {{data.model | odoo_field | replace("."," ") | replace("_", " ") | title |
     {%- set depends = field.depends.split(",") %}
     @api.depends({%- for depend in depends -%}'{{depend | odoo_field}}'{%- if not loop.last -%}, {%endif-%}{%-endfor-%})
     {%-endif %}
-    def _compute_{{field.name | odoo_field}}(self):
+    def _compute_{{field.name | lower | odoo_field}}(self):
     {%- if data.export_type == "scaffold" %}
-        {%- set comment = "None\n" + field.compute | trim | trim('\t') %}
+        {%- if field.compute is sameas true -%}
+            {%- set comment = "None\n" %}
+        {%- else -%}
+            {%- set comment = "None\n" + field.compute | trim | trim('\t') %}
+        {%- endif %}
         for rec in self:
-            rec.{{field.name | odoo_field }} = {{comment | wordwrap(100) | replace('\n', '\n# ') | indent(8,False)}}
+            rec.{{field.name | lower | odoo_field }} = {{comment | wordwrap(100) | replace('\n', '\n# ') | indent(8,False)}}
     {%-else%}
 {{field.compute | trim | replace("\t", "    ") | indent(8, True) | odoo_field}}
     {%-endif%}

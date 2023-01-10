@@ -1,4 +1,4 @@
-{% import "sh/utils_makro.jinja" as makro -%}
+{% import "utils_makro.jinja" as makro -%}
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo {%- if data.noupdate %} noupdate="1"{%-endif-%}>
     <record id="{{data.xml_id | replace(data.module_name ~ '.', '')}}" model="ir.cron">

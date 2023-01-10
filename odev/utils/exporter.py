@@ -101,6 +101,9 @@ def odoo_field(field):
     if field in keyword.kwlist:
         field = field + "_"
 
+    if not field:
+        field = "x_"
+
     return field
 
 
@@ -139,5 +142,6 @@ def odoo_domain(data):
     data = data.replace("&", "&amp;")
     data = data.replace("<", "&lt;")
     data = data.replace(">", "&gt;")
+    data = data.replace('"', "'")
 
     return data.strip()

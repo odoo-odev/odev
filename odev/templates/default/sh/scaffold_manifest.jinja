@@ -1,4 +1,4 @@
-{% import "sh/utils_makro.jinja" as makro -%}
+{% import "utils_makro.jinja" as makro -%}
 {
     'name': '{{data.name or data.module_name}}',
     {%- if "Short (1 phrase/line) summary of the" in data.summary -%}

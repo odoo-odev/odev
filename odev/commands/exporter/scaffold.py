@@ -255,7 +255,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
                 depends = ""
 
                 if model in computes and f_name in computes[model]:
-                    compute = computes[model][f_name]["description"]
+                    compute = computes[model][f_name]["description"] or True
                     depends = computes[model][f_name]["depends"]
 
                 field_desc = field["description"]
@@ -484,7 +484,7 @@ for rec in records:
                     if uniq_key not in views:
                         data = {
                             "xml_id": odoo_field_name(xml_id),
-                            "name": xml_id.replace(".", " ").replace("_", " ").capitalize(),
+                            "name": odoo_model(view.get("model", "")) + ".view." + all_view_types[type_view].lower(),
                             "model": odoo_model(view.get("model", "") or ""),
                             "inherit_id": [{"xml_id": odoo_field_name(xml_id)}],
                             "arch": "",
@@ -755,6 +755,10 @@ for rec in records:
                 self.generate_template({"model": k, "sql": s["sql"]}, cfg)
 
     def _generate_integration(self, integration_ids):
+        if self.type == "saas":
+            _logger.warning("Tried to generate integration for a saas project, ignored.")
+            return []
+
         _logger.debug("Generate integration")
         integration_line = self.connection.get_model("presales.integration_line")
         integration_line_ids = integration_line.search_read([("id", "in", integration_ids)])
@@ -788,7 +792,9 @@ for rec in records:
                         "model": odoo_model(model),
                         "ttype": "selection",
                         "compute": None,
-                        "selection_add": [(odoo_field_name(integration["name"]), integration["name"].capitalize())],
+                        "selection_add": [
+                            (odoo_field_name(integration["name"]), integration["name"].replace("_", " ").capitalize())
+                        ],
                         "ondelete": {odoo_field_name(integration["name"]): "cascade"},
                         "xml_id": odoo_field_name(model + "_type"),
                     }

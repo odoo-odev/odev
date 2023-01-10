@@ -11,7 +11,7 @@
             <field name="model_id" ref="{{data.xml_id}}" />
             <field name="field_description">{{field.field_description | e}}</field>
             {%- if field.ttype in ('one2many', 'many2many', 'many2one') %}
-            <field name="relation">{{field.relation | odoo_field}}</field>
+            <field name="relation">{{field.relation | lower | odoo_field}}</field>
             {%- endif-%}
             {%-if field.ttype == 'selection' %}
             <field name="selection">{{field.selection | e}}</field>
@@ -20,7 +20,7 @@
             <field name="domain">{{field.domain}}</field>
             {%- endif-%}
             {%- if field.related %}
-            <field name="related">{{field.related}}</field>
+            <field name="related">{{field.related | lower}}</field>
             {%- endif -%}
             {%- if field.depends -%}
             <field name="depends">{{field.depends}}</field>
@@ -41,13 +41,17 @@
             {%- if field.compute | trim != "False" and field.compute | trim != ""  %}
             <field name="compute">
 {%- if data.export_type == "scaffold" %}
-    {%- set comment = field.compute -%}
-    {%- if field.compute|length > 100 -%}
+    {%- if field.compute is boolean -%}
+        {%- set comment = '' -%}
+    {%- else -%}
+        {%- set comment = field.compute -%}
+    {%- endif -%}
+    {%- if comment|length > 100 -%}
         {%- set comment = "True\n" + comment -%}
     {%-endif-%}
 <![CDATA[
 for rec in object:
-    rec['{{field.name | odoo_saas_field }}'] = {{comment | wordwrap(100) | replace('\n', '\n# ') | indent(4,False)}}
+    rec['{{field.name | lower | odoo_saas_field }}'] = {{comment | wordwrap(100) | replace('\n', '\n# ') | indent(4,False)}}
 ]]>
 {%-else-%}
 <![CDATA[

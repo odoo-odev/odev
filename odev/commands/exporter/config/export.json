@@ -149,6 +149,18 @@
                 "split": true,
                 "split_name_field": ["res_model", "xml_id"],
                 "template": "ir_actions_act_window_view.jinja",
+                "includes": [
+                    {
+                        "key": "view_id",
+                        "comodel_name": "ir.ui.view",
+                        "inverse_name": "id"
+                    },
+                    {
+                        "key": "act_window_id",
+                        "comodel_name": "ir.actions.act_window",
+                        "inverse_name": "id"
+                    }
+                ],
                 "folder_name": "views",
                 "file_ext": "xml"
             },
@@ -235,6 +247,7 @@
                 "file_ext": "xml"
             },
             "ir.filters": {
+                "export": false,
                 "template": "ir_filters.jinja",
                 "folder_name": "data/filters",
                 "split": true,
@@ -264,9 +277,17 @@
                 "file_ext": "xml"
             },
             "base.automation": {
+                "split": true,
+                "split_name_field": ["model_id.0.xml_name"],
                 "template": "base_automation.jinja",
+                "includes": [
+                    {
+                        "key": "model_id",
+                        "comodel_name": "ir.model",
+                        "inverse_name": "id"
+                    }
+                ],
                 "folder_name": "data",
-                "file_name": "base_automation",
                 "file_ext": "xml"
             },
             "ir.module.category": {

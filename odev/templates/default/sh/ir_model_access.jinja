@@ -1,4 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 {%-for ima in data['ir.model.access'] %}
-{{ima.xml_id | odoo_field}},{{ima.name | odoo_field}},{{ima.model_id[0].xml_id | odoo_field}},{{ima.group_id[0].xml_id | odoo_field}},{{ima.perm_read | int}},{{ima.perm_write | int}},{{ima.perm_create | int}},{{ima.perm_unlink | int}}
+{{ima.xml_id | odoo_field}},{{ima.name | odoo_field}},{%-if data.export_type == "export" -%}model_{{ima.model_id[0].model | odoo_field}}{%-else-%}{{ima.model_id[0].xml_id | odoo_field}}{%-endif-%},{{ima.group_id[0].xml_id | odoo_field}},{{ima.perm_read | int}},{{ima.perm_write | int}},{{ima.perm_create | int}},{{ima.perm_unlink | int}}
 {%- endfor %}

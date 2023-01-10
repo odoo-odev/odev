@@ -1,8 +1,8 @@
 import os
-import sys
 from argparse import Namespace
-from typing import Any, MutableMapping, Optional
+from typing import Any, List, MutableMapping, Optional
 
+import autoflake
 import black
 import isort
 import lxml.etree as ET
@@ -37,14 +37,20 @@ class Template:
 
     def _init_config(self) -> None:
         assert self.export_config is not None
-        self.template_folder = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..",
-            "templates",
-            self.export_config.config.get("template_folder", self.version),
-        )
+        base_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "templates"))
+        self.template_folders: List[str] = []
 
-        self.env = Environment(loader=FileSystemLoader(self.template_folder), keep_trailing_newline=True)
+        for export_type in ["saas", "sh"] if self.type == "saas" else ["sh"]:
+            self.template_folders.extend(
+                [
+                    os.path.join(base_path, str(self.version), export_type),
+                    os.path.join(
+                        base_path, self.export_config.config.get("template_folder", str(self.version)), export_type
+                    ),
+                ]
+            )
+
+        self.env = Environment(loader=FileSystemLoader(self.template_folders), keep_trailing_newline=True)
         self.env.filters["odoo_field"] = odoo_field
         self.env.filters["odoo_field_name"] = odoo_field_name
         self.env.filters["odoo_model"] = odoo_model
@@ -75,13 +81,7 @@ class Template:
 
     # Method to render a template with data as argument
     def render(self, data, cfg):
-        template_file = os.path.join(self.type, cfg["template"])
-        if self.type == "saas" and not os.path.exists(os.path.join(self.template_folder, template_file)):
-            template_file = os.path.join("sh", cfg["template"])
-
-        if sys.platform == "win32":
-            template_file = template_file.replace("\\", "/")
-        tpl = self.env.get_template(template_file)
+        tpl = self.env.get_template(cfg["template"])
         txt = tpl.render(data=data)
 
         # FIXME:
@@ -89,21 +89,30 @@ class Template:
         #     return txt
 
         try:
-            return self.prettier(txt, cfg["file_ext"])
+            return self.prettier(txt, cfg, data)
         except black.NothingChanged:
             return txt
         except Exception as e:
             _logger.error(e)
             return txt
 
-    def prettier(self, txt, ext):
+    def prettier(self, txt, cfg, data=None):
 
-        if ext == "py" and not self.args.pretty_py_off:
+        if cfg["file_ext"] == "py" and not self.args.pretty_py_off:
             txt = black.format_str(txt, mode=black.FileMode(line_length=self.args.line_length or 9999))
 
             if not self.args.pretty_import_off:
                 txt = isort.code(txt, force_single_line=True, single_line_exclusions=["odoo"])
-        elif ext == "xml" and not self.args.pretty_xml_off:
+
+            if not self.args.autoflake_off:
+                filename = self._get_file_name(cfg, data)
+
+                if filename not in ["__init__.py"]:
+                    txt = autoflake.fix_code(
+                        txt, remove_all_unused_imports=True, remove_duplicate_keys=True, remove_unused_variables=True
+                    )
+
+        elif cfg["file_ext"] == "xml" and not self.args.pretty_xml_off:
             parser = ET.XMLParser(remove_blank_text=True, strip_cdata=False)
             root = ET.fromstring(txt.encode(), parser)
             ET.indent(root, space=" " * 4)

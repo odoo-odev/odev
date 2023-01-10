@@ -14,7 +14,7 @@ from odev.constants import LAST_ODOO_VERSION
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import actions, commands
 from odev.utils import logging, odoo
-from odev.utils.exporter import Config
+from odev.utils.exporter import Config, odoo_field
 
 
 _logger = logging.getLogger(__name__)
@@ -247,7 +247,7 @@ class ExportCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
                 if model_name == "ir.model" and with_include:
                     # TODO : Use configuration instead of hardcoding model
-                    file_name = re.sub(r"[\W.]", "", data["model"].replace(".", "_").replace("x_", ""))
+                    file_name = re.sub(r"[\W.]", "", odoo_field(data["model"]))
                     self.init["class"].add(file_name)
                     self._check_and_add_migrate("model", data["model"])
 
