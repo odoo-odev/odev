@@ -273,7 +273,7 @@ def prepare_requirements(
             req_path for path in all_addons if os.path.isfile(req_path := os.path.join(path, "requirements.txt"))
         ]
 
-        if not all(
+        if not any(
             [os.path.getmtime(requirement_file) > last_run.timestamp() for requirement_file in requirements_files]
         ):
             return
@@ -305,6 +305,7 @@ def run_odoo(
     skip_prompt: Optional[bool] = None,
     print_cmdline: bool = True,
     last_run: Optional[datetime] = None,
+    set_last_run: Optional[bool] = True,
 ) -> subprocess.CompletedProcess:
     if addons is None:
         addons = []
@@ -324,6 +325,9 @@ def run_odoo(
     custom_addons_paths = list_submodule_addons([path for path in [os.getcwd(), *addons] if is_addon_path(path)])
 
     prepare_requirements(repos_path, version, venv_name=venv_name, addons=custom_addons_paths, last_run=last_run)
+
+    if set_last_run:
+        ConfigManager("databases").set(database, "last_run", datetime.now().isoformat())
 
     python_exec = os.path.join(get_venv_path(repos_path, version, venv_name), "bin/python")
     command_args = [

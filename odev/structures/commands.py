@@ -816,14 +816,9 @@ class OdooBinMixin(LocalDatabaseCommand, ABC):
         with self.config["databases"] as dbs_config:
             if check_last_run:
                 last_run: Optional[str] = dbs_config.get(database, "last_run")
-                default_args["last_run"] = datetime.fromisoformat(last_run) if last_run else datetime.now()
+                default_args["last_run"] = datetime.fromisoformat(last_run) if last_run else None
 
-            result = odoo.run_odoo(**{**default_args, **kwargs})
-
-            if set_last_run:
-                dbs_config[database]["last_run"] = datetime.now().isoformat()
-
-        return result
+        return odoo.run_odoo(**{**default_args, **kwargs})
 
 
 # TODO: reuse this mixin for all commands that use odoo.com credentials (dump... uhh... just dump)
