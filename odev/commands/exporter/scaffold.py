@@ -34,6 +34,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
     name = "scaffold"
     add_database_argument = False
+    database_required = False
     exporter_subcommand = "scaffold"
     version: Version
 
@@ -56,7 +57,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         no_cache_extract = tldextract.TLDExtract(cache_dir=False)
 
         url_info = no_cache_extract(args.source) if "source" in self.args else None
-        self.database = url_info.subdomain if url_info else self.args.database or "[CLIENT_NAME]"
+        self.database = url_info.subdomain if url_info else "[CLIENT_NAME]"
 
         connection = PSTOOLS_DB[self.args.env]
         self.init_connection(connection["url"], connection["db"], PSTOOLS_USER, PSTOOLS_PASSWORD)
@@ -144,17 +145,19 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
         country_prefix = countries_prefix.get(self.analysis["company_id"][0], "psbe")
         branch_name = repo_name = ""
 
-        if self.type == "saas":
-            repo_name = saas_repo_name
-            branch_name = f"{self.analysis['version'][1]}-{self.database}"
+        if self.database:
+            if self.type == "saas":
+                repo_name = saas_repo_name
+                branch_name = f"{self.analysis['version'][1]}-{self.database}"
+            else:
+                repo_name = (
+                    f"{country_prefix}-{self.database}"
+                    if not [c for c in countries_prefix.values() if c in self.database]
+                    else self.database
+                )
+            return os.path.join(self.config["odev"].get("paths", "dev"), "odoo-ps", repo_name, branch_name)
         else:
-            repo_name = (
-                f"{country_prefix}-{self.database}"
-                if not [c for c in countries_prefix.values() if c in self.database]
-                else self.database
-            )
-
-        return os.path.join(self.config["odev"].get("paths", "dev"), "odoo-ps", repo_name, branch_name)
+            return self.args.path
 
     def export(self) -> None:
         _logger.info(
