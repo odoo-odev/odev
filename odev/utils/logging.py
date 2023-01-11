@@ -15,7 +15,6 @@ from typing import (
     Union,
 )
 
-from odev import utils
 from odev.constants import STYLE_RESET, SYMBOLS, THEMES, term
 from odev.utils.config import ConfigManager
 

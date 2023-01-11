@@ -5,7 +5,7 @@ from odev.commands.odoo_db import create, remove
 from odev.constants import DB_TEMPLATE_SUFFIX
 from odev.exceptions.odoo import RunningOdooDatabase
 from odev.structures import commands
-from odev.utils import logging, odoo
+from odev.utils import logging
 
 
 _logger = logging.getLogger(__name__)

@@ -7,13 +7,7 @@ from datetime import datetime
 
 from odev.commands.exporter import scaffold
 from odev.commands.github import clone
-from odev.commands.odoo_db import (
-    create,
-    dump,
-    init,
-    remove,
-    restore,
-)
+from odev.commands.odoo_db import dump, init, remove, restore
 from odev.exceptions import InvalidVersion
 from odev.structures import commands, database
 from odev.utils import logging

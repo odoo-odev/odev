@@ -51,7 +51,6 @@ from odev.constants import (
     HELP_ARGS_ALIASES,
     ICON_COLORS,
     ICON_OPTIONS,
-    LAST_ODOO_VERSION,
     RE_COMMAND,
     RE_PORT,
 )

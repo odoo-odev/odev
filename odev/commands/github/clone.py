@@ -19,7 +19,7 @@ from odev.structures import commands
 from odev.utils import logging
 from odev.utils.github import git_clone, git_pull, is_git_repo
 from odev.utils.odoo import is_saas_db
-from odev.utils.shconnector import ShConnector, get_sh_connector
+from odev.utils.shconnector import get_sh_connector
 
 
 _logger = logging.getLogger(__name__)

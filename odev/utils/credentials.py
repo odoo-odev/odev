@@ -5,7 +5,7 @@ from typing import MutableMapping, Optional, Tuple
 from agentcrypt.exceptions import AgentCryptException
 
 from odev.utils.config import ConfigManager
-from odev.utils.logging import Logger, PromptFn
+from odev.utils.logging import PromptFn
 from odev.utils.secrets import ssh_agent_decrypt, ssh_agent_encrypt
 
 

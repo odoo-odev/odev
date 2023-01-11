@@ -29,7 +29,6 @@ from odev.commands.odoo_db import create, init, remove
 from odev.commands.odoo_db.create import _logger as create_command_logger
 from odev.exceptions import InvalidFileArgument
 from odev.exceptions.commands import InvalidArgument
-from odev.exceptions.git import HeadRefMismatch
 from odev.structures import commands
 from odev.utils import logging, odoo
 from odev.utils.credentials import CredentialsHelper
