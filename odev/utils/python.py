@@ -1,19 +1,14 @@
 """Python and venv-related utilities"""
 
 import os
-import re
 import subprocess
 import sys
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, Optional, Union
 
 from odev.utils import logging
-from odev.utils.signal import capture_signals
 
 
 _logger = logging.getLogger(__name__)
-
-
-PIP_ERROR_TAG = "ERROR: "
 
 
 def install_packages(
@@ -57,11 +52,9 @@ def install_packages(
     command: str = f'"{python_bin}" -m pip install {pip_args}'
     _logger.log(log_level, log_msg)
 
-    with capture_signals():
-        pip_result = subprocess.getoutput(command)
-
-    pip_errors: List[str] = re.findall(rf"^{PIP_ERROR_TAG}", pip_result)
-
-    for pip_error in pip_errors:
-        msg = pip_error[len(PIP_ERROR_TAG) :]
-        _logger.warning(msg[0].capitalize() + msg[1:])
+    try:
+        subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as error:
+        _logger.info(error.output.decode("utf-8"))
+        _logger.error("Error during pip requirements installation!")
+        sys.exit(1)
