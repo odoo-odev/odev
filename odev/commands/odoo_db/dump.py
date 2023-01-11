@@ -15,7 +15,7 @@ from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarg
 from odev.structures import commands
 from odev.utils import logging, request
 from odev.utils.credentials import CredentialsHelper
-from odev.utils.odoo import sanitize_url
+from odev.utils.odoo import get_database_name_from_url, sanitize_url
 from odev.utils.os import mkdir
 from odev.utils.ssh import SSHClient
 
@@ -156,7 +156,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
         filestore = _logger.confirm("Do you want to include the filestore?")
         ext = "zip" if filestore else "sql.gz"
 
-        database_name = self.source.split("/")[-1].replace(".odoo.com", "")
+        database_name = get_database_name_from_url(self.source)
 
         _logger.info(f"About to download dump file for {database_name}")
 

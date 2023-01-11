@@ -380,3 +380,7 @@ def sanitize_url(url, remove_after=".odoo.com"):
     re_http = re.compile(r"^https?://")
     url_https = f"""{'https://' if not re_http.match(url) else ''}{url}"""
     return url_https[: url_https.index(remove_after) + len(remove_after)]
+
+
+def get_database_name_from_url(url):
+    return url.split("/")[-1].replace(".odoo.com", "")

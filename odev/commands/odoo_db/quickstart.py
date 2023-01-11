@@ -17,7 +17,7 @@ from odev.commands.odoo_db import (
 from odev.exceptions import InvalidVersion
 from odev.structures import commands, database
 from odev.utils import logging
-from odev.utils.odoo import get_odoo_version
+from odev.utils.odoo import get_database_name_from_url, get_odoo_version
 
 
 _logger = logging.getLogger(__name__)
@@ -95,7 +95,8 @@ class QuickStartCommand(
                         return result
 
                     timestamp = datetime.now().strftime("%Y%m%d")
-                    basename = f"{timestamp}_{self.database}.dump"
+                    database_name = get_database_name_from_url(self.subarg)
+                    basename = f"{timestamp}_{database_name}.dump"
 
                     possible_ext = ("zip", "sql.gz")
                     for ext in possible_ext:
