@@ -26,7 +26,8 @@ def main():
         if os.geteuid() == 0:
             raise Exception("Odev should not be run as root")
 
-        odev.update(ConfigManager("odev"))
+        with ConfigManager("odev") as config:
+            odev.Odev(config).dispatch()
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)

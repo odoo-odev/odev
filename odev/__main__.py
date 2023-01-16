@@ -2,7 +2,8 @@ import os
 from signal import SIGINT, SIGTERM, signal
 
 from odev._version import __version__
-from odev.common import signal_handling as handlers, odev
+from odev.common import signal_handling as handlers
+from odev.common.odev import Odev
 from odev.common.config import ConfigManager
 from odev.common.logging import logging
 
@@ -40,14 +41,8 @@ def main():
         if os.geteuid() == 0:
             raise Exception("Odev should not be run as root")
 
-        # --- Update and restart -----------------------------------------------
-        if odev.update(ConfigManager("odev")):
-            odev.restart()
-
-        # registry = CommandRegistry()
-        # registry.run_upgrades()
-        # registry.load_commands()
-        # registry.handle()
+        with ConfigManager("odev") as config:
+            Odev(config).dispatch()
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)

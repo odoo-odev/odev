@@ -3,16 +3,23 @@
 import sys
 import os
 import re
+import importlib
+import pkgutil
+import inspect
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 from git import Repo, Remote
+from typing import Any, List, MutableMapping
 from packaging import version
 
+from odev.common.commands.base import CommandType, BaseCommand
 from odev.common.config import ConfigManager
 from odev.common.logging import logging
 from odev.common.python import PythonEnv
 from odev.common import bash
 from odev.common import prompt
+from odev.commands.utilities.help import HELP_ARGS_ALIASES
 from odev._version import __version__
 
 
@@ -39,6 +46,12 @@ class Odev():
 
     repo: Repo
     """Local git repository."""
+
+    commands_path: Path
+    """Local path to the commands directory."""
+
+    commands: MutableMapping[str, CommandType]
+    """Collection of existing and loaded commands."""
 
     upgrades_path: Path
     """Local path to the upgrades directory."""
@@ -121,8 +134,82 @@ class Odev():
         self.config.set("update", "version", self.version)
         return True
 
+    def import_commands(self) -> List[CommandType]:
+        """Import all commands from the commands directory.
+
+        :return: List of imported command classes
+        :rtype: List[CommandType]
+        """
+        command_dirs = [
+            path for path in self.commands_path.iterdir()
+            if path.is_dir() and not path.name.startswith("_")
+        ]
+        command_modules = pkgutil.iter_modules([str(d) for d in command_dirs])
+        command_classes: List[CommandType] = []
+
+        for module_info in command_modules:
+            module_path: str = module_info.module_finder.find_module(module_info.name).path
+            logger.debug(f"Importing command module {module_path}")
+            spec = importlib.util.spec_from_file_location(Path(module_path).stem, module_path)
+            assert spec is not None and spec.loader is not None
+            command_module: ModuleType = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(command_module)
+            command_classes.extend(command[1] for command in inspect.getmembers(command_module, self.__filter_commands))
+
+        return command_classes
+
+    def register_commands(self) -> None:
+        """Register all commands from the commands directory."""
+        for command_class in self.import_commands():
+            logger.debug(f"Registering command '{command_class.name}'")
+            command_names = [command_class.name] + (list(command_class.aliases) or [])
+
+            if any(name in command_names for name in self.commands.keys()):
+                raise ValueError(f"Another command {command_class.name} is already registered")
+
+            command_class.prepare_command()
+            command_class.framework = self
+
+            self.commands.update({name: command_class for name in command_names})
+
+    def dispatch(self) -> None:
+        """Handle commands and arguments as received from the terminal."""
+        argv = sys.argv[1:]
+        logger.debug(f"Dispatching command '{' '.join(sys.argv)}'")
+
+        if not len(argv) or argv[0].startswith("-"):
+            logger.debug("No command provided, falling back to help command")
+            argv = ["help"]
+
+        if len(argv) >= 2 and any(arg in HELP_ARGS_ALIASES for arg in argv[1:]):
+            logger.debug("Help argument provided, falling back to help command")
+            argv = ["help", argv[0]]
+
+        command_cls = self.commands.get(argv[0])
+
+        if command_cls is None:
+            return logger.error(f"Command {argv[0]} not found")
+
+        logger.debug(f"Dispatching command {command_cls.name}")
+        arguments_parser = command_cls.prepare_parser()
+        arguments = arguments_parser.parse_args(argv[1:])
+        command = command_cls(arguments)
+        command.argv = argv
+        return command.run()
 
     # --- Private methods ------------------------------------------------------
+
+    def __filter_commands(self, attribute: Any) -> bool:
+        """Filter module attributes to extract commands.
+
+        :param attribute: Module attribute
+        :return: Whether the module attribute is a command
+        :rtype: bool
+        """
+        return (
+            inspect.isclass(attribute)
+            and issubclass(attribute, BaseCommand)
+        )
 
     def __git_branch_behind(self) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.
