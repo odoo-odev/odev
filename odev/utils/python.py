@@ -55,6 +55,11 @@ def install_packages(
     try:
         subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as error:
-        _logger.info(error.output.decode("utf-8"))
-        _logger.error("Error during pip requirements installation!")
-        sys.exit(1)
+        output = error.output.decode("utf-8")
+        for line in output.splitlines():
+            # TODO: remove when `file:/home/odoo/src/user/util_package` is no longer
+            # used as a necessary line in custom projects `requirements.txt` files
+            if line.startswith("ERROR:") and "util_package" not in line:
+                _logger.info(output)
+                _logger.error("Error during pip requirements installation!")
+                sys.exit(1)
