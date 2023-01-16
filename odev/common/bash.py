@@ -3,8 +3,8 @@ Utilities for working with the operating system and issue BASH-like commands to
 the subsystem.
 """
 
-from os import geteuid, setpgrp
-from shlex import quote, split
+from os import geteuid
+from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run, Popen
 from typing import Optional
 
@@ -94,4 +94,4 @@ def detached(command: str) -> None:
     :param str command: The command to execute.
     """
     logger.debug(f"Running detached process: {quote(command)}")
-    Popen(split(command), stdout=None, stderr=None, start_new_session=True, preexec_fn=setpgrp)
+    Popen(command, shell=True, start_new_session=True)

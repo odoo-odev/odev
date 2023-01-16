@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
+from odev._version import __version__
 from odev.constants import DEFAULT_DATETIME_FORMAT
 from odev.common import prompt
 from odev.common.logging import logging
@@ -35,3 +36,4 @@ def setup(config: Optional[ConfigManager] = None) -> None:
     config.set("update", "mode", update_mode)
     config.set("update", "interval", update_interval)
     config.set("update", "date", datetime.now().strftime(DEFAULT_DATETIME_FORMAT))
+    config.set("update", "version", __version__)
