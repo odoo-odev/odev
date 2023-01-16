@@ -44,6 +44,10 @@ def main():
             _logger.info("Setting up autocompletion")
             setup.completion.setup(config)
 
+            # --- Configure self-update ----------------------------------------
+            _logger.info("Configuring self-update")
+            setup.update.setup(config)
+
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)
 

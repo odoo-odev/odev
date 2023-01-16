@@ -25,6 +25,8 @@ def setup(config: Optional[ConfigManager] = None) -> None:
     See:
     - https://github.com/scop/bash-completion/
     - https://www.gnu.org/savannah-checkouts/gnu/bash/manual/html_node/Programmable-Completion.html
+
+    :param config: Configuration manager
     """
 
     file_path = Path(__file__).parents[2] / "complete_odev.sh"

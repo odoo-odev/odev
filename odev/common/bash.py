@@ -3,9 +3,9 @@ Utilities for working with the operating system and issue BASH-like commands to
 the subsystem.
 """
 
-from os import geteuid
-from shlex import quote
-from subprocess import CalledProcessError, CompletedProcess, run
+from os import geteuid, setpgrp
+from shlex import quote, split
+from subprocess import CalledProcessError, CompletedProcess, run, Popen
 from typing import Optional
 
 from odev.common import prompt
@@ -86,3 +86,12 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
 
     logger.debug(f"Completed process with return code {process_result.returncode}: {command}")
     return process_result
+
+
+def detached(command: str) -> None:
+    """Execute a command in the operating system and detach it from the current process.
+
+    :param str command: The command to execute.
+    """
+    logger.debug(f"Running detached process: {quote(command)}")
+    Popen(split(command), stdout=None, stderr=None, start_new_session=True, preexec_fn=setpgrp)

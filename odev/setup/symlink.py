@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 def setup(config: Optional[ConfigManager] = None) -> None:
-    """Setup symlinks to odev for using it as a shell command."""
+    """Setup symlinks to odev for using it as a shell command.
+
+    :param config: Configuration manager
+    """
     main_path = Path(__file__).parents[2] / "main.py"
     link_path = Path("~/.local/bin/odev").expanduser()
 

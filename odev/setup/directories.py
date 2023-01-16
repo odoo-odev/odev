@@ -65,7 +65,10 @@ def __ask_dir(message: str, default: str = None, path: Optional[Path] = None) ->
 
 
 def setup(config: Optional[ConfigManager] = None) -> None:
-    """Setup working directories for odev."""
+    """Setup working directories for odev.
+
+    :param config: Configuration manager
+    """
     standard: Optional[Path] = None
     custom: Optional[Path] = None
 
