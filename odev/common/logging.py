@@ -37,6 +37,8 @@ __log_level = re.search(
 
 LOG_LEVEL = __log_level.group(1).upper() if __log_level else "INFO"
 
+SILENCED_LOGGERS = ["git.cmd", "asyncio", "urllib3", "rich", "pip._internal"]
+
 
 # --- Logging handler customization --------------------------------------------
 # Display the log level as a single character
@@ -119,3 +121,6 @@ logging.basicConfig(
         )
     ],
 )
+
+for logger in SILENCED_LOGGERS:
+    logging.getLogger(logger).setLevel(logging.WARNING)
