@@ -298,7 +298,7 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
                         file.write(block)
                         pbar.update(block_size)
 
-        elif _logger.confirm("Do you want to download the last daily backup for the database ?"):
+        elif _logger.confirm("Do you want to download the last daily backup for the database?"):
             destfile = re.sub(".zip$", ".sql.gz", destfile)
             sh_database = self._get_response_data(res, re_database, "database name")
             sh_build = sh_database.split("-")[-1]
@@ -310,7 +310,8 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
                 _logger.warning("This may take a while, please be patient...")
 
                 res = ssh.download(sh_path, destfile)
-
+        else:
+            raise CommandAborted()
         return destfile
 
     def _check_session(self, res):
