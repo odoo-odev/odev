@@ -20,5 +20,7 @@ def run():
         p for p in repos_path.glob("*/*") if p.is_dir() and re_version.match(p.parent.name) and (p / ".git").exists()
     ]
     for directory in repo_dirs:
-        _logger.warning(f"Folder '{str(directory)}' will be deleted to improve performance by using git worktree !")
+        _logger.warning(
+            f"Folder '{directory.as_posix()}' will be deleted to improve performance by using git worktree!"
+        )
         shutil.rmtree(directory)

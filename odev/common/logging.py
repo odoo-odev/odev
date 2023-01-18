@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 # TODO: Implement tree line (command-defined color)
 
+import logging
 import re
 import sys
-import logging
 from logging import LogRecord
 from typing import Dict, Literal, Union
 
@@ -21,6 +21,8 @@ from rich.highlighter import ReprHighlighter, _combine_regex
 from rich.logging import RichHandler
 from rich.text import Text
 from rich.theme import Theme
+
+from odev.common import style
 
 
 __all__ = ["logging", "console", "LOG_LEVEL"]
@@ -42,6 +44,7 @@ SILENCED_LOGGERS = ["git.cmd", "asyncio", "urllib3", "rich", "pip._internal"]
 
 # --- Logging handler customization --------------------------------------------
 # Display the log level as a single character
+
 
 class OdevRichHandler(RichHandler):
     """Custom `RichHandler` to show the log level as a single character.
@@ -74,6 +77,7 @@ class OdevRichHandler(RichHandler):
 # --- Logging highlighter customization ----------------------------------------
 # This is not useful at all, but it's fun to have. I guess...
 
+
 class OdevReprHighlighter(ReprHighlighter):
     """Extension of `ReprHighlighter` to highlight odev version numbers."""
 
@@ -81,7 +85,7 @@ class OdevReprHighlighter(ReprHighlighter):
         super().__init__(*args, **kwargs)
         self.highlights[-1] = _combine_regex(
             r"(?P<odev>odev)",
-            r"(?P<version>([0-9]+\.)+[0-9]+)",
+            r"(?P<version>([0-9]+\.){2,}[0-9]+)",
             self.highlights[-1],
         )
 
@@ -93,13 +97,23 @@ console = Console(
     highlighter=OdevReprHighlighter(),
     theme=Theme(
         {
-            "repr.odev": "bold cyan",
-            "repr.version": "bold cyan",
-            "logging.level.critical": "bold red",
-            "logging.level.error": "bold red",
-            "logging.level.warning": "bold yellow",
-            "logging.level.info": "bold cyan",
-            "logging.level.debug": "bold bright_black",
+            "logging.level.debug": f"bold {style.GRAY}",
+            "logging.level.info": f"bold {style.CYAN}",
+            "logging.level.warning": f"bold {style.YELLOW}",
+            "logging.level.error": f"bold {style.RED}",
+            "logging.level.critical": f"bold {style.RED}",
+            "repr.boolean_false": f"italic {style.RED}",
+            "repr.boolean_true": f"italic {style.GREEN}",
+            "repr.call": style.CYAN,
+            "repr.filename": style.PURPLE,
+            "repr.none": f"italic {style.CYAN}",
+            "repr.number": style.CYAN,
+            "repr.number_complex": style.CYAN,
+            "repr.odev": f"bold {style.CYAN}",
+            "repr.path": style.PURPLE,
+            "repr.str": style.CYAN,
+            "repr.url": style.PURPLE,
+            "repr.version": f"bold {style.CYAN}",
         }
     ),
 )

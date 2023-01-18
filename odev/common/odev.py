@@ -1,38 +1,34 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
-import sys
-import os
-import re
-import importlib
-import pkgutil
 import inspect
+import os
+import pkgutil
+import re
+import sys
 from datetime import datetime, timedelta
+from importlib.machinery import FileFinder
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
-from git import Repo, Remote
 from typing import Any, List, MutableMapping
+
+from git import Remote, Repo
 from packaging import version
 
-from odev.common.commands.base import CommandType, BaseCommand
+from odev._version import __version__
+from odev.commands.utilities.help import HELP_ARGS_ALIASES
+from odev.common import bash, prompt
+from odev.common.commands.base import BaseCommand, CommandType
 from odev.common.config import ConfigManager
 from odev.common.logging import logging
 from odev.common.python import PythonEnv
-from odev.common import bash
-from odev.common import prompt
-from odev.commands.utilities.help import HELP_ARGS_ALIASES
-from odev._version import __version__
-
-
 from odev.constants import DEFAULT_DATETIME_FORMAT
+
 
 logger = logging.getLogger(__name__)
 
 
-ODEV_PATH: Path = Path(__file__).parents[2]
-"""Local path to the odev repository."""
-
-
-class Odev():
+class Odev:
     """Main framework class."""
 
     version: str
@@ -59,7 +55,7 @@ class Odev():
     def __init__(self, config: ConfigManager):
         self.version = __version__
         self.config = config
-        self.path = ODEV_PATH
+        self.path = Path(__file__).parents[2]
         self.repo = Repo(self.path)
         self.commands = {}
         self.commands_path = self.path / "odev" / "commands"
@@ -103,7 +99,7 @@ class Odev():
 
         return True
 
-    def restart() -> None:
+    def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
         logger.debug("Restarting odev")
         os.execv(sys.argv[0], sys.argv)
@@ -132,7 +128,6 @@ class Odev():
             self.__run_upgrade_script(script)
 
         self.config.set("update", "version", self.version)
-        return True
 
     def import_commands(self) -> List[CommandType]:
         """Import all commands from the commands directory.
@@ -141,18 +136,17 @@ class Odev():
         :rtype: List[CommandType]
         """
         command_dirs = [
-            path for path in self.commands_path.iterdir()
-            if path.is_dir() and not path.name.startswith("_")
+            path for path in self.commands_path.iterdir() if path.is_dir() and not path.name.startswith("_")
         ]
-        command_modules = pkgutil.iter_modules([str(d) for d in command_dirs])
+        command_modules = pkgutil.iter_modules([d.as_posix() for d in command_dirs])
         command_classes: List[CommandType] = []
 
         for module_info in command_modules:
-            module_path: str = module_info.module_finder.find_module(module_info.name).path
-            logger.debug(f"Importing command module {module_path}")
-            spec = importlib.util.spec_from_file_location(Path(module_path).stem, module_path)
+            assert isinstance(module_info.module_finder, FileFinder)
+            module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
+            spec = spec_from_file_location(module_path.stem, module_path.as_posix())
             assert spec is not None and spec.loader is not None
-            command_module: ModuleType = importlib.util.module_from_spec(spec)
+            command_module: ModuleType = module_from_spec(spec)
             spec.loader.exec_module(command_module)
             command_classes.extend(command[1] for command in inspect.getmembers(command_module, self.__filter_commands))
 
@@ -206,10 +200,7 @@ class Odev():
         :return: Whether the module attribute is a command
         :rtype: bool
         """
-        return (
-            inspect.isclass(attribute)
-            and issubclass(attribute, BaseCommand)
-        )
+        return inspect.isclass(attribute) and issubclass(attribute, BaseCommand)
 
     def __git_branch_behind(self) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.
@@ -225,8 +216,8 @@ class Odev():
             return False
 
         remote: Remote = self.repo.remotes[remote_branch.remote_name]
-        rev_list: str = self.repo.git.rev_list('--left-right', '--count', f'{remote.name}...HEAD')
-        commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split('\t')]
+        rev_list: str = self.repo.git.rev_list("--left-right", "--count", f"{remote.name}...HEAD")
+        commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
         message_behind = f"{commits_behind} commit{'s' if commits_behind > 1 else ''} behind"
         message_ahead = f"{commits_ahead} commit{'s' if commits_ahead > 1 else ''} ahead of"
 
@@ -255,7 +246,7 @@ class Odev():
         requirements_file = self.path / "requirements.txt"
         diff = self.repo.git.diff("--name-only", "HEAD", requirements_file).strip()
 
-        if diff == str(requirements_file):
+        if diff == requirements_file.as_posix():
             logger.debug("Odev requirements have changed since last version")
 
         return bool(diff)
@@ -305,12 +296,14 @@ class Odev():
         """
         script_version = version.parse(script.parent.name)
 
-        return not any([
-            not script.is_file(),
-            re.match(r"^(\d+\.){2}\d+$", script.parent.name) is None,
-            script_version <= version.parse(self.__latest_version()),
-            script_version > version.parse(self.version),
-        ])
+        return not any(
+            [
+                not script.is_file(),
+                re.match(r"^(\d+\.){2}\d+$", script.parent.name) is None,
+                script_version <= version.parse(self.__latest_version()),
+                script_version > version.parse(self.version),
+            ]
+        )
 
     def __list_upgrade_scripts(self) -> List[Path]:
         """List the upgrade scripts that should be run.
@@ -328,8 +321,8 @@ class Odev():
 
         :param script: Upgrade script's path
         """
-        spec = importlib.util.spec_from_file_location(script.stem, str(script))
+        spec = spec_from_file_location(script.stem, script.as_posix())
         assert spec is not None and spec.loader is not None
-        script_module: ModuleType = importlib.util.module_from_spec(spec)
+        script_module: ModuleType = module_from_spec(spec)
         spec.loader.exec_module(script_module)
         script_module.run(self.config)

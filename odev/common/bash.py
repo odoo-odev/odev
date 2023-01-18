@@ -5,7 +5,7 @@ the subsystem.
 
 from os import geteuid
 from shlex import quote
-from subprocess import CalledProcessError, CompletedProcess, run, Popen
+from subprocess import CalledProcessError, CompletedProcess, Popen, run
 from typing import Optional
 
 from odev.common import prompt
@@ -68,13 +68,15 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
         # If already running as root, sudo will not work
         if not sudo or not geteuid():
             logger.debug(f"Process failed: {quote(command)}")
-            return __raise_or_log(exception, raise_on_error)
+            __raise_or_log(exception, raise_on_error)
+            return None
 
         global sudo_password
         sudo_password = sudo_password or prompt.secret("Session password:")
 
         if sudo_password is None:
-            return __raise_or_log(exception, raise_on_error)
+            __raise_or_log(exception, raise_on_error)
+            return None
 
         try:
             process_result = __run_command(f"echo {quote(sudo_password)} | sudo -Sks {command}")
@@ -82,7 +84,8 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
             logger.debug(f"Process failed with elevated privileges: {quote(command)}")
             exception.cmd = exception.cmd.replace(quote(sudo_password), "*" * len(sudo_password))
             sudo_password = None
-            return __raise_or_log(exception, raise_on_error)
+            __raise_or_log(exception, raise_on_error)
+            return None
 
     logger.debug(f"Completed process with return code {process_result.returncode}: {command}")
     return process_result

@@ -44,7 +44,7 @@ def __move(old: Path, new: Path) -> None:
         new.rmdir()
 
     logger.debug(f"Moving {old} to {new}")
-    shutil.move(str(old), str(new))
+    shutil.move(old.as_posix(), new.as_posix())
 
 
 def __ask_dir(message: str, default: str = None, path: Optional[Path] = None) -> Optional[Path]:
@@ -81,14 +81,14 @@ def setup(config: Optional[ConfigManager] = None) -> None:
         while standard is None:
             standard = __ask_dir(
                 "Where do you want to keep odoo standard repositories?",
-                str(old_standard),
+                old_standard.as_posix(),
                 standard,
             )
 
         while custom is None:
             custom = __ask_dir(
                 "Where do you want to keep odoo-ps repositories?",
-                str(old_custom),
+                old_custom.as_posix(),
                 custom,
             )
 
@@ -100,5 +100,5 @@ def setup(config: Optional[ConfigManager] = None) -> None:
     __move(old_custom, custom)
 
     logger.debug("Saving directories to configuration file")
-    config.set(config_section, config_option_standard, str(standard))
-    config.set(config_section, config_option_custom, str(custom))
+    config.set(config_section, config_option_standard, standard.as_posix())
+    config.set(config_section, config_option_custom, custom.as_posix())

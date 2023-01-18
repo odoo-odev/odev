@@ -1,9 +1,10 @@
 """Python and venv-related utilities"""
 
 import sys
-import virtualenv
 from pathlib import Path
-from typing import Union, List, Optional
+from typing import List, Optional, Union
+
+import virtualenv
 
 from odev.common import bash
 from odev.common.logging import logging
@@ -12,7 +13,7 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-class PythonEnv():
+class PythonEnv:
     """Object representation of a local python environment, this could be the global python interpreter or
     a virtual environment.
     """
@@ -27,7 +28,7 @@ class PythonEnv():
         """
         self._global = path is None
         self.path: Path = Path(sys.prefix if self._global else path).resolve()
-        self.version: float = version or sys.version[:3]
+        self.version: float = version or float(".".join(sys.version.split(".")[:2]))
         self.python: Path = self.path / "bin" / f"python{self.version or ''}"
         self.pip: str = f"{self.python} -m pip"
 
@@ -35,7 +36,7 @@ class PythonEnv():
             if self._global:
                 raise FileNotFoundError(f"Python interpreter not found at {self.python}")
 
-            self.create_venv(self.path, self.version)
+            self.create_venv()
 
     def create_venv(self) -> None:
         """Create a new virtual environment."""
@@ -43,7 +44,7 @@ class PythonEnv():
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
         logger.debug(f"Creating virtual environment at {self.path}")
-        virtualenv.cli_run(["--python", self.version, str(self.path)])
+        virtualenv.cli_run(["--python", self.version, self.path.as_posix()])
 
     def install_packages(self, packages: List[str]) -> None:
         """Install python packages.
