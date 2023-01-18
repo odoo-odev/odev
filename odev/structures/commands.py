@@ -382,6 +382,7 @@ class LocalDatabaseCommand(Command, ABC):
         for key in ["databases"]:
             self.config[key] = ConfigManager(key)
 
+        self.database_required = self.database_required and self.add_database_argument
         self.database = self.database_required and self._get_database(database=args.database) or ""
 
     def _get_database(self, database=None) -> str:
