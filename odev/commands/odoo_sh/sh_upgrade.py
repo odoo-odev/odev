@@ -22,10 +22,10 @@ from typing import (
 
 from github import PullRequestMergeStatus
 
+from odev.common.actions import CommaSplitAction
 from odev.exceptions import BuildCompleteException, BuildWarning, OdooSHException
 from odev.exceptions.commands import CommandAborted
 from odev.structures import commands
-from odev.common.actions import CommaSplitAction
 from odev.utils import logging
 
 

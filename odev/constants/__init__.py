@@ -2,7 +2,6 @@
 Generic constants
 """
 
-from .arguments import *
 from .date import *
 from .exporter import *
 from .logging import *

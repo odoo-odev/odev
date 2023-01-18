@@ -10,6 +10,7 @@ import tldextract
 from odoolib.main import JsonRPCException
 from packaging.version import Version
 
+from odev.common import actions
 from odev.constants import LAST_ODOO_VERSION
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
