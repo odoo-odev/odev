@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 from odev.common import prompt
-from odev.common.logging import logging
 from odev.common.config import ConfigManager
+from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def setup(config: Optional[ConfigManager] = None) -> None:
     if comp_path.exists():
         logger.warning(f"Symlink path {comp_path} already exists")
 
-        if prompt.confirm(f"Would you like to overwrite it?"):
+        if prompt.confirm("Would you like to overwrite it?"):
             logger.debug(f"Removing symlink path {comp_path}")
             comp_path.unlink(missing_ok=True)
 

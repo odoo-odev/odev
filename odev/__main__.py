@@ -3,9 +3,9 @@ from signal import SIGINT, SIGTERM, signal
 
 from odev._version import __version__
 from odev.common import signal_handling as handlers
-from odev.common.odev import Odev
 from odev.common.config import ConfigManager
 from odev.common.logging import logging
+from odev.common.odev import Odev
 
 
 # Explicitly initialize relative imports if run directly

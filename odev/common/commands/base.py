@@ -1,17 +1,27 @@
 """Odev base command class for CLI and programmatic use."""
 
-import textwrap
 import inspect
 import sys
+import textwrap
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
-from typing import ClassVar, Dict, Optional, Sequence, Type, List, MutableMapping, Any, TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Type,
+)
+
 
 if TYPE_CHECKING:
     from odev.common.odev import Odev
 
 CommandType = Type["BaseCommand"]
-"""Base command type for type hinting."""
 
 
 class BaseCommand(ABC):
@@ -29,13 +39,10 @@ class BaseCommand(ABC):
     """
 
     help: ClassVar[Optional[str]] = None
-    """
-    Optional help information on what the command does.
-    """
+    """Optional help information on what the command does."""
 
     description: ClassVar[Optional[str]] = None
-    """
-    Optional short help information on what the command does.
+    """Optional short help information on what the command does.
     If omitted, the class or source module docstring will be used instead.
     """
 
@@ -53,8 +60,11 @@ class BaseCommand(ABC):
             "help": "Show help for the current command.",
         },
     ]
-    """
-    Arguments definitions to extend commands capabilities.
+    """Arguments definitions to extend commands capabilities."""
+
+    _is_abstract: ClassVar[bool]
+    """Indicates if the command is abstract. Abstract commands are not registered and cannot be executed,
+    they can only be inherited from.
     """
 
     def __init__(self, args: Namespace):
@@ -73,14 +83,10 @@ class BaseCommand(ABC):
     @classmethod
     def prepare_command(cls) -> None:
         """Set proper attributes on the command class and provide inheritance from parent classes."""
+        cls._is_abstract = inspect.isabstract(cls) or ABC in cls.__bases__
         cls.name = (cls.name or cls.__name__).lower()
-        cls.is_abstract = inspect.isabstract(cls) or ABC in cls.__bases__
         cls.help = textwrap.dedent(
-            cls.__dict__.get("help")
-            or cls.__doc__
-            or cls.help
-            or sys.modules[cls.__module__].__doc__
-            or ""
+            cls.__dict__.get("help") or cls.__doc__ or cls.help or sys.modules[cls.__module__].__doc__ or ""
         ).strip()
         cls.description = textwrap.dedent(cls.description or cls.help).strip()
         cls.arguments = cls.merge_arguments()

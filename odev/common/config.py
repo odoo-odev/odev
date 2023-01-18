@@ -1,4 +1,3 @@
-import os
 from collections import abc
 from configparser import ConfigParser, SectionProxy
 from pathlib import Path

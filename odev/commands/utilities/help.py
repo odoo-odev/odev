@@ -1,8 +1,5 @@
 """Gets help about commands."""
 
-import os
-import sys
-from textwrap import dedent, indent
 
 from odev.common import commands
 from odev.common.logging import logging
