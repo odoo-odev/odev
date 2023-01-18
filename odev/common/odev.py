@@ -14,10 +14,11 @@ from typing import Any, List, MutableMapping
 
 from git import Remote, Repo
 from packaging import version
+from rich.console import Console
 
 from odev._version import __version__
 from odev.commands.utilities.help import HELP_ARGS_ALIASES
-from odev.common import bash, prompt
+from odev.common import bash, prompt, style
 from odev.common.commands.base import BaseCommand, CommandType
 from odev.common.config import ConfigManager
 from odev.common.logging import logging
@@ -52,12 +53,17 @@ class Odev:
     upgrades_path: Path
     """Local path to the upgrades directory."""
 
+    executable: Path
+    """Path to the current executable."""
+
     def __init__(self, config: ConfigManager):
+        self._console = Console(highlighter=None, theme=style.RICH_THEME)
         self.version = __version__
         self.config = config
         self.path = Path(__file__).parents[2]
         self.repo = Repo(self.path)
         self.commands = {}
+        self.executable = Path(sys.argv[0])
         self.commands_path = self.path / "odev" / "commands"
         self.upgrades_path = self.path / "odev" / "upgrades"
 
@@ -102,7 +108,7 @@ class Odev:
     def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
         logger.debug("Restarting odev")
-        os.execv(sys.argv[0], sys.argv)
+        os.execv(self.executable.as_posix(), sys.argv)
 
     def check_upgrade(self) -> bool:
         """Check whether the current version of odev is the latest available version.

@@ -2,7 +2,6 @@
 
 import inspect
 import sys
-import textwrap
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
 from typing import (
@@ -16,6 +15,8 @@ from typing import (
     Sequence,
     Type,
 )
+
+from odev.common import string
 
 
 if TYPE_CHECKING:
@@ -85,10 +86,10 @@ class BaseCommand(ABC):
         """Set proper attributes on the command class and provide inheritance from parent classes."""
         cls._is_abstract = inspect.isabstract(cls) or ABC in cls.__bases__
         cls.name = (cls.name or cls.__name__).lower()
-        cls.help = textwrap.dedent(
+        cls.help = string.normalize_indent(
             cls.__dict__.get("help") or cls.__doc__ or cls.help or sys.modules[cls.__module__].__doc__ or ""
-        ).strip()
-        cls.description = textwrap.dedent(cls.description or cls.help).strip()
+        )
+        cls.description = string.normalize_indent(cls.description or cls.help)
         cls.arguments = cls.merge_arguments()
 
     @classmethod
@@ -141,6 +142,10 @@ class BaseCommand(ABC):
         )
         cls.prepare_arguments(parser)
         return parser
+
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        """Print to stdout with highlighting and theming."""
+        self.framework._console.print(*args, **kwargs)
 
     # --- Private methods ------------------------------------------------------
 

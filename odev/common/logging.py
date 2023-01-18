@@ -20,7 +20,6 @@ from rich.console import Console
 from rich.highlighter import ReprHighlighter, _combine_regex
 from rich.logging import RichHandler
 from rich.text import Text
-from rich.theme import Theme
 
 from odev.common import style
 
@@ -95,27 +94,7 @@ class OdevReprHighlighter(ReprHighlighter):
 
 console = Console(
     highlighter=OdevReprHighlighter(),
-    theme=Theme(
-        {
-            "logging.level.debug": f"bold {style.GRAY}",
-            "logging.level.info": f"bold {style.CYAN}",
-            "logging.level.warning": f"bold {style.YELLOW}",
-            "logging.level.error": f"bold {style.RED}",
-            "logging.level.critical": f"bold {style.RED}",
-            "repr.boolean_false": f"italic {style.RED}",
-            "repr.boolean_true": f"italic {style.GREEN}",
-            "repr.call": style.CYAN,
-            "repr.filename": style.PURPLE,
-            "repr.none": f"italic {style.CYAN}",
-            "repr.number": style.CYAN,
-            "repr.number_complex": style.CYAN,
-            "repr.odev": f"bold {style.CYAN}",
-            "repr.path": style.PURPLE,
-            "repr.str": style.CYAN,
-            "repr.url": style.PURPLE,
-            "repr.version": f"bold {style.CYAN}",
-        }
-    ),
+    theme=style.RICH_THEME,
 )
 
 
