@@ -4,10 +4,10 @@ from datetime import datetime
 from typing import Optional
 
 from odev._version import __version__
-from odev.constants import DEFAULT_DATETIME_FORMAT
 from odev.common import prompt
-from odev.common.logging import logging
 from odev.common.config import ConfigManager
+from odev.common.logging import logging
+from odev.constants import DEFAULT_DATETIME_FORMAT
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def setup(config: Optional[ConfigManager] = None) -> None:
     """
     update_mode = prompt.select(
         "What should happen when a new version of odev becomes available?",
-        default="always",
+        default=config.get("update", "mode", "ask"),
         choices=[
             ("always", "Update odev automatically"),
             ("never", "Never update odev"),
@@ -31,7 +31,11 @@ def setup(config: Optional[ConfigManager] = None) -> None:
         ],
     )
 
-    update_interval = prompt.integer("How often should odev check for updates (in days)?", default=1, min_value=1)
+    update_interval = prompt.integer(
+        "How often should odev check for updates (in days)?",
+        default=int(config.get("update", "interval", 1)),
+        min_value=1,
+    )
 
     config.set("update", "mode", update_mode)
     config.set("update", "interval", update_interval)
