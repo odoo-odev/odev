@@ -45,6 +45,8 @@ import odoolib
 from github import Github
 from packaging.version import Version
 
+from odev.commands.utilities.help import HELP_ARGS_ALIASES
+from odev.common.actions import CommaSplitAction, OptionalStringAction
 from odev.constants import (
     DB_TEMPLATE_SUFFIX,
     DEFAULT_DATABASE,
@@ -69,7 +71,6 @@ from odev.exceptions import (
     RunningOdooDatabase,
 )
 from odev.exceptions.commands import InvalidQuery
-from odev.common.actions import CommaSplitAction, OptionalStringAction
 from odev.utils import logging, odoo
 from odev.utils.config import ConfigManager
 from odev.utils.exporter import Config, odoo_field, odoo_model
