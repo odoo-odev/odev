@@ -174,7 +174,11 @@ class Odev:
         """Handle commands and arguments as received from the terminal."""
         argv = sys.argv[1:]
 
-        if not len(argv) or (len(argv) >= 2 and any(arg in HELP_ARGS_ALIASES for arg in argv)):
+        if (
+            not len(argv)
+            or (len(argv) >= 2 and any(arg in HELP_ARGS_ALIASES for arg in argv))
+            or argv[0].startswith("-")
+        ):
             logger.debug("Help argument or no command provided, falling back to help command")
             argv = ["help", *argv]
 

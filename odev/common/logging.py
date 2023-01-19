@@ -30,13 +30,17 @@ __all__ = ["logging", "console", "LOG_LEVEL"]
 # --- Logging configuration ----------------------------------------------------
 # Infer log level from command line arguments or default to INFO
 
+LOG_LEVEL = "INFO"
+
 __log_level = re.search(
     r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)",
     " ".join(sys.argv),
     re.IGNORECASE,
 )
 
-LOG_LEVEL = __log_level.group(1).upper() if __log_level else "INFO"
+if __log_level:
+    LOG_LEVEL = str(__log_level.group(1)).upper()
+    sys.argv = " ".join(sys.argv).replace(__log_level.group(0), "").split()
 
 SILENCED_LOGGERS = ["git.cmd", "asyncio", "urllib3", "rich", "pip._internal"]
 
