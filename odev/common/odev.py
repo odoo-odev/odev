@@ -21,7 +21,7 @@ from odev.commands.utilities.help import HELP_ARGS_ALIASES
 from odev.common import bash, prompt, style
 from odev.common.commands.base import BaseCommand, CommandError, CommandType
 from odev.common.config import ConfigManager
-from odev.common.logging import logging
+from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.constants import DEFAULT_DATETIME_FORMAT
 
@@ -108,7 +108,7 @@ class Odev:
     def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
         logger.debug("Restarting odev")
-        os.execv(self.executable.as_posix(), sys.argv)
+        os.execv(self.executable.as_posix(), [*sys.argv, f"--log-level={LOG_LEVEL}"])
 
     def check_upgrade(self) -> bool:
         """Check whether the current version of odev is the latest available version.
