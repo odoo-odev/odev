@@ -203,9 +203,13 @@ class BaseCommand(ABC):
 
         return None
 
-    def print(self, *args: Any, **kwargs: Any) -> None:
+    def print(self, text: str, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
-        self.framework._console.print(*args, **kwargs)
+        if self.framework._console.is_terminal and self.framework._console.height < len(text.splitlines()):
+            with self.framework._console.pager(styles=not self.framework._console.is_dumb_terminal):
+                self.framework._console.print(text, *args, **kwargs)
+        else:
+            self.framework._console.print(text, *args, **kwargs)
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""

@@ -158,12 +158,12 @@ class HelpCommand(commands.BaseCommand):
         """
         return "\n".join(sorted(filter(lambda name: not name.startswith("-"), self.framework.commands.keys())))
 
-    def print(self, message: str) -> None:
+    def print(self, text: str, *args, **kwargs) -> None:
         """Print a message to the standard output.
 
         :param message: The message to print.
         """
-        super().print(textwrap.dedent(message).strip())
+        super().print(textwrap.dedent(text).strip(), *args, **kwargs)
 
     # --- Private Methods ------------------------------------------------------
 
