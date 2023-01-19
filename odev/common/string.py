@@ -64,5 +64,14 @@ def dedent(text: str, dedent: int = 0) -> str:
     :return: The dedented text.
     :rtype: str
     """
-    min_indent = min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())
-    return indent(textwrap.dedent(text), min_indent - dedent)
+    return indent(textwrap.dedent(text), min_indent(text) - dedent)
+
+
+def min_indent(text: str) -> int:
+    """Return the smallest indentation in a text.
+
+    :param text: The text to get the minimum indentation from.
+    :return: The minimum indentation of the text.
+    :rtype: int
+    """
+    return min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())

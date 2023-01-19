@@ -75,7 +75,7 @@ class HelpCommand(commands.BaseCommand):
             [bold][underline]Usage:[/underline] [{style.CYAN}]{usage}[/{style.CYAN}][/bold]
         """
 
-        message_indent = HelpCommand.__min_indent(message)
+        message_indent = string.min_indent(message)
         message_options_indent = message_indent + 4
         description = string.indent(command.description, message_indent)[message_indent:]
         message = message.replace("{command.description}", description)
@@ -136,7 +136,7 @@ class HelpCommand(commands.BaseCommand):
         """
 
         commands = [command for name, command in self.framework.commands.items() if name == command.name]
-        message_indent = HelpCommand.__min_indent(message)
+        message_indent = string.min_indent(message)
         commands_list = string.indent(
             string.format_options_list([(command.name, command.help) for command in commands], blanks=1),
             message_indent,
@@ -164,15 +164,3 @@ class HelpCommand(commands.BaseCommand):
         :param message: The message to print.
         """
         super().print(textwrap.dedent(text).strip(), *args, **kwargs)
-
-    # --- Private Methods ------------------------------------------------------
-
-    @classmethod
-    def __min_indent(cls, text: str) -> int:
-        """Return the minimum indentation of a text.
-
-        :param text: The text to get the minimum indentation from.
-        :return: The minimum indentation of the text.
-        :rtype: int
-        """
-        return min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())
