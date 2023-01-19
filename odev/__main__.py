@@ -8,17 +8,6 @@ from odev.common.logging import logging
 from odev.common.odev import Odev
 
 
-# Explicitly initialize relative imports if run directly
-# if not __package__:
-#     package_dir = os.path.dirname(os.path.realpath(__file__))
-#     sys.path.append(os.path.normpath(os.path.join(package_dir, "..")))
-#     __package__ = os.path.basename(package_dir)  # pylint: disable=redefined-builtin
-
-
-# from odev.structures.registry import CommandRegistry
-# from odev.utils.github import self_update
-
-
 _logger = logging.getLogger(__name__)
 
 
