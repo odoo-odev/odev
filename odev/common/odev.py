@@ -19,7 +19,7 @@ from rich.console import Console
 from odev._version import __version__
 from odev.commands.utilities.help import HELP_ARGS_ALIASES
 from odev.common import bash, prompt, style
-from odev.common.commands.base import BaseCommand, CommandType
+from odev.common.commands.base import BaseCommand, CommandError, CommandType
 from odev.common.config import ConfigManager
 from odev.common.logging import logging
 from odev.common.python import PythonEnv
@@ -174,13 +174,9 @@ class Odev:
         """Handle commands and arguments as received from the terminal."""
         argv = sys.argv[1:]
 
-        if not len(argv) or argv[0].startswith("-"):
-            logger.debug("No command provided, falling back to help command")
-            argv = ["help"]
-
-        if len(argv) >= 2 and any(arg in HELP_ARGS_ALIASES for arg in argv[1:]):
-            logger.debug("Help argument provided, falling back to help command")
-            argv = ["help", argv[0]]
+        if not len(argv) or (len(argv) >= 2 and any(arg in HELP_ARGS_ALIASES for arg in argv)):
+            logger.debug("Help argument or no command provided, falling back to help command")
+            argv = ["help", *argv]
 
         command_cls = self.commands.get(argv[0])
 
@@ -196,7 +192,11 @@ class Odev:
         logger.debug(f"Dispatching command '{command_cls.name}'")
         command = command_cls(arguments)
         command.argv = argv
-        return command.run()
+
+        try:
+            return command.run()
+        except CommandError as exception:
+            return logger.critical(exception)
 
     # --- Private methods ------------------------------------------------------
 

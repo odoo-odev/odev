@@ -31,6 +31,19 @@ CommandType = Type["BaseCommand"]
 logger = logging.getLogger(__name__)
 
 
+class CommandError(Exception):
+    """Custom exception for errors raised during commands execution."""
+
+    def __init__(self, command: "BaseCommand", *args, **kwargs):
+        """
+        Initialize the exception.
+
+        :param command: the command that raised the exception
+        """
+        super().__init__(*args, **kwargs)
+        self.command: "BaseCommand" = command
+
+
 class BaseCommand(ABC):
     """Base class for handling commands."""
 
@@ -193,6 +206,10 @@ class BaseCommand(ABC):
     def print(self, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
         self.framework._console.print(*args, **kwargs)
+
+    def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
+        """Build an instance of CommandError ready to be raised."""
+        return CommandError(self, message, *args, **kwargs)
 
     # --- Private methods ------------------------------------------------------
 

@@ -61,7 +61,7 @@ class HelpCommand(commands.BaseCommand):
         command = self.framework.commands.get(self.args.command)
 
         if command is None:
-            raise Exception(f"Command {self.args.command} not found.")
+            raise self.error(f"Cannot display help for inexistent command '{self.args.command}'")
 
         executable = self.framework.executable.stem
         parser = command.prepare_parser()
