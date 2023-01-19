@@ -1,9 +1,11 @@
 """Odev base command class for CLI and programmatic use."""
 
 import inspect
+import re
 import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
+from io import StringIO
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -17,12 +19,16 @@ from typing import (
 )
 
 from odev.common import string
+from odev.common.logging import logging
 
 
 if TYPE_CHECKING:
     from odev.common.odev import Odev
 
 CommandType = Type["BaseCommand"]
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseCommand(ABC):
@@ -82,9 +88,10 @@ class BaseCommand(ABC):
         raise NotImplementedError()
 
     @classmethod
-    def prepare_command(cls) -> None:
+    def prepare_command(cls, framework: "Odev") -> None:
         """Set proper attributes on the command class and provide inheritance from parent classes."""
         cls._is_abstract = inspect.isabstract(cls) or ABC in cls.__bases__
+        cls.framework = framework
         cls.name = (cls.name or cls.__name__).lower()
         cls.help = string.normalize_indent(
             cls.__dict__.get("help") or cls.__doc__ or cls.help or sys.modules[cls.__module__].__doc__ or ""
@@ -142,6 +149,46 @@ class BaseCommand(ABC):
         )
         cls.prepare_arguments(parser)
         return parser
+
+    @classmethod
+    def parse_arguments(cls, argv: List[str]) -> Namespace:
+        """Parse arguments for the command subclass.
+
+        :param argv: the arguments to parse.
+        :return: instance of :class:`Namespace` with the parsed arguments
+        """
+        parser = cls.prepare_parser()
+
+        with StringIO() as stderr:
+            sys.stderr = stderr
+
+            try:
+                arguments = parser.parse_args(argv)
+            except SystemExit as exception:
+                error_message = stderr.getvalue()
+                error = re.search(rf"{cls.name}: error: (.*)$", error_message, re.MULTILINE)
+                error_message = str(error.group(1)) if error else error_message
+                raise SystemExit(error_message.capitalize()) from exception
+            finally:
+                sys.stderr = sys.__stderr__
+
+        return arguments
+
+    @classmethod
+    def update_argument(cls, name: str, **values: MutableMapping[str, Any]) -> Optional[MutableMapping[str, Any]]:
+        """Find argument by name and update its properties.
+
+        :param name: the name of the argument to update
+        :param values: the values to update
+        :return: the updated argument or None if not found
+        :rtype: Optional[MutableMapping[str, Any]]
+        """
+        for arg in cls.arguments:
+            if arg["name"] == name or name in arg["aliases"]:
+                arg.update(**values)
+                return arg
+
+        return None
 
     def print(self, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""

@@ -167,15 +167,12 @@ class Odev:
             if any(name in command_names for name in self.commands.keys()):
                 raise ValueError(f"Another command {command_class.name} is already registered")
 
-            command_class.prepare_command()
-            command_class.framework = self
-
+            command_class.prepare_command(self)
             self.commands.update({name: command_class for name in command_names})
 
     def dispatch(self) -> None:
         """Handle commands and arguments as received from the terminal."""
         argv = sys.argv[1:]
-        logger.debug(f"Dispatching command '{' '.join(sys.argv)}'")
 
         if not len(argv) or argv[0].startswith("-"):
             logger.debug("No command provided, falling back to help command")
@@ -190,9 +187,13 @@ class Odev:
         if command_cls is None:
             return logger.error(f"Command {argv[0]} not found")
 
-        logger.debug(f"Dispatching command {command_cls.name}")
-        arguments_parser = command_cls.prepare_parser()
-        arguments = arguments_parser.parse_args(argv[1:])
+        try:
+            logger.debug(f"Parsing command arguments '{' '.join(argv[1:])}'")
+            arguments = command_cls.parse_arguments(argv[1:])
+        except SystemExit as exception:
+            return logger.error(exception)
+
+        logger.debug(f"Dispatching command '{command_cls.name}'")
         command = command_cls(arguments)
         command.argv = argv
         return command.run()
