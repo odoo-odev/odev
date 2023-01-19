@@ -3,8 +3,9 @@
 import textwrap
 from typing import List, Tuple
 
+from rich.markup import escape
+
 from odev.common import commands, string, style
-from odev.common.commands.base import CommandType
 from odev.common.logging import logging
 
 
@@ -25,7 +26,10 @@ class HelpCommand(commands.BaseCommand):
         {
             "aliases": ["command"],
             "nargs": "?",
-            "help": "Get help about a specific command",
+            "help": """
+                Get help about a specific command.
+                Use [bold italic]odev help[/bold italic] for a list of available commands.
+            """,
         },
         {
             "aliases": ["-1", "--one-column", "--names-only"],
@@ -61,25 +65,26 @@ class HelpCommand(commands.BaseCommand):
 
         executable = self.framework.executable.stem
         parser = command.prepare_parser()
-        usage = parser.format_usage().replace("usage:", executable).strip()
+        usage = escape(parser.format_usage().replace("usage:", executable).strip())
 
         message = f"""
             [bold {style.PURPLE}]{executable.upper()} {command.name.upper()}[/bold {style.PURPLE}]
 
             {{command.description}}
 
-            [bold]Usage: [{style.CYAN}]{usage}[/{style.CYAN}][/bold]
+            [bold][underline]Usage:[/underline] [{style.CYAN}]{usage}[/{style.CYAN}][/bold]
         """
 
-        message_indent = self.__min_indent(message)
-        description = textwrap.indent(command.description, " " * message_indent)[message_indent:]
+        message_indent = HelpCommand.__min_indent(message)
+        message_options_indent = message_indent + 4
+        description = string.indent(command.description, message_indent)[message_indent:]
         message = message.replace("{command.description}", description)
 
         if command.aliases:
             aliases = f"""
-                [bold]Aliases:[/bold] {', '.join(command.aliases)}
+                [bold underline]Aliases:[/bold underline] {', '.join(command.aliases)}
             """
-            message += textwrap.indent(textwrap.dedent(aliases), " " * message_indent)
+            message += string.dedent(aliases, message_options_indent - message_indent)
 
         positional_arguments: List[Tuple[str, str]] = [
             (arg.__dict__["dest"], string.normalize_indent(arg.__dict__["help"]))
@@ -87,12 +92,12 @@ class HelpCommand(commands.BaseCommand):
         ]
 
         if positional_arguments:
-            arguments_list = self.__arguments_to_list(positional_arguments, message_indent)
             positionals = f"""
-                [bold]Positional Arguments:[/bold]
-                {arguments_list}
+                [bold underline]Positional Arguments:[/bold underline]
+
+                {string.format_options_list(positional_arguments, message_options_indent)}
             """
-            message += textwrap.indent(textwrap.dedent(positionals), " " * message_indent)
+            message += string.dedent(positionals, message_options_indent - message_indent)
 
         optional_arguments: List[Tuple[str, str]] = [
             (", ".join(arg.__dict__["option_strings"]), string.normalize_indent(arg.__dict__["help"]))
@@ -100,12 +105,12 @@ class HelpCommand(commands.BaseCommand):
         ]
 
         if optional_arguments:
-            arguments_list = self.__arguments_to_list(optional_arguments, message_indent)
             optionals = f"""
-                [bold]Optional Arguments:[/bold]
-                {arguments_list}
+                [bold underline]Optional Arguments:[/bold underline]
+
+                {string.format_options_list(optional_arguments, message_options_indent)}
             """
-            message += textwrap.indent(textwrap.dedent(optionals), " " * message_indent)
+            message += string.dedent(optionals, message_options_indent - message_indent)
 
         return message
 
@@ -131,10 +136,11 @@ class HelpCommand(commands.BaseCommand):
         """
 
         commands = [command for name, command in self.framework.commands.items() if name == command.name]
-        commands_indent = max(len(command.name) for command in commands)
-        commands_list = ("\n" * 2).join(self.__command_short_help(command, commands_indent) for command in commands)
-        message_indent = self.__min_indent(message)
-        commands_list = textwrap.indent(commands_list, " " * message_indent)[message_indent:]
+        message_indent = HelpCommand.__min_indent(message)
+        commands_list = string.indent(
+            string.format_options_list([(command.name, command.help) for command in commands], blanks=1),
+            message_indent,
+        )[message_indent:]
 
         return f"""
             {message.rstrip()}
@@ -161,29 +167,8 @@ class HelpCommand(commands.BaseCommand):
 
     # --- Private Methods ------------------------------------------------------
 
-    def __short_help(self, name: str, description: str, indent: int = 0) -> str:
-        """Return the short help formatted for a name and its description.
-
-        :param name: The name of the element.
-        :param description: The description of the element.
-        :param indent: The number of spaces to indent the help.
-        :return: The short help of the element.
-        :rtype: str
-        """
-        help_text = textwrap.indent(description, " " * (indent + 4))[len(name) :]
-        return f"[bold]{name}[/bold]{help_text}"
-
-    def __command_short_help(self, command: CommandType, indent: int = 0) -> str:
-        """Return the short help of a command.
-
-        :param command: The command to get the short help from.
-        :param indent: The number of spaces to indent the help.
-        :return: The short help of the command.
-        :rtype: str
-        """
-        return self.__short_help(command.name, command.help, indent)
-
-    def __min_indent(self, text: str) -> int:
+    @classmethod
+    def __min_indent(cls, text: str) -> int:
         """Return the minimum indentation of a text.
 
         :param text: The text to get the minimum indentation from.
@@ -191,15 +176,3 @@ class HelpCommand(commands.BaseCommand):
         :rtype: int
         """
         return min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())
-
-    def __arguments_to_list(self, arguments: List[Tuple[str, str]], indent: int = 0) -> str:
-        """Return the list of arguments formatted as a string.
-
-        :param arguments: The list of arguments to format.
-        :param indent: The number of spaces to indent the list.
-        :return: The list of arguments formatted as a string.
-        :rtype: str
-        """
-        arguments_indent = max(len(arg[0]) for arg in arguments)
-        arguments_list: str = "\n".join([self.__short_help(*arg, arguments_indent) for arg in arguments])
-        return textwrap.indent(arguments_list, " " * (indent + 8))[indent + 4 :]
