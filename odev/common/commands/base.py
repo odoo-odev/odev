@@ -25,7 +25,7 @@ from odev.common.logging import logging
 if TYPE_CHECKING:
     from odev.common.odev import Odev
 
-CommandType = Type["BaseCommand"]
+CommandType = Type["Command"]
 
 
 logger = logging.getLogger(__name__)
@@ -34,17 +34,17 @@ logger = logging.getLogger(__name__)
 class CommandError(Exception):
     """Custom exception for errors raised during commands execution."""
 
-    def __init__(self, command: "BaseCommand", *args, **kwargs):
+    def __init__(self, command: "Command", *args, **kwargs):
         """
         Initialize the exception.
 
         :param command: the command that raised the exception
         """
         super().__init__(*args, **kwargs)
-        self.command: "BaseCommand" = command
+        self.command: "Command" = command
 
 
-class BaseCommand(ABC):
+class Command(ABC):
     """Base class for handling commands."""
 
     name: ClassVar[str]
@@ -221,5 +221,5 @@ class BaseCommand(ABC):
     def __reversed_mro(cls):
         """Return the reversed MRO of the class, excluding non command-based classes."""
         for base_cls in reversed(cls.mro()):
-            if issubclass(base_cls, BaseCommand):
+            if issubclass(base_cls, Command):
                 yield base_cls

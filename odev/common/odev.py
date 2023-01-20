@@ -19,7 +19,7 @@ from rich.console import Console
 from odev._version import __version__
 from odev.commands.utilities.help import HELP_ARGS_ALIASES
 from odev.common import bash, prompt, style
-from odev.common.commands.base import BaseCommand, CommandError, CommandType
+from odev.common.commands.base import Command, CommandError, CommandType
 from odev.common.config import ConfigManager
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
@@ -211,7 +211,7 @@ class Odev:
         :return: Whether the module attribute is a command
         :rtype: bool
         """
-        return inspect.isclass(attribute) and issubclass(attribute, BaseCommand)
+        return inspect.isclass(attribute) and issubclass(attribute, Command)
 
     def __git_branch_behind(self) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.

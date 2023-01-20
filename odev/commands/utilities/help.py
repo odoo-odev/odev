@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 HELP_ARGS_ALIASES = ["-h", "--help"]
 
 
-class HelpCommand(commands.BaseCommand):
+class HelpCommand(commands.Command):
     """Display extensive help about the selected command or a generic help message
     lightly covering all available commands.
     """

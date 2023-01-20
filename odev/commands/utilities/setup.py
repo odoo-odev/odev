@@ -16,7 +16,7 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-class SetupCommand(commands.BaseCommand):
+class SetupCommand(commands.Command):
     """Re-run odev's setup and allow reconfiguring parts of it.
     A category can be provided to run a specific part of the setup only.
     """
