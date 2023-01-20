@@ -3,7 +3,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import time
 from base64 import b64encode
@@ -34,6 +33,7 @@ from odev.utils import logging, odoo
 from odev.utils.credentials import CredentialsHelper
 from odev.utils.github import is_git_repo
 from odev.utils.odoo import get_manifest, is_really_module, list_submodule_addons
+from odev.utils.pre_commit import fetch_pre_commit_config
 from odev.utils.rpc import OdooRPC
 from odev.utils.shconnector import get_sh_connector
 
@@ -342,30 +342,11 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
         # -------------------------------------------------------------
         # Run pre-commit on modules and run `odoo-bin cloc` again
 
-        pre_commit_organization = "odoo-ps"
-        pre_commit_repo_name = f"{pre_commit_organization}/psbe-ps-tech-tools"
-        pre_commit_branch = f"{project_info['odoo_branch']}-pre-commit-config"
-        pre_commit_repo_path = os.path.join(self.config["odev"].get("paths", "dev"), pre_commit_repo_name)
-
         try:
-            if not is_git_repo(pre_commit_repo_path):
-                clone.CloneCommand(args=self.args).clone(
-                    {
-                        "repo": pre_commit_repo_name,
-                        "organization": pre_commit_organization,
-                        "branch": pre_commit_branch,
-                    }
-                )
-
-            pre_commit_repo = Repo(pre_commit_repo_path)
-            pre_commit_repo.git.checkout(pre_commit_branch)
-            pre_commit_repo.git.pull()
-        except GitCommandError:
-            _logger.warning(f"No pre-commit configuration found for Odoo version {project_info['odoo_branch']}")
+            fetch_pre_commit_config(dst_path=git_repo_path, version=project_info["odoo_branch"])
+        except Exception:
+            _logger.warning(f"Unable to get pre-commit configuration for Odoo version {project_info['odoo_branch']}")
         else:
-            for file in filter(lambda f: os.path.isfile(f), os.listdir(pre_commit_repo_path)):
-                shutil.copy(os.path.join(pre_commit_repo_path, file), git_repo_path)
-
             _logger.info(f"Running pre-commit in {git_repo_path}")
             pre_commit_config = os.path.join(git_repo_path, PRE_COMMIT_CONFIG_FILE)
 
@@ -384,10 +365,6 @@ class OdooSHMonitorCommand(commands.OdooComCliMixin, commands.Command):
         # Cleanup pre-commit changes
         git_repo.git.clean("-df")
         git_repo.git.checkout("--", ".")
-
-        # Checkout again if we are testing psbe-ps-tech-tools (which should never happen)
-        if pre_commit_repo_path == git_repo_path:
-            git_repo.git.checkout(prod_branch)
 
         # -------------------------------------------------------------
         # Update project with modules on https://ps-tools.odoo.com/

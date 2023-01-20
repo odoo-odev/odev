@@ -292,3 +292,7 @@ Generate a config file to use VSCode for debugging with two available configurat
 
 Create your daily timesheets. Uses configs defined in `.config/odev/timesheet.xml` file.
 [Check the docs for more info.](doc/timesheet.md)
+
+### `pre-commit`
+
+Download the latest pre-commit configuration to the repository in the current working directory.

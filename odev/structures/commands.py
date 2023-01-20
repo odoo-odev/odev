@@ -42,7 +42,6 @@ from typing import (
 
 import imgkit
 import odoolib
-from copier import copy
 from github import Github
 from packaging.version import Version
 
@@ -84,6 +83,7 @@ from odev.utils.odoo import (
     parse_odoo_version,
 )
 from odev.utils.os import mkdir
+from odev.utils.pre_commit import fetch_pre_commit_config
 from odev.utils.psql import PSQL
 from odev.utils.shconnector import ShConnector, get_sh_connector
 from odev.utils.signal import capture_signals
@@ -1528,13 +1528,7 @@ class ExportCommand(Command, ABC, Template):
 
         odoo_version = self._get_version(True)
         if not self.no_pre_commit and odoo_version >= Version("13.0"):
-            copy(
-                "git@github.com:odoo-ps/psbe-ps-tech-tools.git",
-                dst_path=self.args.path,
-                vcs_ref=f"{odoo_version}-pre-commit-config",
-                force=True,
-                quiet=True,
-            )
+            fetch_pre_commit_config(dst_path=self.args.path, version=odoo_version)
 
     def _generate_mig_script(self):
         if self.type == "saas":

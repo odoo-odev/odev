@@ -17,3 +17,7 @@ class MissingTrackingBranch(GitException):
 
 class HeadRefMismatch(GitException):
     """Raised when HEAD points to a different branch than the specified one"""
+
+
+class GitEmptyStagingException(GitException):
+    """Raised when no files were staged to commit"""
