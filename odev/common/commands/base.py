@@ -82,11 +82,6 @@ class Command(ABC):
     ]
     """Arguments definitions to extend commands capabilities."""
 
-    _is_abstract: ClassVar[bool]
-    """Indicates if the command is abstract. Abstract commands are not registered and cannot be executed,
-    they can only be inherited from.
-    """
-
     def __init__(self, args: Namespace):
         """
         Initialize the command runner.
@@ -101,9 +96,15 @@ class Command(ABC):
         raise NotImplementedError()
 
     @classmethod
+    def is_abstract(cls) -> bool:
+        """Indicates if the command is abstract. Abstract commands are not registered and cannot be executed,
+        they can only be inherited from.
+        """
+        return inspect.isabstract(cls) or ABC in cls.__bases__
+
+    @classmethod
     def prepare_command(cls, framework: "Odev") -> None:
         """Set proper attributes on the command class and provide inheritance from parent classes."""
-        cls._is_abstract = inspect.isabstract(cls) or ABC in cls.__bases__
         cls.framework = framework
         cls.name = (cls.name or cls.__name__).lower()
         cls.help = string.normalize_indent(

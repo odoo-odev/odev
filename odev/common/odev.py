@@ -213,7 +213,7 @@ class Odev:
         :return: Whether the module attribute is a command
         :rtype: bool
         """
-        return inspect.isclass(attribute) and issubclass(attribute, Command)
+        return inspect.isclass(attribute) and issubclass(attribute, Command) and not attribute.is_abstract()
 
     def __git_branch_behind(self) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.
