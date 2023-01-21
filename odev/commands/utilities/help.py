@@ -5,14 +5,15 @@ from typing import List, Tuple
 
 from rich.markup import escape
 
-from odev.common import commands, string, style
+from odev.common import string, style
+from odev.common.commands import Command
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class HelpCommand(commands.Command):
+class HelpCommand(Command):
     """Display extensive help about the selected command or a generic help message
     lightly covering all available commands.
     """

@@ -1,3 +1,3 @@
 """Odev base command classes."""
 
-from .base import *
+from .base import Command, CommandError

@@ -9,14 +9,15 @@ from pathlib import Path
 from types import ModuleType
 from typing import Generator, List, Optional, Tuple
 
-from odev.common import commands, string
+from odev.common import string
+from odev.common.commands import Command
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class SetupCommand(commands.Command):
+class SetupCommand(Command):
     """Re-run odev's setup and allow reconfiguring parts of it.
     A category can be provided to run a specific part of the setup only.
     """
