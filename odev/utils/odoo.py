@@ -131,9 +131,9 @@ def get_python_version(odoo_version: str) -> str:
         16: "3.10",
         15: "3.8",
         14: "3.8",
-        13: "3.6",
-        12: "3.6",
-        11: "3.5",
+        13: "3.7",
+        12: "3.7",
+        11: "3.7",
     }
     odoo_version_major: int = parse_odoo_version(odoo_version).major
     python_version = odoo_python_versions.get(odoo_version_major)
@@ -251,7 +251,7 @@ def prepare_venv(venv_parent_dir, py_version: str, venv_name=DEFAULT_VENV_NAME, 
                 "Please check the correct version of Python is installed on your computer:\n"
                 "\tsudo add-apt-repository ppa:deadsnakes/ppa\n"
                 "\tsudo apt update\n"
-                f"\tsudo apt install -y python{py_version} python{py_version}-dev"
+                f"\tsudo apt install -y python{py_version} python{py_version}-dev python{py_version}-distutils"
             )
 
 
@@ -279,7 +279,7 @@ def prepare_requirements(
             return
 
     _logger.info(f"Checking for missing dependencies for {version} in requirements.txt")
-    install_packages(packages="pip setuptools pudb ipdb websocket-client", python_bin=python_bin)
+    install_packages(packages="pip pudb ipdb websocket-client", python_bin=python_bin)
     for addon_path in all_addons:
         try:
             install_packages(requirements_dir=addon_path, python_bin=python_bin)
@@ -291,6 +291,12 @@ def prepare_requirements(
         install_packages(packages="psycopg2==2.7.3.1", python_bin=python_bin)
         # use lessc v3 for odoo < 10
         subprocess.run("npm install less@3.0.4 less-plugin-clean-css", cwd=version_path, shell=True)
+
+    if parse_odoo_version(version).major <= 13:
+        # python < 3.8 is not compatible with setuptools 58.0.0
+        install_packages(packages="setuptools<58.0.0", python_bin=python_bin)
+    else:
+        install_packages(packages="setuptools", python_bin=python_bin)
 
 
 def run_odoo(
