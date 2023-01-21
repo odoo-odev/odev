@@ -75,7 +75,7 @@ repos:
       rev: v0.931
       hooks:
           - id: mypy
-            exclude: (odev/upgrades|static/util\.py)
+            exclude: (odev/common/mixins/connectors\.pyi)
             args:
                 - --no-strict-optional
                 - --ignore-missing-imports
