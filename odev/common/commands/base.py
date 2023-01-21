@@ -58,10 +58,10 @@ class Command(ABC):
     to sibling commands.
     """
 
-    help: ClassVar[Optional[str]] = None
+    help: ClassVar[str] = None
     """Optional help information on what the command does."""
 
-    description: ClassVar[Optional[str]] = None
+    description: ClassVar[str] = None
     """Optional short help information on what the command does.
     If omitted, the class or source module docstring will be used instead.
     """
@@ -188,7 +188,7 @@ class Command(ABC):
         return arguments
 
     @classmethod
-    def update_argument(cls, name: str, **values: MutableMapping[str, Any]) -> Optional[MutableMapping[str, Any]]:
+    def update_argument(cls, name: str, values: MutableMapping[str, Any]) -> Optional[MutableMapping[str, Any]]:
         """Find argument by name and update its properties.
 
         :param name: the name of the argument to update

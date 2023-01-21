@@ -12,16 +12,13 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-HELP_ARGS_ALIASES = ["-h", "--help"]
-
-
 class HelpCommand(commands.Command):
     """Display extensive help about the selected command or a generic help message
     lightly covering all available commands.
     """
 
     name = "help"
-    aliases = ["h", "man", *HELP_ARGS_ALIASES]
+    aliases = ["h", "man", "-h", "--help"]
     arguments = [
         {
             "aliases": ["command"],
@@ -41,8 +38,6 @@ class HelpCommand(commands.Command):
 
     def run(self) -> None:
         """Print help about the available commands."""
-        assert self.framework
-
         if self.args.names_only:
             help_text = self.command_names()
         elif self.args.command:

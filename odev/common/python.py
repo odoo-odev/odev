@@ -44,7 +44,7 @@ class PythonEnv:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
         logger.debug(f"Creating virtual environment at {self.path}")
-        virtualenv.cli_run(["--python", self.version, self.path.as_posix()])
+        virtualenv.cli_run(["--python", str(self.version), self.path.as_posix()])
 
     def install_packages(self, packages: List[str]) -> None:
         """Install python packages.
@@ -61,16 +61,16 @@ class PythonEnv:
         """
         requirements_path = Path(path).resolve()
 
-        if requirements_path.is_dir() or requirements_path.name != "requirements.txt":
+        if requirements_path.is_dir():
             requirements_path = requirements_path / "requirements.txt"
 
         if not requirements_path.exists():
-            raise FileNotFoundError(f"No requirements.txt found under in {path}")
+            raise FileNotFoundError(f"No requirements.txt found under {path}")
 
         logger.debug(f"Installing python packages from {requirements_path}")
         bash.execute(f'{self.pip} install -r "{requirements_path}"')
 
-    def run_script(self, script: Union[Path, str], args: Optional[List[str]] = None) -> None:
+    def run_script(self, script: Union[Path, str], args: Optional[List[str]] = None):
         """Run a python script.
 
         :param path: Path to the python script to run.
@@ -82,4 +82,4 @@ class PythonEnv:
             raise FileNotFoundError(f"Python script not found at {script_path}")
 
         logger.debug(f"Running python script {script_path}")
-        bash.execute(f"{self.python} {script_path} {' '.join(args)}")
+        return bash.execute(f"{self.python} {script_path} {' '.join(args)}")

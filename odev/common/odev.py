@@ -17,7 +17,6 @@ from packaging import version
 from rich.console import Console
 
 from odev._version import __version__
-from odev.commands.utilities.help import HELP_ARGS_ALIASES
 from odev.common import bash, prompt, style
 from odev.common.commands.base import Command, CommandError, CommandType
 from odev.common.config import ConfigManager
@@ -176,7 +175,10 @@ class Odev:
 
         if (
             not len(argv)
-            or (len(argv) >= 2 and any(arg in HELP_ARGS_ALIASES for arg in argv))
+            or (
+                len(argv) >= 2
+                and any(arg in filter(lambda a: a.startswith("-"), self.commands.get("help").aliases) for arg in argv)
+            )
             or argv[0].startswith("-")
         ):
             logger.debug("Help argument or no command provided, falling back to help command")
@@ -191,7 +193,7 @@ class Odev:
             logger.debug(f"Parsing command arguments '{' '.join(argv[1:])}'")
             arguments = command_cls.parse_arguments(argv[1:])
         except SystemExit as exception:
-            return logger.error(exception)
+            return logger.error(str(exception))
 
         logger.debug(f"Dispatching command '{command_cls.name}'")
         command = command_cls(arguments)
@@ -200,7 +202,7 @@ class Odev:
         try:
             return command.run()
         except CommandError as exception:
-            return logger.critical(exception)
+            return logger.critical(str(exception))
 
     # --- Private methods ------------------------------------------------------
 

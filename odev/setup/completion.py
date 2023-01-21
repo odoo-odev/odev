@@ -16,6 +16,13 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
+# --- Values -------------------------------------------------------------------
+
+
+file_path = Path(__file__).parents[2] / "complete_odev.sh"
+comp_path = Path("~/.local/share/bash-completion/completions/complete_odev.sh").expanduser()
+
+
 # --- Setup --------------------------------------------------------------------
 
 
@@ -28,9 +35,6 @@ def setup(config: Optional[ConfigManager] = None) -> None:
 
     :param config: Configuration manager
     """
-
-    file_path = Path(__file__).parents[2] / "complete_odev.sh"
-    comp_path = Path("~/.local/share/bash-completion/completions/complete_odev.sh").expanduser()
 
     if not comp_path.parent.exists():
         logger.debug(f"Directory {comp_path.parent} does not exist, creating it")

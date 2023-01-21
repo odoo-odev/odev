@@ -7,7 +7,7 @@ from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
-from typing import Generator, List, Tuple
+from typing import Generator, List, Optional, Tuple
 
 from odev.common import commands, string
 from odev.common.logging import logging
@@ -38,7 +38,7 @@ class SetupCommand(commands.Command):
         else:
             self.run_setup()
 
-    def run_setup(self, name: str = None) -> None:
+    def run_setup(self, name: Optional[str] = None) -> None:
         """Run the entire setup."""
         for script in self.__import_setup_scripts():
             if name is None or script.__name__ == name:
@@ -48,10 +48,11 @@ class SetupCommand(commands.Command):
     def prepare_command(cls, *args, **kwargs) -> None:
         super().prepare_command(*args, **kwargs)
         scripts: List[Tuple[str, str]] = [
-            (script.__name__, string.normalize_indent(script.__doc__)) for script in cls.__import_setup_scripts()
+            (script.__name__, string.normalize_indent(script.__doc__ or "No description."))
+            for script in cls.__import_setup_scripts()
         ]
         script_names = [script[0] for script in scripts]
-        cls.update_argument("category", choices=script_names)
+        cls.update_argument("category", {"choices": script_names})
         indent = len(max(script_names, key=len))
         description = f"""
 
@@ -91,18 +92,3 @@ class SetupCommand(commands.Command):
         :rtype: bool
         """
         return inspect.ismodule(module) and hasattr(module, "setup") and callable(module.setup)
-
-    @classmethod
-    def __setup_description(cls, script: ModuleType, indent: int = 0) -> str:
-        """Return the the description of a setup script.
-
-        :param script: The module of the script to describe.
-        :param indent: The number of spaces to indent the description.
-        :return: The description of the script.
-        :rtype: str
-        """
-        help_text = textwrap.indent(
-            script.__doc__ or "No description available.",
-            " " * (indent + 4),
-        )[len(script.__name__) :].rstrip()
-        return f"{script.__name__}[italic]{help_text}[/italic]"

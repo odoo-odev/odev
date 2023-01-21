@@ -81,9 +81,13 @@ class ConfigManager(abc.MutableMapping):
 
         return self.parser
 
-    def clear(self) -> ConfigParser:  # type: ignore
+    def clear(self):
         self.parser.clear()
         return self.parser
+
+    def sections(self) -> List[str]:
+        """Return a list of section names, excluding DEFAULT"""
+        return self.parser.sections()
 
     def set(self, section: str, key: str, value: Any) -> ConfigParser:
         """
@@ -131,10 +135,6 @@ class ConfigManager(abc.MutableMapping):
 
     def __delitem__(self, section: str) -> None:
         self.parser.__delitem__(section)
-
-    def sections(self) -> List[str]:
-        """Return a list of section names, excluding DEFAULT"""
-        return self.parser.sections()
 
     def __len__(self) -> int:
         """Sections in the config file, excluding DEFAULT"""
