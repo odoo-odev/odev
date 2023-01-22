@@ -1,13 +1,24 @@
 """Mixins for commands that need to use a connector."""
 
 from pathlib import Path
-from typing import List, Type
+from typing import Callable, List, Type
 
 from odev.common.connectors import Connector, PostgresConnector
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_connected(func: Callable) -> Callable:
+    """Decorator that ensures that the connector is connected before running the decorated method."""
+
+    def wrapped(self, *args, **kwargs):
+        if not self.connector:
+            return logger.error("Connector is not initialized, use the `with` statement or call `connect` first")
+        return func(self, *args, **kwargs)
+
+    return wrapped
 
 
 class ConnectorMixin:
@@ -22,6 +33,9 @@ class ConnectorMixin:
     To remediate this, the type definition for the attribute is added to the adjacent connectors.pyi file.
     Code completion and type hinting will become available after the mixin has been used and odev has been run once.
     """
+
+    connector: Connector = None
+    """The connector instance used."""
 
     def __init__(self, *args, **kwargs):
         """Initialize the mixin and dynamically add the connector attribute to the command instance."""

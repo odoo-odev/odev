@@ -1,14 +1,27 @@
 """PostgreSQL connector."""
 
-from typing import ClassVar, Optional
+import textwrap
+from functools import lru_cache
+from typing import (
+    ClassVar,
+    List,
+    Optional,
+    Sequence,
+    Union,
+)
 
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from odev.common.connectors import Connector
+from odev.common.logging import logging
 
 
-DEFAULT_DATABASE = "template1"
+logger = logging.getLogger(__name__)
+
+
+DEFAULT_DATABASE = "postgres"
 
 
 class PostgresConnector(Connector):
@@ -32,12 +45,37 @@ class PostgresConnector(Connector):
         self._connection = psycopg2.connect(database=self.database)
         self._connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         self.cr = self._connection.cursor()
+        logger.debug(f"Connected to PSQL database '{self.database}'")
 
     def disconnect(self):
         """Disconnect from the database engine."""
         if self.cr:
             self.cr.close()
+            del self.cr
         if self._connection:
             self._connection.commit()
             self._connection.close()
             del self._connection
+        logger.debug(f"Disconnected from PSQL database '{self.database}'")
+
+    @lru_cache
+    def query(
+        self, query: Union[str, sql.SQL], params: Optional[Sequence] = None
+    ) -> Union[Optional[List[tuple]], bool]:
+        """Execute a query and return its result.
+
+        :param query: The query to execute.
+        :param params: Additional parameters to pass to the cursor.
+        """
+        assert self.cr, "The cursor is not initialized, connect first."
+
+        if isinstance(query, sql.SQL):
+            query = query.as_string(self.cr)
+
+        if isinstance(query, str):
+            query = textwrap.dedent(query).strip()
+            query_lower = query.lower()
+
+        logger.debug(f"Executing PostgreSQL query against database '{self.database}':\n{query}")
+        self.cr.execute(query, params)
+        return self.cr.fetchall() if query_lower.startswith("select") or " returning " in query_lower else True
