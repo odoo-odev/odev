@@ -1,4 +1,4 @@
-"""Base mixin for commands that need to use a connector."""
+"""Mixins for commands that need to use a connector."""
 
 from pathlib import Path
 from typing import List, Type
@@ -49,7 +49,7 @@ class ConnectorMixin:
             f"    >>> with self.{cls._connector_attribute_name}(...) as {cls._connector_attribute_name}:\n"
             f"    >>>     ...\n"
             f'    """\n\n'
-            f"    {cls._connector_attribute_name}: Type[{cls._connector_class.__name__}]\n"
+            f"    {cls._connector_attribute_name}: Type[{cls._connector_class.__name__}]  # noqa: F405\n"
         )
 
     @classmethod
