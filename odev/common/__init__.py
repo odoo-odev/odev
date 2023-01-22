@@ -10,3 +10,4 @@ from . import python
 from . import signal_handling
 from . import string
 from . import style
+from . import version
