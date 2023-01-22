@@ -1,31 +1,61 @@
 """Actions for parsing arguments with argparse."""
 
-from argparse import Action, ArgumentParser, Namespace
-from typing import Optional, Sequence, Union
+import re
+from abc import ABC, abstractmethod
+from argparse import Action as BaseAction, ArgumentParser, Namespace
+from typing import (
+    Any,
+    List,
+    Optional,
+    Sequence,
+    Union,
+)
+
+
+class Action(BaseAction, ABC):
+    """Base class for custom actions."""
+
+    def __call__(
+        self,
+        parser: ArgumentParser,
+        namespace: Namespace,
+        values: Union[str, Sequence, None],
+        option_string: Optional[str] = None,
+    ) -> None:
+        setattr(namespace, self.dest, self._transform(values))
+
+    @abstractmethod
+    def _transform_one(self, value: str) -> Any:
+        """Transform a single value."""
+
+    def _transform(self, values: Union[str, Sequence, None]) -> Optional[Any]:
+        """Transform the values passed to the action."""
+        if values is None:
+            return values
+
+        if isinstance(values, str):
+            return self._transform_one(values)
+
+        return [self._transform_one(value) for value in values]
+
+    @classmethod
+    def _action_name(cls) -> str:
+        """Return the name of the action."""
+        return "store_" + re.sub(r"(?<!^)(?=[A-Z])", "_", re.sub(r"Action$", "", cls.__name__)).lower()
 
 
 class CommaSplitAction(Action):
     """Converter for command line arguments passed as comma-separated lists of values."""
 
-    def __call__(
-        self,
-        parser: ArgumentParser,
-        namespace: Namespace,
-        values: Union[str, Sequence, None],
-        option_string: Optional[str] = None,
-    ) -> None:
-        values = values.split(",") if isinstance(values, str) else values
-        setattr(namespace, self.dest, values)
+    def _transform_one(self, value: str) -> List[str]:
+        return value.split(",")
 
 
-class OptionalStringAction(Action):
-    """Converter for command line arguments passed as an optional single string."""
+class RegexAction(Action):
+    """Converter for command line arguments passed as a string that should be compiled as a regex."""
 
-    def __call__(
-        self,
-        parser: ArgumentParser,
-        namespace: Namespace,
-        values: Union[str, Sequence, None],
-        option_string: Optional[str] = None,
-    ) -> None:
-        setattr(namespace, self.dest, values[0] if isinstance(values, list) and len(values) else values)
+    def _transform_one(self, value: str) -> re.Pattern[str]:
+        return re.compile(value)
+
+
+ACTIONS_MAPPING = {a._action_name(): a for a in Action.__subclasses__()}

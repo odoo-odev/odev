@@ -19,6 +19,7 @@ from typing import (
 )
 
 from odev.common import string
+from odev.common.actions import ACTIONS_MAPPING
 from odev.common.logging import logging
 
 
@@ -130,7 +131,7 @@ class Command(ABC):
                 merged_arg: Dict[str, Any] = dict(merged_args.pop(arg_name, {}))
                 merged_arg.update(arg)
                 merged_arg.setdefault("name", arg_name)
-                merged_arg.setdefault("aliases", [])
+                merged_arg.setdefault("aliases", [arg_name])
 
                 if arg_name not in merged_arg["aliases"] and not merged_arg["aliases"][0].startswith("-"):
                     merged_arg["aliases"].insert(0, arg_name)
@@ -146,6 +147,10 @@ class Command(ABC):
             params = dict(arg)
             params.pop("name")
             aliases = params.pop("aliases")
+
+            if "action" in params:
+                params["action"] = ACTIONS_MAPPING.get(params["action"], params["action"])
+
             parser.add_argument(*aliases, **params)
 
     @classmethod
