@@ -16,7 +16,11 @@ from typing import (
     Optional,
     Sequence,
     Type,
+    Union,
 )
+
+from rich import box
+from rich.table import Table
 
 from odev.common import string
 from odev.common.actions import ACTIONS_MAPPING
@@ -216,6 +220,27 @@ class Command(ABC):
                 self.framework._console.print(text, *args, **kwargs)
         else:
             self.framework._console.print(text, *args, **kwargs)
+
+    def table(self, columns: Union[List[str], List[MutableMapping[str, Any]]], rows: List[List[Any]]) -> None:
+        """Print a table to stdout with highlighting and theming."""
+        table = Table(
+            show_header=True,
+            header_style="bold",
+            box=box.HORIZONTALS,
+        )
+
+        for column in columns:
+            if isinstance(column, str):
+                column = {"name": column}
+
+            column.setdefault("justify", "left")
+            column_name = column.pop("name")
+            table.add_column(column_name, **column)
+
+        for row in rows:
+            table.add_row(*row)
+
+        self.framework._console.print(table)
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""
