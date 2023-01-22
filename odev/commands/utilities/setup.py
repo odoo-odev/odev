@@ -72,7 +72,7 @@ class SetupCommand(Command):
         :return: Imported setup modules
         :rtype: Generator[ModuleType]
         """
-        setup_modules = pkgutil.iter_modules([d.as_posix() for d in cls.framework.path.glob("odev/setup")])
+        setup_modules = pkgutil.iter_modules([d.as_posix() for d in cls.framework.setup_path.parent.glob("setup")])
 
         for module_info in setup_modules:
             assert isinstance(module_info.module_finder, FileFinder)

@@ -52,6 +52,9 @@ class Odev:
     upgrades_path: Path
     """Local path to the upgrades directory."""
 
+    setup_path: Path
+    """Local path to the setup directory."""
+
     executable: Path
     """Path to the current executable."""
 
@@ -65,6 +68,7 @@ class Odev:
         self.executable = Path(sys.argv[0])
         self.commands_path = self.path / "odev" / "commands"
         self.upgrades_path = self.path / "odev" / "upgrades"
+        self.setup_path = self.path / "odev" / "setup"
 
         if self.update():
             self.restart()

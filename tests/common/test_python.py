@@ -34,23 +34,23 @@ class TestCommonPython:
     def test_install_requirements(self, tmp_path):
         """Python manager should be able to install packages from requirements.txt"""
         env = python.PythonEnv(path=tmp_path, version=3.8)
-        env.install_requirements(Path(__file__).parent / "test_python")
+        env.install_requirements(Path(__file__).parents[1] / "resources")
         assert (env.path / "lib/python3.8/site-packages/pytest/__main__.py").is_file(), "pytest should be installed"
 
     def test_install_requirements_missing_file(self, tmp_path):
         """Python manager should raise if requirements.txt is missing"""
         env = python.PythonEnv(path=tmp_path, version=3.8)
         with pytest.raises(FileNotFoundError) as _:
-            env.install_requirements(Path(__file__).parent / "test_python/missing")
+            env.install_requirements(Path(__file__).parents[1] / "resources/missing")
 
     def test_run_script(self, tmp_path):
         """Python manager should be able to run a script"""
         env = python.PythonEnv(path=tmp_path, version=3.8)
-        result = env.run_script(Path(__file__).parent / "test_python/test_script.py", ["'Hello, odev!'"])
+        result = env.run_script(Path(__file__).parents[1] / "resources/test_script.py", ["'Hello, odev!'"])
         assert result.stdout == b"Hello, odev!\n", "script should return the correct output"
 
     def test_run_script_missing_file(self, tmp_path):
         """Python manager should raise if script is missing"""
         env = python.PythonEnv(path=tmp_path, version=3.8)
         with pytest.raises(FileNotFoundError) as _:
-            env.run_script(Path(__file__).parent / "test_python/missing")
+            env.run_script(Path(__file__).parents[1] / "resources/missing")
