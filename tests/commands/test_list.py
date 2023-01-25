@@ -1,4 +1,4 @@
-from odev.commands.local.list import ListCommand
+from odev.commands.utilities.list import ListCommand
 from odev.common.commands import CommandError
 from tests.fixtures import (
     CaptureOutput,
