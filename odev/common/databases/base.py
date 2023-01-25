@@ -1,7 +1,7 @@
 """Handling of database information."""
 
 from abc import ABC
-from typing import Any, Mapping
+from typing import Any, MutableMapping
 
 
 class Database(ABC):
@@ -14,6 +14,6 @@ class Database(ABC):
         """Initialize the database."""
         self.name = name
 
-    def info(self) -> Mapping[str, Any]:
+    def info(self) -> MutableMapping[str, Any]:
         """Return information about the database."""
         return {"name": self.name}

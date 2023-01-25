@@ -16,7 +16,6 @@ from typing import (
     Optional,
     Sequence,
     Type,
-    Union,
 )
 
 from rich import box
@@ -221,7 +220,7 @@ class Command(ABC):
         else:
             self.framework._console.print(text, *args, **kwargs)
 
-    def table(self, columns: Union[List[str], List[MutableMapping[str, Any]]], rows: List[List[Any]]) -> None:
+    def table(self, columns: List[MutableMapping[str, Any]], rows: List[List[Any]]) -> None:
         """Print a table to stdout with highlighting and theming."""
         table = Table(
             show_header=True,
@@ -230,9 +229,6 @@ class Command(ABC):
         )
 
         for column in columns:
-            if isinstance(column, str):
-                column = {"name": column}
-
             column.setdefault("justify", "left")
             column_name = column.pop("name")
             table.add_column(column_name, **column)

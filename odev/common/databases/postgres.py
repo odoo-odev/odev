@@ -1,6 +1,6 @@
 """PostgreSQL database class."""
 
-from typing import Optional
+from typing import Any, MutableMapping, Optional
 
 from odev.common.databases import Database
 from odev.common.mixins import PostgresConnectorMixin
@@ -21,7 +21,7 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
         self.psql(self.name).__exit__(*args)
         del self.connector
 
-    def info(self) -> dict:
+    def info(self) -> MutableMapping[str, Any]:
         return {
             **super().info(),
             "is_odoo": self.is_odoo(),

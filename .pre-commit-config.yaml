@@ -133,7 +133,7 @@ repos:
             args: ["--fix=lf"]
           - id: name-tests-test
             args: ["--django"]
-            exclude: ^tests/resources/
+            exclude: ^tests/(resources|fixtures)/
           - id: requirements-txt-fixer
           - id: trailing-whitespace
 

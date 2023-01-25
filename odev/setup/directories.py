@@ -74,8 +74,8 @@ def setup(config: Optional[ConfigManager] = None) -> None:
 
     config_section, config_option_standard, config_option_custom = "paths", "odoo", "dev"
 
-    old_standard: Path = __resolve(Path(config.get(config_section, config_option_standard), "~/odoo/versions"))
-    old_custom: Path = __resolve(Path(config.get(config_section, config_option_custom), "~/odoo/dev"))
+    old_standard: Path = __resolve(Path(config.get(config_section, config_option_standard, "~/odoo/versions")))
+    old_custom: Path = __resolve(Path(config.get(config_section, config_option_custom, "~/odoo/dev")))
 
     while standard is None or custom is None:
         while standard is None:
