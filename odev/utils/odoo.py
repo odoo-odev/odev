@@ -7,6 +7,7 @@ import subprocess
 from datetime import datetime, timedelta
 from subprocess import DEVNULL
 from typing import Any, List, Mapping, Optional
+from urllib.parse import urlparse
 
 import requests
 from packaging.version import Version
@@ -23,7 +24,7 @@ from odev.constants import (
     PRE_11_SAAS_TO_MAJOR_VERSIONS,
     RE_ODOO_DBNAME,
 )
-from odev.exceptions import InvalidOdooDatabase, InvalidVersion
+from odev.exceptions import InvalidOdooDatabase, InvalidVersion, OdooException
 from odev.utils import logging
 from odev.utils.config import ConfigManager
 from odev.utils.github import get_worktree_list, git_clone_or_pull, worktree_clone_or_pull
@@ -382,11 +383,14 @@ def list_submodule_addons(paths: List[str]) -> List[str]:
     return list({os.path.normpath(path) for path in paths + submodule_addons})
 
 
-def sanitize_url(url, remove_after=".odoo.com"):
-    re_http = re.compile(r"^https?://")
-    url_https = f"""{'https://' if not re_http.match(url) else ''}{url}"""
-    return url_https[: url_https.index(remove_after) + len(remove_after)]
+def sanitize_url(url):
+    subdomain = get_database_name_from_url(url)
+    return f"https://{subdomain}.odoo.com"
 
 
 def get_database_name_from_url(url):
-    return url.split("/")[-1].replace(".odoo.com", "")
+    url = urlparse(url)
+    subdomain = url.netloc.split(".")[0]
+    if subdomain in ("www", "odoo") or not url.netloc.endswith("odoo.com"):
+        raise OdooException("Invalid URL: use format `subdomain.odoo.com`")
+    return subdomain
