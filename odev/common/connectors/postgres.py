@@ -45,7 +45,7 @@ class PostgresConnector(Connector):
         self._connection = psycopg2.connect(database=self.database)
         self._connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         self.cr = self._connection.cursor()
-        logger.debug(f"Connected to PSQL database '{self.database}'")
+        logger.debug(f"Connected to database {self.database!r}")
 
     def disconnect(self):
         """Disconnect from the database engine."""
@@ -56,7 +56,7 @@ class PostgresConnector(Connector):
             self._connection.commit()
             self._connection.close()
             del self._connection
-        logger.debug(f"Disconnected from PSQL database '{self.database}'")
+        logger.debug(f"Disconnected from database {self.database!r}")
 
     @lru_cache
     def query(
@@ -76,6 +76,6 @@ class PostgresConnector(Connector):
             query = textwrap.dedent(query).strip()
             query_lower = query.lower()
 
-        logger.debug(f"Executing PostgreSQL query against database '{self.database}':\n{query}")
+        logger.debug(f"Executing PostgreSQL query against database {self.database!r}':\n{query}")
         self.cr.execute(query, params)
         return self.cr.fetchall() if query_lower.startswith("select") or " returning " in query_lower else True

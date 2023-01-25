@@ -164,11 +164,11 @@ class Odev:
     def register_commands(self) -> None:
         """Register all commands from the commands directory."""
         for command_class in self.import_commands():
-            logger.debug(f"Registering command '{command_class.name}'")
+            logger.debug(f"Registering command {command_class.name!r}")
             command_names = [command_class.name] + (list(command_class.aliases) or [])
 
             if any(name in command_names for name in self.commands.keys()):
-                raise ValueError(f"Another command {command_class.name} is already registered")
+                raise ValueError(f"Another command {command_class.name!r} is already registered")
 
             command_class.prepare_command(self)
             self.commands.update({name: command_class for name in command_names})
@@ -191,7 +191,7 @@ class Odev:
         command_cls = self.commands.get(argv[0])
 
         if command_cls is None:
-            return logger.error(f"Command {argv[0]} not found")
+            return logger.error(f"Command {argv[0]!r} not found")
 
         try:
             logger.debug(f"Parsing command arguments '{' '.join(argv[1:])}'")
@@ -199,11 +199,11 @@ class Odev:
         except SystemExit as exception:
             return logger.error(str(exception))
 
-        logger.debug(f"Dispatching command '{command_cls.name}'")
         command = command_cls(arguments)
         command.argv = argv
 
         try:
+            logger.debug(f"Dispatching {command!r}")
             return command.run()
         except CommandError as exception:
             return logger.critical(str(exception))

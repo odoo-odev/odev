@@ -94,6 +94,13 @@ class Command(ABC):
         """
         self.args: Namespace = args
 
+    def __repr__(self) -> str:
+        args = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
+        return f"{self.__class__.__name__}({args})"
+
+    def __str__(self) -> str:
+        return self.name
+
     @abstractmethod
     def run(self) -> None:
         """Executes the command."""

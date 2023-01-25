@@ -18,6 +18,14 @@ class Database(ABC):
         """Initialize the database."""
         self.name = name
 
+    def __repr__(self):
+        """Return the representation of the database."""
+        return f"{self.__class__.__name__}({self.name!r})"
+
+    def __str__(self):
+        """Return the string representation of the database."""
+        return self.name
+
     @abstractmethod
     def __enter__(self):
         """Setup connection to the required underlying systems."""
@@ -101,3 +109,7 @@ class Database(ABC):
     @abstractmethod
     def odoo_rpc_port(self) -> Optional[int]:
         """Return the port to access the database."""
+
+    @abstractmethod
+    def exists(self) -> bool:
+        """Return whether the database exists."""
