@@ -1,7 +1,7 @@
 """Shared methods for working with strings."""
 
 import textwrap
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 
 def normalize_indent(text: str) -> str:
@@ -75,3 +75,18 @@ def min_indent(text: str) -> int:
     :rtype: int
     """
     return min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())
+
+
+def bytes_size(size: Union[int, float]) -> str:
+    """Formats a number to its human readable representation in bytes-units.
+
+    :param size: The number to format.
+    :param suffix: The suffix to add to the number.
+    :return: The formatted number.
+    :rtype: str
+    """
+    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+        if abs(size) < 1024.0:
+            return f"{size:3.1f} {unit}B"
+        size /= 1024.0
+    return f"{size:.1f} YB"

@@ -1,6 +1,5 @@
 from odev.commands.local.list import ListCommand
 from odev.common.commands import CommandError
-from odev.common.databases import Database
 from tests.fixtures import (
     CaptureOutput,
     Patch,
@@ -16,7 +15,7 @@ class TestCommandList:
         setup_command_class(ListCommand)
 
     def get_database_info_mock(self, database: str):
-        return Database(database).info()
+        return {"name": database}
 
     def test_list_names_only(self):
         """Test running the command with the --names-only argument.
@@ -24,7 +23,11 @@ class TestCommandList:
         """
         command = setup_command(ListCommand, ["--names-only"])
 
-        with CaptureOutput() as output, Patch(command.psql, "query", return_value=[("test1",), ("test2",)]):
+        with (
+            CaptureOutput() as output,
+            Patch(command.psql, "query", return_value=[("test1",), ("test2",)]),
+            Patch(command, "is_odoo", return_value=True),
+        ):
             command.run()
 
         assert "test1\n" in output.stdout
@@ -36,8 +39,7 @@ class TestCommandList:
         """
         command = setup_command(ListCommand)
 
-        with Raises(CommandError) as error, Patch(command.psql, "query") as mock:
-            mock.return_value = []
+        with Raises(CommandError) as error, Patch(command.psql, "query", return_value=[]):
             command.run()
 
         assert error.match("No database found")
@@ -52,6 +54,7 @@ class TestCommandList:
             CaptureOutput() as output,
             Patch(command.psql, "query", return_value=[("test1",), ("test2",)]),
             Patch(command, "get_database_info", side_effect=self.get_database_info_mock),
+            Patch(command, "is_odoo", return_value=True),
         ):
             command.run()
 
@@ -64,8 +67,7 @@ class TestCommandList:
         """
         command = setup_command(ListCommand, ["--expression", "no-match"])
 
-        with Raises(CommandError) as error, Patch(command.psql, "query") as mock:
-            mock.return_value = [("test1",), ("test2",)]
+        with Raises(CommandError) as error, Patch(command.psql, "query", return_value=[("test1",), ("test2",)]):
             command.run()
 
         assert error.match("No database found matching pattern 'no-match'")

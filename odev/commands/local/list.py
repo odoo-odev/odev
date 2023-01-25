@@ -1,8 +1,16 @@
 """Gets help about commands."""
 
 import collections
-from typing import Any, List, MutableMapping, Tuple
+from typing import (
+    Any,
+    List,
+    MutableMapping,
+    Sequence,
+    Tuple,
+)
+from urllib.parse import urlparse
 
+from odev.common import string, style
 from odev.common.commands import Command
 from odev.common.databases import PostgresDatabase
 from odev.common.logging import logging
@@ -23,14 +31,18 @@ _Mapped = collections.namedtuple("_Mapped", ["info_key", "title", "justify", "di
 # - display: Whether to display the column in the table.
 #     Either a boolean or a callable that takes the commands arguments and returns a boolean.
 # - format: A callable that takes the value of the database information and returns
-#    the formatted value to display in the table.
+#     the formatted value to display in the table.
 TABLE_MAPPING: List[_Mapped] = [
     _Mapped(
-        info_key="is_odoo",
+        info_key="is_odoo_running",
         title=None,
         justify=None,
         display=True,
-        format=lambda value: value and ":white_circle:" or "",
+        format=lambda value: (
+            value is not None
+            and "[{style}]:white_circle:[/{style}]".format(style=value and style.GREEN or style.RED)
+            or ""
+        ),
     ),
     _Mapped(
         info_key="name",
@@ -53,6 +65,48 @@ TABLE_MAPPING: List[_Mapped] = [
         display=True,
         format=lambda value: (value or "").capitalize(),
     ),
+    _Mapped(
+        info_key="size",
+        title="Size (SQL)",
+        justify="right",
+        display=lambda args: args.details,
+        format=lambda value: string.bytes_size(value or 0),
+    ),
+    _Mapped(
+        info_key="odoo_filestore_size",
+        title="Size (FS)",
+        justify="right",
+        display=lambda args: args.details,
+        format=lambda value: string.bytes_size(value) if value else "",
+    ),
+    _Mapped(
+        info_key="odoo_filestore_path",
+        title="Filestore",
+        justify=None,
+        display=lambda args: args.details,
+        format=lambda value: value and f"[link={value.as_posix()}]{value.name}/[/link]" or "",
+    ),
+    _Mapped(
+        info_key="last_access_date",
+        title="Last Authentication",
+        justify=None,
+        display=lambda args: args.details,
+        format=lambda value: value and value.strftime("%Y-%m-%d %X") or "",
+    ),
+    _Mapped(
+        info_key="odoo_process_id",
+        title="PID",
+        justify="right",
+        display=lambda args: args.details,
+        format=lambda value: value and str(value) or "",
+    ),
+    _Mapped(
+        info_key="odoo_url",
+        title="URL",
+        justify=None,
+        display=lambda args: args.details,
+        format=lambda value: value and f"[link={value}?debug=1]{urlparse(value).netloc}[/link]" or "",
+    ),
 ]
 
 
@@ -74,6 +128,18 @@ class ListCommand(PostgresConnectorMixin, Command):
             "action": "store_regex",
             "help": "Regular expression pattern to filter listed databases.",
         },
+        {
+            "name": "details",
+            "aliases": ["-d", "--details"],
+            "action": "store_true",
+            "help": "Display more details for each database.",
+        },
+        {
+            "name": "include_other",
+            "aliases": ["-o", "--include-other"],
+            "action": "store_true",
+            "help": "Display non-Odoo databases as well.",
+        },
     ]
 
     def run(self) -> None:
@@ -90,7 +156,7 @@ class ListCommand(PostgresConnectorMixin, Command):
         if self.args.names_only and databases:
             return self.print(*databases, sep="\n")
 
-        self.table(*self.get_table_data())
+        self.table(*self.get_table_data(databases))
 
     def list_databases(self) -> List[str]:
         """List the names of all local databases, excluding templates
@@ -100,22 +166,26 @@ class ListCommand(PostgresConnectorMixin, Command):
             databases = psql.query(
                 """
                 SELECT datname
-                    FROM pg_database
-                    WHERE datistemplate = false
-                        AND datname != 'postgres'
-                    ORDER by datname
+                FROM pg_database
+                WHERE datistemplate = false
+                    AND datname != 'postgres'
+                ORDER by datname
                 """
             )
 
-        return [
+        databases = [
             database[0]
             for database in databases
             if not self.args.expression or self.args.expression.search(database[0])
         ]
 
-    def get_table_data(self) -> Tuple[List[MutableMapping[str, str]], List[List[Any]]]:
+        if not self.args.include_other:
+            databases = [database for database in databases if self.is_odoo(database)]
+
+        return databases
+
+    def get_table_data(self, databases: Sequence[str]) -> Tuple[List[MutableMapping[str, str]], List[List[Any]]]:
         """Get the table data for the list of databases."""
-        databases = self.list_databases()
         headers: List[MutableMapping[str, Any]] = []
         rows: List[List[Any]] = []
 
@@ -140,3 +210,8 @@ class ListCommand(PostgresConnectorMixin, Command):
         """Get information about a database."""
         with PostgresDatabase(database) as db:
             return db.info()
+
+    def is_odoo(self, database: str) -> bool:
+        """Check if a database is an Odoo database."""
+        with PostgresDatabase(database) as db:
+            return db.is_odoo()
