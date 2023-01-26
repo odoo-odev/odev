@@ -39,16 +39,12 @@ class Database(ABC):
         return {
             "name": self.name,
             "size": self.size(),
+            "exists": self.exists(),
             "is_odoo": self.is_odoo(),
-            "is_odoo_running": self.is_odoo_running(),
             "odoo_version": self.odoo_version(),
             "odoo_edition": self.odoo_edition(),
-            "odoo_process_id": self.odoo_process_id(),
-            "odoo_process_command": self.odoo_process_command(),
-            "odoo_rpc_port": self.odoo_rpc_port(),
             "odoo_filestore_path": self.odoo_filestore_path(),
             "odoo_filestore_size": self.odoo_filestore_size(),
-            "odoo_url": self.odoo_url(),
             "last_access_date": self.last_access_date(),
         }
 
@@ -63,28 +59,6 @@ class Database(ABC):
     @abstractmethod
     def odoo_edition(self) -> Optional[str]:
         """Return the Odoo edition of the database."""
-
-    @abstractmethod
-    def odoo_process(self) -> Optional[str]:
-        """Return the process currently running odoo, if any.
-        Grep-ed `ps aux` output.
-        """
-
-    @abstractmethod
-    def odoo_process_command(self) -> Optional[str]:
-        """Return the command of the process currently running odoo, if any."""
-
-    @abstractmethod
-    def odoo_process_id(self) -> int:
-        """Return the PID of the process currently running odoo, if any."""
-
-    @abstractmethod
-    def is_odoo_running(self) -> Optional[bool]:
-        """Return whether Odoo is currently running on the database.
-        - True if the database is an Odoo database and Odoo is running
-        - False if the database is an Odoo database and Odoo is not running
-        - None if the database is not an Odoo database
-        """
 
     @abstractmethod
     def odoo_filestore_path(self) -> Optional[Path]:
@@ -105,10 +79,6 @@ class Database(ABC):
     @abstractmethod
     def odoo_url(self) -> Optional[str]:
         """Return the URL to access the database."""
-
-    @abstractmethod
-    def odoo_rpc_port(self) -> Optional[int]:
-        """Return the port to access the database."""
 
     @abstractmethod
     def exists(self) -> bool:
