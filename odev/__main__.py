@@ -1,5 +1,6 @@
 import os
 from signal import SIGINT, SIGTERM, signal
+from time import monotonic
 
 from odev._version import __version__
 from odev.common import signal_handling as handlers
@@ -19,6 +20,8 @@ def main():
     Manages taking input from the user and calling the subsequent subcommands
     with the proper arguments as specified in the command line.
     """
+    start_time = monotonic()
+
     try:
         _logger.debug(f"Starting odev version {__version__}")
 
@@ -40,4 +43,4 @@ def main():
         _logger.exception("Execution failed due to an unhandled exception")
         exit(1)
 
-    _logger.debug("Execution completed successfully")
+    _logger.debug(f"Execution completed successfully in {monotonic() - start_time:.3f} seconds")
