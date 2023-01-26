@@ -23,7 +23,7 @@ from rich.table import Table
 
 from odev.common import string
 from odev.common.actions import ACTIONS_MAPPING
-from odev.common.logging import logging
+from odev.common.logging import LOG_LEVEL, logging
 
 
 if TYPE_CHECKING:
@@ -93,6 +93,7 @@ class Command(ABC):
         :param args: the parsed arguments as an instance of :class:`Namespace`
         """
         self.args: Namespace = args
+        self.args.log_level = LOG_LEVEL
 
     def __repr__(self) -> str:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
