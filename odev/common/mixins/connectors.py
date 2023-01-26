@@ -15,7 +15,7 @@ def ensure_connected(func: Callable) -> Callable:
 
     def wrapped(self, *args, **kwargs):
         if not self.connector:
-            return logger.error("Connector is not initialized, use the `with` statement or call `connect` first")
+            raise ConnectionError("Connector is not initialized, use the `with` statement or call `connect` first")
         return func(self, *args, **kwargs)
 
     return wrapped
