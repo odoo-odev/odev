@@ -18,7 +18,7 @@ class PythonEnv:
     a virtual environment.
     """
 
-    def __init__(self, path: Optional[Union[Path, str]] = None, version: Optional[float] = None):
+    def __init__(self, path: Optional[Union[Path, str]] = None, version: Optional[str] = None):
         """Initializes a python environment.
 
         :param path: Path to the python environment containing the interpreter to use in the current context.
@@ -28,8 +28,8 @@ class PythonEnv:
         """
         self._global = path is None
         self.path: Path = Path(sys.prefix if self._global else path).resolve()
-        self.version: float = version or float(".".join(sys.version.split(".")[:2]))
-        self.python: Path = self.path / "bin" / f"python{self.version or ''}"
+        self.version: str = version or (".".join(sys.version.split(".")[:2]))
+        self.python: Path = self.path / "bin" / f"python{self.version}"
         self.pip: str = f"{self.python} -m pip"
 
         if not self.python.is_file():
@@ -44,7 +44,7 @@ class PythonEnv:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
         logger.debug(f"Creating virtual environment at {self.path}")
-        virtualenv.cli_run(["--python", str(self.version), self.path.as_posix()])
+        virtualenv.cli_run(["--python", self.version, self.path.as_posix()])
 
     def install_packages(self, packages: List[str]) -> None:
         """Install python packages.
@@ -82,4 +82,4 @@ class PythonEnv:
             raise FileNotFoundError(f"Python script not found at {script_path}")
 
         logger.debug(f"Running python script {script_path}")
-        return bash.execute(f"{self.python} {script_path} {' '.join(args)}")
+        return bash.run(f"{self.python} {script_path} {' '.join(args)}")

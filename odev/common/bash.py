@@ -5,7 +5,7 @@ the subsystem.
 
 from os import geteuid
 from shlex import quote
-from subprocess import CalledProcessError, CompletedProcess, Popen, run
+from subprocess import CalledProcessError, CompletedProcess, Popen, run as run_subprocess
 from typing import Optional
 
 from odev.common import prompt
@@ -25,9 +25,15 @@ sudo_password: Optional[str] = None
 # --- Helpers ------------------------------------------------------------------
 
 
-def __run_command(command: str) -> CompletedProcess[bytes]:
-    """Execute a command as a subprocess."""
-    return run(command, shell=True, check=True, capture_output=True)
+def __run_command(command: str, capture: bool = True) -> CompletedProcess[bytes]:
+    """Execute a command as a subprocess.
+
+    :param str command: The command to execute.
+    :param bool capture: Whether to capture the output of the command.
+    :return: The result of the command execution.
+    :rtype: CompletedProcess
+    """
+    return run_subprocess(command, shell=True, check=True, capture_output=capture)
 
 
 def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
@@ -98,3 +104,12 @@ def detached(command: str) -> None:
     """
     logger.debug(f"Running detached process: {quote(command)}")
     Popen(command, shell=True, start_new_session=True)
+
+
+def run(command: str) -> CompletedProcess:
+    """Execute a command in the operating system and wait for it to complete.
+
+    :param str command: The command to execute.
+    """
+    logger.debug(f"Running process: {quote(command)}")
+    return __run_command(command, capture=False)
