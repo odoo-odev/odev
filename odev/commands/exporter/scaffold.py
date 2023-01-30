@@ -70,7 +70,7 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
             _logger.info(
                 f"Generate scaffold code for analysis : {self.args.task_id}"
-                f" into {'xml' if self.args.type == 'saas' else 'python'} module(s)"
+                f" into {'xml' if self.type == 'saas' else 'python'} module(s)"
                 f" in v {str(self.version)} ( using config: {str(self.export_config.config_version)} )"
             )
 
@@ -129,10 +129,10 @@ class ScaffoldCommand(commands.ExportCommand, commands.LocalDatabaseCommand):
 
         self.export_config = Config(self.version, os.path.dirname(os.path.abspath(__file__)))
 
-        super()._init_config()
-
         if not self.args.type:
             self.type = "saas" if self.analysis["platform"] == "saas" else "sh"
+
+        super()._init_config()
 
         self.manifest["name"] = self.args.name.replace("_", " ").title()
         self.manifest["summary"] = f"{self.manifest['name']} scaffolded module"

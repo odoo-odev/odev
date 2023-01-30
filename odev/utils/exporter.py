@@ -73,10 +73,6 @@ def odoo_model(model):
 
 
 def odoo_field(field):
-    # TODO: Check if needed
-    # if self.type == "saas":
-    #     return field
-
     special_fields = {"x_name": "name_custo"}
 
     if type(field) != str or field in ["x_icon"]:
