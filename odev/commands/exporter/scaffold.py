@@ -758,16 +758,16 @@ for rec in records:
                 self.generate_template({"model": k, "sql": s["sql"]}, cfg)
 
     def _generate_integration(self, integration_ids):
-        if self.type == "saas":
-            _logger.warning("Tried to generate integration for a saas project, ignored.")
-            return []
-
         _logger.debug("Generate integration")
         integration_line = self.connection.get_model("presales.integration_line")
         integration_line_ids = integration_line.search_read([("id", "in", integration_ids)])
         models = defaultdict()
 
         if integration_line_ids:
+            if self.type == "saas":
+                _logger.warning("Tried to generate integration for a saas project, ignored.")
+                return []
+
             integrations_type = {x["type"] for x in integration_line_ids}
             if "sftp" in integrations_type:
                 self.integration = "edi_sftp_connection"
