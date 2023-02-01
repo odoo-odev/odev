@@ -1,13 +1,22 @@
 """Python and venv-related utilities"""
 
+import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Union
+from subprocess import CompletedProcess
+from typing import (
+    Generator,
+    List,
+    Mapping,
+    Optional,
+    Union,
+)
 
 import virtualenv
+from packaging import version
 
-from odev.common import bash
-from odev.common.logging import logging
+from odev.common import bash, prompt, style
+from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 
 
 logger = logging.getLogger(__name__)
@@ -32,9 +41,8 @@ class PythonEnv:
         self.python: Path = self.path / "bin" / f"python{self.version}"
         self.pip: str = f"{self.python} -m pip"
 
-        if not self.python.is_file():
-            if self._global:
-                raise FileNotFoundError(f"Python interpreter not found at {self.python}")
+        if not self.exists and self._global:
+            raise FileNotFoundError(f"Python interpreter not found at {self.python}")
 
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.path.name!r}, version={self.version})"
@@ -44,15 +52,19 @@ class PythonEnv:
         if self._global:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
-        logger.debug(f"Creating virtual environment at {self.path}")
-        virtualenv.cli_run(["--python", self.version, self.path.as_posix()])
+        logger.info(f"Creating virtual environment {self.path.name!r} with python version {self.version}")
+        logger.debug(f"Creating virtual environment at {self.path} with python version {self.version}")
+
+        with silence_loggers("root", "distlib.util", "filelock"):
+            virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
 
     def install_packages(self, packages: List[str]) -> None:
         """Install python packages.
 
         :param packages: a list of package specs to install.
         """
-        logger.debug(f"Installing python packages: {', '.join(packages)}")
+        logger.info(f"Installing {len(packages)} python packages")
+        logger.debug("Installing python packages:\n" + "\n".join(packages))
         bash.execute(f"{self.pip} install {' '.join(packages)}")
 
     def install_requirements(self, path: Union[Path, str]) -> None:
@@ -68,13 +80,151 @@ class PythonEnv:
         if not requirements_path.exists():
             raise FileNotFoundError(f"No requirements.txt found under {path}")
 
-        logger.debug(f"Installing python packages from {requirements_path}")
-        bash.execute(f'{self.pip} install -r "{requirements_path}"')
+        logger.info(f"Installing python packages from {requirements_path}")
+        re_package = re.compile(r"(?:[\s,](?P<name>[\w_-]+)(?:(?P<op>[<>=]+)(?P<version>[\d.]+))?)")
+        debug_mode = int(LOG_LEVEL != "DEBUG")
 
-    def run_script(self, script: Union[Path, str], args: Optional[List[str]] = None):
+        if debug_mode:
+            style.console.print()
+
+        for line in bash.stream(f"{self.pip} install -r '{requirements_path}' --no-color"):
+            if not line.strip() or line.startswith(" "):
+                continue
+
+            if line.startswith("Collecting"):
+                match = re_package.search(line)
+
+                if match is None:
+                    continue
+
+                prompt.clear_line(int(debug_mode))
+                logger.info(
+                    "Collecting python package "
+                    f"[bold {style.PURPLE}]{match.group('name')}[/bold {style.PURPLE}]"
+                    f"{match.group('op') or ''}"
+                    f"[bold {style.CYAN}]{match.group('version') or ''}[/bold {style.CYAN}]"
+                )
+
+            elif line.startswith("Installing collected packages:"):
+                prompt.clear_line(int(debug_mode))
+                packages = line.replace(",", "").split(" ")[3:]
+                logger.debug("Installing python packages:\n" + "\n".join(packages))
+                logger.info(f"Installing {len(packages)} python packages")
+
+            elif line.startswith("Successfully installed"):
+                prompt.clear_line(int(debug_mode))
+                packages = line.split(" ")[2:]
+                logger.debug("Installed python packages:\n" + "\n".join(packages))
+                logger.info(f"Successfully installed {len(packages)} python packages")
+
+    def installed_packages(self) -> Mapping[str, version.Version]:
+        """Run pip freeze.
+
+        :return: The result of the pip command execution.
+        :rtype: CompletedProcess
+        """
+        logger.debug(f"Running pip freeze in {self.path}")
+        result = bash.execute(f"{self.pip} freeze")
+        packages = result.stdout.decode().splitlines()
+        return {package.split("==")[0].lower(): version.parse(package.split("==")[1]) for package in packages}
+
+    def missing_requirements(self, path: Union[Path, str]) -> Generator[str, None, None]:
+        """Check for missing packages in a requirements.txt file.
+
+        :param path: Path to the requirements.txt file or the containing directory.
+        :return: A list of missing packages.
+        :rtype: List[str]
+        """
+        requirements_path = Path(path).resolve()
+
+        if requirements_path.is_dir():
+            requirements_path = requirements_path / "requirements.txt"
+
+        if not requirements_path.exists():
+            raise FileNotFoundError(f"No requirements.txt found under {path}")
+
+        logger.debug(f"Checking missing python packages from {requirements_path}")
+        installed_packages = self.installed_packages()
+        required_packages = requirements_path.read_text().splitlines()
+        re_package = re.compile(
+            r"""
+            (?:
+                (?P<name>[\w_-]+)
+                (?:
+                    (?P<op>[~<>=]+)
+                    (?P<version>[\d.*]+)
+                )?
+                (?:
+                    \s*;\s*
+                    (?P<conditional>.*)
+                )?
+            )
+            """,
+            re.VERBOSE | re.IGNORECASE,
+        )
+
+        eval_locals = {
+            "sys_platform": sys.platform,
+            "python_version": self.version,
+        }
+
+        for line in required_packages:
+            line = line.split("#", 1)[0].strip()
+
+            if not line.strip():
+                continue
+
+            match = re_package.search(line)
+
+            if match is None:
+                continue
+
+            package_conditional = match.group("conditional")
+
+            if package_conditional is not None and not eval(package_conditional, eval_locals):
+                continue
+
+            installed_version = installed_packages.get(match.group("name").lower())
+
+            if installed_version is None:
+                logger.debug(f"Missing python package {match.group('name')}")
+                yield line
+                continue
+
+            if match.group("version") is None and match.group("op") is None:
+                continue
+
+            package_operator = match.group("op")
+
+            if package_operator is None:
+                continue
+
+            package_version = match.group("version")
+
+            if "*" in package_version:
+                package_version = package_version.split("*", 1)[0].rstrip(".")
+
+            version_locals = {
+                "installed_version": installed_version,
+                "package_version": version.parse(package_version),
+            }
+
+            if not eval(f"installed_version {package_operator} package_version", version_locals):
+                logger.debug(
+                    f"Outdated python package {match.group('name')} "
+                    f"({installed_version} {package_operator} {package_version})"
+                )
+                yield line
+
+    def run_script(
+        self, script: Union[Path, str], args: Optional[List[str]] = None, stream: bool = False
+    ) -> CompletedProcess:
         """Run a python script.
 
         :param path: Path to the python script to run.
+        :param args: A list of arguments to pass to the script.
+        :return: The result of the script execution.
+        :rtype: CompletedProcess
         """
         script_path = Path(script).resolve()
         args = args or []
@@ -83,4 +233,10 @@ class PythonEnv:
             raise FileNotFoundError(f"Python script not found at {script_path}")
 
         logger.debug(f"Running python script {script_path}")
-        return bash.run(f"{self.python} {script_path} {' '.join(args)}")
+        command = f"{self.python} {script_path} {' '.join(args)}"
+        return bash.run(command) if stream else bash.execute(command)
+
+    @property
+    def exists(self) -> bool:
+        """Whether the python environment exists."""
+        return self.python.is_file()
