@@ -1,13 +1,13 @@
 """Kill the process of a running Odoo database."""
 
-from odev.common.commands.database import DatabaseCommand
+from odev.common.commands import OdoobinCommand
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class KillCommand(DatabaseCommand):
+class KillCommand(OdoobinCommand):
     """Kill a running Odoo database. Useful if the process crashed because of
     a forgotten IPDB or if you lost your terminal and don't want to search
     for the process' PID.
@@ -29,9 +29,8 @@ class KillCommand(DatabaseCommand):
         if not self.database.exists():
             raise self.error(f"Database {self.database.name!r} does not exist")
 
-        if not self.database.process.is_running():
+        if not self.odoobin.is_running():
             raise self.error(f"Database {self.database.name!r} is not running")
 
-        pid = self.database.process.pid()
-        logger.info(f"Killing process for running database {self.database.name!r} (pid: {pid})")
-        self.database.process.kill(hard=self.args.hard)
+        logger.info(f"Killing process for running database {self.database.name!r} (pid: {self.odoobin.pid()})")
+        self.odoobin.kill(hard=self.args.hard)
