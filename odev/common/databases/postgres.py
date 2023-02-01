@@ -3,11 +3,10 @@
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 
 from odev.common.databases import Database
-from odev.common.mixins import PostgresConnectorMixin
-from odev.common.mixins.connectors import ensure_connected
+from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoo import OdooBinProcess
 from odev.common.version import OdooVersion
 
@@ -15,11 +14,8 @@ from odev.common.version import OdooVersion
 class PostgresDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
 
-    def __init__(self, name: str):
-        """Initialize the database."""
-        super().__init__(name)
-        self.process = OdooBinProcess(self)
-        """Reference to the odoo-bin process for this database."""
+    _process: Optional[OdooBinProcess] = None
+    """The Odoo process running the database."""
 
     def __enter__(self):
         self.connector = self.psql(self.name).__enter__()
@@ -27,7 +23,6 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
 
     def __exit__(self, *args):
         self.psql(self.name).__exit__(*args)
-        del self.connector
 
     def info(self):
         return {
@@ -39,19 +34,8 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
             "odoo_url": self.odoo_url(),
         }
 
-    @ensure_connected
     def is_odoo(self) -> bool:
-        return bool(
-            self.connector.query(
-                """
-                SELECT c.relname FROM pg_class c
-                JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE c.relname = 'ir_module_module'
-                    AND c.relkind IN ('r', 'v', 'm')
-                    AND n.nspname = current_schema
-                """
-            )
-        )
+        return self.table_exists("ir_module_module")
 
     @ensure_connected
     def odoo_version(self) -> Optional[OdooVersion]:
@@ -82,11 +66,17 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
         return result and result[0][0] and "enterprise" or "community"
 
     def odoo_filestore_path(self) -> Optional[Path]:
-        return self.is_odoo() and Path.home() / ".local/share/Odoo/filestore/" / self.name
+        return self.is_odoo() and Path.home() / ".local/share/Odoo/filestore/" / self.name or None
 
     @lru_cache
     def odoo_filestore_size(self) -> Optional[int]:
-        return self.is_odoo() and sum(f.stat().st_size for f in self.odoo_filestore_path().rglob("*") if f.is_file())
+        if not self.is_odoo():
+            return None
+
+        return sum(f.stat().st_size for f in self.odoo_filestore_path().rglob("*") if f.is_file())
+
+    def odoo_url(self) -> Optional[str]:
+        return self.process.is_running() and f"http://localhost:{self.process.rpc_port()}/web" or None
 
     def size(self) -> int:
         with self.psql() as psql:
@@ -111,16 +101,40 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
         return result and result[0][0] or None
 
     def exists(self) -> bool:
+        """Check if the database exists."""
         with self.psql() as psql:
-            result = psql.query(
-                f"""
-                SELECT datname
-                FROM pg_database
-                WHERE datname = '{self.name}'
-                LIMIT 1
-                """
-            )
-        return bool(result)
+            return bool(psql.database_exists(self.name))
 
-    def odoo_url(self) -> Optional[str]:
-        return self.process.is_running() and f"http://localhost:{self.process.rpc_port()}/web" or None
+    def create(self):
+        """Create the database."""
+        with self.psql() as psql:
+            psql.create_database(self.name)
+
+    def drop(self):
+        """Drop the database."""
+        with self.psql() as psql:
+            psql.drop_database(self.name)
+
+    @ensure_connected
+    def table_exists(self, table: str) -> bool:
+        """Check if a table exists in the database."""
+        return self.connector.table_exists(table)
+
+    @ensure_connected
+    def create_table(self, table: str, columns: Mapping[str, str]):
+        """Create a table in the database."""
+        return self.connector.create_table(table, columns)
+
+    @ensure_connected
+    def query(self, query: str):
+        """Execute a query on the database."""
+        return self.connector.query(query)
+
+    @property
+    def process(self) -> Optional[OdooBinProcess]:
+        if self._process is None:
+            with self:
+                if self.is_odoo():
+                    self._process = OdooBinProcess(self)
+
+        return self._process
