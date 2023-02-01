@@ -4,7 +4,7 @@ from time import monotonic
 
 from odev._version import __version__
 from odev.common import signal_handling as handlers
-from odev.common.config import ConfigManager
+from odev.common.config import config
 from odev.common.logging import logging
 from odev.common.odev import Odev
 
@@ -33,7 +33,7 @@ def main():
         if os.geteuid() == 0:
             raise Exception("Odev should not be run as root")
 
-        with ConfigManager("odev") as config:
+        with config:
             Odev(config).dispatch()
 
     except KeyboardInterrupt:
