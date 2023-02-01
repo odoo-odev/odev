@@ -13,12 +13,10 @@ class Connector(ABC):
     @abstractmethod
     def connect(self):
         """Connect to the external service."""
-        raise NotImplementedError()
 
     @abstractmethod
     def disconnect(self):
         """Disconnect from the external service."""
-        raise NotImplementedError()
 
     def __enter__(self):
         """Open a connection to the external service."""
