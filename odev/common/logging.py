@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 import logging
 import re
 import sys
+from contextlib import contextmanager
 from logging import LogRecord
 from typing import Dict, Literal, Union
 
@@ -121,3 +122,22 @@ logging.basicConfig(
 
 for logger in SILENCED_LOGGERS:
     logging.getLogger(logger).setLevel(logging.WARNING)
+
+
+@contextmanager
+def silence_loggers(*names: str):
+    """Context manager to silence loggers.
+
+    :param names: Names of the loggers to silence.
+    :type names: Sequence[str]
+    """
+    loggers = [logging.getLogger(name) for name in names]
+    levels = [logger.level for logger in loggers]
+
+    for logger in loggers:
+        logger.setLevel(logging.WARNING)
+
+    yield
+
+    for logger, level in zip(loggers, levels):
+        logger.setLevel(level)
