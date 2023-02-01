@@ -75,6 +75,9 @@ class Odev:
 
         self.register_commands()
 
+    def __repr__(self) -> str:
+        return f"Odev(version={self.version})"
+
     def update(self) -> bool:
         """
         Check for updates in the odev repository and download them if necessary.

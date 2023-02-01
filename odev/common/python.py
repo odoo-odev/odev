@@ -36,7 +36,8 @@ class PythonEnv:
             if self._global:
                 raise FileNotFoundError(f"Python interpreter not found at {self.python}")
 
-            self.create_venv()
+    def __repr__(self) -> str:
+        return f"PythonEnv(name={self.path.name!r}, version={self.version})"
 
     def create_venv(self) -> None:
         """Create a new virtual environment."""
