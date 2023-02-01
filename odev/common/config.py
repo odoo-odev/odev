@@ -41,6 +41,9 @@ class ConfigManager(abc.MutableMapping):
         self.path.touch(mode=0o600, exist_ok=True)
         self.load()
 
+    def __repr__(self) -> str:
+        return f"ConfigManager(name={self.name!r}, path={self.path!r})"
+
     def to_dict(self) -> ConfigType:
         return {section["name"]: dict(section) for section in self.parser.values() if section and "name" in section}
 
@@ -152,3 +155,6 @@ class ConfigManager(abc.MutableMapping):
         if not any((exc_type, exc_val, exc_tb)):
             self.save()
             self.auto_save = True
+
+
+config: ConfigManager = ConfigManager("odev")
