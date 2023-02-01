@@ -79,6 +79,7 @@ repos:
             args:
                 - --no-strict-optional
                 - --ignore-missing-imports
+                - --check-untyped-defs
             additional_dependencies:
                 - types-decorator==5.1.4
                 - types-docutils==0.17.5
