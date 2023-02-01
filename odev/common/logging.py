@@ -43,7 +43,7 @@ if __log_level:
     LOG_LEVEL = str(__log_level.group(1)).upper()
     sys.argv = " ".join(sys.argv).replace(__log_level.group(0), "").split()
 
-SILENCED_LOGGERS = ["git.cmd", "asyncio", "urllib3", "rich", "pip._internal"]
+SILENCED_LOGGERS = ["git.cmd", "asyncio", "urllib3", "rich", "pip._internal", "github.Requester"]
 
 
 # --- Logging handler customization --------------------------------------------
@@ -71,11 +71,19 @@ class OdevRichHandler(RichHandler):
         :return: A tuple of the style and level name.
         :rtype: Text
         """
-
-        symbol = self.symbols.get(record.levelno, self.symbols["default"])
         level_text = super().get_level_text(record)
-        level_text.plain = f"[{symbol}]".ljust(3)
+        level_text.plain = self.get_level_symbol_text(record.levelno)
         return level_text
+
+    def get_level_symbol_text(self, level: int) -> str:
+        """Get the representation of the symbol associated with the level.
+
+        :param level: Log level.
+        :return: The formatted symbol.
+        :rtype: str
+        """
+        symbol = self.symbols.get(level, self.symbols["default"])
+        return f"[{symbol}]".ljust(3)
 
 
 # --- Logging highlighter customization ----------------------------------------
@@ -90,6 +98,7 @@ class OdevReprHighlighter(ReprHighlighter):
         self.highlights[-1] = _combine_regex(
             r"(?P<odev>odev)",
             r"(?P<version>([0-9]+\.){2,}[0-9]+)",
+            r"(?:(?P<package_name>[\w_-]+)(?:(?P<package_op>[<>=]+)(?P<package_version>[\d.]+)))",
             self.highlights[-1],
         )
 

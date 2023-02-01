@@ -14,7 +14,6 @@ from typing import Any, List, MutableMapping
 
 from git import Remote, Repo
 from packaging import version
-from rich.console import Console
 
 from odev._version import __version__
 from odev.common import bash, prompt, style
@@ -59,7 +58,7 @@ class Odev:
     """Path to the current executable."""
 
     def __init__(self, config: ConfigManager):
-        self._console = Console(highlighter=None, theme=style.RICH_THEME)
+        self._console = style.console
         self.version = __version__
         self.config = config
         self.path = Path(__file__).parents[2]
