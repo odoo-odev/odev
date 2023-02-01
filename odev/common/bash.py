@@ -5,8 +5,15 @@ the subsystem.
 
 from os import geteuid
 from shlex import quote
-from subprocess import CalledProcessError, CompletedProcess, Popen, run as run_subprocess
-from typing import Optional
+from subprocess import (
+    DEVNULL,
+    PIPE,
+    CalledProcessError,
+    CompletedProcess,
+    Popen,
+    run as run_subprocess,
+)
+from typing import Generator, Optional
 
 from odev.common import prompt
 from odev.common.logging import logging
@@ -93,17 +100,16 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
             __raise_or_log(exception, raise_on_error)
             return None
 
-    logger.debug(f"Completed process with return code {process_result.returncode}: {command}")
     return process_result
 
 
-def detached(command: str) -> None:
+def detached(command: str) -> Popen[bytes]:
     """Execute a command in the operating system and detach it from the current process.
 
     :param str command: The command to execute.
     """
     logger.debug(f"Running detached process: {quote(command)}")
-    Popen(command, shell=True, start_new_session=True)
+    return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)
 
 
 def run(command: str) -> CompletedProcess:
@@ -113,3 +119,18 @@ def run(command: str) -> CompletedProcess:
     """
     logger.debug(f"Running process: {quote(command)}")
     return __run_command(command, capture=False)
+
+
+def stream(command: str) -> Generator[str, None, None]:
+    """Execute a command in the operating system and stream its output .
+
+    :param str command: The command to execute.
+    """
+    logger.debug(f"Running process: {quote(command)}")
+    process = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+
+    for line in iter(process.stdout.readline, b""):
+        if process.poll() is not None:
+            break
+
+        yield line.rstrip().decode()
