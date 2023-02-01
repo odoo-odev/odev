@@ -23,3 +23,7 @@ def run(config: ConfigManager) -> None:
     config.delete("update", "last_check")
     config.delete("update", "check_interval")
     config.delete("odev")
+
+    config.set("paths", "repositories", config.get("paths", "custom", "~/odoo/repositories"))
+    config.delete("paths", "standard")
+    config.delete("paths", "custom")
