@@ -1,5 +1,6 @@
 from abc import ABC
 from pathlib import Path
+from typing import Optional
 
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import PostgresDatabase
@@ -40,9 +41,6 @@ class OdoobinCommand(DatabaseCommand, ABC):
         if not isinstance(self.database, PostgresDatabase):
             raise ValueError("Database must be an instance of PostgresDatabase.")
 
-        self.odoobin: OdooBinProcess = self.database.process
-        """The odoo-bin process associated with the database."""
-
         if self.args.addons is not None:
             addons_paths = [Path(addon).resolve() for addon in self.args.addons]
             invalid_paths = [path for path in addons_paths if not self.odoobin.check_addons_path(path)]
@@ -55,5 +53,11 @@ class OdoobinCommand(DatabaseCommand, ABC):
         else:
             addons_paths = [Path().resolve()]
 
-        self.odoobin.additional_addons_paths = addons_paths
-        """Additional addons paths to pass to odoo-bin."""
+        if self.odoobin is not None:
+            self.odoobin.additional_addons_paths = addons_paths
+            """Additional addons paths to pass to odoo-bin."""
+
+    @property
+    def odoobin(self) -> Optional[OdooBinProcess]:
+        """The odoo-bin process associated with the database."""
+        return self.database.process
