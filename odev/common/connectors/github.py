@@ -1,6 +1,7 @@
 """A module for connecting to the Github API and interacting with repositories."""
 
 import re
+import shutil
 from pathlib import Path
 from types import FrameType
 from typing import (
@@ -227,8 +228,8 @@ class GithubConnector(Connector):
     def update(self):
         """Update the repository."""
         if self.repository and self.remote:
-            self.fetch()
             self.pull()
+            self.fetch()
             self.prune_worktrees()
             self.fetch_worktrees()
 
@@ -276,6 +277,7 @@ class GithubConnector(Connector):
         """Fetch changes from the remote in a detached process.
         Doesn't wait for the fetch to end so pulling right after calling this method
         may result in changes not being downloaded.
+        Attention: Do not call right before `pull` as both git processes might enter into conflict.
         """
         bash.detached(f"cd {self.path} && git fetch")
 
@@ -438,6 +440,11 @@ class GithubConnector(Connector):
 
         self.worktrees_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"Creating worktree [bold]{branch!s}[/bold] for [bold {style.CYAN}]{self.name}[/bold {style.CYAN}]")
+
+        if path.exists():
+            logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
+            shutil.rmtree(path)
+
         logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {branch!r}")
         self.repository.git.worktree("add", path, branch or self.branch)
 
@@ -468,6 +475,11 @@ class GithubConnector(Connector):
         :rtype: Optional[GitWorktree]
         """
         for worktree in self.worktrees():
+            if not worktree.path.is_dir():
+                logger.debug(f"Worktree path {worktree.path!s} does not exist, removing references")
+                self.repository.git.worktree("remove", worktree.path)
+                continue
+
             if worktree.branch == branch:
                 return worktree
 
@@ -479,6 +491,7 @@ class GithubConnector(Connector):
 
     def fetch_worktrees(self, worktrees: Sequence[GitWorktree] = None):
         """Fetch all worktrees of the repository.
+        Attention: Do not call right before `pull_worktrees` as both git processes might enter into conflict.
 
         :param worktrees: A list of worktrees to fetch. If not specified, all worktrees will be fetched.
         """

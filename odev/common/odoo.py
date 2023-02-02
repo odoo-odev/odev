@@ -194,10 +194,11 @@ class OdooBinProcess:
     def update_worktrees(self):
         """Update the worktrees of the Odoo repositories."""
         for repository in self.odoo_repositories:
+            repository.prune_worktrees()
             worktree = repository.get_worktree(self._get_odoo_branch())
-            repository.fetch_worktrees([worktree])
             requirements = repository.modified_worktrees_requirements([worktree])
             repository.pull_worktrees([worktree])
+            repository.fetch_worktrees([worktree])
 
             for requirement in requirements:
                 self.venv.install_requirements(requirement)
