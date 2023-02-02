@@ -159,7 +159,7 @@ class OdooBinProcess:
         if pid is not None:
             bash.execute(f"kill -{9 if hard else 2} {pid}")
 
-    def run(self, args: List[str] = None):
+    def run(self, args: List[str] = None, subcommand: str = None):
         """Run Odoo on the current database."""
         if self.is_running():
             raise RuntimeError("Odoo is already running on this database.")
@@ -168,6 +168,9 @@ class OdooBinProcess:
         odoo_bin_args.extend(["-d", self.database.name])
         odoo_bin_args.extend(["--addons-path", ",".join(path.as_posix() for path in self.addons_paths)])
         odoo_bin_args.extend(args or [])
+
+        if subcommand is not None:
+            odoo_bin_args.insert(0, subcommand)
 
         self.prepare_venv()
         self.update_worktrees()
