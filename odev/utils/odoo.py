@@ -305,6 +305,7 @@ def run_odoo(
     version: str,
     database: str,
     addons: Optional[List[str]] = None,
+    command_input: Optional[str] = None,
     subcommand: Optional[str] = None,
     additional_args: Optional[List[str]] = None,
     venv_name: Optional[str] = None,
@@ -345,8 +346,9 @@ def run_odoo(
         *["--addons-path", ",".join(addons_paths + custom_addons_paths)],
         *additional_args,
     ]
-
     command = shlex.join(command_args)
+    if command_input:
+        command = command_input + command
     if print_cmdline:
         _logger.info(f"Running: {command}")
 
