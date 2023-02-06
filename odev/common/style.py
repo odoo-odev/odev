@@ -1,6 +1,7 @@
 """Styling and theming variables."""
 
 from rich.console import Console
+from rich.highlighter import ReprHighlighter, _combine_regex
 from rich.theme import Theme
 
 
@@ -49,10 +50,41 @@ RICH_THEME = Theme(
         "repr.package_name": f"bold {PURPLE}",
         "repr.package_op": GRAY,
         "repr.package_version": f"bold {CYAN}",
-        "status.spinner": GRAY,
+        "status.spinner": f"bold {PURPLE}",
     }
 )
+
+
+# --- Logging highlighter customization ----------------------------------------
+# This is not useful at all, but it's fun to have. I guess...
+
+
+class OdevReprHighlighter(ReprHighlighter):
+    """Extension of `ReprHighlighter` to highlight odev version numbers."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.highlights[-1] = _combine_regex(
+            r"(?P<odev>odev)",
+            r"(?P<version>([0-9]+\.){2,}[0-9]+)",
+            r"(?:(?P<package_name>[\w_-]+)(?:(?P<package_op>[<>=]+)(?P<package_version>[\d.]+)))",
+            self.highlights[-1],
+        )
+
 
 # --- Bare rich console --------------------------------------------------------
 
 console = Console(highlighter=None, theme=RICH_THEME)
+repr_console = Console(highlighter=OdevReprHighlighter(), theme=RICH_THEME)
+
+
+# --- Spinner context manager --------------------------------------------------
+
+
+def spinner(message: str):
+    """Context manager to display a spinner while executing code.
+
+    :param message: The message to display.
+    :type message: str
+    """
+    return repr_console.status(repr_console.render_str(message), spinner="arc")

@@ -17,12 +17,10 @@ from contextlib import contextmanager
 from logging import LogRecord
 from typing import Dict, Literal, Union
 
-from rich.console import Console
-from rich.highlighter import ReprHighlighter, _combine_regex
 from rich.logging import RichHandler
 from rich.text import Text
 
-from odev.common import style
+from odev.common.style import repr_console as console
 
 
 __all__ = ["logging", "console", "LOG_LEVEL"]
@@ -84,32 +82,6 @@ class OdevRichHandler(RichHandler):
         """
         symbol = self.symbols.get(level, self.symbols["default"])
         return f"[{symbol}]".ljust(3)
-
-
-# --- Logging highlighter customization ----------------------------------------
-# This is not useful at all, but it's fun to have. I guess...
-
-
-class OdevReprHighlighter(ReprHighlighter):
-    """Extension of `ReprHighlighter` to highlight odev version numbers."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.highlights[-1] = _combine_regex(
-            r"(?P<odev>odev)",
-            r"(?P<version>([0-9]+\.){2,}[0-9]+)",
-            r"(?:(?P<package_name>[\w_-]+)(?:(?P<package_op>[<>=]+)(?P<package_version>[\d.]+)))",
-            self.highlights[-1],
-        )
-
-
-# --- Logging console initialization -------------------------------------------
-# Initialize a rich console with a custom theme
-
-console = Console(
-    highlighter=OdevReprHighlighter(),
-    theme=style.RICH_THEME,
-)
 
 
 # --- Logging module initialization --------------------------------------------

@@ -143,7 +143,8 @@ class ListCommand(PostgresConnectorMixin, Command):
     ]
 
     def run(self) -> None:
-        databases = self.list_databases()
+        with style.spinner("Listing databases..."):
+            databases = self.list_databases()
 
         if not databases:
             message = "No database found"

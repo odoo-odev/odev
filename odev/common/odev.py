@@ -69,10 +69,12 @@ class Odev:
         self.upgrades_path = self.path / "odev" / "upgrades"
         self.setup_path = self.path / "odev" / "setup"
 
-        if self.update():
-            self.restart()
+        with style.spinner(f"Checking for updates to odev {self.version}"):
+            if self.update():
+                self.restart()
 
-        self.register_commands()
+        with style.spinner("Loading commands"):
+            self.register_commands()
 
     def __repr__(self) -> str:
         return f"Odev(version={self.version})"

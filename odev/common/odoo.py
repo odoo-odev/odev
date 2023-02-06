@@ -1,9 +1,10 @@
 """Module to manage Odoo processes."""
 
 import re
+from contextlib import nullcontext
 from functools import lru_cache
 from pathlib import Path
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, CompletedProcess
 from typing import (
     TYPE_CHECKING,
     Generator,
@@ -159,8 +160,15 @@ class OdooBinProcess:
         if pid is not None:
             bash.execute(f"kill -{9 if hard else 2} {pid}")
 
-    def run(self, args: List[str] = None, subcommand: str = None):
-        """Run Odoo on the current database."""
+    def run(self, args: List[str] = None, subcommand: str = None, stream: bool = True) -> Optional[CompletedProcess]:
+        """Run Odoo on the current database.
+
+        :param args: Additional arguments to pass to odoo-bin.
+        :param subcommand: Subcommand to pass to odoo-bin.
+        :param stream: Whether to stream the output of the process.
+        :return: The return result of the process after completion.
+        :rtype: subprocess.CompletedProcess
+        """
         if self.is_running():
             raise RuntimeError("Odoo is already running on this database.")
 
@@ -172,18 +180,31 @@ class OdooBinProcess:
         if subcommand is not None:
             odoo_bin_args.insert(0, subcommand)
 
-        self.prepare_venv()
-        self.update_worktrees()
+        with style.spinner(f"Preparing venv for Odoo {self.version}"):
+            self.prepare_venv()
+
+        with style.spinner(f"Preparing git worktrees for Odoo {self.version}"):
+            self.update_worktrees()
 
         with capture_signals():
-            logger.info(f"Running Odoo {self.version!s} on database {self.database.name!r} using command:")
-            style.console.print(f"\n[{style.CYAN}]{self.odoobin_path} {' '.join(odoo_bin_args)}[/{style.CYAN}]\n")
+            odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
+            info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
+            logger.info(f"{info_message} using command:")
+            style.console.print(
+                f"\n[{style.CYAN}]{self.odoobin_path} {' '.join(odoo_bin_args)}[/{style.CYAN}]\n",
+                soft_wrap=True,
+            )
 
             try:
-                self.venv.run_script(self.odoobin_path, odoo_bin_args, stream=True)
-            except CalledProcessError:
-                style.console.print()
-                logger.error("Odoo exited with an error, check the output above for more information")
+                with style.spinner(info_message) if not stream else nullcontext():
+                    process = self.venv.run_script(self.odoobin_path, odoo_bin_args, stream=stream)
+            except CalledProcessError as error:
+                if not stream:
+                    style.console.print(error.stderr.decode())
+
+                return logger.error("Odoo exited with an error, check the output above for more information")
+            else:
+                return process
 
     def prepare_venv(self):
         """Prepare the virtual environment of the Odoo installation."""

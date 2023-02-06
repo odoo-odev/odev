@@ -228,8 +228,18 @@ class Command(ABC):
         else:
             self.framework._console.print(text, *args, **kwargs)
 
-    def table(self, columns: List[MutableMapping[str, Any]], rows: List[List[Any]]) -> None:
-        """Print a table to stdout with highlighting and theming."""
+    def table(
+        self,
+        columns: Sequence[MutableMapping[str, Any]],
+        rows: Sequence[List[Any]],
+        total: List[Any] = None,
+    ) -> None:
+        """Print a table to stdout with highlighting and theming.
+
+        :param columns: The headers of the table.
+        :param rows: The rows of the table.
+        :param total: The total row of the table.
+        """
         table = Table(
             show_header=True,
             header_style="bold",
@@ -242,7 +252,13 @@ class Command(ABC):
             table.add_column(column_name, **column)
 
         for row in rows:
-            table.add_row(*row)
+            if total and row == rows[-1]:
+                table.add_row(*row, end_section=True)
+            else:
+                table.add_row(*row)
+
+        if total:
+            table.add_row(*total, style="bold")
 
         self.framework._console.print(table)
 
