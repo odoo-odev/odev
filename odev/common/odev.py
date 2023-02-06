@@ -203,10 +203,10 @@ class Odev:
         except SystemExit as exception:
             return logger.error(str(exception))
 
-        command = command_cls(arguments)
-        command.argv = argv
-
         try:
+            command = command_cls(arguments)
+            command.argv = argv
+
             logger.debug(f"Dispatching {command!r}")
             return command.run()
         except CommandError as exception:

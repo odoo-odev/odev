@@ -41,6 +41,9 @@ class OdoobinCommand(DatabaseCommand, ABC):
         if not isinstance(self.database, PostgresDatabase):
             raise ValueError("Database must be an instance of PostgresDatabase.")
 
+        if not self.database.exists():
+            raise self.error(f"Database {self.database.name!r} does not exist.")
+
         if self.args.addons is not None:
             addons_paths = [Path(addon).resolve() for addon in self.args.addons]
             invalid_paths = [path for path in addons_paths if not self.odoobin.check_addons_path(path)]

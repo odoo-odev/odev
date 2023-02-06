@@ -8,6 +8,12 @@ class RunCommand(OdoobinCommand):
 
     name = "run"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.odoobin.is_running():
+            raise self.error(f"Database {self.database.name!r} is already running")
+
     def run(self):
         """Run the odoo-bin process for the selected database locally."""
         self.odoobin.run(args=self.args.odoo_args)

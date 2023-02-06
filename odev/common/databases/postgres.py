@@ -132,7 +132,7 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
 
     @property
     def process(self) -> Optional[OdooBinProcess]:
-        if self._process is None:
+        if self._process is None and self.exists():
             with self:
                 if self.is_odoo():
                     self._process = OdooBinProcess(self)
