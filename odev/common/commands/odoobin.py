@@ -34,14 +34,23 @@ class OdoobinCommand(DatabaseCommand, ABC):
             for the list of available arguments.
             """,
         },
+        {
+            "name": "enterprise",
+            "aliases": ["-e", "--enterprise"],
+            "action": "store_true",
+            "help": "Force running the database with enterprise addons.",
+        },
     ]
+
+    _require_exists: bool = True
+    """Whether the database must exist before running the command."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not isinstance(self.database, PostgresDatabase):
             raise ValueError("Database must be an instance of PostgresDatabase.")
 
-        if not self.database.exists():
+        if self._require_exists and not self.database.exists():
             raise self.error(f"Database {self.database.name!r} does not exist.")
 
         if self.args.addons is not None:
@@ -58,7 +67,7 @@ class OdoobinCommand(DatabaseCommand, ABC):
 
         if self.odoobin is not None:
             self.odoobin.additional_addons_paths = addons_paths
-            """Additional addons paths to pass to odoo-bin."""
+            self.odoobin._force_enterprise = bool(self.args.enterprise)
 
     @property
     def odoobin(self) -> Optional[OdooBinProcess]:

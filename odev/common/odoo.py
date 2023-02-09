@@ -11,6 +11,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Sequence,
 )
 
 from odev.common import bash, style
@@ -45,27 +46,55 @@ class OdooBinProcess:
     additional_addons_paths: List[Path] = []
     """List of additional addons paths to use when starting the Odoo process."""
 
-    def __init__(self, database: "PostgresDatabase", venv: str = None):
+    _venv: Optional[PythonEnv] = None
+    """Cached python virtual environment used by the Odoo installation."""
+
+    _force_enterprise: bool = False
+    """Force using the enterprise version of Odoo."""
+
+    def __init__(self, database: "PostgresDatabase", venv: str = None, version: OdooVersion = None):
         """Initialize the OdooBinProcess object."""
         self.database: PostgresDatabase = database
         """Database this process is for."""
+
+        self._version: Optional[OdooVersion] = version
+        """Force the version of Odoo when running the process."""
+
+        self._venv_name: str = venv or "venv"
+        """Name of the virtual environment to use."""
 
         self.clone_repositories()
         self.repository: GithubConnector = GithubConnector("odoo/odoo")
         """Github repository of Odoo."""
 
-        self.version: Optional[OdooVersion] = None
-        """Version of Odoo running in this process."""
-
-        if self.database.exists():
-            with self.database:
-                self.version = self.database.odoo_version()
-
-        self.venv = PythonEnv(self.venv_path / (venv or "venv"), self._get_python_version())
-        """Python virtual environment used by the Odoo installation."""
-
     def __repr__(self) -> str:
         return f"OdooBinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid()!r})"
+
+    def with_version(self, version: OdooVersion = None) -> "OdooBinProcess":
+        """Return the OdooBinProcess instance with the given version forced."""
+        self._version = version
+        self._venv = None
+        return self
+
+    @property
+    def venv(self):
+        """Python virtual environment used by the Odoo installation."""
+        if self._venv is None:
+            self._venv = PythonEnv(self.venv_path / self._venv_name, self._get_python_version())
+
+        return self._venv
+
+    @property
+    def version(self) -> Optional[OdooVersion]:
+        """Version of Odoo running in this process."""
+        if self._version is not None:
+            return self._version
+
+        if not self.database.exists():
+            return None
+
+        with self.database:
+            return self.database.odoo_version()
 
     @property
     def odoo_path(self) -> Path:
@@ -82,7 +111,12 @@ class OdooBinProcess:
     @property
     def odoobin_path(self) -> Path:
         """Path to the odoo-bin executable."""
-        return self.odoo_path / "odoo-bin"
+        odoo_bin = self.odoo_path / "odoo-bin"
+
+        if not odoo_bin.exists():
+            return self.odoo_path / "odoo.py"
+
+        return odoo_bin
 
     @property
     def venv_path(self):
@@ -160,7 +194,13 @@ class OdooBinProcess:
         if pid is not None:
             bash.execute(f"kill -{9 if hard else 2} {pid}")
 
-    def run(self, args: List[str] = None, subcommand: str = None, stream: bool = True) -> Optional[CompletedProcess]:
+    def run(
+        self,
+        args: List[str] = None,
+        subcommand: str = None,
+        stream: bool = True,
+        version: OdooVersion = None,
+    ) -> Optional[CompletedProcess]:
         """Run Odoo on the current database.
 
         :param args: Additional arguments to pass to odoo-bin.
@@ -169,8 +209,8 @@ class OdooBinProcess:
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
         """
-        if self.is_running():
-            raise RuntimeError("Odoo is already running on this database.")
+        if self.is_running() and subcommand is None:
+            raise RuntimeError("Odoo is already running on this database")
 
         odoo_bin_args: List[str] = []
         odoo_bin_args.extend(["-d", self.database.name])
@@ -180,18 +220,16 @@ class OdooBinProcess:
         if subcommand is not None:
             odoo_bin_args.insert(0, subcommand)
 
-        with style.spinner(f"Preparing venv for Odoo {self.version}"):
-            self.prepare_venv()
-
-        with style.spinner(f"Preparing git worktrees for Odoo {self.version}"):
-            self.update_worktrees()
+        self.prepare_npm()
+        self.update_worktrees()
+        self.prepare_venv()
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
             info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
             logger.info(f"{info_message} using command:")
             style.console.print(
-                f"\n[{style.CYAN}]{self.odoobin_path} {' '.join(odoo_bin_args)}[/{style.CYAN}]\n",
+                f"\n[{style.CYAN}]{self.venv.python} {self.odoobin_path} {' '.join(odoo_bin_args)}[/{style.CYAN}]\n",
                 soft_wrap=True,
             )
 
@@ -206,6 +244,32 @@ class OdooBinProcess:
             else:
                 return process
 
+    def prepare_npm(self):
+        """Prepare the packages of the Odoo installation."""
+        try:
+            logger.debug("Verifying NPM installation")
+            bash.execute("npm --version")
+        except Exception:
+            raise RuntimeError("NPM is not installed, please install it first")
+
+        packages = ["rtlcss"]
+
+        if self.version.major <= 10:
+            packages.extend(["less", "less-plugin-clean-css"])
+
+        missing = list(self.missing_npm_packages(packages))
+
+        if any(missing):
+            bash.execute(f"cd {self.odoo_path} && npm install {' '.join(missing)}")
+
+    def missing_npm_packages(self, packages: Sequence[str]) -> Generator[str, None, None]:
+        """Check whether the given NPM packages are installed in the version folder of Odoo."""
+        installed_packages = bash.execute(f"cd {self.odoo_path} && npm list").stdout.decode()
+
+        for package in packages:
+            if f" {package}" not in installed_packages:
+                yield package
+
     def prepare_venv(self):
         """Prepare the virtual environment of the Odoo installation."""
         if not self.venv.exists:
@@ -215,17 +279,16 @@ class OdooBinProcess:
             if any(self.venv.missing_requirements(path)):
                 self.venv.install_requirements(path)
 
+        if self.version.major < 10:
+            self.venv.install_packages(["psycopg2==2.7.3.1"])
+
     def update_worktrees(self):
         """Update the worktrees of the Odoo repositories."""
         for repository in self.odoo_repositories:
             repository.prune_worktrees()
             worktree = repository.get_worktree(self._get_odoo_branch())
-            requirements = repository.modified_worktrees_requirements([worktree])
             repository.pull_worktrees([worktree])
             repository.fetch_worktrees([worktree])
-
-            for requirement in requirements:
-                self.venv.install_requirements(requirement)
 
     def clone_repositories(self):
         """Clone the missing Odoo repositories."""
@@ -241,7 +304,7 @@ class OdooBinProcess:
         repo_names: List[str] = ["odoo", "design-themes"]
 
         with self.database:
-            if self.database.odoo_edition() == "enterprise":
+            if self.database.odoo_edition() == "enterprise" or self._force_enterprise:
                 repo_names.insert(1, "enterprise")
 
         for repo_name in repo_names:
@@ -250,8 +313,10 @@ class OdooBinProcess:
     @property
     def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
         """Return the list of Odoo worktrees the current version."""
+        branch = self._get_odoo_branch()
+
         for repo in self.odoo_repositories:
-            yield repo.get_worktree(self._get_odoo_branch())
+            yield repo.get_worktree(branch)
 
     @property
     def odoo_addons_paths(self) -> List[Path]:
@@ -273,7 +338,11 @@ class OdooBinProcess:
         """Return the list of addons requirements files."""
         globs = (
             path.glob("requirements.txt")
-            for path in self.addons_paths + [worktree.path for worktree in self.odoo_worktrees]
+            for path in (
+                self.addons_paths
+                + [Path(__file__).parents[1] / "static"]
+                + [worktree.path for worktree in self.odoo_worktrees]
+            )
         )
         return (path for glob in globs for path in glob)
 

@@ -1,0 +1,5 @@
+ipdb
+pudb
+setuptools<58.0.0; python_version < '3.8'
+setuptools<59.0.0; python_version >= '3.8'
+websocket-client

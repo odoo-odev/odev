@@ -67,19 +67,12 @@ class PythonEnv:
         logger.debug("Installing python packages:\n" + "\n".join(packages))
         bash.execute(f"{self.pip} install {' '.join(packages)}")
 
-    def install_requirements(self, path: Union[Path, str]) -> None:
+    def install_requirements(self, path: Union[Path, str]):
         """Install packages from a requirements.txt file.
 
         :param path: Path to the requirements.txt file or the containing directory.
         """
-        requirements_path = Path(path).resolve()
-
-        if requirements_path.is_dir():
-            requirements_path = requirements_path / "requirements.txt"
-
-        if not requirements_path.exists():
-            raise FileNotFoundError(f"No requirements.txt found under {path}")
-
+        requirements_path = self.__check_requirements_path(path)
         logger.info(f"Installing python packages from {requirements_path}")
         re_package = re.compile(r"(?:[\s,](?P<name>[\w_-]+)(?:(?P<op>[<>=]+)(?P<version>[\d.]+))?)")
         debug_mode = int(LOG_LEVEL != "DEBUG")
@@ -87,8 +80,12 @@ class PythonEnv:
         if debug_mode:
             style.console.print()
 
+        buffer: List[str] = []
+
         for line in bash.stream(f"{self.pip} install -r '{requirements_path}' --no-color"):
+            # print(line)
             if not line.strip() or line.startswith(" "):
+                buffer.append(line.strip())
                 continue
 
             if line.startswith("Collecting"):
@@ -97,6 +94,7 @@ class PythonEnv:
                 if match is None:
                     continue
 
+                buffer.clear()
                 prompt.clear_line(int(debug_mode))
                 logger.info(
                     "Collecting python package "
@@ -105,13 +103,27 @@ class PythonEnv:
                     f"[bold {style.CYAN}]{match.group('version') or ''}[/bold {style.CYAN}]"
                 )
 
+            elif line.startswith("Building wheels for collected packages:"):
+                buffer.clear()
+                prompt.clear_line(int(debug_mode))
+                packages = line.replace(",", "").split(" ")[5:]
+                logger.debug("Building python packages:\n" + "\n".join(packages))
+                logger.info(f"Building wheels for {len(packages)} python packages")
+
+            elif line.startswith("Failed to build"):
+                prompt.clear_line(int(debug_mode))
+                logger.error("Failed to build python packages:\n" + "\n".join(buffer))
+                break
+
             elif line.startswith("Installing collected packages:"):
+                buffer.clear()
                 prompt.clear_line(int(debug_mode))
                 packages = line.replace(",", "").split(" ")[3:]
                 logger.debug("Installing python packages:\n" + "\n".join(packages))
                 logger.info(f"Installing {len(packages)} python packages")
 
             elif line.startswith("Successfully installed"):
+                buffer.clear()
                 prompt.clear_line(int(debug_mode))
                 packages = line.split(" ")[2:]
                 logger.debug("Installed python packages:\n" + "\n".join(packages))
@@ -124,25 +136,20 @@ class PythonEnv:
         :rtype: CompletedProcess
         """
         logger.debug(f"Running pip freeze in {self.path}")
-        result = bash.execute(f"{self.pip} freeze")
+        result = bash.execute(f"{self.pip} freeze --all")
         packages = result.stdout.decode().splitlines()
         return {package.split("==")[0].lower(): version.parse(package.split("==")[1]) for package in packages}
 
     def missing_requirements(self, path: Union[Path, str]) -> Generator[str, None, None]:
         """Check for missing packages in a requirements.txt file.
+        Useful to ensure all packages have the correct version even if the user already installed some packages
+        manually.
 
         :param path: Path to the requirements.txt file or the containing directory.
         :return: A list of missing packages.
         :rtype: List[str]
         """
-        requirements_path = Path(path).resolve()
-
-        if requirements_path.is_dir():
-            requirements_path = requirements_path / "requirements.txt"
-
-        if not requirements_path.exists():
-            raise FileNotFoundError(f"No requirements.txt found under {path}")
-
+        requirements_path = self.__check_requirements_path(path)
         logger.debug(f"Checking missing python packages from {requirements_path}")
         installed_packages = self.installed_packages()
         required_packages = requirements_path.read_text().splitlines()
@@ -163,11 +170,6 @@ class PythonEnv:
             re.VERBOSE | re.IGNORECASE,
         )
 
-        eval_locals = {
-            "sys_platform": sys.platform,
-            "python_version": self.version,
-        }
-
         for line in required_packages:
             line = line.split("#", 1)[0].strip()
 
@@ -179,9 +181,7 @@ class PythonEnv:
             if match is None:
                 continue
 
-            package_conditional = match.group("conditional")
-
-            if package_conditional is not None and not eval(package_conditional, eval_locals):
+            if not self.__check_package_conditions(match.group("conditional")):
                 continue
 
             installed_version = installed_packages.get(match.group("name").lower())
@@ -199,10 +199,7 @@ class PythonEnv:
             if package_operator is None:
                 continue
 
-            package_version = match.group("version")
-
-            if "*" in package_version:
-                package_version = package_version.split("*", 1)[0].rstrip(".")
+            package_version = match.group("version").split("*", 1)[0].rstrip(".")
 
             version_locals = {
                 "installed_version": installed_version,
@@ -211,10 +208,40 @@ class PythonEnv:
 
             if not eval(f"installed_version {package_operator} package_version", version_locals):
                 logger.debug(
-                    f"Outdated python package {match.group('name')} "
+                    f"Incorrect python package version {match.group('name')} "
                     f"({installed_version} {package_operator} {package_version})"
                 )
                 yield line
+
+    def __check_requirements_path(self, path: Union[Path, str]) -> Path:
+        requirements_path = Path(path).resolve()
+
+        if requirements_path.is_dir():
+            requirements_path = requirements_path / "requirements.txt"
+
+        if not requirements_path.exists():
+            raise FileNotFoundError(f"No requirements.txt found under {path}")
+
+        return requirements_path
+
+    def __check_package_conditions(self, conditional: Optional[str]) -> bool:
+        if conditional is None:
+            return True
+
+        if "python_version" in conditional:
+            conditional = re.sub(
+                r"(?:'|\")(3.\d+)(?:'|\")",
+                lambda m: m.group(1) and str(int(m.group(1).replace(".", ""))),
+                conditional,
+            )
+
+        return eval(
+            conditional,
+            {
+                "sys_platform": sys.platform,
+                "python_version": int(self.version.replace(".", "")),
+            },
+        )
 
     def run_script(
         self, script: Union[Path, str], args: Optional[List[str]] = None, stream: bool = False
