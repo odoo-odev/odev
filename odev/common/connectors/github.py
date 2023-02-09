@@ -515,23 +515,6 @@ class GithubConnector(Connector):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
                     repo.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
 
-    def modified_worktrees_requirements(self, worktrees: Sequence[GitWorktree] = None) -> Generator[Path, None, None]:
-        """Find all modified requirements files in worktrees.
-
-        :param worktrees: A list of worktrees to search. If not specified, all worktrees will be searched.
-        :return: A list of paths to modified requirements files.
-        :rtype: Generator[Path, None, None]
-        """
-        for worktree in self._filter_worktrees(worktrees):
-            repo = Repo(worktree.path)
-            requirements_paths = worktree.path.rglob("requirements.txt")
-
-            for path in requirements_paths:
-                diff = repo.git.diff("--name-only", "HEAD", "--", path.as_posix()).strip()
-
-                if diff == path.as_posix():
-                    yield worktree.path / diff
-
     @property
     def name(self) -> str:
         """The name of the repository."""
