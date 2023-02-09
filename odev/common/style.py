@@ -87,4 +87,6 @@ def spinner(message: str):
     :param message: The message to display.
     :type message: str
     """
-    return repr_console.status(repr_console.render_str(message), spinner="arc")
+    status = repr_console.status(repr_console.render_str(message), spinner="arc")
+    status._spinner.frames = [f"[{frame}]" for frame in status._spinner.frames]
+    return status
