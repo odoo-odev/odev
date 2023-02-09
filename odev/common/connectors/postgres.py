@@ -1,6 +1,7 @@
 """PostgreSQL connector."""
 
 import textwrap
+from contextlib import contextmanager, nullcontext
 from typing import (
     ClassVar,
     List,
@@ -13,16 +14,37 @@ from typing import (
 )
 
 import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, QueryCanceledError, cursor as PsycopgCursor
 
 from odev.common.connectors import Connector
 from odev.common.logging import logging
+from odev.common.signal_handling import capture_signals
+from odev.common.thread import Thread
 
 
 logger = logging.getLogger(__name__)
 
 
 DEFAULT_DATABASE = "postgres"
+
+
+class Cursor(PsycopgCursor):
+    """Extended Psycopg cursor class to add some convenience methods."""
+
+    @contextmanager
+    def transaction(self):
+        """Enter a new transaction and either commit or rollback on exit base don the result
+        of operations.
+        """
+        self.execute("BEGIN")
+
+        try:
+            yield
+        except Exception as e:
+            self.execute("ROLLBACK")
+            raise e
+        finally:
+            self.execute("COMMIT")
 
 
 class PostgresConnector(Connector):
@@ -37,7 +59,7 @@ class PostgresConnector(Connector):
     _query_cache: ClassVar[MutableMapping[Tuple[str, str], List[tuple]]] = {}
     """Simple cache of queries."""
 
-    cr: Optional[psycopg2.extensions.cursor] = None
+    cr: Optional[Cursor] = None
     """The cursor to the database engine."""
 
     def __init__(self, database: Optional[str] = None):
@@ -52,27 +74,41 @@ class PostgresConnector(Connector):
             self._connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
         if self.cr is None:
-            self.cr = self._connection.cursor()
+            self.cr = Cursor(self._connection)
 
     def disconnect(self):
         """Disconnect from the database engine."""
-        if self.cr:
+        if self.cr is not None:
             self.cr.close()
             del self.cr
 
-        if self._connection:
+        if self._connection is not None:
             self._connection.commit()
             self._connection.close()
             del self._connection
 
+    def invalidate_cache(self, database: str = None):
+        """Invalidate the cache for a given database."""
+        database = database or self.database
+        logger.debug(f"Invalidating SQL cache for database {database!r}")
+
+        for key in self._query_cache.keys():
+            if key[0] == database:
+                del self._query_cache[key]
+
     def query(
-        self, query: str, params: Optional[Sequence] = None, nocache: bool = False
+        self,
+        query: str,
+        params: Optional[Sequence] = None,
+        nocache: bool = False,
+        transaction: bool = True,
     ) -> Union[Optional[List[tuple]], bool]:
         """Execute a query and return its result.
 
         :param query: The query to execute.
         :param params: Additional parameters to pass to the cursor.
         :param nocache: Whether to bypass the cache. Select statements are cached by default.
+        :param transaction: Whether to execute the query in a transaction.
         """
         assert self.cr, "The cursor is not initialized, connect first"
         query = textwrap.dedent(query).strip()
@@ -83,27 +119,52 @@ class PostgresConnector(Connector):
         if not nocache and is_select and (self.database, query) in self._query_cache:
             return self._query_cache[(self.database, query)]
 
-        logger.debug(f"Executing PostgreSQL query against database {self.database!r}:\n{query}")
-        self.cr.execute(query, params)
+        def signal_handler_cancel_statement(*args, **kwargs):
+            """Cancel the SQL query currently running."""
+            logger.warning("Aborting execution of SQL query")
+            logger.debug(f"Aborting query:\n{query}")
+            self.cr.connection.cancel()
 
-        if not expect_result:
-            return True
+        with (
+            self.cr.transaction() if transaction else nullcontext(),
+            capture_signals(handler=signal_handler_cancel_statement),
+        ):
+            logger.debug(f"Executing PostgreSQL query against database {self.database!r}:\n{query}")
+            thread = Thread(target=self.cr.execute, args=(query, params))
 
-        result = self.cr.fetchall()
+            try:
+                thread.start()
+                thread.join()
+            except RuntimeError as error:
+                if isinstance(error.__cause__, QueryCanceledError):
+                    return False
+                raise error
+
+            result = expect_result and self.cr.fetchall()
 
         if not nocache and is_select and result:
             self._query_cache[(self.database, query)] = result
 
-        return result
+        return result if expect_result else True
 
-    def create_database(self, database: str) -> bool:
+    def create_database(self, database: str, template: str = None) -> bool:
         """Create a database.
 
         :param database: The name of the database to create.
         :return: Whether the database was created.
         :rtype: bool
         """
-        return bool(self.query(f"CREATE DATABASE {database}"))
+        return bool(
+            self.query(
+                f"""
+            CREATE DATABASE {database}
+                WITH TEMPLATE {template or 'template0'}
+                LC_COLLATE 'C'
+                ENCODING 'unicode'
+            """,
+                transaction=False,
+            )
+        )
 
     def drop_database(self, database: str) -> bool:
         """Drop a database.
@@ -112,7 +173,8 @@ class PostgresConnector(Connector):
         :return: Whether the database was dropped.
         :rtype: bool
         """
-        return bool(self.query(f"DROP DATABASE IF EXISTS {database}"))
+        self.invalidate_cache(database=database)
+        return bool(self.query(f"DROP DATABASE IF EXISTS {database}", transaction=False))
 
     def database_exists(self, database: str) -> bool:
         """Check whether a database exists.
@@ -146,7 +208,8 @@ class PostgresConnector(Connector):
                 WHERE c.relname = '{table}'
                     AND c.relkind IN ('r', 'v', 'm')
                     AND n.nspname = current_schema
-                """
+                """,
+                nocache=True,
             )
         )
 

@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, Optional
 
+from odev.common.connectors import PostgresConnector
 from odev.common.databases import Database
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoo import OdooBinProcess
@@ -16,6 +17,8 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
 
     _process: Optional[OdooBinProcess] = None
     """The Odoo process running the database."""
+
+    connector: PostgresConnector
 
     def __enter__(self):
         self.connector = self.psql(self.name).__enter__()
@@ -66,7 +69,11 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
         return result and result[0][0] and "enterprise" or "community"
 
     def odoo_filestore_path(self) -> Optional[Path]:
-        return self.is_odoo() and Path.home() / ".local/share/Odoo/filestore/" / self.name or None
+        return self.is_odoo() and self._odoo_filestore_path() or None
+
+    def _odoo_filestore_path(self) -> Path:
+        """Return the path to the filestore of the database without checking if linked to an Odoo database."""
+        return Path.home() / ".local/share/Odoo/filestore/" / self.name
 
     @lru_cache
     def odoo_filestore_size(self) -> Optional[int]:
@@ -105,15 +112,19 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
         with self.psql() as psql:
             return bool(psql.database_exists(self.name))
 
-    def create(self):
-        """Create the database."""
-        with self.psql() as psql:
-            psql.create_database(self.name)
+    def create(self, template: str = None) -> bool:
+        """Create the database.
 
-    def drop(self):
-        """Drop the database."""
+        :param template: The name of the template to copy.
+        """
         with self.psql() as psql:
-            psql.drop_database(self.name)
+            return psql.create_database(self.name, template=template)
+
+    def drop(self) -> bool:
+        """Drop the database."""
+        self.connector.disconnect()
+        with self.psql() as psql:
+            return psql.drop_database(self.name)
 
     @ensure_connected
     def table_exists(self, table: str) -> bool:

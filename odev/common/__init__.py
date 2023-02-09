@@ -11,4 +11,5 @@ from . import python
 from . import signal_handling
 from . import string
 from . import style
+from . import thread
 from . import version
