@@ -3,7 +3,7 @@ from abc import ABC
 from typing import ClassVar, Optional
 
 from odev.common.commands import Command
-from odev.common.databases import Database, PostgresDatabase
+from odev.common.databases.postgres import Database, PostgresDatabase
 
 
 class DatabaseCommand(Command, ABC):

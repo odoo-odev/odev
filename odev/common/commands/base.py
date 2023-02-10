@@ -51,6 +51,9 @@ class CommandError(Exception):
 class Command(ABC):
     """Base class for handling commands."""
 
+    argv: List[str] = []
+    """Arguments passed to the command before parsing."""
+
     name: ClassVar[str]
     """The name of the command associated with the class. Must be unique."""
 

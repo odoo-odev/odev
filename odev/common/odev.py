@@ -19,6 +19,7 @@ from odev._version import __version__
 from odev.common import bash, prompt, style
 from odev.common.commands.base import Command, CommandError, CommandType
 from odev.common.config import ConfigManager
+from odev.common.history import history
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.constants import DEFAULT_DATETIME_FORMAT
@@ -208,9 +209,12 @@ class Odev:
             command.argv = argv
 
             logger.debug(f"Dispatching {command!r}")
-            return command.run()
+            result = command.run()
         except CommandError as exception:
             return logger.critical(str(exception))
+        else:
+            history.set(command)
+            return result
 
     # --- Private methods ------------------------------------------------------
 

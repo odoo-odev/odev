@@ -87,8 +87,8 @@ TABLE_MAPPING: List[_Mapped] = [
         format=lambda value: value and f"[link={value.as_posix()}]{value.name}/[/link]" or "",
     ),
     _Mapped(
-        info_key="last_access_date",
-        title="Last Authentication",
+        info_key="last_date",
+        title="Last Use",
         justify=None,
         display=lambda args: args.details,
         format=lambda value: value and value.strftime("%Y-%m-%d %X") or "",
@@ -169,7 +169,6 @@ class ListCommand(PostgresConnectorMixin, Command):
                 SELECT datname
                 FROM pg_database
                 WHERE datistemplate = false
-                    AND datname != 'postgres'
                 ORDER by datname
                 """
             )

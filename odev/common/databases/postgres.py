@@ -35,6 +35,7 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
             "odoo_process_command": self.process and self.process.command(),
             "odoo_rpc_port": self.process and self.process.rpc_port(),
             "odoo_url": self.process and self.odoo_url(),
+            "last_date": self.last_date(),
         }
 
     def is_odoo(self) -> bool:
@@ -94,6 +95,31 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
                 """
             )
         return result and result[0][0] or 0
+
+    def last_date(self) -> Optional[datetime]:
+        last_access = self.last_access_date()
+        last_usage = self.last_usage_date()
+
+        if last_access and last_usage:
+            return max(last_access, last_usage)
+
+        return last_access or last_usage
+
+    def last_usage_date(self) -> Optional[datetime]:
+        if not self.is_odoo():
+            return None
+
+        with self.psql("odev") as psql:
+            result = psql.query(
+                f"""
+                SELECT date
+                FROM history
+                WHERE database = '{self.name}'
+                ORDER BY date DESC
+                LIMIT 1
+                """
+            )
+            return result and result[0][0] or None
 
     @ensure_connected
     def last_access_date(self) -> Optional[datetime]:

@@ -1,17 +1,11 @@
 from base64 import b64decode, b64encode
 from io import StringIO
-from typing import (
-    Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import Literal, Optional, Sequence, Union
 
 from agentcrypt.io import Container
 
 from odev.common import prompt
-from odev.common.databases import PostgresDatabase
+from odev.common.databases import OdevDatabase
 from odev.common.logging import logging
 
 
@@ -43,39 +37,17 @@ class Secret:
         return f"{self.__class__.__name__}({self.key!r})"
 
 
-class SecretsVault(PostgresDatabase):
+class SecretsVault(OdevDatabase):
     """A class for managing credentials in a vault database."""
 
-    _database: str = "odev"
-    """Name of the database to which the secrets are stored."""
-
-    _table: str = "secrets"
+    _table = "secrets"
     """Name of the table in which the secrets are stored."""
 
-    _columns: Mapping[str, str] = {
+    _columns = {
         "name": "VARCHAR PRIMARY KEY",
         "login": "VARCHAR",
         "cypher": "TEXT",
     }
-    """Columns definition of the secrets table.
-        Format: `{column_name: column_type}` where `column_type` is the SQL definition of the column.
-    """
-
-    def __init__(self):
-        """Initialize the vault."""
-        super().__init__(self._database)
-        self._prepare_database()
-
-    def _prepare_database(self):
-        """Prepare the vault database, ensure the database exists and has the required tables."""
-        with self:
-            if not self.exists():
-                logger.debug(f"Creating database {self!r}")
-                self.create()
-
-            if not self.table_exists(self._table):
-                logger.debug(f"Creating table {self._table!r} in database {self!r}")
-                self.create_table(self._table, self._columns)
 
     def get(
         self,
