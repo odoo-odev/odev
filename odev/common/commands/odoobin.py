@@ -6,6 +6,7 @@ from odev.common.commands import DatabaseCommand
 from odev.common.databases import PostgresDatabase
 from odev.common.logging import logging
 from odev.common.odoo import OdooBinProcess
+from odev.common.version import OdooVersion
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,13 @@ class OdoobinCommand(DatabaseCommand, ABC):
             "action": "store_true",
             "help": "Force running the database with enterprise addons.",
         },
+        {
+            "name": "version",
+            "aliases": ["-V", "--version"],
+            "help": """The Odoo version to use for running the database.
+            If not specified, defaults to the latest version of the base module installed in the database.
+            """,
+        },
     ]
 
     _require_exists: bool = True
@@ -68,6 +76,9 @@ class OdoobinCommand(DatabaseCommand, ABC):
         if self.odoobin is not None:
             self.odoobin.additional_addons_paths = addons_paths
             self.odoobin._force_enterprise = bool(self.args.enterprise)
+
+            if self.args.version is not None:
+                self.odoobin._version = OdooVersion(self.args.version)
 
     @property
     def odoobin(self) -> Optional[OdooBinProcess]:

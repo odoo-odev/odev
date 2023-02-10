@@ -32,9 +32,8 @@ __all__ = ["logging", "console", "LOG_LEVEL"]
 LOG_LEVEL = "INFO"
 
 __log_level = re.search(
-    r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-z]+)",
+    r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-zA-Z]+)",
     " ".join(sys.argv),
-    re.IGNORECASE,
 )
 
 if __log_level:

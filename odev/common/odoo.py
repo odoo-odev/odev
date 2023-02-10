@@ -17,7 +17,7 @@ from typing import (
 from odev.common import bash, style
 from odev.common.config import config
 from odev.common.connectors import GithubConnector, GitWorktree
-from odev.common.logging import logging
+from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.signal_handling import capture_signals
 from odev.common.version import OdooVersion
@@ -143,6 +143,9 @@ class OdooBinProcess:
         if self.version is None:
             return None
 
+        if self.version == OdooVersion("master"):
+            return ODOO_PYTHON_VERSIONS.get(max(ODOO_PYTHON_VERSIONS.keys()), None)
+
         return ODOO_PYTHON_VERSIONS.get(self.version.major, "2.7" if self.version.major < 11 else None)
 
     def _get_odoo_branch(self) -> str:
@@ -215,6 +218,7 @@ class OdooBinProcess:
         odoo_bin_args: List[str] = []
         odoo_bin_args.extend(["-d", self.database.name])
         odoo_bin_args.extend(["--addons-path", ",".join(path.as_posix() for path in self.addons_paths)])
+        odoo_bin_args.extend(["--log-level", LOG_LEVEL.lower()])
         odoo_bin_args.extend(args or [])
 
         if subcommand is not None:
@@ -279,7 +283,7 @@ class OdooBinProcess:
             if any(self.venv.missing_requirements(path)):
                 self.venv.install_requirements(path)
 
-        if self.version.major < 10:
+        if self.version.major < 10 and not self.version.master:
             self.venv.install_packages(["psycopg2==2.7.3.1"])
 
     def update_worktrees(self):

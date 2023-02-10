@@ -42,9 +42,9 @@ class CreateCommand(OdoobinCommand):
         },
         {
             "name": "version",
-            "aliases": ["-V", "--version"],
             "help": """The Odoo version to use for the new database.
-            If not specified, the version of the template database will be used.
+            If not specified and a template is provided, the version of
+            the template database will be used. Otherwise, the version will default to "master".
             """,
         },
     ]
@@ -55,6 +55,19 @@ class CreateCommand(OdoobinCommand):
         super().__init__(*args, **kwargs)
         self.template: Optional[PostgresDatabase] = self.args.template and PostgresDatabase(self.args.template) or None
         """Template database to copy."""
+
+        version = self.args.version and OdooVersion(self.args.version) or None
+        """Odoo version to use for the new database."""
+
+        if version is None and self.template is not None:
+            with self.template:
+                version = self.template.odoo_version()
+
+        if version is None:
+            version = OdooVersion("master")
+
+        self.version: OdooVersion = version
+        """Odoo version to use for the new database."""
 
     def run(self):
         """Create a new database locally."""
@@ -172,11 +185,9 @@ class CreateCommand(OdoobinCommand):
         if not re.search(r"--st(op-after-init)?", joined_args):
             args.append("--stop-after-init")
 
-        version = OdooVersion(self.args.version) if self.args.version else None
+        process = (self.odoobin or OdooBinProcess(self.database)).with_version(self.version).run(args=args, stream=True)
 
-        init_process = (self.odoobin or OdooBinProcess(self.database)).with_version(version).run(args=args, stream=True)
-
-        if init_process is None:
+        if process is None:
             raise self.error(f"Failed to initialize database {self.database.name!r}")
 
         logger.info(f"Initialized database {self.database.name!r}")

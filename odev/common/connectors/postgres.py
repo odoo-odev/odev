@@ -91,10 +91,7 @@ class PostgresConnector(Connector):
         """Invalidate the cache for a given database."""
         database = database or self.database
         logger.debug(f"Invalidating SQL cache for database {database!r}")
-
-        for key in self._query_cache.keys():
-            if key[0] == database:
-                del self._query_cache[key]
+        PostgresConnector._query_cache = {key: value for key, value in self._query_cache.items() if key[0] != database}
 
     def query(
         self,
@@ -157,11 +154,11 @@ class PostgresConnector(Connector):
         return bool(
             self.query(
                 f"""
-            CREATE DATABASE {database}
-                WITH TEMPLATE {template or 'template0'}
-                LC_COLLATE 'C'
-                ENCODING 'unicode'
-            """,
+                CREATE DATABASE {database}
+                    WITH TEMPLATE {template or 'template0'}
+                    LC_COLLATE 'C'
+                    ENCODING 'unicode'
+                """,
                 transaction=False,
             )
         )
@@ -173,8 +170,9 @@ class PostgresConnector(Connector):
         :return: Whether the database was dropped.
         :rtype: bool
         """
+        res = bool(self.query(f"DROP DATABASE IF EXISTS {database}", transaction=False))
         self.invalidate_cache(database=database)
-        return bool(self.query(f"DROP DATABASE IF EXISTS {database}", transaction=False))
+        return res
 
     def database_exists(self, database: str) -> bool:
         """Check whether a database exists.

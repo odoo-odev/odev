@@ -7,11 +7,13 @@ import re
 from packaging.version import InvalidVersion, _BaseVersion
 
 
-_Version = collections.namedtuple("_Version", ["major", "minor", "module", "saas"])
+_Version = collections.namedtuple("_Version", ["major", "minor", "module", "saas", "master"])
 
 
 ODOO_VERSION_PATTERN = r"""
     (?:
+        (?P<master>master)?             # master
+        |
         (?P<saas>saas-)?                # saas
         (?P<major>(?:[0-9]+)?)          # odoo major version
         [\.]?
@@ -44,10 +46,12 @@ class OdooVersion(_BaseVersion):
             minor=int(match.group("minor")) if match.group("minor") else 0,
             module=tuple(int(i) for i in match.group("module").split(".")) if match.group("module") else (),
             saas=match.group("saas") is not None,
+            master=match.group("master") is not None,
         )
 
         # Generate a key which will be used for sorting
         self._key = _cmpkey(
+            self._version.master,
             self._version.major,
             self._version.minor,
             self._version.module,
@@ -56,6 +60,9 @@ class OdooVersion(_BaseVersion):
 
     def __str__(self) -> str:
         """Return the string representation of the version."""
+        if self.master:
+            return "master"
+
         version = f"{self.major}.{self.minor}"
 
         if self.saas:
@@ -68,7 +75,7 @@ class OdooVersion(_BaseVersion):
 
     def __bool__(self) -> bool:
         """Return True if the version is not empty."""
-        return bool(self.major or self.minor or self.module)
+        return bool(self.major or self.minor or self.module or self.master)
 
     @property
     def major(self) -> int:
@@ -87,11 +94,16 @@ class OdooVersion(_BaseVersion):
 
     @property
     def saas(self) -> bool:
-        """Get the saas version."""
+        """Get whether the version is for SaaS."""
         return self._version.saas
 
+    @property
+    def master(self) -> bool:
+        """Get version this is the master version."""
+        return self._version.master
 
-def _cmpkey(major: int, minor: int, module: tuple, saas: bool):
+
+def _cmpkey(master: bool, major: int, minor: int, module: tuple, saas: bool):
     # When we compare a release version, we want to compare it with all of the
     # trailing zeros removed. So we'll use a reverse the list, drop all the now
     # leading zeros until we come to something non zero, then take the rest
@@ -102,4 +114,7 @@ def _cmpkey(major: int, minor: int, module: tuple, saas: bool):
     # Saas versions should sort after non-saas versions
     _saas = int(saas)
 
-    return major, minor, _module, _saas
+    # Master versions should sort before non-master versions
+    _master = int(master)
+
+    return _master, major, minor, _module, _saas

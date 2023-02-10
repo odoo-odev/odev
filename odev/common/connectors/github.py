@@ -28,6 +28,7 @@ from rich.progress import (
 )
 
 from odev.common import bash, prompt, style
+from odev.common.commands.base import CommandError
 from odev.common.config import config
 from odev.common.connectors.base import Connector
 from odev.common.logging import logging
@@ -419,8 +420,7 @@ class GithubConnector(Connector):
         tree_list: str = self.repository.git.worktree("list", "--porcelain")
 
         for worktree in [tree.strip() for tree in tree_list.split("\n" * 2) if tree and tree.startswith("worktree ")]:
-            if not re.match(r"^worktree (.*)\n", worktree).group(1) == self.path.as_posix():
-                yield GitWorktree.parse(self, worktree)
+            yield GitWorktree.parse(self, worktree)
 
     def create_worktree(self, path: Union[Path, str], branch: str = None):
         """Create a new worktree for the repository based on a specific branch
@@ -438,15 +438,27 @@ class GithubConnector(Connector):
         if not path.is_absolute():
             path = (self.worktrees_path / path).resolve()
 
-        self.worktrees_path.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Creating worktree [bold]{branch!s}[/bold] for [bold {style.CYAN}]{self.name}[/bold {style.CYAN}]")
+        message = f"worktree [bold]{branch!s}[/bold] for [bold {style.CYAN}]{self.name}[/bold {style.CYAN}]"
 
-        if path.exists():
-            logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
-            shutil.rmtree(path)
+        with style.spinner(f"Creating {message}"):
+            self.worktrees_path.mkdir(parents=True, exist_ok=True)
 
-        logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {branch!r}")
-        self.repository.git.worktree("add", path, branch or self.branch)
+            if path.exists():
+                logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
+                shutil.rmtree(path)
+
+            logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {branch!r}")
+
+            try:
+                self.repository.git.worktree("add", path, branch or self.branch)
+            except GitCommandError as error:
+                if "fatal: invalid reference" in error.stderr:
+                    logger.error(f"Git branch {branch!r} does not exist for repository {self.name!r}")
+                    raise CommandError(None, "Did you forget to use '--version master'?") from error
+
+                raise error
+
+        logger.info(f"Created {message}")
 
     def prune_worktrees(self):
         """Prune worktrees marked as prunable by git."""
