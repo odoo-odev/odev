@@ -24,7 +24,6 @@ class CreateCommand(OdoobinCommand):
         {
             "name": "template",
             "aliases": ["-t", "--template"],
-            "nargs": "?",
             "help": "Name of an existing PostgreSQL database to copy.",
         },
         {
@@ -53,7 +52,7 @@ class CreateCommand(OdoobinCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.template: Optional[LocalDatabase] = self.args.template and LocalDatabase(self.args.template) or None
+        self.template: Optional[LocalDatabase] = LocalDatabase(self.args.template) if self.args.template else None
         """Template database to copy."""
 
         version = self.args.version and OdooVersion(self.args.version) or None
@@ -61,7 +60,7 @@ class CreateCommand(OdoobinCommand):
 
         if version is None and self.template is not None:
             with self.template:
-                version = self.template.odoo_version()
+                version = self.template.odoo_version
 
         if version is None:
             version = OdooVersion("master")
