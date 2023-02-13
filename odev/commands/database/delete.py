@@ -36,6 +36,10 @@ class DeleteCommand(OdoobinCommand):
         if not prompt.confirm(f"Are you sure you want to delete the database {self.database.name!r}?"):
             raise self.error("Command aborted")
 
+        if self.database.whitelisted:
+            if not prompt.confirm(f"Database {self.database.name!r} is whitelisted, are you really sure?"):
+                raise self.error("Command aborted")
+
         if "template" not in self.args.keep:
             self.remove_template_databases()
 
