@@ -10,19 +10,31 @@ from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
-from typing import Any, List, MutableMapping
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    List,
+    MutableMapping,
+)
 
 from git import Remote, Repo
 from packaging import version
 
 from odev._version import __version__
 from odev.common import bash, prompt, style
-from odev.common.commands.base import Command, CommandError, CommandType
 from odev.common.config import ConfigManager
-from odev.common.history import history
+from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
+from odev.common.store import DataStore
 from odev.constants import DEFAULT_DATETIME_FORMAT
+
+
+if TYPE_CHECKING:
+    from rich.console import Console
+
+    from odev.common.commands.base import CommandType
 
 
 logger = logging.getLogger(__name__)
@@ -31,44 +43,34 @@ logger = logging.getLogger(__name__)
 class Odev:
     """Main framework class."""
 
-    version: str
+    version: ClassVar[str] = __version__
     """Odev version."""
 
-    path: Path
+    path: ClassVar[Path] = Path(__file__).parents[2]
     """Local path to the odev repository."""
 
-    config: ConfigManager
+    config: ClassVar["ConfigManager"] = None
     """Odev configuration."""
 
-    repo: Repo
-    """Local git repository."""
+    store: ClassVar["DataStore"] = None
+    """Odev data storage."""
 
-    commands_path: Path
-    """Local path to the commands directory."""
-
-    commands: MutableMapping[str, CommandType]
+    commands: ClassVar[MutableMapping[str, "CommandType"]] = {}
     """Collection of existing and loaded commands."""
 
-    upgrades_path: Path
-    """Local path to the upgrades directory."""
-
-    setup_path: Path
-    """Local path to the setup directory."""
-
-    executable: Path
+    executable: ClassVar[Path] = Path(sys.argv[0])
     """Path to the current executable."""
 
-    def __init__(self, config: ConfigManager):
-        self._console = style.console
-        self.version = __version__
-        self.config = config
-        self.path = Path(__file__).parents[2]
-        self.repo = Repo(self.path)
-        self.commands = {}
-        self.executable = Path(sys.argv[0])
-        self.commands_path = self.path / "odev" / "commands"
-        self.upgrades_path = self.path / "odev" / "upgrades"
-        self.setup_path = self.path / "odev" / "setup"
+    def __init__(self):
+        logger.debug(f"Starting odev version {self.version}")
+        if self.__class__.config is None:
+            self.__class__.config = ConfigManager(self.name)
+
+        if self.__class__.store is None:
+            self.__class__.store = DataStore(self.name)
+
+        self.repo: Repo = Repo(self.path)
+        """Local git repository."""
 
         with style.spinner(f"Checking for updates to odev {self.version}"):
             if self.update():
@@ -76,6 +78,31 @@ class Odev:
 
         with style.spinner("Loading commands"):
             self.register_commands()
+
+    @property
+    def name(self) -> str:
+        """Name of the framework."""
+        return "odev"
+
+    @property
+    def _console(self) -> "Console":
+        """Rich console instance to display information to users."""
+        return style.console
+
+    @property
+    def commands_path(self) -> Path:
+        """Local path to the commands directory."""
+        return self.path / "odev" / "commands"
+
+    @property
+    def upgrades_path(self) -> Path:
+        """Local path to the upgrades directory."""
+        return self.path / "odev" / "upgrades"
+
+    @property
+    def setup_path(self) -> Path:
+        """Local path to the setup directory."""
+        return self.path / "odev" / "setup"
 
     def __repr__(self) -> str:
         return f"Odev(version={self.version})"
@@ -143,7 +170,7 @@ class Odev:
 
         self.config.set("update", "version", self.version)
 
-    def import_commands(self) -> List[CommandType]:
+    def import_commands(self) -> List["CommandType"]:
         """Import all commands from the commands directory.
 
         :return: List of imported command classes
@@ -153,7 +180,7 @@ class Odev:
             path for path in self.commands_path.iterdir() if path.is_dir() and not path.name.startswith("_")
         ]
         command_modules = pkgutil.iter_modules([d.as_posix() for d in command_dirs])
-        command_classes: List[CommandType] = []
+        command_classes: List["CommandType"] = []
 
         for module_info in command_modules:
             assert isinstance(module_info.module_finder, FileFinder)
@@ -213,7 +240,7 @@ class Odev:
         except CommandError as exception:
             return logger.critical(str(exception))
         else:
-            history.set(command)
+            self.store.history.set(command)
             return result
 
     # --- Private methods ------------------------------------------------------
@@ -225,6 +252,8 @@ class Odev:
         :return: Whether the module attribute is a command
         :rtype: bool
         """
+        from odev.common.commands.base import Command
+
         return inspect.isclass(attribute) and issubclass(attribute, Command) and not attribute.is_abstract()
 
     def __git_branch_behind(self) -> bool:

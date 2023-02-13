@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 from odev.common import string, style
 from odev.common.commands import Command
-from odev.common.databases import PostgresDatabase
+from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin
 
@@ -39,9 +39,7 @@ TABLE_MAPPING: List[_Mapped] = [
         justify=None,
         display=True,
         format=lambda value: (
-            value is not None
-            and "[{style}]:white_circle:[/{style}]".format(style=value and style.GREEN or style.RED)
-            or ""
+            value is not None and "[{style}]⚪[/{style}]".format(style=value and style.GREEN or style.RED) or ""
         ),
     ),
     _Mapped(
@@ -87,6 +85,13 @@ TABLE_MAPPING: List[_Mapped] = [
         format=lambda value: value and f"[link={value.as_posix()}]{value.name}/[/link]" or "",
     ),
     _Mapped(
+        info_key="odoo_venv_path",
+        title="Virtualenv",
+        justify=None,
+        display=lambda args: args.details,
+        format=lambda value: value and f"[link={value.as_posix()}]{value.parent.name}/{value.name}[/link]" or "",
+    ),
+    _Mapped(
         info_key="last_date",
         title="Last Use",
         justify=None,
@@ -106,6 +111,15 @@ TABLE_MAPPING: List[_Mapped] = [
         justify=None,
         display=lambda args: args.details,
         format=lambda value: value and f"[link={value}?debug=1]{urlparse(value).netloc}[/link]" or "",
+    ),
+    _Mapped(
+        info_key="whitelisted",
+        title="Whitelisted",
+        justify="center",
+        display=lambda args: args.details,
+        format=lambda value: f"[bold {style.GREEN}]✔[bold {style.GREEN}]"
+        if value
+        else f"[bold {style.RED}] ❌[bold {style.RED}]",
     ),
 ]
 
@@ -146,18 +160,20 @@ class ListCommand(PostgresConnectorMixin, Command):
         with style.spinner("Listing databases..."):
             databases = self.list_databases()
 
-        if not databases:
-            message = "No database found"
+            if not databases:
+                message = "No database found"
 
-            if self.args.expression:
-                message += f" matching pattern '{self.args.expression.pattern}'"
+                if self.args.expression:
+                    message += f" matching pattern '{self.args.expression.pattern}'"
 
-            raise self.error(message)
+                raise self.error(message)
 
-        if self.args.names_only and databases:
-            return self.print(*databases, sep="\n")
+            if self.args.names_only and databases:
+                return self.print(*databases, sep="\n")
 
-        self.table(*self.get_table_data(databases))
+            data = self.get_table_data(databases)
+
+        self.table(*data)
 
     def list_databases(self) -> List[str]:
         """List the names of all local databases, excluding templates
@@ -208,10 +224,10 @@ class ListCommand(PostgresConnectorMixin, Command):
 
     def get_database_info(self, database: str) -> MutableMapping[str, Any]:
         """Get information about a database."""
-        with PostgresDatabase(database) as db:
+        with LocalDatabase(database) as db:
             return db.info()
 
     def is_odoo(self, database: str) -> bool:
         """Check if a database is an Odoo database."""
-        with PostgresDatabase(database) as db:
-            return db.is_odoo()
+        with LocalDatabase(database) as db:
+            return db.is_odoo

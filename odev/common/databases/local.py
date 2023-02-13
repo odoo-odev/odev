@@ -1,7 +1,6 @@
 """PostgreSQL database class."""
 
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, Optional
 
@@ -12,13 +11,24 @@ from odev.common.odoo import OdooBinProcess
 from odev.common.version import OdooVersion
 
 
-class PostgresDatabase(PostgresConnectorMixin, Database):
+class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
 
     _process: Optional[OdooBinProcess] = None
     """The Odoo process running the database."""
 
     connector: PostgresConnector
+
+    _whitelisted: bool = False
+    """Whether the database is whitelisted and should not be removed automatically."""
+
+    def __init__(self, name: str):
+        super().__init__(name)
+
+        if self.is_odoo:
+            info = self.store.databases.get(self)
+            self._whitelisted: bool = info is not None and info.whitelisted
+            self.store.databases.set(self)
 
     def __enter__(self):
         self.connector = self.psql(self.name).__enter__()
@@ -30,62 +40,85 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
     def info(self):
         return {
             **super().info(),
-            "is_odoo_running": self.process.is_running() if self.is_odoo() else None,
-            "odoo_process_id": self.process and self.process.pid(),
-            "odoo_process_command": self.process and self.process.command(),
-            "odoo_rpc_port": self.process and self.process.rpc_port(),
-            "odoo_url": self.process and self.odoo_url(),
-            "last_date": self.last_date(),
+            "is_odoo_running": self.process.is_running if self.is_odoo else None,
+            "odoo_process_id": self.process and self.process.pid,
+            "odoo_process_command": self.process and self.process.command,
+            "odoo_rpc_port": self.process and self.process.rpc_port,
+            "odoo_url": self.process and self.odoo_url,
+            "last_date": self.last_date,
+            "whitelisted": self.whitelisted,
+            "odoo_venv_path": self.odoo_venv,
         }
 
+    @property
     def is_odoo(self) -> bool:
-        return self.table_exists("ir_module_module")
+        with self:
+            return self.table_exists("ir_module_module")
 
-    @ensure_connected
-    def odoo_version(self) -> Optional[OdooVersion]:
-        result = self.is_odoo() and self.connector.query(
-            """
-            SELECT latest_version
-            FROM ir_module_module
-            WHERE name = 'base'
-            LIMIT 1
-            """
-        )
-        return result and OdooVersion(result[0][0]) or None
-
-    @ensure_connected
-    def odoo_edition(self) -> Optional[str]:
-        if not self.is_odoo():
+    @property
+    def odoo_venv(self) -> Optional[Path]:
+        if not self.is_odoo:
             return None
 
-        result = self.connector.query(
-            """
-            SELECT true
-            FROM ir_module_module
-            WHERE license LIKE 'OEEL-%'
-                AND state = 'installed'
-            LIMIT 1
-            """
-        )
+        info = self.store.databases.get(self)
+
+        if info is None:
+            return None
+
+        return Path(info.virtualenv)
+
+    @property
+    def odoo_version(self) -> Optional[OdooVersion]:
+        with self:
+            result = self.is_odoo and self.connector.query(
+                """
+                SELECT latest_version
+                FROM ir_module_module
+                WHERE name = 'base'
+                LIMIT 1
+                """
+            )
+
+        return result and OdooVersion(result[0][0]) or None
+
+    @property
+    def odoo_edition(self) -> Optional[str]:
+        if not self.is_odoo:
+            return None
+
+        with self:
+            result = self.connector.query(
+                """
+                SELECT true
+                FROM ir_module_module
+                WHERE license LIKE 'OEEL-%'
+                    AND state = 'installed'
+                LIMIT 1
+                """
+            )
+
         return result and result[0][0] and "enterprise" or "community"
 
+    @property
     def odoo_filestore_path(self) -> Optional[Path]:
-        return self.is_odoo() and self._odoo_filestore_path() or None
+        return self.is_odoo and self._odoo_filestore_path() or None
 
     def _odoo_filestore_path(self) -> Path:
         """Return the path to the filestore of the database without checking if linked to an Odoo database."""
         return Path.home() / ".local/share/Odoo/filestore/" / self.name
 
-    @lru_cache
+    @property
     def odoo_filestore_size(self) -> Optional[int]:
-        if not self.is_odoo():
+        if not self.is_odoo:
             return None
 
-        return sum(f.stat().st_size for f in self.odoo_filestore_path().rglob("*") if f.is_file())
+        return sum(f.stat().st_size for f in self.odoo_filestore_path.rglob("*") if f.is_file())
 
+    @property
     def odoo_url(self) -> Optional[str]:
-        return self.process.is_running() and f"http://localhost:{self.process.rpc_port()}/web" or None
+        return self.process.is_running and f"http://localhost:{self.process.rpc_port}/web" or None
 
+    @property
     def size(self) -> int:
         with self.psql() as psql:
             result = psql.query(
@@ -96,17 +129,19 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
             )
         return result and result[0][0] or 0
 
+    @property
     def last_date(self) -> Optional[datetime]:
-        last_access = self.last_access_date()
-        last_usage = self.last_usage_date()
+        last_access = self.last_access_date
+        last_usage = self.last_usage_date
 
         if last_access and last_usage:
             return max(last_access, last_usage)
 
         return last_access or last_usage
 
+    @property
     def last_usage_date(self) -> Optional[datetime]:
-        if not self.is_odoo():
+        if not self.is_odoo:
             return None
 
         with self.psql("odev") as psql:
@@ -121,18 +156,21 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
             )
             return result and result[0][0] or None
 
-    @ensure_connected
+    @property
     def last_access_date(self) -> Optional[datetime]:
-        result = self.is_odoo() and self.connector.query(
-            """
-            SELECT create_date
-            FROM res_users_log
-            ORDER BY create_date DESC
-            LIMIT 1
-            """
-        )
+        with self:
+            result = self.is_odoo and self.connector.query(
+                """
+                SELECT create_date
+                FROM res_users_log
+                ORDER BY create_date DESC
+                LIMIT 1
+                """
+            )
+
         return result and result[0][0] or None
 
+    @property
     def exists(self) -> bool:
         """Check if the database exists."""
         with self.psql() as psql:
@@ -169,9 +207,28 @@ class PostgresDatabase(PostgresConnectorMixin, Database):
 
     @property
     def process(self) -> Optional[OdooBinProcess]:
-        if self._process is None and self.exists():
+        if self._process is None and self.exists:
             with self:
-                if self.is_odoo():
+                if self.is_odoo:
                     self._process = OdooBinProcess(self)
 
         return self._process
+
+    @property
+    def whitelisted(self) -> bool:
+        """Whether the database is whitelisted and should not be removed automatically."""
+        if not self.is_odoo:
+            return True
+
+        info = self.store.databases.get(self)
+
+        if not info:
+            return False
+
+        return info.whitelisted
+
+    @whitelisted.setter
+    def whitelisted(self, value: bool):
+        """Set the whitelisted status of the database."""
+        self._whitelisted = value
+        self.store.databases.set(self)

@@ -27,10 +27,10 @@ class KillCommand(OdoobinCommand):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if not self.odoobin.is_running():
+        if not self.odoobin.is_running:
             raise self.error(f"Database {self.database.name!r} is not running")
 
     def run(self):
         """Kill the process of the current database."""
-        logger.info(f"Killing process for running database {self.database.name!r} (pid: {self.odoobin.pid()})")
+        logger.info(f"Killing process for running database {self.database.name!r} (pid: {self.odoobin.pid})")
         self.odoobin.kill(hard=self.args.hard)

@@ -28,9 +28,8 @@ from rich.progress import (
 )
 
 from odev.common import bash, prompt, style
-from odev.common.commands.base import CommandError
-from odev.common.config import config
 from odev.common.connectors.base import Connector
+from odev.common.errors import CommandError
 from odev.common.logging import logging
 from odev.common.signal_handling import capture_signals
 
@@ -46,6 +45,7 @@ class Stash:
 
         :param repository: The repository to stash changes in.
         """
+
         self.repository: Repo = repository
         """The repository to stash changes in."""
 
@@ -218,6 +218,8 @@ class GithubConnector(Connector):
 
         :param repo: The repository to connect to in the format `organization/repository`.
         """
+        super().__init__()
+
         repo_values = repo.split("/")
 
         if len(repo_values) != 2:
@@ -239,27 +241,24 @@ class GithubConnector(Connector):
 
     def connect(self):
         """Connect to the Github API."""
-        from odev.common.secrets import vault
+        if self._token is None:
+            self._token = self.store.secrets.get(
+                key=self._token_vault_key,
+                fields=("password",),
+                prompt_format="Please enter your Github API token:",
+            ).password
 
-        with vault:
-            if self._token is None:
-                self._token = vault.get(
-                    key=self._token_vault_key,
-                    fields=("password",),
-                    prompt_format="Please enter your Github API token:",
-                ).password
+        if self._connection is None:
+            self._connection = Github(self._token)
 
-            if self._connection is None:
-                self._connection = Github(self._token)
+        if not self.authenticated:
+            logger.warning("Failed to connect to Github API, please check your token is valid")
+            self.store.secrets.invalidate(self._token_vault_key)
+            self._disconnect()
+            return self.connect()
 
-            if not self.authenticated:
-                logger.warning("Failed to connect to Github API, please check your token is valid")
-                vault.invalidate(self._token_vault_key)
-                self._disconnect()
-                return self.connect()
-
-            if self.repository is None and self.path.exists() and self.path.is_dir():
-                self.repository = Repo(self.path)
+        if self.repository is None and self.path.exists() and self.path.is_dir():
+            self.repository = Repo(self.path)
 
         logger.debug("Connected to Github API")
 
@@ -535,8 +534,8 @@ class GithubConnector(Connector):
     @property
     def path(self) -> Path:
         """The path to the repository."""
-        with config:
-            return Path(config.get("paths", "repositories")) / self.name
+        with self.config:
+            return Path(self.config.get("paths", "repositories")) / self.name
 
     @property
     def url(self) -> str:
@@ -608,5 +607,5 @@ class GithubConnector(Connector):
     @property
     def worktrees_path(self) -> Path:
         """Path to the worktrees directory."""
-        with config:
-            return Path(config.get("paths", "repositories")).parent / ".worktrees"
+        with self.config:
+            return Path(self.config.get("paths", "repositories")).parent / ".worktrees"

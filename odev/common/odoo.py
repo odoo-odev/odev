@@ -15,17 +15,16 @@ from typing import (
 )
 
 from odev.common import bash, style
-from odev.common.config import config
 from odev.common.connectors import GithubConnector, GitWorktree
 from odev.common.logging import LOG_LEVEL, logging
+from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.python import PythonEnv
 from odev.common.signal_handling import capture_signals
 from odev.common.version import OdooVersion
 
 
 if TYPE_CHECKING:
-    from odev.common.databases import PostgresDatabase
-
+    from odev.common.databases import LocalDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,7 @@ ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
 }
 
 
-class OdooBinProcess:
+class OdooBinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
 
     additional_addons_paths: List[Path] = []
@@ -52,9 +51,11 @@ class OdooBinProcess:
     _force_enterprise: bool = False
     """Force using the enterprise version of Odoo."""
 
-    def __init__(self, database: "PostgresDatabase", venv: str = None, version: OdooVersion = None):
+    def __init__(self, database: "LocalDatabase", venv: str = None, version: OdooVersion = None):
         """Initialize the OdooBinProcess object."""
-        self.database: PostgresDatabase = database
+        super().__init__()
+
+        self.database: LocalDatabase = database
         """Database this process is for."""
 
         self._version: Optional[OdooVersion] = version
@@ -68,7 +69,7 @@ class OdooBinProcess:
         """Github repository of Odoo."""
 
     def __repr__(self) -> str:
-        return f"OdooBinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid()!r})"
+        return f"OdooBinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid!r})"
 
     def with_version(self, version: OdooVersion = None) -> "OdooBinProcess":
         """Return the OdooBinProcess instance with the given version forced."""
@@ -90,11 +91,11 @@ class OdooBinProcess:
         if self._version is not None:
             return self._version
 
-        if not self.database.exists():
+        if not self.database.exists:
             return None
 
         with self.database:
-            return self.database.odoo_version()
+            return self.database.odoo_version
 
     @property
     def odoo_path(self) -> Path:
@@ -121,8 +122,8 @@ class OdooBinProcess:
     @property
     def venv_path(self):
         """Path to the virtual environment of the Odoo installation."""
-        with config:
-            return Path(config.get("paths", "repositories")).parent / ".virtualenvs" / str(self.version)
+        with self.config:
+            return Path(self.config.get("paths", "repositories")).parent / ".virtualenvs" / str(self.version)
 
     @lru_cache
     def _get_ps_process(self) -> Optional[str]:
@@ -155,6 +156,7 @@ class OdooBinProcess:
 
         return str(self.version)
 
+    @property
     def pid(self) -> Optional[int]:
         """Return the process id of the current database if it is running."""
         process = self._get_ps_process()
@@ -164,6 +166,7 @@ class OdooBinProcess:
 
         return int(re.split(r"\s+", process)[1])
 
+    @property
     def command(self) -> Optional[str]:
         """Return the command of the process of the current database if it is running."""
         process = self._get_ps_process()
@@ -173,29 +176,28 @@ class OdooBinProcess:
 
         return " ".join(re.split(r"\s+", process)[10:])
 
+    @property
     def rpc_port(self) -> Optional[int]:
         """Return the RPC port of the process of the current database if it is running."""
-        command = self.command()
-
-        if not command:
+        if not self.command:
             return None
 
-        match = re.search(r"(?:-p|--http-port)(?:\s+|=)([0-9]{1,5})", command)
+        match = re.search(r"(?:-p|--http-port)(?:\s+|=)([0-9]{1,5})", self.command)
         return int(match.group(1)) if match is not None else 8069
 
+    @property
     def is_running(self) -> bool:
         """Return whether Odoo is currently running on the database."""
-        return self.pid() is not None
+        return self.pid is not None
 
     def kill(self, hard: bool = False):
         """Kill the process of the current database.
 
         :param hard: Send a SIGKILL instead of a SIGTERM to the running process.
         """
-        pid = self.pid()
 
-        if pid is not None:
-            bash.execute(f"kill -{9 if hard else 2} {pid}")
+        if self.pid is not None:
+            bash.execute(f"kill -{9 if hard else 2} {self.pid}")
 
     def run(
         self,
@@ -212,7 +214,7 @@ class OdooBinProcess:
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
         """
-        if self.is_running() and subcommand is None:
+        if self.is_running and subcommand is None:
             raise RuntimeError("Odoo is already running on this database")
 
         odoo_bin_args: List[str] = []
@@ -224,9 +226,10 @@ class OdooBinProcess:
         if subcommand is not None:
             odoo_bin_args.insert(0, subcommand)
 
-        self.prepare_npm()
-        self.update_worktrees()
-        self.prepare_venv()
+        with style.spinner(f"Preparing Odoo {self.version!s} for database {self.database.name!r}"):
+            self.prepare_npm()
+            self.update_worktrees()
+            self.prepare_venv()
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
@@ -308,7 +311,7 @@ class OdooBinProcess:
         repo_names: List[str] = ["odoo", "design-themes"]
 
         with self.database:
-            if self.database.odoo_edition() == "enterprise" or self._force_enterprise:
+            if self.database.odoo_edition == "enterprise" or self._force_enterprise:
                 repo_names.insert(1, "enterprise")
 
         for repo_name in repo_names:

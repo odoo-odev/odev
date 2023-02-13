@@ -2,11 +2,8 @@ import os
 from signal import SIGINT, SIGTERM, signal
 from time import monotonic
 
-from odev._version import __version__
-from odev.common import signal_handling as handlers
-from odev.common.config import config
+from odev.common import init_framework, signal_handling as handlers
 from odev.common.logging import logging
-from odev.common.odev import Odev
 
 
 _logger = logging.getLogger(__name__)
@@ -23,7 +20,6 @@ def main():
     start_time = monotonic()
 
     try:
-        _logger.debug(f"Starting odev version {__version__}")
 
         # --- Handle signals and interrupts ------------------------------------
         for sig in (SIGINT, SIGTERM):
@@ -33,8 +29,8 @@ def main():
         if os.geteuid() == 0:
             raise Exception("Odev should not be run as root")
 
-        with config:
-            Odev(config).dispatch()
+        odev = init_framework()
+        odev.dispatch()
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)

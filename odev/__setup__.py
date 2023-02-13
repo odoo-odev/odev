@@ -3,8 +3,7 @@ from signal import SIGINT, SIGTERM, signal
 
 import odev.setup as setup
 from odev._version import __version__
-from odev.common import signal_handling as handlers
-from odev.common.config import config
+from odev.common import init_framework, signal_handling as handlers
 from odev.common.logging import logging
 
 
@@ -29,8 +28,9 @@ def main():
 
         # --- Initialize odev configuration files ------------------------------
         _logger.debug("Initializing configuration files")
+        odev = init_framework()
 
-        with config:
+        with odev.config as config:
 
             # --- Create directories -------------------------------------------
             _logger.info("Setting up working directories")

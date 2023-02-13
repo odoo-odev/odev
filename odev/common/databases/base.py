@@ -1,21 +1,23 @@
 """Handling of database information."""
 
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from datetime import datetime
 from pathlib import Path
 from typing import Any, MutableMapping, Optional
 
+from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.version import OdooVersion
 
 
-class Database(ABC):
+class Database(OdevFrameworkMixin, ABC):
     """Base abstract class for manipulating databases."""
 
     name: str = None
     """The name of the database."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, *args, **kwargs):
         """Initialize the database."""
+        super().__init__(*args, **kwargs)
         self.name = name
 
     def __repr__(self):
@@ -38,48 +40,48 @@ class Database(ABC):
         """Return information about the database."""
         return {
             "name": self.name,
-            "size": self.size(),
-            "exists": self.exists(),
-            "is_odoo": self.is_odoo(),
-            "odoo_version": self.odoo_version(),
-            "odoo_edition": self.odoo_edition(),
-            "odoo_filestore_path": self.odoo_filestore_path(),
-            "odoo_filestore_size": self.odoo_filestore_size(),
-            "last_access_date": self.last_access_date(),
+            "size": self.size,
+            "exists": self.exists,
+            "is_odoo": self.is_odoo,
+            "odoo_version": self.odoo_version,
+            "odoo_edition": self.odoo_edition,
+            "odoo_filestore_path": self.odoo_filestore_path,
+            "odoo_filestore_size": self.odoo_filestore_size,
+            "last_access_date": self.last_access_date,
         }
 
-    @abstractmethod
+    @abstractproperty
     def is_odoo(self) -> bool:
         """Return whether the database is an Odoo database."""
 
-    @abstractmethod
+    @abstractproperty
     def odoo_version(self) -> Optional[OdooVersion]:
         """Return the Odoo version of the database."""
 
-    @abstractmethod
+    @abstractproperty
     def odoo_edition(self) -> Optional[str]:
         """Return the Odoo edition of the database."""
 
-    @abstractmethod
+    @abstractproperty
     def odoo_filestore_path(self) -> Optional[Path]:
         """Return the path to the Odoo filestore on the local filesystem."""
 
-    @abstractmethod
+    @abstractproperty
     def odoo_filestore_size(self) -> Optional[int]:
         """Return the size of the Odoo filestore in bytes."""
 
-    @abstractmethod
+    @abstractproperty
     def size(self) -> int:
         """Return the size of the database in bytes."""
 
-    @abstractmethod
+    @abstractproperty
     def last_access_date(self) -> Optional[datetime]:
         """Return the date of the last access to the database."""
 
-    @abstractmethod
+    @abstractproperty
     def odoo_url(self) -> Optional[str]:
         """Return the URL to access the database."""
 
-    @abstractmethod
+    @abstractproperty
     def exists(self) -> bool:
         """Return whether the database exists."""

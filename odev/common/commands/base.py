@@ -23,7 +23,9 @@ from rich.table import Table
 
 from odev.common import string
 from odev.common.actions import ACTIONS_MAPPING
+from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
+from odev.common.mixins.framework import OdevFrameworkMixin
 
 
 if TYPE_CHECKING:
@@ -35,20 +37,7 @@ CommandType = Type["Command"]
 logger = logging.getLogger(__name__)
 
 
-class CommandError(Exception):
-    """Custom exception for errors raised during commands execution."""
-
-    def __init__(self, command: "Command", *args, **kwargs):
-        """
-        Initialize the exception.
-
-        :param command: the command that raised the exception
-        """
-        super().__init__(*args, **kwargs)
-        self.command: "Command" = command
-
-
-class Command(ABC):
+class Command(OdevFrameworkMixin, ABC):
     """Base class for handling commands."""
 
     argv: List[str] = []
@@ -59,11 +48,6 @@ class Command(ABC):
 
     aliases: ClassVar[Sequence[str]] = []
     """The aliases of the command associated with the class. Must be unique."""
-
-    framework: ClassVar["Odev"] = None
-    """The framework instance associated with the command, provides access
-    to sibling commands.
-    """
 
     help: ClassVar[str] = None
     """Optional help information on what the command does."""
@@ -120,7 +104,7 @@ class Command(ABC):
     @classmethod
     def prepare_command(cls, framework: "Odev") -> None:
         """Set proper attributes on the command class and provide inheritance from parent classes."""
-        cls.framework = framework
+        cls._framework = framework
         cls.name = (cls.name or cls.__name__).lower()
         cls.help = string.normalize_indent(
             cls.__dict__.get("help") or cls.__doc__ or cls.help or sys.modules[cls.__module__].__doc__ or ""
@@ -225,11 +209,11 @@ class Command(ABC):
 
     def print(self, text: str, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
-        if self.framework._console.is_terminal and self.framework._console.height < len(text.splitlines()):
-            with self.framework._console.pager(styles=not self.framework._console.is_dumb_terminal):
-                self.framework._console.print(text, *args, **kwargs)
+        if self.odev._console.is_terminal and self.odev._console.height < len(text.splitlines()):
+            with self.odev._console.pager(styles=not self.odev._console.is_dumb_terminal):
+                self.odev._console.print(text, *args, **kwargs)
         else:
-            self.framework._console.print(text, *args, **kwargs)
+            self.odev._console.print(text, *args, **kwargs)
 
     def table(
         self,
@@ -263,7 +247,7 @@ class Command(ABC):
         if total:
             table.add_row(*total, style="bold")
 
-        self.framework._console.print(table)
+        self.odev._console.print(table)
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""

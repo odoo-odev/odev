@@ -43,7 +43,7 @@ class SetupCommand(Command):
         """Run the entire setup."""
         for script in self.__import_setup_scripts():
             if name is None or script.__name__ == name:
-                script.setup(self.framework.config)
+                script.setup(self.config)
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
@@ -72,7 +72,7 @@ class SetupCommand(Command):
         :return: Imported setup modules
         :rtype: Generator[ModuleType]
         """
-        setup_modules = pkgutil.iter_modules([d.as_posix() for d in cls.framework.setup_path.parent.glob("setup")])
+        setup_modules = pkgutil.iter_modules([d.as_posix() for d in cls._framework.setup_path.parent.glob("setup")])
 
         for module_info in setup_modules:
             assert isinstance(module_info.module_finder, FileFinder)

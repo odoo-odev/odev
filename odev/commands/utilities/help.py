@@ -54,12 +54,12 @@ class HelpCommand(Command):
         :return: Help about a single command.
         :rtype: str
         """
-        command = self.framework.commands.get(self.args.command)
+        command = self.odev.commands.get(self.args.command)
 
         if command is None:
             raise self.error(f"Cannot display help for inexistent command '{self.args.command}'")
 
-        executable = self.framework.executable.stem
+        executable = self.odev.executable.stem
         parser = command.prepare_parser()
         usage = escape(parser.format_usage().replace("usage:", executable).strip())
 
@@ -116,9 +116,9 @@ class HelpCommand(Command):
         :return: A summary of all commands.
         :rtype: str
         """
-        executable = self.framework.executable.stem
+        executable = self.odev.executable.stem
         message = f"""
-            [bold {style.PURPLE}]{executable.upper()} {self.framework.version}[/bold {style.PURPLE}]
+            [bold {style.PURPLE}]{executable.upper()} {self.odev.version}[/bold {style.PURPLE}]
 
             [italic]Automate common tasks relative to working with Odoo development databases.[/italic]
 
@@ -131,7 +131,7 @@ class HelpCommand(Command):
             arguments without brackets ('arg') are required.
         """
 
-        commands = [command for name, command in self.framework.commands.items() if name == command.name]
+        commands = [command for name, command in self.odev.commands.items() if name == command.name]
         message_indent = string.min_indent(message)
         commands_list = string.indent(
             string.format_options_list([(command.name, command.help) for command in commands], blanks=1),
@@ -152,7 +152,7 @@ class HelpCommand(Command):
         :return: The names of all available commands.
         :rtype: str
         """
-        return "\n".join(sorted(filter(lambda name: not name.startswith("-"), self.framework.commands.keys())))
+        return "\n".join(sorted(filter(lambda name: not name.startswith("-"), self.odev.commands.keys())))
 
     def print(self, text: str, *args, **kwargs) -> None:
         """Print a message to the standard output.

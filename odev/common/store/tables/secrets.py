@@ -1,12 +1,13 @@
 from base64 import b64decode, b64encode
+from dataclasses import dataclass
 from io import StringIO
 from typing import Literal, Optional, Sequence, Union
 
 from agentcrypt.io import Container
 
 from odev.common import prompt
-from odev.common.databases import OdevDatabase
 from odev.common.logging import logging
+from odev.common.postgres import PostgresTable
 
 
 logger = logging.getLogger(__name__)
@@ -18,29 +19,29 @@ class NamedStringIO(StringIO):
     name: str = "NamedStringIO"
 
 
+@dataclass
 class Secret:
     """Simple representation of a secret."""
 
-    def __init__(self, key: str, login: str, password: str):
-        self.key: str = key
-        """Key (identifier) of the secret."""
+    key: str
+    """Key (identifier) of the secret."""
 
-        self.login: str = login
-        """Login."""
+    login: str
+    """Login."""
 
-        self.password: str = password
-        """Password.
-        WARNING: This is the plaintext password, be careful with what you display.
-        """
+    password: str
+    """Password.
+    WARNING: This is the plaintext password, be careful with what you display.
+    """
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.key!r})"
 
 
-class SecretsVault(OdevDatabase):
+class SecretStore(PostgresTable):
     """A class for managing credentials in a vault database."""
 
-    _table = "secrets"
+    name = "secrets"
     """Name of the table in which the secrets are stored."""
 
     _columns = {
@@ -94,7 +95,7 @@ class SecretsVault(OdevDatabase):
         :param key: The key for the secret.
         """
         self._delete(key)
-        logger.debug(f"Secret {key!r} invalidated and removed from {self._table!r}")
+        logger.debug(f"Secret {key!r} invalidated and removed from {self.name!r}")
 
     def _get(self, name: str) -> Optional[Secret]:
         """Get a secret from the vault.
@@ -107,7 +108,7 @@ class SecretsVault(OdevDatabase):
             result = self.query(
                 f"""
                 SELECT login, cypher
-                FROM {self._table}
+                FROM {self.name}
                 WHERE name = '{name.lower()}'
                 LIMIT 1
                 """
@@ -116,7 +117,7 @@ class SecretsVault(OdevDatabase):
         if not result:
             return None
 
-        return Secret(name, result[0][0], SecretsVault.decrypt(result[0][1]))
+        return Secret(name, result[0][0], SecretStore.decrypt(result[0][1]))
 
     def _set(self, secret: Secret):
         """Save a secret to the vault.
@@ -125,12 +126,12 @@ class SecretsVault(OdevDatabase):
         :param login: The login.
         :param password: The password.
         """
-        cypher = SecretsVault.encrypt(secret.password)
+        cypher = SecretStore.encrypt(secret.password)
 
         with self:
             self.query(
                 f"""
-                INSERT INTO {self._table} (name, login, cypher)
+                INSERT INTO {self.name} (name, login, cypher)
                 VALUES ('{secret.key.lower()}', '{secret.login}', '{cypher}')
                 ON CONFLICT (name) DO
                     UPDATE SET login = '{secret.login}', cypher = '{cypher}'
@@ -145,7 +146,7 @@ class SecretsVault(OdevDatabase):
         with self:
             self.query(
                 f"""
-                DELETE FROM {self._table}
+                DELETE FROM {self.name}
                 WHERE name = '{name.lower()}'
                 """
             )
@@ -178,6 +179,3 @@ class SecretsVault(OdevDatabase):
 
         with NamedStringIO(decoded) as stream, Container.load(stream) as container:
             return container.getvalue().decode()
-
-
-vault: SecretsVault = SecretsVault()

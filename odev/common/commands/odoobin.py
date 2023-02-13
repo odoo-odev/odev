@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from odev.common.commands import DatabaseCommand
-from odev.common.databases import PostgresDatabase
+from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoo import OdooBinProcess
 from odev.common.version import OdooVersion
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class OdoobinCommand(DatabaseCommand, ABC):
     """Base class for commands that interact with an odoo-bin process."""
 
-    database: PostgresDatabase
+    database: LocalDatabase
     arguments = [
         {
             "name": "addons",
@@ -55,10 +55,10 @@ class OdoobinCommand(DatabaseCommand, ABC):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not isinstance(self.database, PostgresDatabase):
-            raise ValueError("Database must be an instance of PostgresDatabase.")
+        if not isinstance(self.database, LocalDatabase):
+            raise ValueError(f"Database must be an instance of {LocalDatabase.__name__}.")
 
-        if self._require_exists and not self.database.exists():
+        if self._require_exists and not self.database.exists:
             raise self.error(f"Database {self.database.name!r} does not exist.")
 
         if self.args.addons is not None:

@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from odev.common import prompt, style
 from odev.common.commands import OdoobinCommand
-from odev.common.databases import PostgresDatabase
+from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoo import OdooBinProcess
 from odev.common.version import OdooVersion
@@ -53,7 +53,7 @@ class CreateCommand(OdoobinCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.template: Optional[PostgresDatabase] = self.args.template and PostgresDatabase(self.args.template) or None
+        self.template: Optional[LocalDatabase] = self.args.template and LocalDatabase(self.args.template) or None
         """Template database to copy."""
 
         version = self.args.version and OdooVersion(self.args.version) or None
@@ -83,7 +83,7 @@ class CreateCommand(OdoobinCommand):
 
     def ensure_database_not_exists(self):
         """Drop the database if it exists."""
-        if self.database.exists():
+        if self.database.exists:
             logger.warning(f"Database {self.database.name!r} already exists")
 
             if not prompt.confirm("Overwrite it?"):
@@ -97,16 +97,16 @@ class CreateCommand(OdoobinCommand):
         if self.template is None:
             return
 
-        if not self.template.exists():
+        if not self.template.exists:
             raise self.error(f"Template database {self.template.name!r} does not exist")
 
-        if self.template.process is not None and self.template.process.is_running():
+        if self.template.process is not None and self.template.process.is_running:
             raise self.error(f"Cannot copy template {self.template.name!r} while it is running, shut it down and retry")
 
     def copy_template_filestore(self):
         """Copy the template filestore to the new database."""
         with self.template:
-            template_filestore = self.template.odoo_filestore_path()
+            template_filestore = self.template.odoo_filestore_path
 
         if template_filestore is not None and template_filestore.exists():
             database_filestore = self.database._odoo_filestore_path()

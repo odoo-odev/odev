@@ -33,7 +33,7 @@ class Cursor(PsycopgCursor):
 
     @contextmanager
     def transaction(self):
-        """Enter a new transaction and either commit or rollback on exit base don the result
+        """Enter a new transaction and either commit or rollback on exit based on the result
         of operations.
         """
         self.execute("BEGIN")
@@ -64,6 +64,8 @@ class PostgresConnector(Connector):
 
     def __init__(self, database: Optional[str] = None):
         """Initialize the connector."""
+        super().__init__()
+
         self.database: str = database or self._fallback_database
         """The name of the database to connect to."""
 

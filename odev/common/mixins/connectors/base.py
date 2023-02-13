@@ -13,9 +13,8 @@ def ensure_connected(func: Callable) -> Callable:
     """Decorator that ensures that the connector is connected before running the decorated method."""
 
     def wrapped(self, *args, **kwargs):
-        if not self.connector:
-            raise ConnectionError("Connector is not initialized, use the `with` statement or call `connect` first")
-        return func(self, *args, **kwargs)
+        with self:
+            return func(self, *args, **kwargs)
 
     return wrapped
 

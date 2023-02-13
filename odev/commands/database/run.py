@@ -11,7 +11,7 @@ class RunCommand(OdoobinCommand):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if self.odoobin.is_running():
+        if self.odoobin.is_running:
             raise self.error(f"Database {self.database.name!r} is already running")
 
     def run(self):

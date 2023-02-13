@@ -155,6 +155,3 @@ class ConfigManager(abc.MutableMapping):
         if not any((exc_type, exc_val, exc_tb)):
             self.save()
             self.auto_save = True
-
-
-config: ConfigManager = ConfigManager("odev")
