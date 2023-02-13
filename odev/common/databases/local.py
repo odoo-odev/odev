@@ -82,7 +82,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and OdooVersion(result[0][0]) or None
+        return result and result[0][0] and OdooVersion(result[0][0]) or None
 
     @property
     def odoo_edition(self) -> Optional[str]:
