@@ -52,6 +52,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def is_odoo(self) -> bool:
+        if not self.exists:
+            return False
+
         with self:
             return self.table_exists("ir_module_module")
 
