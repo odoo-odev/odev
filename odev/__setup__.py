@@ -7,7 +7,7 @@ from odev.common import init_framework, signal_handling as handlers
 from odev.common.logging import logging
 
 
-_logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 # --- Main entry method --------------------------------------------------------
@@ -16,43 +16,43 @@ _logger = logging.getLogger(__name__)
 def main():
     """Odev initial setup entry point."""
     try:
-        _logger.debug(f"Starting setup for odev version {__version__}")
+        logger.debug(f"Starting setup for odev version {__version__}")
 
         # --- Handle signals and interrupts ------------------------------------
         for sig in (SIGINT, SIGTERM):
             signal(sig, handlers.signal_handler_exit)
 
-        _logger.debug("Checking runtime permissions")
+        logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
             raise Exception("Odev should not be run as root")
 
         # --- Initialize odev configuration files ------------------------------
-        _logger.debug("Initializing configuration files")
+        logger.debug("Initializing configuration files")
         odev = init_framework()
 
         with odev.config as config:
 
             # --- Create directories -------------------------------------------
-            _logger.info("Setting up working directories")
+            logger.info("Setting up working directories")
             setup.directories.setup(config)
 
             # --- Create symlinks ----------------------------------------------
-            _logger.info("Setting up symlinks for command registration")
+            logger.info("Setting up symlinks for command registration")
             setup.symlink.setup(config)
 
             # --- Enable autocompletion ----------------------------------------
-            _logger.info("Setting up autocompletion")
+            logger.info("Setting up autocompletion")
             setup.completion.setup(config)
 
             # --- Configure self-update ----------------------------------------
-            _logger.info("Configuring self-update")
+            logger.info("Configuring self-update")
             setup.update.setup(config)
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)
 
     except Exception:
-        _logger.exception("Execution failed due to an unhandled exception")
+        logger.exception("Execution failed due to an unhandled exception")
         exit(1)
 
-    _logger.debug("Execution completed successfully")
+    logger.debug("Execution completed successfully")
