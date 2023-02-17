@@ -241,12 +241,13 @@ class Odev:
             logger.debug(f"Dispatching {command!r}")
             command.run()
         except CommandError as exception:
-            logger.exception(str(exception))
+            logger.error(str(exception))
         else:
             if history:
                 self.store.history.set(command)
         finally:
-            command.cleanup()
+            if command is not None:
+                command.cleanup()
 
     def dispatch(self) -> None:
         """Handle commands and arguments as received from the terminal."""
