@@ -10,6 +10,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import enlighten
+from paramiko import PasswordRequiredException
 
 from odev.exceptions import CommandAborted, SHConnectionError, SHDatabaseTooLarge
 from odev.structures import commands
@@ -206,6 +207,10 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             )
             params = {"support-login": login, "support-pass": api_key}
             with request.get(dump_url, params, stream=True) as response:
+                if not self._check_response_status(response):
+                    raise Exception(
+                        "Access Error, verify that you have Tech Support access and that your odoo api key is correct"
+                    )
                 content_length = int(response.headers.get("Content-Length", False))
                 bar_format = (
                     "{desc}{desc_pad}{percentage:3.0f}%|{bar}| "
@@ -305,11 +310,14 @@ class DumpCommand(commands.LocalDatabaseCommand, commands.OdooComCliMixin):
             sh_path = f"/home/odoo/backup.daily/{sh_database}_daily.sql.gz"
             ssh_url = f"{sh_build}@{self.source.split('/')[2]}"
 
-            with SSHClient(url=ssh_url) as ssh:
-                _logger.info(f"Downloading dump from {ssh_url}:{sh_path} to {destfile}...")
-                _logger.warning("This may take a while, please be patient...")
+            try:
+                with SSHClient(url=ssh_url) as ssh:
+                    _logger.info(f"Downloading dump from {ssh_url}:{sh_path} to {destfile}...")
+                    _logger.warning("This may take a while, please be patient...")
 
-                res = ssh.download(sh_path, destfile)
+                    res = ssh.download(sh_path, destfile)
+            except PasswordRequiredException:
+                raise Exception("Access Error, verify that your private key is set on your odoo.sh profile")
         else:
             raise CommandAborted()
         return destfile
