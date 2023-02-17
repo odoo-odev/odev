@@ -96,6 +96,11 @@ def psql_gz(database: str, dump_file: str) -> Tuple[Callable[[], IO], int, str]:
 
 
 @restore_subprocess
+def psql_bzip(database: str, dump_file: str) -> Tuple[Callable[[], IO], int, str]:
+    return get_dump_loader(dump_file), os.path.getsize(dump_file), f'bzcat - | psql "{database}"'
+
+
+@restore_subprocess
 def psql_zip(database: str, dumpzip: zipfile.ZipFile, member: str) -> Tuple[Callable[[], IO], int, str]:
     return partial(dumpzip.open, member, "r", force_zip64=True), dumpzip.getinfo(member).file_size, f'psql "{database}"'
 
@@ -157,6 +162,8 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
                 pg_restore(self.database, self.dump_path)
         elif ext == ".gz":
             psql_gz(self.database, self.dump_path)
+        elif ext in (".bz2", ".bz"):
+            psql_bzip(self.database, self.dump_path)
         elif ext == ".zip":
             self.handle_zipped_dump()
         else:
