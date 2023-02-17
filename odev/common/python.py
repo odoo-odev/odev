@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import (
+    Callable,
     Generator,
     List,
     Mapping,
@@ -83,7 +84,6 @@ class PythonEnv:
         buffer: List[str] = []
 
         for line in bash.stream(f"{self.pip} install -r '{requirements_path}' --no-color"):
-            # print(line)
             if not line.strip() or line.startswith(" "):
                 buffer.append(line.strip())
                 continue
@@ -244,12 +244,17 @@ class PythonEnv:
         )
 
     def run_script(
-        self, script: Union[Path, str], args: Optional[List[str]] = None, stream: bool = False
-    ) -> CompletedProcess:
+        self,
+        script: Union[Path, str],
+        args: Optional[List[str]] = None,
+        stream: bool = False,
+        progress: Callable[[str], None] = None,
+    ) -> Optional[CompletedProcess]:
         """Run a python script.
 
         :param path: Path to the python script to run.
         :param args: A list of arguments to pass to the script.
+        :progress: A callback function to call when a line is printed to stdout. Unused if stream is False.
         :return: The result of the script execution.
         :rtype: CompletedProcess
         """
@@ -261,7 +266,19 @@ class PythonEnv:
 
         logger.debug(f"Running python script {script_path}")
         command = f"{self.python} {script_path} {' '.join(args)}"
-        return bash.run(command) if stream else bash.execute(command)
+
+        if not stream:
+            return bash.execute(command)
+
+        if progress is None:
+            return bash.run(command)
+
+        progress = progress if progress is not None else style.console.print
+
+        for line in bash.stream(command):
+            progress(line)
+
+        return None
 
     @property
     def exists(self) -> bool:

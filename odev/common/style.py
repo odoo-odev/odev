@@ -5,7 +5,7 @@ from rich.highlighter import ReprHighlighter, _combine_regex
 from rich.theme import Theme
 
 
-BLACK = "#8a909c"
+BLACK = "dim"
 CYAN = "#00afaf"
 GRAY = ""  # Default text color from terminal settings
 GREEN = "#98C379"
@@ -15,17 +15,21 @@ YELLOW = "#d19a66"
 
 # --- Theme --------------------------------------------------------------------
 
+LOGGING_THEME_VALUES = {
+    "logging.level.critical": f"bold {RED}",
+    "logging.level.debug": f"bold {GRAY}",
+    "logging.level.error": f"bold {RED}",
+    "logging.level.info": f"bold {CYAN}",
+    "logging.level.warning": f"bold {YELLOW}",
+}
+
 RICH_THEME = Theme(
     {
         "bar.back": "black",
         "bar.complete": PURPLE,
         "bar.finished": PURPLE,
         "bar.pulse": PURPLE,
-        "logging.level.critical": f"bold {RED}",
-        "logging.level.debug": f"bold {GRAY}",
-        "logging.level.error": f"bold {RED}",
-        "logging.level.info": f"bold {CYAN}",
-        "logging.level.warning": f"bold {YELLOW}",
+        **LOGGING_THEME_VALUES,
         "progress.data.speed": CYAN,
         "progress.description": GRAY,
         "progress.download": CYAN,

@@ -1,5 +1,7 @@
 """Shared methods for working with strings."""
 
+import random
+import string as string_module
 import textwrap
 from typing import List, Tuple, Union
 
@@ -90,3 +92,13 @@ def bytes_size(size: Union[int, float]) -> str:
             return f"{size:3.1f} {unit}B"
         size /= 1024.0
     return f"{size:.1f} YB"
+
+
+def suid() -> str:
+    """Return a randomly generated unique identifier.
+
+    :return: The unique identifier.
+    :rtype: str
+    """
+    alphabet = string_module.ascii_lowercase + string_module.digits
+    return "".join(random.choices(alphabet, k=8))

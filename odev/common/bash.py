@@ -8,6 +8,7 @@ from shlex import quote
 from subprocess import (
     DEVNULL,
     PIPE,
+    STDOUT,
     CalledProcessError,
     CompletedProcess,
     Popen,
@@ -126,8 +127,8 @@ def stream(command: str) -> Generator[str, None, None]:
 
     :param str command: The command to execute.
     """
-    logger.debug(f"Running process: {quote(command)}")
-    process = Popen(command, shell=True, stdout=PIPE, stderr=PIPE)
+    logger.debug(f"Streaming process: {quote(command)}")
+    process = Popen(command, shell=True, stdout=PIPE, stderr=STDOUT)
 
     for line in iter(process.stdout.readline, b""):
         if process.poll() is not None:

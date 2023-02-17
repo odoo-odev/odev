@@ -40,7 +40,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def info(self):
         return {
             **super().info(),
-            "is_odoo_running": self.process.is_running if self.is_odoo else None,
+            "is_odoo_running": self.process.is_running if self.process.is_running or self.is_odoo else None,
             "odoo_process_id": self.process and self.process.pid,
             "odoo_process_command": self.process and self.process.command,
             "odoo_rpc_port": self.process and self.process.rpc_port,
@@ -212,8 +212,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def process(self) -> Optional[OdooBinProcess]:
         if self._process is None and self.exists:
             with self:
-                if self.is_odoo:
-                    self._process = OdooBinProcess(self)
+                self._process = OdooBinProcess(self)
 
         return self._process
 

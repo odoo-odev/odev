@@ -7,6 +7,7 @@ from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
     TYPE_CHECKING,
+    Callable,
     Generator,
     List,
     Mapping,
@@ -131,7 +132,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         Grep-ed `ps aux` output.
         """
         process = bash.execute(
-            f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}\\s*' || echo -n ''"
+            f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}(\\s+|$)' || echo -n ''"
         )
 
         if process is not None:
@@ -199,23 +200,14 @@ class OdooBinProcess(OdevFrameworkMixin):
         if self.pid is not None:
             bash.execute(f"kill -{9 if hard else 2} {self.pid}")
 
-    def run(
-        self,
-        args: List[str] = None,
-        subcommand: str = None,
-        stream: bool = True,
-        version: OdooVersion = None,
-    ) -> Optional[CompletedProcess]:
-        """Run Odoo on the current database.
+    def prepare_odoobin_args(self, args: List[str] = None, subcommand: str = None) -> List[str]:
+        """Prepare the arguments to pass to odoo-bin.
 
         :param args: Additional arguments to pass to odoo-bin.
         :param subcommand: Subcommand to pass to odoo-bin.
-        :param stream: Whether to stream the output of the process.
-        :return: The return result of the process after completion.
-        :rtype: subprocess.CompletedProcess
+        :return: List of arguments to pass to odoo-bin.
+        :rtype: List[str]
         """
-        if self.is_running and subcommand is None:
-            raise RuntimeError("Odoo is already running on this database")
 
         odoo_bin_args: List[str] = []
         odoo_bin_args.extend(["-d", self.database.name])
@@ -226,23 +218,51 @@ class OdooBinProcess(OdevFrameworkMixin):
         if subcommand is not None:
             odoo_bin_args.insert(0, subcommand)
 
+        return odoo_bin_args
+
+    def prepare_odoobin(self):
+        """Prepare the odoo-bin executable and ensure all dependencies are installed."""
+        self.prepare_npm()
+        self.update_worktrees()
+        self.prepare_venv()
+
+    def run(
+        self,
+        args: List[str] = None,
+        subcommand: str = None,
+        stream: bool = True,
+        progress: Callable[[str], None] = None,
+    ) -> Optional[CompletedProcess]:
+        """Run Odoo on the current database.
+
+        :param args: Additional arguments to pass to odoo-bin.
+        :param subcommand: Subcommand to pass to odoo-bin.
+        :param stream: Whether to stream the output of the process.
+        :param dry: Whether to only print the command that would be executed without running it.
+        :param progress: Callback to call on each line outputted by the process. Ignored if `stream` is False.
+        :return: The return result of the process after completion.
+        :rtype: subprocess.CompletedProcess
+        """
+        if self.is_running and subcommand is None:
+            raise RuntimeError("Odoo is already running on this database")
+
         with style.spinner(f"Preparing Odoo {self.version!s} for database {self.database.name!r}"):
-            self.prepare_npm()
-            self.update_worktrees()
-            self.prepare_venv()
+            self.prepare_odoobin()
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
             info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
+            odoobin_args = self.prepare_odoobin_args(args, subcommand)
+
             logger.info(f"{info_message} using command:")
             style.console.print(
-                f"\n[{style.CYAN}]{self.venv.python} {self.odoobin_path} {' '.join(odoo_bin_args)}[/{style.CYAN}]\n",
+                f"\n[{style.CYAN}]{self.venv.python} {self.odoobin_path} {' '.join(odoobin_args)}[/{style.CYAN}]\n",
                 soft_wrap=True,
             )
 
             try:
                 with style.spinner(info_message) if not stream else nullcontext():
-                    process = self.venv.run_script(self.odoobin_path, odoo_bin_args, stream=stream)
+                    process = self.venv.run_script(self.odoobin_path, odoobin_args, stream=stream, progress=progress)
             except CalledProcessError as error:
                 if not stream:
                     style.console.print(error.stderr.decode())

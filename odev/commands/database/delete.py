@@ -53,6 +53,7 @@ class DeleteCommand(OdoobinCommand):
             self.remove_configuration()
 
         self.drop_database()
+        logger.info(f"Dropped database {self.database.name!r}")
 
     def drop_database(self):
         """Drop the database if it exists."""

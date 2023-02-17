@@ -156,8 +156,8 @@ class PostgresConnector(Connector):
         return bool(
             self.query(
                 f"""
-                CREATE DATABASE {database}
-                    WITH TEMPLATE {template or 'template0'}
+                CREATE DATABASE "{database}"
+                    WITH TEMPLATE "{template or 'template0'}"
                     LC_COLLATE 'C'
                     ENCODING 'unicode'
                 """,
@@ -172,7 +172,14 @@ class PostgresConnector(Connector):
         :return: Whether the database was dropped.
         :rtype: bool
         """
-        res = bool(self.query(f"DROP DATABASE IF EXISTS {database}", transaction=False))
+        res = bool(
+            self.query(
+                f"""
+                DROP DATABASE IF EXISTS "{database}"
+                """,
+                transaction=False,
+            )
+        )
         self.invalidate_cache(database=database)
         return res
 

@@ -1,3 +1,4 @@
+import re
 from abc import ABC
 from pathlib import Path
 from typing import Optional
@@ -53,10 +54,26 @@ class OdoobinCommand(DatabaseCommand, ABC):
     _require_exists: bool = True
     """Whether the database must exist before running the command."""
 
+    _odoo_log_regex: re.Pattern = re.compile(
+        r"""
+            (?:
+                (?P<date>\d{4}-\d{2}-\d{2})\s
+                (?P<time>\d{2}:\d{2}:\d{2},\d{3})\s
+                (?P<pid>\d+)\s
+                (?P<level>[A-Z]+)\s
+                (?P<database>[^\s]+)\s
+                (?P<logger>[^:]+):\s
+                (?P<description>.*)
+            )
+        """,
+        re.VERBOSE | re.IGNORECASE,
+    )
+    """Regular expression to match the output of odoo-bin."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if not isinstance(self.database, LocalDatabase):
-            raise ValueError(f"Database must be an instance of {LocalDatabase.__name__}.")
+            raise self.error(f"Database must be an instance of {LocalDatabase.__name__}.")
 
         if self._require_exists and not self.database.exists:
             raise self.error(f"Database {self.database.name!r} does not exist.")

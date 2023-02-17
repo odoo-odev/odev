@@ -39,7 +39,7 @@ TABLE_MAPPING: List[_Mapped] = [
         justify=None,
         display=True,
         format=lambda value: (
-            value is not None and "[{style}]⚪[/{style}]".format(style=value and style.GREEN or style.RED) or ""
+            value is not None and "[{style}]⚪[/{style}]".format(style=style.GREEN if value else style.RED) or ""
         ),
     ),
     _Mapped(

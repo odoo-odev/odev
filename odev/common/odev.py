@@ -205,6 +205,49 @@ class Odev:
             command_class.prepare_command(self)
             self.commands.update({name: command_class for name in command_names})
 
+    def parse_arguments(self, command_cls: "CommandType", *args):
+        """Parse arguments for a command.
+
+        :param command_cls: Command class to parse arguments for
+        :param args: Arguments to parse
+        :return: Parsed arguments
+        """
+        try:
+            logger.debug(f"Parsing command arguments '{' '.join(args)}'")
+            arguments = command_cls.parse_arguments(args)
+        except SystemExit as exception:
+            return logger.error(str(exception))
+        return arguments
+
+    def run_command(self, name: str, *args: str, history: bool = False) -> None:
+        """Run a command with the given arguments.
+
+        :param name: Name of the command to run
+        :param args: Arguments to pass to the command
+        :param history: Whether to add the command to the command history.
+        """
+        command_cls = self.commands.get(name)
+
+        if command_cls is None:
+            return logger.error(f"Command {name!r} not found")
+
+        arguments = self.parse_arguments(command_cls, *args)
+        command = None  # Avoid UnboundLocalError during cleanup
+
+        try:
+            command = command_cls(arguments)
+            command.argv = " ".join(args)
+
+            logger.debug(f"Dispatching {command!r}")
+            command.run()
+        except CommandError as exception:
+            logger.exception(str(exception))
+        else:
+            if history:
+                self.store.history.set(command)
+        finally:
+            command.cleanup()
+
     def dispatch(self) -> None:
         """Handle commands and arguments as received from the terminal."""
         argv = sys.argv[1:]
@@ -220,28 +263,7 @@ class Odev:
             logger.debug("Help argument or no command provided, falling back to help command")
             argv = ["help", *argv]
 
-        command_cls = self.commands.get(argv[0])
-
-        if command_cls is None:
-            return logger.error(f"Command {argv[0]!r} not found")
-
-        try:
-            logger.debug(f"Parsing command arguments '{' '.join(argv[1:])}'")
-            arguments = command_cls.parse_arguments(argv[1:])
-        except SystemExit as exception:
-            return logger.error(str(exception))
-
-        try:
-            command = command_cls(arguments)
-            command.argv = argv
-
-            logger.debug(f"Dispatching {command!r}")
-            result = command.run()
-        except CommandError as exception:
-            return logger.critical(str(exception))
-        else:
-            self.store.history.set(command)
-            return result
+        self.run_command(argv[0], *argv[1:], history=True)
 
     # --- Private methods ------------------------------------------------------
 

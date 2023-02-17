@@ -21,7 +21,7 @@ from typing import (
 from rich import box
 from rich.table import Table
 
-from odev.common import string
+from odev.common import prompt, string
 from odev.common.actions import ACTIONS_MAPPING
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
@@ -70,6 +70,12 @@ class Command(OdevFrameworkMixin, ABC):
             "action": "store_true",
             "help": "Show help for the current command.",
         },
+        {
+            "aliases": ["-f", "--force"],
+            "dest": "bypass_prompt",
+            "action": "store_true",
+            "help": "Bypass confirmation prompts and assume 'yes' to all, use with caution!",
+        },
     ]
     """Arguments definitions to extend commands capabilities."""
 
@@ -82,6 +88,12 @@ class Command(OdevFrameworkMixin, ABC):
         self.args: Namespace = args
         self.args.log_level = LOG_LEVEL
 
+        prompt.bypass_prompt = self.args.bypass_prompt
+
+    def __del__(self):
+        """Reset the bypass prompt flag."""
+        prompt.bypass_prompt = not self.args.bypass_prompt
+
     def __repr__(self) -> str:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
         return f"{self.__class__.__name__}({args})"
@@ -93,6 +105,9 @@ class Command(OdevFrameworkMixin, ABC):
     def run(self) -> None:
         """Executes the command."""
         raise NotImplementedError()
+
+    def cleanup(self) -> None:
+        """Cleanup after the command execution."""
 
     @classmethod
     def is_abstract(cls) -> bool:

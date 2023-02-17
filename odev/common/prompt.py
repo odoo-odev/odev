@@ -11,6 +11,12 @@ from prompt_toolkit.validation import ValidationError
 from odev.common import style
 
 
+# --- Bypass confirmation prompts ----------------------------------------------
+
+
+bypass_prompt = False
+
+
 # --- Constants ----------------------------------------------------------------
 
 
@@ -179,14 +185,17 @@ def confirm(message: str, default: bool = False) -> bool:
     :rtype: bool
     """
 
-    return inquirer.confirm(
-        message=message,
-        default=default,
-        raise_keyboard_interrupt=True,
-        style=STYLE,
-        amark=MARK,
-        qmark=MARK,
-    ).execute()
+    return (
+        bypass_prompt
+        or inquirer.confirm(
+            message=message,
+            default=default,
+            raise_keyboard_interrupt=True,
+            style=STYLE,
+            amark=MARK,
+            qmark=MARK,
+        ).execute()
+    )
 
 
 def directory(message: str, default: str = None) -> Optional[str]:
