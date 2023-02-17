@@ -5,7 +5,6 @@ import re
 import shlex
 import subprocess
 from datetime import datetime, timedelta
-from subprocess import DEVNULL
 from typing import Any, List, Mapping, Optional
 from urllib.parse import urlparse
 
@@ -238,22 +237,23 @@ def prepare_venv(venv_parent_dir, py_version: str, venv_name=DEFAULT_VENV_NAME, 
     """
     venv_path = os.path.join(venv_parent_dir, venv_name)
     if not os.path.isdir(venv_path) or force_prepare:
-
-        try:
-            command = f'cd "{venv_parent_dir}" && virtualenv --python={py_version} {venv_name}'
-            _logger.info(f"Creating virtual environment: Python {py_version} ({venv_name})")
-            with capture_signals():
-                subprocess.run(command, shell=True, check=True, stdout=DEVNULL)
-
-        except Exception:  # FIXME: W0703 broad-except
-            # TODO: log Exception details (if any) or capture stdout+stderr to log?
-            _logger.error(f"Error creating virtual environment for Python {py_version}")
-            _logger.error(
-                "Please check the correct version of Python is installed on your computer:\n"
-                "\tsudo add-apt-repository ppa:deadsnakes/ppa\n"
-                "\tsudo apt update\n"
-                f"\tsudo apt install -y python{py_version} python{py_version}-dev python{py_version}-distutils"
-            )
+        command = f'cd "{venv_parent_dir}" && virtualenv --python={py_version} {venv_name}'
+        _logger.info(f"Creating virtual environment: Python {py_version} ({venv_name})")
+        with capture_signals():
+            output = subprocess.run(command, shell=True, capture_output=True)
+            if output.returncode != 0:
+                _logger.error(f"Error creating virtual environment for Python {py_version}")
+                if output.stderr.decode("utf-8") == "/bin/sh: 1: virtualenv: not found\n":
+                    _logger.error(
+                        "Please check that virtualenv is installed on your computer:\n\tsudo apt install python3-virtualenv"
+                    )
+                else:
+                    _logger.error(
+                        "Please check the correct version of Python is installed on your computer:\n"
+                        "\tsudo add-apt-repository ppa:deadsnakes/ppa\n"
+                        "\tsudo apt update\n"
+                        f"\tsudo apt install -y python{py_version} python{py_version}-dev python{py_version}-distutils"
+                    )
 
 
 def prepare_requirements(
