@@ -21,7 +21,7 @@ from argparse import (
 )
 from collections import defaultdict
 from contextlib import nullcontext
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -47,7 +47,10 @@ from github import Github
 from packaging.version import Version
 
 from odev.constants import (
+    DB_TEMPLATE_SUFFIX,
     DEFAULT_DATABASE,
+    DEFAULT_DATETIME_FORMAT,
+    DEFAULT_VENV_NAME,
     HELP_ARGS_ALIASES,
     ICON_COLORS,
     ICON_OPTIONS,
@@ -59,10 +62,12 @@ from odev.exceptions import (
     BuildFail,
     BuildTimeout,
     BuildWarning,
+    CommandAborted,
     InvalidArgument,
     InvalidDatabase,
     InvalidFileArgument,
     InvalidOdooDatabase,
+    RunningOdooDatabase,
 )
 from odev.exceptions.commands import InvalidQuery
 from odev.structures.actions import CommaSplitAction, OptionalStringAction
@@ -73,6 +78,7 @@ from odev.utils.github import get_github
 from odev.utils.odoo import (
     check_database_name,
     get_odoo_version,
+    get_venv_path,
     is_addon_path,
     is_really_module,
     parse_odoo_version,
@@ -383,6 +389,152 @@ class LocalDatabaseCommand(Command, ABC):
 
         self.database_required = self.database_required and self.add_database_argument
         self.database = self.database_required and self._get_database(database=args.database) or ""
+        self._clean_old_db()
+
+    def remove(
+        self, database: str = None, keep_template: bool = False, keep_filestore: bool = False, keep_venv: bool = False
+    ):
+        """
+        Deletes an existing local database and its filestore.
+        """
+        self.database = database or self.database
+
+        if not self.db_exists_all():
+            if _logger.confirm(f"Database {self.database} does not exist, do you still want to delete its filestore?"):
+                self.remove_filestore()
+                self.remove_configuration()
+                return 0
+            raise InvalidDatabase(f"Database {self.database} does not exist")
+
+        if self.db_runs():
+            raise RunningOdooDatabase(f"Database {self.database} is running, please shut it down and retry")
+
+        is_odoo_db = self.is_odoo_db()
+        version = is_odoo_db and self.db_version_clean()
+
+        dbs = [self.database]
+        queries = [f"""DROP DATABASE "{self.database}";"""]
+        info_text = f"Dropping PSQL database {self.database}"
+        template_db_name = f"{self.database}{DB_TEMPLATE_SUFFIX}"
+
+        if not keep_template and self.db_exists(template_db_name):
+            _logger.warning(f"You are about to delete the database template {template_db_name}")
+
+            confirm = _logger.confirm(f"Delete database template `{template_db_name}` ?")
+            if confirm:
+                queries.append(f"""DROP DATABASE "{template_db_name}";""")
+                dbs.append(template_db_name)
+                info_text += " and his template"
+
+        with_filestore = " and its filestore" if not keep_filestore else ""
+
+        _logger.warning(
+            f"You are about to delete the database {self.database}{with_filestore}. This action is irreversible."
+        )
+
+        if not is_odoo_db:
+            _logger.warning(f"Warning: {self.database} is not an Odoo database.")
+
+        if not _logger.confirm(f"Delete database {self.database}{with_filestore}?"):
+            raise CommandAborted()
+
+        _logger.info(info_text)
+        # We need two calls as Postgres will embed those two queries inside a block
+        # https://github.com/psycopg/psycopg2/issues/1201
+        result = None
+
+        for query in queries:
+            result = self.run_queries(query, database=DEFAULT_DATABASE)
+
+        if not result or self.db_exists_all():
+            return 1
+
+        _logger.debug(f"Dropped database {self.database}{with_filestore}")
+
+        if not keep_filestore:
+            self.remove_filestore()
+
+        if is_odoo_db and not keep_venv:
+            self.remove_specific_venv(version)
+
+        self.remove_configuration(dbs)
+
+        return 0
+
+    def remove_configuration(self, databases=None):
+        for db in databases or [self.database]:
+            if db in self.config["databases"]:
+                self.config["databases"].delete(db)
+
+    def remove_filestore(self):
+        filestore = self.db_filestore()
+        if not os.path.exists(filestore):
+            _logger.info("Filestore not found, no action taken")
+        else:
+            try:
+                _logger.info(f"Deleting filestore in `{filestore}`")
+                shutil.rmtree(filestore)
+            except Exception as exc:
+                _logger.warning(f"Error while deleting filestore: {exc}")
+
+    def remove_specific_venv(self, version: str):
+        venv_path: str = get_venv_path(self.config["odev"].get("paths", "odoo"), version, self.database)
+        assert not venv_path.endswith(DEFAULT_VENV_NAME)
+        if os.path.isdir(venv_path):
+            try:
+                _logger.info(f"Deleting database-specific venv in `{venv_path}`")
+                shutil.rmtree(venv_path)
+            except Exception as exc:
+                _logger.warning(f"Error while deleting database-specific venv: {exc}")
+
+    def _clean_old_db(self):
+        config = ConfigManager("odev")
+
+        default_date = (datetime.today() - timedelta(days=6)).strftime(DEFAULT_DATETIME_FORMAT)
+        update_check_interval = config.get("clean", "clean_interval", 10)
+        last_update_check = config.get("clean", "last_clean", default_date)
+        last_check_diff = (datetime.today() - datetime.strptime(last_update_check, DEFAULT_DATETIME_FORMAT)).days
+
+        if last_check_diff > update_check_interval:
+            min_delay_before_drop = int(config.get("cleaning", "min_delay_before_drop"), 10)
+            databases_to_clean: List = []
+
+            for db_section in self.config["databases"].values():
+                if db_section.get("whitelist_cleaning") == "true":
+                    continue
+
+                last_access = (
+                    db_section.get("last_run", db_section.get("create_date"))
+                ) or datetime.today().isoformat()
+                last_access_date = datetime.fromisoformat(last_access)
+
+                day_since_last_run = (datetime.today() - last_access_date).days
+
+                if day_since_last_run > min_delay_before_drop:
+                    databases_to_clean.append({"config": db_section, "day_since_last_run": day_since_last_run})
+
+            if databases_to_clean:
+                warn_msg = (
+                    f"You have some databases ({len(databases_to_clean)})"
+                    f" that where not used for more than {min_delay_before_drop} day(s)."
+                )
+                _logger.warning(warn_msg)
+
+                if _logger.confirm("Do you want to check them now and delete them?"):
+                    for db in databases_to_clean:
+                        answer = _logger.ask(
+                            f"The database {db['config'].name} hasn't been used for {db['day_since_last_run']} day(s)."
+                            " Can Odev delete it?",
+                            default="y",
+                            choice_options=("y", "n", "(w)hitelist"),
+                        )
+
+                        if answer == "y":
+                            self.remove(db)
+                        elif answer == "w":
+                            self.config["databases"].set(db["config"].name, "whitelist_cleaning", "true")
+
+            config.set("clean", "last_clean", datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
 
     def _get_database(self, database=None) -> str:
         database = database or self.database or DEFAULT_DATABASE

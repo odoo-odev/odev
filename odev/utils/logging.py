@@ -118,11 +118,13 @@ class Logger(logging.getLoggerClass()):  # type: ignore
         """
         choice_options = choice_options or []
 
-        message = self.format_question(question, default=default)
+        message = self.format_question(question, choices=choice_options, default=default)
         answer = input(message)
 
         if default and not answer:
             answer = default
+
+        choice_options += tuple(answer for a in choice_options if "(%s)" % answer in a)
 
         if choice_options and answer not in choice_options:
             answer = self.ask(question, default, choice_options)

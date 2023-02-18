@@ -149,6 +149,7 @@ class ListCommand(commands.LocalDatabaseCommand):
                 "name": database,
                 "version": self.config["databases"].get(database, "version_clean"),
                 "enterprise": self.config["databases"].get(database, "enterprise"),
+                "whitelist_cleaning": self.config["databases"].get(database, "whitelist_cleaning") == "true",
             }
 
             if not db_info["version"]:
@@ -168,7 +169,7 @@ class ListCommand(commands.LocalDatabaseCommand):
             db_is_running = self.db_runs(database)
             table_row = [
                 ("r" if db_is_running else "s") + "⬤",
-                db_info["name"],
+                db_info["name"] + (" *" if db_info["whitelist_cleaning"] else ""),
                 f"""{db_info['version']} - {db_info['enterprise']}""",
                 self.db_url(database) if db_is_running else "",
             ]

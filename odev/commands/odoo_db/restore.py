@@ -7,6 +7,7 @@ import subprocess
 import time
 import zipfile
 from argparse import Namespace
+from datetime import datetime
 from functools import partial, wraps
 from io import UnsupportedOperation
 from pathlib import Path
@@ -194,6 +195,7 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
             db_config.set(db, "version", version)
             db_config.set(db, "version_clean", version_clean)
             db_config.set(db, "enterprise", enterprise)
+            db_config.set(db, "create_date", datetime.now().isoformat())
 
         db_config.save()
 
