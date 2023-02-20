@@ -6,9 +6,9 @@ import shlex
 import subprocess
 from datetime import datetime, timedelta
 from typing import Any, List, Mapping, Optional
-from urllib.parse import urlparse
 
 import requests
+import tldextract
 from packaging.version import Version
 
 from odev.constants import (
@@ -391,8 +391,9 @@ def sanitize_url(url):
 
 
 def get_database_name_from_url(url):
-    url = urlparse(url)
-    subdomain = url.netloc.split(".")[0]
-    if subdomain in ("www", "odoo") or not url.netloc.endswith("odoo.com"):
+    ext = tldextract.extract(url)
+    db_name = ext.subdomain.split(".")[0]
+    if db_name in ("", "www", "odoo") or ext.domain != "odoo":
         raise OdooException("Invalid URL: use format `subdomain.odoo.com`")
-    return subdomain
+
+    return db_name

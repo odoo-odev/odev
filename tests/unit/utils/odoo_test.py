@@ -2,9 +2,10 @@ from collections import namedtuple
 
 import pytest
 
+from odev.exceptions import InvalidVersion, OdooException
 from odev.utils.odoo import (
-    InvalidVersion,
     branch_from_version,
+    get_database_name_from_url,
     get_odoo_version,
     get_python_version,
     parse_odoo_version,
@@ -126,3 +127,29 @@ def test_version_from_branch(versions_data):
             assert version_from_branch(v.branch) == v.branch
         else:
             assert version_from_branch(v.branch) == v.version, f"branch {v.branch} => odoo {v.version}"
+
+
+def test_get_database_name_from_url():
+    invalid_urls = [
+        "mambojambo",
+        "odoo.com",
+        "www.odoo.com",
+        "http://www.odoo.com",
+        "https://odoo.odoo.com",
+        "domain.com",
+        "https://sdomain.domain.com/web/login",
+    ]
+
+    for url in invalid_urls:
+        with pytest.raises(OdooException):
+            get_database_name_from_url(url)
+
+    valid_urls = [
+        "test.dev.odoo.com",
+        "test.odoo.com",
+        "http://test.odoo.com",
+        "https://test.odoo.com/web/login",
+    ]
+
+    for url in valid_urls:
+        assert get_database_name_from_url(url) == "test"
