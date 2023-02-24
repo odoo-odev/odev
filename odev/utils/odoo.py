@@ -386,14 +386,19 @@ def list_submodule_addons(paths: List[str]) -> List[str]:
 
 
 def sanitize_url(url):
-    subdomain = get_database_name_from_url(url)
-    return f"https://{subdomain}.odoo.com"
+    url_parts = extract_url_parts(url)
+    return f"https://{url_parts.subdomain}.odoo.com"
 
 
 def get_database_name_from_url(url):
-    ext = tldextract.extract(url)
-    db_name = ext.subdomain.split(".")[0]
-    if db_name in ("", "www", "odoo") or ext.domain != "odoo":
+    url_parts = extract_url_parts(url)
+    return url_parts.subdomain.split(".")[0]  # return first part in case of multi-level subdomain
+
+
+def extract_url_parts(url):
+    # Extract the parts of a `subdomain.odoo.com` URL with sanity checks
+    url_parts = tldextract.extract(url)
+    if url_parts.subdomain in ("", "www", "odoo") or url_parts.domain != "odoo" or url_parts.suffix != "com":
         raise OdooException("Invalid URL: use format `subdomain.odoo.com`")
 
-    return db_name
+    return url_parts

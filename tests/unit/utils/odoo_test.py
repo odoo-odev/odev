@@ -9,6 +9,7 @@ from odev.utils.odoo import (
     get_odoo_version,
     get_python_version,
     parse_odoo_version,
+    sanitize_url,
     version_from_branch,
 )
 
@@ -129,13 +130,14 @@ def test_version_from_branch(versions_data):
             assert version_from_branch(v.branch) == v.version, f"branch {v.branch} => odoo {v.version}"
 
 
-def test_get_database_name_from_url():
+def test_url_parse_methods():
     invalid_urls = [
         "mambojambo",
         "odoo.com",
         "www.odoo.com",
         "http://www.odoo.com",
         "https://odoo.odoo.com",
+        "https://test.odoo.co.uk",
         "domain.com",
         "https://sdomain.domain.com/web/login",
     ]
@@ -144,8 +146,10 @@ def test_get_database_name_from_url():
         with pytest.raises(OdooException):
             get_database_name_from_url(url)
 
+        with pytest.raises(OdooException):
+            sanitize_url(url)
+
     valid_urls = [
-        "test.dev.odoo.com",
         "test.odoo.com",
         "http://test.odoo.com",
         "https://test.odoo.com/web/login",
@@ -153,3 +157,8 @@ def test_get_database_name_from_url():
 
     for url in valid_urls:
         assert get_database_name_from_url(url) == "test"
+        assert sanitize_url(url) == "https://test.odoo.com"
+
+    # test multi-level subdomain
+    assert get_database_name_from_url("test.dev.odoo.com") == "test"
+    assert sanitize_url("http://test.dev.odoo.com/web?debug=1") == "https://test.dev.odoo.com"
