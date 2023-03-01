@@ -43,6 +43,7 @@ class Database(OdevFrameworkMixin, ABC):
         """Return information about the database."""
         return {
             "name": self.name,
+            "platform": self.platform,
             "size": self.size,
             "exists": self.exists,
             "is_odoo": self.is_odoo,
@@ -50,7 +51,7 @@ class Database(OdevFrameworkMixin, ABC):
             "odoo_edition": self.odoo_edition,
             "odoo_filestore_path": self.odoo_filestore_path,
             "odoo_filestore_size": self.odoo_filestore_size,
-            "odoo_rpc_port": self.process and self.process.rpc_port,
+            "odoo_rpc_port": self.odoo_rpc_port,
             "odoo_url": self.odoo_url,
             "last_access_date": self.last_access_date,
         }
@@ -96,10 +97,9 @@ class Database(OdevFrameworkMixin, ABC):
     def exists(self) -> bool:
         """Return whether the database exists."""
 
-    @property
+    @abstractproperty
     def odoo_rpc_port(self) -> Optional[int]:
         """Return the port used by the Odoo RPC interface."""
-        return 8069
 
     def create(self):
         """Create the database."""

@@ -46,15 +46,20 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def info(self):
         return {
             **super().info(),
-            "is_odoo_running": self.process.is_running if self.process.is_running or self.is_odoo else None,
+            "is_odoo_running": self.process.is_running
+            if (self.process and self.process.is_running) or self.is_odoo
+            else None,
             "odoo_process_id": self.process and self.process.pid,
             "odoo_process_command": self.process and self.process.command,
-            "odoo_rpc_port": self.process and self.process.rpc_port,
             "odoo_url": self.process and self.odoo_url,
             "last_date": self.last_date,
             "whitelisted": self.whitelisted,
             "odoo_venv_path": self.odoo_venv,
         }
+
+    @property
+    def odoo_rpc_port(self):
+        return self.process and self.process.rpc_port
 
     @property
     def is_odoo(self) -> bool:
@@ -78,6 +83,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def odoo_version(self) -> Optional[OdooVersion]:
+        if not self.is_odoo:
+            return None
+
         with self:
             result = self.is_odoo and self.connector.query(
                 """
@@ -125,10 +133,16 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def odoo_url(self) -> Optional[str]:
+        if not self.is_odoo:
+            return None
+
         return self.process.is_running and f"http://localhost:{self.process.rpc_port}/web" or None
 
     @property
     def size(self) -> int:
+        if not self.exists:
+            return 0
+
         with self.psql() as psql:
             result = psql.query(
                 f"""
@@ -167,6 +181,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def last_access_date(self) -> Optional[datetime]:
+        if not self.is_odoo:
+            return None
+
         with self:
             result = self.is_odoo and self.connector.query(
                 """
@@ -307,11 +324,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return self.is_odoo and bool(
             self.query(
                 """
-                SELECT 0
+                SELECT value
                 FROM ir_config_parameter
-                WHERE
-                    key ='database.enterprise_code'
-                    AND value IS NOT NULL
+                WHERE key ='database.is_neutralized'
                 """
             )
         )
