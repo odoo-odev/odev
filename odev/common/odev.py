@@ -222,7 +222,7 @@ class Odev:
             logger.debug(f"Parsing command arguments '{' '.join(args)}'")
             arguments = command_cls.parse_arguments(args)
         except SystemExit as exception:
-            raise command_cls.error(str(exception))
+            raise command_cls.error(None, str(exception))
         return arguments
 
     def run_command(self, name: str, *args: str, history: bool = False) -> None:

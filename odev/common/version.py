@@ -14,7 +14,7 @@ ODOO_VERSION_PATTERN = r"""
     (?:
         (?P<master>master)?             # master
         |
-        (?P<saas>saas-)?                # saas
+        (?P<saas>saas[-~])?             # saas
         (?P<major>(?:[0-9]+)?)          # odoo major version
         [\.]?
         (?P<minor>(?:[0-9]+)?)          # odoo minor version

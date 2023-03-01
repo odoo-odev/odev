@@ -43,6 +43,11 @@ class Connector(ABC):
         self.disconnect()
 
     @property
+    def connected(self) -> bool:
+        """Return whether or not the connector is connected to the external service."""
+        return self._connection is not None
+
+    @property
     def odev(self) -> "Odev":
         """Return the Odev framework instance."""
         return self._framework

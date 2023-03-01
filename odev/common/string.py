@@ -1,6 +1,7 @@
 """Shared methods for working with strings."""
 
 import random
+import re
 import string as string_module
 import textwrap
 from typing import List, Tuple, Union
@@ -83,7 +84,6 @@ def bytes_size(size: Union[int, float]) -> str:
     """Formats a number to its human readable representation in bytes-units.
 
     :param size: The number to format.
-    :param suffix: The suffix to add to the number.
     :return: The formatted number.
     :rtype: str
     """
@@ -92,6 +92,23 @@ def bytes_size(size: Union[int, float]) -> str:
             return f"{size:3.1f} {unit}B"
         size /= 1024.0
     return f"{size:.1f} YB"
+
+
+def bytes_from_string(string: str) -> int:
+    """Converts a human readable representation of bytes-units to a number.
+
+    :param repr: The string to parse.
+    :return: The number of bytes.
+    :rtype: str
+    """
+    match = re.match(r"(?P<number>\d+(?:\.\d+)?)\s*(?P<factor>[KMGTPEZY]?)(?P<unit>B|b)?", string)
+
+    if not match:
+        raise ValueError(f"Invalid bytes representation: {string}")
+
+    number = float(match.group("number"))
+    factor = 1024.0 ** ["", "K", "M", "G", "T", "P", "E", "Z", "Y"].index(match.group("factor"))
+    return int(number * factor)
 
 
 def suid() -> str:
