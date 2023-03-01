@@ -15,6 +15,9 @@ class Database(OdevFrameworkMixin, ABC):
     name: str = None
     """The name of the database."""
 
+    _platform: str = None
+    """The platform on which the database is running."""
+
     def __init__(self, name: str, *args, **kwargs):
         """Initialize the database."""
         super().__init__(*args, **kwargs)
@@ -47,8 +50,15 @@ class Database(OdevFrameworkMixin, ABC):
             "odoo_edition": self.odoo_edition,
             "odoo_filestore_path": self.odoo_filestore_path,
             "odoo_filestore_size": self.odoo_filestore_size,
+            "odoo_rpc_port": self.process and self.process.rpc_port,
+            "odoo_url": self.odoo_url,
             "last_access_date": self.last_access_date,
         }
+
+    @property
+    def platform(self) -> str:
+        """The platform on which the database is running."""
+        return self._platform
 
     @abstractproperty
     def is_odoo(self) -> bool:
@@ -85,3 +95,27 @@ class Database(OdevFrameworkMixin, ABC):
     @abstractproperty
     def exists(self) -> bool:
         """Return whether the database exists."""
+
+    @property
+    def odoo_rpc_port(self) -> Optional[int]:
+        """Return the port used by the Odoo RPC interface."""
+        return 8069
+
+    def create(self):
+        """Create the database."""
+        raise NotImplementedError(f"Database creation not implemented for instances of {self.__class__.name}.")
+
+    def drop(self):
+        """Drop the database."""
+        raise NotImplementedError(f"Database deletion not implemented for instances of {self.__class__.name}.")
+
+    def neutralize(self):
+        """Neutralize the database and make it suitable for development."""
+        raise NotImplementedError(f"Database neutralization not implemented for instances of {self.__class__.name}.")
+
+    def dump(self, filestore: bool = False, path: Path = None):
+        """Generate a dump file for the database.
+        :param filestore: Whether to include the filestore in the dump.
+        :param path: The path to the dump file.
+        """
+        raise NotImplementedError(f"Database dump not implemented for instances of {self.__class__.name}.")

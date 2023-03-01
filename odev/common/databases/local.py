@@ -22,6 +22,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _whitelisted: bool = False
     """Whether the database is whitelisted and should not be removed automatically."""
 
+    _platform: str = "local"
+
     def __init__(self, name: str):
         super().__init__(name)
 
