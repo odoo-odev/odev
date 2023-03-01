@@ -200,27 +200,36 @@ class ListCommand(PostgresConnectorMixin, Command):
 
         return databases
 
-    def get_table_data(self, databases: Sequence[str]) -> Tuple[List[MutableMapping[str, str]], List[List[Any]]]:
+    def get_table_data(
+        self, databases: Sequence[str]
+    ) -> Tuple[List[MutableMapping[str, str]], List[List[Any]], List[str]]:
         """Get the table data for the list of databases."""
         headers: List[MutableMapping[str, Any]] = []
         rows: List[List[Any]] = []
+        totals: List[int] = []
 
         for mapped in TABLE_MAPPING:
             if mapped[3] is True or (callable(mapped[3]) and mapped[3](self.args)):
                 headers.append({"name": mapped[1] or "", "justify": mapped[2] or "left"})
+                totals.append(0)
 
         for database in databases:
             row: List[Any] = []
             info = self.get_database_info(database)
 
-            for mapped in TABLE_MAPPING:
+            for index, mapped in enumerate(TABLE_MAPPING):
                 if mapped[3] is True or (callable(mapped[3]) and mapped[3](self.args)):
                     info.setdefault(mapped[0], "")
                     row.append(mapped[4](info[mapped[0]]) if callable(mapped[4]) else info[mapped[0]])
 
+                    if mapped[0] in ("size", "odoo_filestore_size"):
+                        totals[index] += info[mapped[0]] or 0
+
             rows.append(row)
 
-        return headers, rows
+        totals_formatted: List[str] = [string.bytes_size(total) if total != 0 else "" for total in totals]
+        totals_formatted[1] = f"{len(databases)} databases"
+        return headers, rows, totals_formatted
 
     def get_database_info(self, database: str) -> MutableMapping[str, Any]:
         """Get information about a database."""
