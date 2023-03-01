@@ -222,7 +222,7 @@ class Odev:
             logger.debug(f"Parsing command arguments '{' '.join(args)}'")
             arguments = command_cls.parse_arguments(args)
         except SystemExit as exception:
-            return logger.error(str(exception))
+            raise command_cls.error(str(exception))
         return arguments
 
     def run_command(self, name: str, *args: str, history: bool = False) -> None:
@@ -237,10 +237,10 @@ class Odev:
         if command_cls is None:
             return logger.error(f"Command {name!r} not found")
 
-        arguments = self.parse_arguments(command_cls, *args)
         command = None  # Avoid UnboundLocalError during cleanup
 
         try:
+            arguments = self.parse_arguments(command_cls, *args)
             command = command_cls(arguments)
             command.argv = " ".join(args)
 
