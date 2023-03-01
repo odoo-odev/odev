@@ -83,8 +83,8 @@ class SecretStore(PostgresTable):
 
                 prompt_method = prompt.secret if field == "password" else prompt.text
                 setattr(secret, field, prompt_method(prompt_format.format(key=key, field=field)))
+                self._set(secret)
 
-        self._set(secret)
         return secret
 
     def invalidate(self, key: str):
