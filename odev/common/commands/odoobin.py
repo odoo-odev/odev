@@ -51,9 +51,6 @@ class OdoobinCommand(DatabaseCommand, ABC):
         },
     ]
 
-    _require_exists: bool = True
-    """Whether the database must exist before running the command."""
-
     _odoo_log_regex: re.Pattern = re.compile(
         r"""
             (?:
@@ -74,9 +71,6 @@ class OdoobinCommand(DatabaseCommand, ABC):
         super().__init__(*args, **kwargs)
         if not isinstance(self.database, LocalDatabase):
             raise self.error(f"Database must be an instance of {LocalDatabase.__name__}.")
-
-        if self._require_exists and not self.database.exists:
-            raise self.error(f"Database {self.database.name!r} does not exist.")
 
         if self.args.addons is not None:
             addons_paths = [Path(addon).resolve() for addon in self.args.addons]

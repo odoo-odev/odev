@@ -19,6 +19,9 @@ class DatabaseCommand(Command, ABC):
         },
     ]
 
+    _require_exists: bool = True
+    """Whether the database must exist before running the command."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.database_name: Optional[str] = self.args.database or None
@@ -26,6 +29,9 @@ class DatabaseCommand(Command, ABC):
 
         self.database: Optional[LocalDatabase] = self.get_database_from_name()
         """The database instance associated with the command."""
+
+        if self._require_exists and not self.database.exists:
+            raise self.error(f"Database {self.database.name!r} does not exist.")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
