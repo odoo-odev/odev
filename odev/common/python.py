@@ -16,7 +16,7 @@ from typing import (
 import virtualenv
 from packaging import version
 
-from odev.common import bash, prompt, style
+from odev.common import bash, progress, prompt, style
 from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 
 
@@ -82,6 +82,7 @@ class PythonEnv:
             style.console.print()
 
         buffer: List[str] = []
+        progress.StackedStatus.pause_stack()
 
         for line in bash.stream(f"{self.pip} install -r '{requirements_path}' --no-color"):
             if not line.strip() or line.startswith(" "):
@@ -128,6 +129,8 @@ class PythonEnv:
                 packages = line.split(" ")[2:]
                 logger.debug("Installed python packages:\n" + "\n".join(packages))
                 logger.info(f"Successfully installed {len(packages)} python packages")
+
+        progress.StackedStatus.resume_stack()
 
     def installed_packages(self) -> Mapping[str, version.Version]:
         """Run pip freeze.

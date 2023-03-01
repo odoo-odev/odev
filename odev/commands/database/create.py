@@ -4,7 +4,7 @@ import re
 import shutil
 from typing import List, Optional
 
-from odev.common import prompt, style
+from odev.common import progress, prompt
 from odev.common.commands import OdoobinCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
@@ -88,7 +88,7 @@ class CreateCommand(OdoobinCommand):
             if not prompt.confirm("Overwrite it?"):
                 raise self.error(f"Cannot create database with already existing name {self.database.name!r}")
 
-            with style.spinner(f"Dropping database {self.database.name!r}"):
+            with progress.spinner(f"Dropping database {self.database.name!r}"):
                 self.database.drop()
 
     def ensure_template_exists(self):
@@ -117,10 +117,10 @@ class CreateCommand(OdoobinCommand):
                     if not prompt.confirm("Overwrite it?"):
                         raise self.error(f"Cannot copy template filestore to existing directory {database_filestore!s}")
 
-                    with style.spinner(f"Removing {database_filestore!s}"):
+                    with progress.spinner(f"Removing {database_filestore!s}"):
                         shutil.rmtree(database_filestore)
 
-                with style.spinner(f"Copying filestore from {template_filestore!s} to {database_filestore!s}"):
+                with progress.spinner(f"Copying filestore from {template_filestore!s} to {database_filestore!s}"):
                     database_filestore.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copytree(template_filestore, database_filestore)
 
@@ -137,7 +137,7 @@ class CreateCommand(OdoobinCommand):
         if self.template:
             self.template.connector.disconnect()
 
-        with style.spinner(f"Creating {message}"):
+        with progress.spinner(f"Creating {message}"):
             created = self.database.create(template=template)
 
             if created is False:

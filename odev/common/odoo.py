@@ -19,6 +19,7 @@ from odev.common import bash, style
 from odev.common.connectors import GithubConnector, GitWorktree
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
+from odev.common.progress import spinner
 from odev.common.python import PythonEnv
 from odev.common.signal_handling import capture_signals
 from odev.common.version import OdooVersion
@@ -246,7 +247,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         if self.is_running and subcommand is None:
             raise RuntimeError("Odoo is already running on this database")
 
-        with style.spinner(f"Preparing Odoo {self.version!s} for database {self.database.name!r}"):
+        with spinner(f"Preparing Odoo {self.version!s} for database {self.database.name!r}"):
             self.prepare_odoobin()
 
         with capture_signals():
@@ -261,7 +262,7 @@ class OdooBinProcess(OdevFrameworkMixin):
             )
 
             try:
-                with style.spinner(info_message) if not stream else nullcontext():
+                with spinner(info_message) if not stream else nullcontext():
                     process = self.venv.run_script(self.odoobin_path, odoobin_args, stream=stream, progress=progress)
             except CalledProcessError as error:
                 if not stream:

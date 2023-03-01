@@ -2,7 +2,7 @@
 
 import shutil
 
-from odev.common import prompt, style
+from odev.common import progress, prompt
 from odev.common.commands import OdoobinCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
@@ -41,7 +41,7 @@ class RenameCommand(OdoobinCommand):
         self.new_filestore = new_database._odoo_filestore_path()
 
     def run(self):
-        with style.spinner(f"Renaming database {self.database.name!r} to {self.args.name!r}"):
+        with progress.spinner(f"Renaming database {self.database.name!r} to {self.args.name!r}"):
             self.rename_database()
 
         self.move_filestore()

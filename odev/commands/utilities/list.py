@@ -10,7 +10,7 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from odev.common import string, style
+from odev.common import progress, string, style
 from odev.common.commands import Command
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
@@ -157,7 +157,7 @@ class ListCommand(PostgresConnectorMixin, Command):
     ]
 
     def run(self) -> None:
-        with style.spinner("Listing databases..."):
+        with progress.spinner("Listing databases..."):
             databases = self.list_databases()
 
             if not databases:

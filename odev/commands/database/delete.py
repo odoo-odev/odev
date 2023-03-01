@@ -2,7 +2,7 @@
 
 import shutil
 
-from odev.common import prompt, style
+from odev.common import progress, prompt
 from odev.common.commands import OdoobinCommand
 from odev.common.logging import logging
 
@@ -60,7 +60,7 @@ class DeleteCommand(OdoobinCommand):
         if not self.database.exists:
             return logger.info(f"PostgreSQL database {self.database.name!r} does not exist, cleaning up resources")
 
-        with style.spinner(f"Dropping database {self.database.name!r}"):
+        with progress.spinner(f"Dropping database {self.database.name!r}"):
             self.database.drop()
 
     def remove_template_databases(self):
@@ -88,7 +88,7 @@ class DeleteCommand(OdoobinCommand):
         if using_venv[0][0] > 0:
             return logger.info(f"Virtual environment {venv_path} is used by other databases, keeping it")
 
-        with style.spinner(f"Removing virtual environment {venv_path}"):
+        with progress.spinner(f"Removing virtual environment {venv_path}"):
             shutil.rmtree(venv_path)
 
     def remove_filestore(self):
@@ -100,7 +100,7 @@ class DeleteCommand(OdoobinCommand):
 
         filestore_path = filestore.as_posix()
 
-        with style.spinner(f"Removing filestore {filestore_path}"):
+        with progress.spinner(f"Removing filestore {filestore_path}"):
             shutil.rmtree(filestore_path)
 
     def remove_configuration(self):

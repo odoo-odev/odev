@@ -22,7 +22,7 @@ from git import Remote, Repo
 from packaging import version
 
 from odev._version import __version__
-from odev.common import bash, prompt, style
+from odev.common import bash, progress, prompt, style
 from odev.common.config import ConfigManager
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
@@ -72,11 +72,11 @@ class Odev:
         self.repo: Repo = Repo(self.path)
         """Local git repository."""
 
-        with style.spinner(f"Checking for updates to odev {self.version}"):
+        with progress.spinner(f"Checking for updates to odev {self.version}"):
             if self.update():
                 self.restart()
 
-        with style.spinner("Loading commands"):
+        with progress.spinner("Loading commands"):
             self.register_commands()
 
     @property

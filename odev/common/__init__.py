@@ -9,6 +9,7 @@ from . import logging
 from . import odev
 from . import odoo
 from . import postgres
+from . import progress
 from . import prompt
 from . import python
 from . import signal_handling

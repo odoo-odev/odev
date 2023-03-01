@@ -17,20 +17,12 @@ from typing import (
 
 from git import GitCommandError, Remote, RemoteReference, Repo
 from github import Github, GithubException
-from rich.markup import escape
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 from odev.common import bash, prompt, style
 from odev.common.connectors.base import Connector
 from odev.common.errors import CommandError
 from odev.common.logging import logging
+from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
 
 
@@ -362,26 +354,7 @@ class GithubConnector(Connector):
 
     def _git_progress(self, operation: Callable, *args, **kwargs):
         """Display a progress bar when performing time-consuming git operations."""
-        log_info_symbol: str = escape(logger.root.handlers[0].get_level_symbol_text(logging.INFO))
-
-        progress = Progress(
-            TextColumn(
-                f"[logging.level.info]{log_info_symbol}[/logging.level.info] "
-                "[progress.description]{task.description}",
-                justify="right",
-            ),
-            BarColumn(),
-            TaskProgressColumn(
-                text_format="[progress.percentage]{task.percentage:>6.2f}%",
-                text_format_no_percentage="[progress.percentage]  -.--%",
-            ),
-            TimeRemainingColumn(),
-            TimeElapsedColumn(),
-            TextColumn("[progress.elapsed](elapsed)"),
-            transient=True,
-            console=style.console,
-        )
-
+        progress = Progress()
         repo_name = f"[bold {style.CYAN}]{self.name}[/bold {style.CYAN}]"
         task_description_clone = f"Downloading repository {repo_name}"
         task_description_delta = f"Resolving deltas in {repo_name}"
@@ -439,7 +412,7 @@ class GithubConnector(Connector):
 
         message = f"worktree [bold]{branch!s}[/bold] for [bold {style.CYAN}]{self.name}[/bold {style.CYAN}]"
 
-        with style.spinner(f"Creating {message}"):
+        with spinner(f"Creating {message}"):
             self.worktrees_path.mkdir(parents=True, exist_ok=True)
 
             if path.exists():
