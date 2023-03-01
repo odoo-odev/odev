@@ -113,9 +113,21 @@ class Database(OdevFrameworkMixin, ABC):
         """Neutralize the database and make it suitable for development."""
         raise NotImplementedError(f"Database neutralization not implemented for instances of {self.__class__.name}.")
 
-    def dump(self, filestore: bool = False, path: Path = None):
+    def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
         """Generate a dump file for the database.
         :param filestore: Whether to include the filestore in the dump.
         :param path: The path to the dump file.
+        :return: The path to the dump file.
+        :rtype: Path
         """
         raise NotImplementedError(f"Database dump not implemented for instances of {self.__class__.name}.")
+
+    def _get_dump_filename(self, filestore: bool = False, suffix: str = None) -> str:
+        """Return the filename of the dump file.
+        :param filestore: Whether to include the filestore in the dump.
+        :param suffix: An optional suffix to add to the filename.
+        """
+        prefix = datetime.now().strftime("%Y%m%d")
+        suffix = f".{suffix}" if suffix else ""
+        extension = "zip" if filestore else "sql"
+        return f"{prefix}-{self.name}.dump{suffix}.{extension}"

@@ -104,6 +104,12 @@ class Odev:
         """Local path to the setup directory."""
         return self.path / "odev" / "setup"
 
+    @property
+    def dumps_path(self) -> Path:
+        """Local path to the directory where database dumps are stored."""
+        with self.config:
+            return Path(self.config.get("paths", "repositories")).parent / "dumps"
+
     def __repr__(self) -> str:
         return f"Odev(version={self.version})"
 

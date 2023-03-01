@@ -1,9 +1,13 @@
 """PostgreSQL database class."""
 
+import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Mapping, Optional
+from zipfile import ZipFile
 
+from odev.common import bash, progress, prompt
 from odev.common.connectors import PostgresConnector
 from odev.common.databases import Database
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
@@ -190,10 +194,39 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return psql.create_database(self.name, template=template)
 
     def drop(self) -> bool:
-        """Drop the database."""
         self.connector.disconnect()
         with self.psql() as psql:
             return psql.drop_database(self.name)
+
+    def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
+        if path is None:
+            path = self.odev.dumps_path
+
+        path.mkdir(parents=True, exist_ok=True)
+        filename = self._get_dump_filename(filestore, suffix="neutralized" if self.neutralized else None)
+        file = path / filename
+
+        if file.exists() and not prompt.confirm(f"File {file} already exists. Overwrite it?"):
+            return None
+
+        file.unlink(missing_ok=True)
+
+        with tempfile.TemporaryDirectory() as temp_directory:
+            temp_file = Path(temp_directory) / filename
+
+            with progress.spinner(f"Dumping PostgreSQL database {self.name}"):
+                bash.execute(f"pg_dump -d {self.name} > {temp_file}")
+
+            if not filestore:
+                shutil.move(temp_file, file)
+            else:
+                with progress.spinner(f"Writing dump to archive {file}"):
+                    shutil.make_archive(file.parent / file.stem, "zip", self.odoo_filestore_path)
+
+                    with ZipFile(file, "w") as zip_file:
+                        zip_file.write(temp_file.as_posix(), "dump.sql")
+
+        return file
 
     @ensure_connected
     def unaccent(self):
@@ -267,3 +300,18 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Set the whitelisted status of the database."""
         self._whitelisted = value
         self.store.databases.set(self)
+
+    @property
+    def neutralized(self):
+        """Whether the database is neutralized."""
+        return self.is_odoo and bool(
+            self.query(
+                """
+                SELECT 0
+                FROM ir_config_parameter
+                WHERE
+                    key ='database.enterprise_code'
+                    AND value IS NOT NULL
+                """
+            )
+        )
