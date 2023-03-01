@@ -69,24 +69,22 @@ class SecretStore(PostgresTable):
         :return: The login and password.
         :rtype: Tuple[str, str]
         """
-        secret = self._get(key)
+        secret = self._get(key) or Secret(key, "", "")
 
-        if secret is None:
-            logger.debug(f"Secret {key!r} not found in vault {self!r}")
+        if fields is None:
+            fields = ("login", "password")
 
-            if fields is None:
-                fields = ("login", "password")
+        for field in fields:
+            if not getattr(secret, field, ""):
+                logger.debug(f"Secret {key!r} has no {field!r} in vault")
 
-            if prompt_format is None:
-                prompt_format = "{field} for '{key}':".capitalize()
+                if prompt_format is None:
+                    prompt_format = "{field} for '{key}':".capitalize()
 
-            secret = Secret(
-                key,
-                "login" in fields and prompt.text(prompt_format.format(key=key, field="login")) or "",
-                "password" in fields and prompt.secret(prompt_format.format(key=key, field="password")) or "",
-            )
-            self._set(secret)
+                prompt_method = prompt.secret if field == "password" else prompt.text
+                setattr(secret, field, prompt_method(prompt_format.format(key=key, field=field)))
 
+        self._set(secret)
         return secret
 
     def invalidate(self, key: str):
@@ -104,15 +102,14 @@ class SecretStore(PostgresTable):
         :return: The login and password.
         :rtype: Tuple[str, str]
         """
-        with self:
-            result = self.query(
-                f"""
-                SELECT login, cypher
-                FROM {self.name}
-                WHERE name = '{name.lower()}'
-                LIMIT 1
-                """
-            )
+        result = self.database.query(
+            f"""
+            SELECT login, cypher
+            FROM {self.name}
+            WHERE name = '{name.lower()}'
+            LIMIT 1
+            """
+        )
 
         if not result:
             return None
@@ -127,29 +124,26 @@ class SecretStore(PostgresTable):
         :param password: The password.
         """
         cypher = SecretStore.encrypt(secret.password)
-
-        with self:
-            self.query(
-                f"""
-                INSERT INTO {self.name} (name, login, cypher)
-                VALUES ('{secret.key.lower()}', '{secret.login}', '{cypher}')
-                ON CONFLICT (name) DO
-                    UPDATE SET login = '{secret.login}', cypher = '{cypher}'
-                """
-            )
+        self.database.query(
+            f"""
+            INSERT INTO {self.name} (name, login, cypher)
+            VALUES ('{secret.key.lower()}', '{secret.login}', '{cypher}')
+            ON CONFLICT (name) DO
+                UPDATE SET login = '{secret.login}', cypher = '{cypher}'
+            """
+        )
 
     def _delete(self, name: str):
         """Remove a secret from the vault.
 
         :param key: The key for the secret.
         """
-        with self:
-            self.query(
-                f"""
-                DELETE FROM {self.name}
-                WHERE name = '{name.lower()}'
-                """
-            )
+        self.database.query(
+            f"""
+            DELETE FROM {self.name}
+            WHERE name = '{name.lower()}'
+            """
+        )
 
     @classmethod
     def encrypt(cls, plaintext: str) -> str:

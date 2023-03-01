@@ -73,7 +73,7 @@ def clear_line(count: int = 1) -> None:
     print("\x1b[F".join(["\x1b[2K\x1b[0G" for _ in range(count + 1)]), end="")
 
 
-def text(message: str, default: str = None) -> Optional[str]:
+def text(message: str, default: str = "") -> Optional[str]:
     """Prompt for some free text.
 
     :param message: Question to ask the user
