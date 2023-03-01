@@ -138,35 +138,10 @@ class CreateCommand(OdoobinCommand):
             self.template.connector.disconnect()
 
         with progress.spinner(f"Creating {message}"):
-            created = self.database.create(template=template)
+            created = self.database.create(template=template) & self.database.unaccent()
 
             if created is False:
                 raise self.error(f"Failed to create database {self.database.name!r}")
-
-            unaccent_queries = [
-                "CREATE SCHEMA IF NOT EXISTS unaccent_schema",
-                "CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA unaccent_schema",
-                "COMMENT ON EXTENSION unaccent IS 'text search dictionary that removes accents'",
-                """
-                DO $$
-                BEGIN
-                    CREATE FUNCTION public.unaccent(text)
-                        RETURNS text
-                        LANGUAGE sql IMMUTABLE
-                        AS $_$
-                            SELECT unaccent_schema.unaccent('unaccent_schema.unaccent', $1)
-                        $_$;
-                    EXCEPTION
-                        WHEN duplicate_function
-                        THEN null;
-                END; $$
-                """,
-                "GRANT USAGE ON SCHEMA unaccent_schema TO PUBLIC",
-            ]
-
-            with self.database:
-                for query in unaccent_queries:
-                    self.database.query(query)
 
         logger.info(f"Created {message}")
 

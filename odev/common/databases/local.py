@@ -196,6 +196,37 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return psql.drop_database(self.name)
 
     @ensure_connected
+    def unaccent(self):
+        """Install the unaccent extension on the database."""
+        unaccent_queries = [
+            "CREATE SCHEMA IF NOT EXISTS unaccent_schema",
+            "CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA unaccent_schema",
+            "COMMENT ON EXTENSION unaccent IS 'text search dictionary that removes accents'",
+            """
+            DO $$
+            BEGIN
+                CREATE FUNCTION public.unaccent(text)
+                    RETURNS text
+                    LANGUAGE sql IMMUTABLE
+                    AS $_$
+                        SELECT unaccent_schema.unaccent('unaccent_schema.unaccent', $1)
+                    $_$;
+                EXCEPTION
+                    WHEN duplicate_function
+                    THEN null;
+            END; $$
+            """,
+            "GRANT USAGE ON SCHEMA unaccent_schema TO PUBLIC",
+        ]
+
+        res: bool = True
+
+        for query in unaccent_queries:
+            res &= self.query(query)
+
+        return res
+
+    @ensure_connected
     def table_exists(self, table: str) -> bool:
         """Check if a table exists in the database."""
         return self.connector.table_exists(table)
