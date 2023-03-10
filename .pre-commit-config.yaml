@@ -28,7 +28,7 @@ repos:
                 - --line-length=120
 
     - repo: https://github.com/PyCQA/isort
-      rev: 5.5.1
+      rev: 5.12.0
       hooks:
           - id: isort
             exclude: (__init__|static/util)\.py$
