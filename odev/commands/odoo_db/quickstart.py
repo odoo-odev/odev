@@ -56,6 +56,7 @@ class QuickStartCommand(
             "dest": "task_id",
             "help": "Scaffold the code for this task_id",
         },
+        *[arg for arg in restore.RestoreCommand.arguments if arg.get("dest") == "no_clean"],
     ]
 
     def __init__(self, args: Namespace):
@@ -107,7 +108,7 @@ class QuickStartCommand(
                 else:  # mode == 'file'
                     filepath = self.subarg
 
-                result = restore.RestoreCommand.run_with(**self.args.__dict__, dump=filepath, no_clean=False)
+                result = restore.RestoreCommand.run_with(**self.args.__dict__, dump=filepath)
 
                 if result != 0:
                     return result

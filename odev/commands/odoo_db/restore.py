@@ -172,6 +172,10 @@ class RestoreCommand(database.DBExistsCommandMixin, commands.TemplateCreateDBCom
 
         if self.run_clean:
             clean.CleanCommand.run_with(**self.args.__dict__)
+        elif not logging.interactive:
+            raise RuntimeError("Cannot restore a database with --no-clean in non-interactive mode")
+        else:
+            _logger.confirm("Skipping cleaning of the restored database. Do you confirm to understand the risks?")
 
         dbs = [self.database]
 
