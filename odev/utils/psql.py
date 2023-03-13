@@ -42,11 +42,12 @@ class PSQL:
         try:
             assert self.cr
 
+            queries = [dedent(query).strip() for query in queries]
             for query in queries:
                 assert isinstance(query, str)
-                self.cr.execute(dedent(query).strip())
+                self.cr.execute(query)
 
-            if any(str(query).lower().startswith("select") for query in queries):
+            if any(str(query.strip()).lower().startswith("select") for query in queries):
                 result = self.cr.fetchall()
             else:
                 result = True

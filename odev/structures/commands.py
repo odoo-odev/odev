@@ -683,6 +683,39 @@ class LocalDatabaseCommand(Command, ABC):
         else:
             return True
 
+    def db_is_neutralized(self, database=None):
+        """
+        Checks whether a database has been cleaned / neuteralized.
+        """
+        database = self._get_database(database)
+
+        self.check_database(database)
+
+        # TODO: check also config? Or should it not be trusted?
+
+        with PSQL(database) as psql:
+            is_neutralized = psql.query(
+                """
+                SELECT TRUE
+                  FROM ir_config_parameter
+                 WHERE key = 'database.is_neutralized' AND lower(value) IN ('true', '1');
+                """
+            )
+            if is_neutralized:
+                return True
+
+            has_enterprise_code = psql.query(
+                "SELECT TRUE FROM ir_config_parameter WHERE key = 'database.enterprise_code';"
+            )
+            if not has_enterprise_code:
+                return True
+
+            has_cleaned_users = psql.query("SELECT TRUE FROM res_users WHERE password IN ('odoo', 'admin');")
+            if has_cleaned_users:
+                return True
+
+        return False
+
     def db_pid(self, database=None):
         """
         Gets the PID of a currently running database.

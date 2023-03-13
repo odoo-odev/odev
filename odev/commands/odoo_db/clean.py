@@ -88,6 +88,11 @@ class CleanCommand(commands.LocalDatabaseCommand):
             THEN UPDATE website SET domain = NULL;
         END IF; END; $$
         """,
+        """
+        INSERT INTO ir_config_parameter (key, value)
+        VALUES ('database.is_neutralized', true)
+            ON CONFLICT (key) DO UPDATE SET value = true;
+        """,
     ]
 
     def __init__(self, args: Namespace):
