@@ -500,7 +500,9 @@ class LocalDatabaseCommand(Command, ABC):
             databases_to_clean: List = []
 
             for db_section in self.config["databases"].values():
-                if db_section.get("whitelist_cleaning") == "true":
+                is_neutralized = self.db_is_neutralized(db_section["name"])
+
+                if is_neutralized and db_section.get("whitelist_cleaning") == "true":
                     continue
 
                 last_access = (
@@ -511,7 +513,13 @@ class LocalDatabaseCommand(Command, ABC):
                 day_since_last_run = (datetime.today() - last_access_date).days
 
                 if day_since_last_run > min_delay_before_drop:
-                    databases_to_clean.append({"config": db_section, "day_since_last_run": day_since_last_run})
+                    databases_to_clean.append(
+                        {
+                            "config": db_section,
+                            "day_since_last_run": day_since_last_run,
+                            "is_neutralized": is_neutralized,
+                        }
+                    )
 
             if databases_to_clean:
                 warn_msg = (
@@ -522,16 +530,19 @@ class LocalDatabaseCommand(Command, ABC):
 
                 if _logger.confirm("Do you want to check them now and delete them?"):
                     for db in databases_to_clean:
+                        choice_options = ["y", "n"]
+                        if db["is_neutralized"]:
+                            choice_options.append("(w)hitelist")
                         answer = _logger.ask(
                             f"The database {db['config'].name} hasn't been used for {db['day_since_last_run']} day(s)."
                             " Can Odev delete it?",
                             default="y",
-                            choice_options=("y", "n", "(w)hitelist"),
+                            choice_options=choice_options,
                         )
 
                         if answer == "y":
                             self.remove(db)
-                        elif answer == "w":
+                        elif db["is_neutralized"] and answer == "w":
                             self.config["databases"].set(db["config"].name, "whitelist_cleaning", "true")
 
             config.set("clean", "last_clean", datetime.today().strftime(DEFAULT_DATETIME_FORMAT))
