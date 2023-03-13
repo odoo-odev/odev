@@ -166,10 +166,13 @@ class ListCommand(commands.LocalDatabaseCommand):
                     "enterprise" if self.db_enterprise(database) else "standard",
                 )[database]["enterprise"]
 
+            is_neutralized = self.db_is_neutralized(database)
             db_is_running = self.db_runs(database)
             table_row = [
                 ("r" if db_is_running else "s") + "⬤",
-                db_info["name"] + (" *" if db_info["whitelist_cleaning"] else ""),
+                db_info["name"]
+                + (" *" if db_info["whitelist_cleaning"] else "")
+                + ("" if is_neutralized else " UNCLEAN!!"),
                 f"""{db_info['version']} - {db_info['enterprise']}""",
                 self.db_url(database) if db_is_running else "",
             ]
@@ -197,6 +200,7 @@ class ListCommand(commands.LocalDatabaseCommand):
         table_text = re.sub(r"\n(=+)\n", term.snow4(r"\n\1\n"), table_text)
         table_text = re.sub(r"r⬤", term.green(" ⬤"), table_text)
         table_text = re.sub(r"s⬤", term.red(" ⬤"), table_text)
+        table_text = re.sub(r"(UNCLEAN!!)", term.orangered(r"\1"), table_text)
 
         print("\n" + indent(table_text, " " * 2), end="")
 
