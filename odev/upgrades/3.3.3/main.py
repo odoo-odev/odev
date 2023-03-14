@@ -1,3 +1,5 @@
+import psycopg2
+
 from odev.utils import logging
 from odev.utils.config import ConfigManager
 from odev.utils.psql import PSQL
@@ -15,7 +17,14 @@ def run() -> None:
         for database, db_section in dbs_config.items():
             clean = db_section.get("clean")
 
-            with PSQL(database) as psql:
+            psql = PSQL(database)
+            try:
+                psql.connect()
+            except psycopg2.OperationalError as e:
+                _logger.warning(f"Failing to connect to database {database}: {e}")
+                continue
+
+            try:
                 if not clean:
                     has_enterprise_code = psql.query(
                         "SELECT TRUE FROM ir_config_parameter WHERE key = 'database.enterprise_code';"
@@ -37,6 +46,9 @@ def run() -> None:
                     clean_databases.add(database)
                 else:
                     non_clean_databases.add(database)
+
+            finally:
+                psql.disconnect()
 
     _logger.info(f"Cleaned databases marked as neutralized: {clean_databases}")
     _logger.info(f"Non-cleaned databases: {non_clean_databases}")
