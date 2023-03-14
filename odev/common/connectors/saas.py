@@ -3,6 +3,8 @@
 import json
 import re
 from functools import lru_cache
+from pathlib import Path
+from types import FrameType
 from typing import (
     Any,
     ClassVar,
@@ -18,6 +20,8 @@ from requests import Response, Session
 from odev.common import prompt
 from odev.common.connectors.base import Connector
 from odev.common.logging import LOG_LEVEL, logging
+from odev.common.progress import Progress
+from odev.common.signal_handling import capture_signals
 
 
 logger = logging.getLogger(__name__)
@@ -93,7 +97,7 @@ class SaasConnector(Connector):
 
     def dump_path(self, include_filestore: bool = False) -> str:
         """Return the path to the dump of the SaaS database."""
-        return f"saas_worker/dump.{'zip' if include_filestore else 'sql.gz'}"
+        return f"saas_worker/dump.{'zip' if include_filestore else 'dump'}"
 
     def request(
         self,
@@ -179,6 +183,42 @@ class SaasConnector(Connector):
         :rtype: requests.Response
         """
         return self.request("POST", path, params=params, authenticate=authenticate, **kwargs)
+
+    def dump(self, path: Path, include_filestore: bool = False) -> Path:
+        """Dump the SaaS database to the specified path.
+        :param path: The path to the dump file. Assumed to be a valid file location.
+            If existing, the file will be overwritten.
+        :param include_filestore: Whether to include the filestore in the dump.
+        """
+        dump_path = self.dump_path(include_filestore)
+        progress = Progress()
+        task = progress.add_task(
+            f"Dumping database [repr.url]{self.url}[/repr.url] {'with' if include_filestore else 'without'} filestore",
+            total=None,
+        )
+
+        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+            progress.stop_task(task)
+            progress.stop()
+            logger.warning(f"{progress._tasks.get(task).description}: task interrupted by user")
+            raise KeyboardInterrupt
+
+        progress.start()
+
+        with capture_signals(handler=signal_handler_progress), self.get(dump_path, stream=True) as response:
+            content_length = int(response.headers.get("content-length", 0))
+            progress.update(task, total=content_length)
+            progress.start_task(task)
+
+            with path.open("wb") as dump_file:
+                for chunk in response.iter_content(chunk_size=1024):
+                    dump_file.write(chunk)
+                    progress.advance(task, advance=len(chunk))
+
+        progress.stop_task(task)
+        progress.stop()
+        prompt.clear_line()
+        return path
 
     @property
     def exists(self) -> bool:

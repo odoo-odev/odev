@@ -228,10 +228,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         file.unlink(missing_ok=True)
 
-        with tempfile.TemporaryDirectory() as temp_directory:
+        # By default, TemporaryDirectory creates files under /tmp which on Fedora runs on tmpfs.
+        # This filesystem is based on RAM and SWAP and is therefore limited in size to a portion
+        # of the total RAM. This is not enough for large database dumps.
+        # Moving the temporary directory to /var/tmp solves the issue of size by running on the var
+        # partition. Files are still deleted after all operations complete.
+        with tempfile.TemporaryDirectory(dir="/var/tmp") as temp_directory:
             temp_file = Path(temp_directory) / filename
 
-            with progress.spinner(f"Dumping PostgreSQL database {self.name}"):
+            with progress.spinner(f"Dumping PostgreSQL database {self.name!r}"):
                 bash.execute(f"pg_dump -d {self.name} > {temp_file}")
 
             if not filestore:
@@ -326,7 +331,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
                 SELECT value
                 FROM ir_config_parameter
-                WHERE key ='database.is_neutralized'
+                WHERE key = 'database.is_neutralized'
                 """
             )
         )

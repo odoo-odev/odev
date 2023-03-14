@@ -122,12 +122,14 @@ class Database(OdevFrameworkMixin, ABC):
         """
         raise NotImplementedError(f"Database dump not implemented for instances of {self.__class__.name}.")
 
-    def _get_dump_filename(self, filestore: bool = False, suffix: str = None) -> str:
+    def _get_dump_filename(self, filestore: bool = False, suffix: str = None, extension: str = None) -> str:
         """Return the filename of the dump file.
         :param filestore: Whether to include the filestore in the dump.
         :param suffix: An optional suffix to add to the filename.
+        :param extension: Force the extension for the filename, by default inferred
+            from whether the filestore is present.
         """
         prefix = datetime.now().strftime("%Y%m%d")
         suffix = f".{suffix}" if suffix else ""
-        extension = "zip" if filestore else "sql"
+        extension = extension if extension is not None else "zip" if filestore else "sql"
         return f"{prefix}-{self.name}.dump{suffix}.{extension}"

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from odev.common import string
+from odev.common import prompt, string
 from odev.common.connectors import SaasConnector
 from odev.common.databases import Database
 from odev.common.mixins import SaasConnectorMixin
@@ -100,3 +100,18 @@ class SaasDatabase(SaasConnectorMixin, Database):
     @property
     def odoo_rpc_port(self) -> Optional[int]:
         return 443
+
+    def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
+        if path is None:
+            path = self.odev.dumps_path
+
+        path.mkdir(parents=True, exist_ok=True)
+        filename = self._get_dump_filename(filestore, suffix=self.platform, extension="dump" if not filestore else None)
+        file = path / filename
+
+        if file.exists() and not prompt.confirm(f"File {file} already exists. Overwrite it?"):
+            return None
+
+        file.unlink(missing_ok=True)
+        self.saas.dump(file, filestore)
+        return file
