@@ -16,6 +16,9 @@ class DatabaseCommand(Command, ABC):
     _database_arg_required: ClassVar[bool] = True
     """Whether the command requires a database to be specified or not in its arguments."""
 
+    _database_exists_required: ClassVar[bool] = True
+    """Whether the database must exist before running the command."""
+
     arguments = [
         {
             "name": "database",
@@ -23,23 +26,24 @@ class DatabaseCommand(Command, ABC):
         },
     ]
 
-    _require_exists: bool = True
-    """Whether the database must exist before running the command."""
+    database: Optional[Union[LocalDatabase, SaasDatabase]] = None
+    """The database instance associated with the command."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.database_name: Optional[str] = self.args.database or None
         """The database name specified by the user."""
 
-        self.database: Optional[Union[LocalDatabase, SaasDatabase]] = self.infer_database_instance()
-        """The database instance associated with the command."""
+        if self._database_arg_required or self.database_name is not None:
+            self.database = self.infer_database_instance()
 
-        if self._require_exists and not self.database.exists:
-            raise self.error(f"Database {self.database.name!r} does not exist.")
+            if self._database_exists_required and not self.database.exists:
+                raise self.error(f"Database {self.database.name!r} does not exist.")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
         super().prepare_command(*args, **kwargs)
+
         if not cls._database_arg_required:
             cls.update_argument("database", {"nargs": "?"})
 

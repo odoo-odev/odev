@@ -48,7 +48,7 @@ class CreateCommand(OdoobinCommand):
         },
     ]
 
-    _require_exists = False
+    _database_exists_required = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

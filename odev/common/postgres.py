@@ -153,3 +153,7 @@ class PostgresTable(ABC):
             for name, definition in self._constraints.items():
                 logger.debug(f"Creating constraint {name!r} on table {self.name!r} in database {self.database!r}")
                 self.database.constraint(self.name, name, definition)
+
+    def clear(self):
+        """Clear the table."""
+        self.database.query(f"DELETE FROM {self.name}")
