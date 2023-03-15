@@ -22,7 +22,7 @@ class HistoryStore(PostgresTable):
         self.database.query(
             f"""
             INSERT INTO {self.name} (command, database, arguments)
-            VALUES ({command.name!r}, {database}, {" ".join(command.argv[1:])!r})
+            VALUES ({command.name!r}, {database}, {command.argv!r})
             ON CONFLICT (command, arguments) DO
                 UPDATE SET date = CURRENT_TIMESTAMP
             """

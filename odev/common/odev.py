@@ -225,11 +225,11 @@ class Odev:
             raise command_cls.error(None, str(exception))
         return arguments
 
-    def run_command(self, name: str, *args: str, history: bool = False) -> None:
+    def run_command(self, name: str, *cli_args: str, history: bool = False) -> None:
         """Run a command with the given arguments.
 
         :param name: Name of the command to run
-        :param args: Arguments to pass to the command
+        :param cli_args: Arguments to pass to the command
         :param history: Whether to add the command to the command history.
         """
         command_cls = self.commands.get(name)
@@ -240,9 +240,9 @@ class Odev:
         command = None  # Avoid UnboundLocalError during cleanup
 
         try:
-            arguments = self.parse_arguments(command_cls, *args)
+            arguments = self.parse_arguments(command_cls, *cli_args)
             command = command_cls(arguments)
-            command.argv = " ".join(args)
+            command.argv = " ".join(cli_args)
 
             logger.debug(f"Dispatching {command!r}")
             command.run()
