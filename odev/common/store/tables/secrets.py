@@ -47,7 +47,7 @@ class SecretStore(PostgresTable):
     _columns = {
         "name": "VARCHAR PRIMARY KEY",
         "login": "VARCHAR",
-        "cypher": "TEXT",
+        "cipher": "TEXT",
     }
 
     def get(
@@ -104,7 +104,7 @@ class SecretStore(PostgresTable):
         """
         result = self.database.query(
             f"""
-            SELECT login, cypher
+            SELECT login, cipher
             FROM {self.name}
             WHERE name = '{name.lower()}'
             LIMIT 1
@@ -123,13 +123,13 @@ class SecretStore(PostgresTable):
         :param login: The login.
         :param password: The password.
         """
-        cypher = SecretStore.encrypt(secret.password)
+        cipher = SecretStore.encrypt(secret.password)
         self.database.query(
             f"""
-            INSERT INTO {self.name} (name, login, cypher)
-            VALUES ('{secret.key.lower()}', '{secret.login}', '{cypher}')
+            INSERT INTO {self.name} (name, login, cipher)
+            VALUES ('{secret.key.lower()}', '{secret.login}', '{cipher}')
             ON CONFLICT (name) DO
-                UPDATE SET login = '{secret.login}', cypher = '{cypher}'
+                UPDATE SET login = '{secret.login}', cipher = '{cipher}'
             """
         )
 
@@ -168,7 +168,6 @@ class SecretStore(PostgresTable):
         :return: The decrypted string.
         :rtype: str
         """
-
         decoded = b64decode(ciphertext.encode()).decode()
 
         with NamedStringIO(decoded) as stream, Container.load(stream) as container:
