@@ -7,7 +7,7 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-class KillCommand(DatabaseCommand):
+class DumpCommand(DatabaseCommand):
     """Backup a local or remote database and save its dump file on the local
     filesystem.
     """
@@ -29,6 +29,6 @@ class KillCommand(DatabaseCommand):
         dump_path = self.database.dump(filestore=self.args.filestore)
 
         if dump_path is None:
-            logger.error(f"Database {self.database.name!r} could not be dumped")
+            raise self.error(f"Database {self.database.name!r} could not be dumped")
 
         logger.info(f"Database {self.database.name!r} dumped to {dump_path}")
