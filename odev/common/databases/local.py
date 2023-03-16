@@ -136,7 +136,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if not self.is_odoo:
             return None
 
-        return self.process.is_running and f"http://localhost:{self.process.rpc_port}/web" or None
+        return self.process.is_running and f"http://localhost:{self.process.rpc_port}" or None
 
     @property
     def size(self) -> int:
@@ -151,6 +151,40 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
         return result and result[0][0] or 0
+
+    @property
+    def expiration_date(self) -> Optional[datetime]:
+        if not self.is_odoo:
+            return None
+
+        with self:
+            result = self.connector.query(
+                """
+                SELECT value
+                FROM ir_config_parameter
+                WHERE key = 'database.expiration_date'
+                LIMIT 1
+                """
+            )
+
+        return result and datetime.strptime(result[0][0], "%Y-%m-%d") or None
+
+    @property
+    def uuid(self) -> Optional[str]:
+        if not self.is_odoo:
+            return None
+
+        with self:
+            result = self.connector.query(
+                """
+                SELECT value
+                FROM ir_config_parameter
+                WHERE key = 'database.uuid'
+                LIMIT 1
+                """
+            )
+
+        return result and result[0][0] or None
 
     @property
     def last_date(self) -> Optional[datetime]:

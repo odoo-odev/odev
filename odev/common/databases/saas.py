@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import urlparse
 
 from odev.common import prompt, string
@@ -30,6 +30,9 @@ class SaasDatabase(SaasConnectorMixin, Database):
         super().__init__(name)
         parsed = urlparse(name)
 
+        if not parsed.scheme and ODOO_DOMAIN_SUFFIX in name:
+            parsed = urlparse(f"https://{name}")
+
         if parsed.netloc:
             if not parsed.netloc.endswith(ODOO_DOMAIN_SUFFIX):
                 raise ValueError(f"Invalid SaaS database name or URL {name!r}")
@@ -54,6 +57,9 @@ class SaasDatabase(SaasConnectorMixin, Database):
         return {
             **super().info(),
             "is_odoo_running": self.is_odoo,
+            "mode": self.mode,
+            "active": self.active,
+            "domains": self.domains,
         }
 
     @property
@@ -92,6 +98,29 @@ class SaasDatabase(SaasConnectorMixin, Database):
     @property
     def size(self) -> int:
         return string.bytes_from_string(self.saas.database_info().get("size_backup"))
+
+    @property
+    def expiration_date(self) -> Optional[datetime]:
+        return datetime.strptime(self.saas.database_info().get("date_expire"), "%Y-%m-%d %H-%M-%S UTC")
+
+    @property
+    def uuid(self) -> Optional[str]:
+        return self.saas.database_info().get("uuid")
+
+    @property
+    def domains(self) -> List[str]:
+        """Return the domain names of the database."""
+        return self.saas.database_info().get("hostnames")
+
+    @property
+    def mode(self) -> str:
+        """Return the mode of the database."""
+        return self.saas.database_info().get("metabase_mode")
+
+    @property
+    def active(self) -> bool:
+        """Return whether the database has been activated."""
+        return self.saas.database_info().get("metabase_status") == "activated"
 
     @property
     def last_access_date(self) -> Optional[datetime]:

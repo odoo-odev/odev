@@ -54,6 +54,8 @@ class Database(OdevFrameworkMixin, ABC):
             "odoo_rpc_port": self.odoo_rpc_port,
             "odoo_url": self.odoo_url,
             "last_access_date": self.last_access_date,
+            "expiration_date": self.expiration_date,
+            "uuid": self.uuid,
         }
 
     @property
@@ -84,6 +86,14 @@ class Database(OdevFrameworkMixin, ABC):
     @abstractproperty
     def size(self) -> int:
         """Return the size of the database in bytes."""
+
+    @abstractproperty
+    def expiration_date(self) -> Optional[datetime]:
+        """Return the expiration date of the database."""
+
+    @abstractproperty
+    def uuid(self) -> Optional[str]:
+        """Return the UUID of the database."""
 
     @abstractproperty
     def last_access_date(self) -> Optional[datetime]:

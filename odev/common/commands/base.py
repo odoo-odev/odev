@@ -235,18 +235,19 @@ class Command(OdevFrameworkMixin, ABC):
         columns: Sequence[MutableMapping[str, Any]],
         rows: Sequence[List[Any]],
         total: List[Any] = None,
+        **kwargs,
     ) -> None:
         """Print a table to stdout with highlighting and theming.
 
         :param columns: The headers of the table.
         :param rows: The rows of the table.
         :param total: The total row of the table.
+        :param kwargs: Additional keyword arguments to pass to the Rich Table.
         """
-        table = Table(
-            show_header=True,
-            header_style="bold",
-            box=box.HORIZONTALS,
-        )
+        kwargs.setdefault("show_header", True)
+        kwargs.setdefault("header_style", "bold")
+        kwargs.setdefault("box", box.HORIZONTALS)
+        table = Table(**kwargs)
 
         for column in columns:
             column.setdefault("justify", "left")
@@ -256,6 +257,8 @@ class Command(OdevFrameworkMixin, ABC):
         for row in rows:
             if total and row == rows[-1]:
                 table.add_row(*row, end_section=True)
+            elif not row and table.rows:
+                table.rows[-1].end_section = True
             else:
                 table.add_row(*row)
 

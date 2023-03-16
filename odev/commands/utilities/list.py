@@ -110,7 +110,7 @@ TABLE_MAPPING: List[_Mapped] = [
         title="URL",
         justify=None,
         display=lambda args: args.details,
-        format=lambda value: value and f"[link={value}?debug=1]{urlparse(value).netloc}[/link]" or "",
+        format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
     ),
     _Mapped(
         info_key="whitelisted",
