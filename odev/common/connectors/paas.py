@@ -16,7 +16,7 @@ from parsel.selector import Selector
 from requests import Response
 from requests.exceptions import HTTPError
 
-from odev.common import prompt, string
+from odev.common import prompt
 from odev.common.connectors.rest import RestConnector
 from odev.common.logging import logging
 
@@ -293,12 +293,10 @@ class PaasConnector(RestConnector):
         if user is None:
             user = self.list_users()[0]
             logger.warning(
-                string.normalize_indent(
-                    f"""
-                    GitHub user {self.github_login!r} is not a member of the {self._name!r} project, consider adding
-                    her/him to the list of users. Now impersonating the the project owner instead: {user["username"]!r}.
-                    """
-                )
+                f"""
+                GitHub user {self.github_login!r} is not a member of the {self._name!r} project, consider adding
+                her/him to the list of users. Now impersonating the the project owner instead: {user["username"]!r}.
+                """
             )
 
         return user

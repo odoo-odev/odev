@@ -20,6 +20,7 @@ from typing import Dict, Literal, Union
 from rich.logging import RichHandler
 from rich.text import Text
 
+from odev.common import string
 from odev.common.style import repr_console as console
 
 
@@ -81,6 +82,9 @@ class OdevRichHandler(RichHandler):
         """
         symbol = self.symbols.get(level, self.symbols["default"])
         return f"[{symbol}]".ljust(3)
+
+    def format(self, record: LogRecord) -> str:
+        return string.normalize_indent(super().format(record))
 
 
 # --- Logging module initialization --------------------------------------------
