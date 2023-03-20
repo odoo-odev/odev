@@ -35,6 +35,9 @@ class Secret:
     """
 
     def __repr__(self) -> str:
+        """Return a string representation of the secret to avoid passwords being
+        displayed in logs or tracebacks.
+        """
         return f"{self.__class__.__name__}({self.key!r})"
 
 
@@ -49,6 +52,34 @@ class SecretStore(PostgresTable):
         "login": "VARCHAR",
         "cipher": "TEXT",
     }
+
+    @classmethod
+    def encrypt(cls, plaintext: str) -> str:
+        """Symmetrically encrypt a string using ssh-agent.
+
+        :param plaintext: The string to encrypt.
+        :return: The encrypted string.
+        :rtype: str
+        """
+
+        with NamedStringIO() as stream, Container.create(stream) as container:
+            container.write(plaintext)
+            container.flush()
+            encrypted = stream.getvalue()
+        return b64encode(encrypted.encode()).decode()
+
+    @classmethod
+    def decrypt(cls, ciphertext: str) -> str:
+        """Symmetrically decrypt a string using ssh-agent.
+
+        :param ciphertext: The string to decrypt.
+        :return: The decrypted string.
+        :rtype: str
+        """
+        decoded = b64decode(ciphertext.encode()).decode()
+
+        with NamedStringIO(decoded) as stream, Container.load(stream) as container:
+            return container.getvalue().decode()
 
     def get(
         self,
@@ -177,31 +208,3 @@ class SecretStore(PostgresTable):
             WHERE name = '{name.lower()}'
             """
         )
-
-    @classmethod
-    def encrypt(cls, plaintext: str) -> str:
-        """Symmetrically encrypt a string using ssh-agent.
-
-        :param plaintext: The string to encrypt.
-        :return: The encrypted string.
-        :rtype: str
-        """
-
-        with NamedStringIO() as stream, Container.create(stream) as container:
-            container.write(plaintext)
-            container.flush()
-            encrypted = stream.getvalue()
-        return b64encode(encrypted.encode()).decode()
-
-    @classmethod
-    def decrypt(cls, ciphertext: str) -> str:
-        """Symmetrically decrypt a string using ssh-agent.
-
-        :param ciphertext: The string to decrypt.
-        :return: The decrypted string.
-        :rtype: str
-        """
-        decoded = b64decode(ciphertext.encode()).decode()
-
-        with NamedStringIO(decoded) as stream, Container.load(stream) as container:
-            return container.getvalue().decode()

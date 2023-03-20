@@ -1,6 +1,5 @@
 """Connect to Odoo SaaS databases."""
 
-from functools import lru_cache
 from pathlib import Path
 from types import FrameType
 from typing import Literal, Optional, Union
@@ -24,6 +23,12 @@ class SaasConnector(RestConnector):
     def name(self) -> str:
         """Return the name of the SaaS database."""
         return self.parsed_url.netloc.removesuffix(".odoo.com")
+
+    @property
+    def exists(self) -> bool:
+        """Return whether the SaaS database exists."""
+        response = self.get("saas_worker/noop", allow_redirects=False, authenticate=False)
+        return response.status_code == 200
 
     @property
     def login(self) -> str:
@@ -104,13 +109,6 @@ class SaasConnector(RestConnector):
         prompt.clear_line()
         return path
 
-    @property
-    def exists(self) -> bool:
-        """Return whether the SaaS database exists."""
-        response = self.get("saas_worker/noop", allow_redirects=False, authenticate=False)
-        return response.status_code == 200
-
-    @lru_cache
     def database_info(self) -> dict:
         """Return the information about the SaaS database."""
         response = self.post("saas_worker/db_info", allow_redirects=False)

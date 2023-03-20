@@ -53,15 +53,6 @@ class SaasDatabase(SaasConnectorMixin, Database):
     def __exit__(self, *args):
         self.saas.__exit__(*args)
 
-    def info(self):
-        return {
-            **super().info(),
-            "is_odoo_running": self.is_odoo,
-            "mode": self.mode,
-            "active": self.active,
-            "domains": self.domains,
-        }
-
     @property
     def exists(self) -> bool:
         return self.saas.exists
@@ -129,6 +120,15 @@ class SaasDatabase(SaasConnectorMixin, Database):
     @property
     def odoo_rpc_port(self) -> Optional[int]:
         return 443
+
+    def info(self):
+        return {
+            **super().info(),
+            "is_odoo_running": self.is_odoo,
+            "mode": self.mode,
+            "active": self.active,
+            "domains": self.domains,
+        }
 
     def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
         if path is None:

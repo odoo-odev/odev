@@ -48,6 +48,11 @@ class PythonEnv:
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.path.name!r}, version={self.version})"
 
+    @property
+    def exists(self) -> bool:
+        """Whether the python environment exists."""
+        return self.python.is_file()
+
     def create_venv(self) -> None:
         """Create a new virtual environment."""
         if self._global:
@@ -282,8 +287,3 @@ class PythonEnv:
             progress(line)
 
         return None
-
-    @property
-    def exists(self) -> bool:
-        """Whether the python environment exists."""
-        return self.python.is_file()

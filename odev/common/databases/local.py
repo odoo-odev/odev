@@ -43,20 +43,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def __exit__(self, *args):
         self.psql(self.name).__exit__(*args)
 
-    def info(self):
-        return {
-            **super().info(),
-            "is_odoo_running": self.process.is_running
-            if (self.process and self.process.is_running) or self.is_odoo
-            else None,
-            "odoo_process_id": self.process and self.process.pid,
-            "odoo_process_command": self.process and self.process.command,
-            "odoo_url": self.process and self.odoo_url,
-            "last_date": self.last_date,
-            "whitelisted": self.whitelisted,
-            "odoo_venv_path": self.odoo_venv,
-        }
-
     @property
     def odoo_rpc_port(self):
         return self.process and self.process.rpc_port
@@ -119,10 +105,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def odoo_filestore_path(self) -> Optional[Path]:
         return self.is_odoo and self._odoo_filestore_path() or None
-
-    def _odoo_filestore_path(self) -> Path:
-        """Return the path to the filestore of the database without checking if linked to an Odoo database."""
-        return Path.home() / ".local/share/Odoo/filestore/" / self.name
 
     @property
     def odoo_filestore_size(self) -> Optional[int]:
@@ -236,6 +218,64 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         with self.psql() as psql:
             return bool(psql.database_exists(self.name))
 
+    @property
+    def process(self) -> Optional[OdooBinProcess]:
+        if self._process is None and self.exists:
+            with self:
+                self._process = OdooBinProcess(self)
+
+        return self._process
+
+    @property
+    def whitelisted(self) -> bool:
+        """Whether the database is whitelisted and should not be removed automatically."""
+        if not self.is_odoo:
+            return True
+
+        info = self.store.databases.get(self)
+
+        if not info:
+            return False
+
+        return info.whitelisted
+
+    @whitelisted.setter
+    def whitelisted(self, value: bool):
+        """Set the whitelisted status of the database."""
+        self._whitelisted = value
+        self.store.databases.set(self)
+
+    @property
+    def neutralized(self):
+        """Whether the database is neutralized."""
+        return self.is_odoo and bool(
+            self.query(
+                """
+                SELECT value
+                FROM ir_config_parameter
+                WHERE key = 'database.is_neutralized'
+                """
+            )
+        )
+
+    def info(self):
+        return {
+            **super().info(),
+            "is_odoo_running": self.process.is_running
+            if (self.process and self.process.is_running) or self.is_odoo
+            else None,
+            "odoo_process_id": self.process and self.process.pid,
+            "odoo_process_command": self.process and self.process.command,
+            "odoo_url": self.process and self.odoo_url,
+            "last_date": self.last_date,
+            "whitelisted": self.whitelisted,
+            "odoo_venv_path": self.odoo_venv,
+        }
+
+    def _odoo_filestore_path(self) -> Path:
+        """Return the path to the filestore of the database without checking if linked to an Odoo database."""
+        return Path.home() / ".local/share/Odoo/filestore/" / self.name
+
     def create(self, template: str = None) -> bool:
         """Create the database.
 
@@ -329,43 +369,3 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def query(self, query: str):
         """Execute a query on the database."""
         return self.connector.query(query)
-
-    @property
-    def process(self) -> Optional[OdooBinProcess]:
-        if self._process is None and self.exists:
-            with self:
-                self._process = OdooBinProcess(self)
-
-        return self._process
-
-    @property
-    def whitelisted(self) -> bool:
-        """Whether the database is whitelisted and should not be removed automatically."""
-        if not self.is_odoo:
-            return True
-
-        info = self.store.databases.get(self)
-
-        if not info:
-            return False
-
-        return info.whitelisted
-
-    @whitelisted.setter
-    def whitelisted(self, value: bool):
-        """Set the whitelisted status of the database."""
-        self._whitelisted = value
-        self.store.databases.set(self)
-
-    @property
-    def neutralized(self):
-        """Whether the database is neutralized."""
-        return self.is_odoo and bool(
-            self.query(
-                """
-                SELECT value
-                FROM ir_config_parameter
-                WHERE key = 'database.is_neutralized'
-                """
-            )
-        )

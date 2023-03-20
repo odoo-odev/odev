@@ -40,19 +40,6 @@ class HistoryStore(PostgresTable):
     }
     _constraints = {"history_unique_command_arguments": "UNIQUE(command, arguments)"}
 
-    def set(self, command: Command):
-        """Set the history of a command."""
-        database = f"{command.database.name!r}" if isinstance(command, DatabaseCommand) and command.database else "NULL"
-
-        self.database.query(
-            f"""
-            INSERT INTO {self.name} (command, database, arguments)
-            VALUES ({command.name!r}, {database}, {command.argv!r})
-            ON CONFLICT (command, arguments) DO
-                UPDATE SET date = CURRENT_TIMESTAMP
-            """
-        )
-
     def get(self, command: Command = None, database: Database = None) -> List[HistoryLine]:
         """Get the history of a command or a database.
         :param command: The command to get the history of.
@@ -81,3 +68,16 @@ class HistoryStore(PostgresTable):
         )
 
         return [HistoryLine(*line) for line in result]
+
+    def set(self, command: Command):
+        """Set the history of a command."""
+        database = f"{command.database.name!r}" if isinstance(command, DatabaseCommand) and command.database else "NULL"
+
+        self.database.query(
+            f"""
+            INSERT INTO {self.name} (command, database, arguments)
+            VALUES ({command.name!r}, {database}, {command.argv!r})
+            ON CONFLICT (command, arguments) DO
+                UPDATE SET date = CURRENT_TIMESTAMP
+            """
+        )

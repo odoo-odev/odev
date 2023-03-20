@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 class Stash:
     """A context manager for stashing and popping changes in a git repository."""
 
+    # --- Low-level methods ----------------------------------------------------
+
     def __init__(self, repository: Repo):
         """Initialize the Git stash context manager.
 
@@ -63,6 +65,8 @@ class Stash:
 
 class GitWorktree:
     """A dataclass for working with git worktrees."""
+
+    # --- Attributes -----------------------------------------------------------
 
     connector: "GithubConnector"
     """The connector to use to connect to the Github API."""
@@ -150,6 +154,12 @@ class GitWorktree:
         self.prunable = prunable
         self.prunable_reason = prunable_reason
 
+    def __eq__(self, __o: object) -> bool:
+        return isinstance(__o, GitWorktree) and self.path == __o.path
+
+    def __repr__(self) -> str:
+        return f"GitWorktree({self.repository.name} on {self.branch})"
+
     @property
     def repository(self) -> Repo:
         """Get the repository object for the worktree.
@@ -173,12 +183,6 @@ class GitWorktree:
             for key, value in matched_values.items()
         }
         return cls(connector, **values)  # type: ignore
-
-    def __eq__(self, __o: object) -> bool:
-        return isinstance(__o, GitWorktree) and self.path == __o.path
-
-    def __repr__(self) -> str:
-        return f"GitWorktree({self.repository.name} on {self.branch})"
 
 
 class GithubConnector(Connector):
@@ -220,6 +224,93 @@ class GithubConnector(Connector):
         self._organization, self._repository = repo_values
         self.repository = Repo(self.path) if self.path.exists() and self.path.is_dir() else None
 
+    def __repr__(self) -> str:
+        return f"GithubConnector({self.name!r})"
+
+    @property
+    def name(self) -> str:
+        """The name of the repository."""
+        return f"{self._organization}/{self._repository}"
+
+    @property
+    def path(self) -> Path:
+        """The path to the repository."""
+        with self.config:
+            return Path(self.config.get("paths", "repositories")) / self.name
+
+    @property
+    def url(self) -> str:
+        """The URL to the repository."""
+        return f"https://github.com/{self.name}"
+
+    @property
+    def ssh_url(self) -> str:
+        """The SSH URL to the repository."""
+        return f"git@github.com:{self.name}.git"
+
+    @property
+    def remote(self) -> Optional[Remote]:
+        """The reference to the remote of the local repository."""
+        if hasattr(self.repository.remotes, "origin"):
+            return self.repository.remotes.origin
+
+        if self.repository.remotes:
+            return self.repository.remotes[0]
+
+        return None
+
+    @property
+    def remote_branch(self) -> Optional[RemoteReference]:
+        """Reference to the tracked branch on the remote."""
+        if self.remote is None:
+            return None
+
+        return self.repository.active_branch.tracking_branch()
+
+    @property
+    def default_branch(self) -> Optional[str]:
+        """The main branch of the repository."""
+        if self.remote is None:
+            if not self.repository.heads:
+                return None
+
+            return self.repository.heads[0].name.split("/")[-1]
+
+        with self:
+            return self._connection.get_repo(self.name).default_branch
+
+    @property
+    def branch(self) -> Optional[str]:
+        """The current branch of the repository."""
+        if self.repository.head.is_detached:
+            return None
+
+        return self.repository.active_branch.name.split("/")[-1]
+
+    @property
+    def requirements_path(self) -> Path:
+        """Path to the requirements.txt path of the repo, if present."""
+        return self.path / "requirements.txt"
+
+    @property
+    def authenticated(self) -> bool:
+        """Whether the current session is authenticated."""
+        if self._connection is None:
+            return False
+
+        try:
+            self._connection.get_user().login
+        except GithubException:
+            return False
+        else:
+            return True
+
+    @property
+    def worktrees_path(self) -> Path:
+        """Path to the worktrees directory."""
+        with self.config:
+            return Path(self.config.get("paths", "repositories")).parent / ".worktrees"
+
     def update(self):
         """Update the repository."""
         if self.repository and self.remote:
@@ -227,9 +318,6 @@ class GithubConnector(Connector):
             self.fetch()
             self.prune_worktrees()
             self.fetch_worktrees()
-
-    def __repr__(self) -> str:
-        return f"GithubConnector({self.name!r})"
 
     def connect(self):
         """Connect to the Github API."""
@@ -498,87 +586,3 @@ class GithubConnector(Connector):
                 with Stash(repo):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
                     repo.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
-
-    @property
-    def name(self) -> str:
-        """The name of the repository."""
-        return f"{self._organization}/{self._repository}"
-
-    @property
-    def path(self) -> Path:
-        """The path to the repository."""
-        with self.config:
-            return Path(self.config.get("paths", "repositories")) / self.name
-
-    @property
-    def url(self) -> str:
-        """The URL to the repository."""
-        return f"https://github.com/{self.name}"
-
-    @property
-    def ssh_url(self) -> str:
-        """The SSH URL to the repository."""
-        return f"git@github.com:{self.name}.git"
-
-    @property
-    def remote(self) -> Optional[Remote]:
-        """The reference to the remote of the local repository."""
-        if hasattr(self.repository.remotes, "origin"):
-            return self.repository.remotes.origin
-
-        if self.repository.remotes:
-            return self.repository.remotes[0]
-
-        return None
-
-    @property
-    def remote_branch(self) -> Optional[RemoteReference]:
-        """Reference to the tracked branch on the remote."""
-        if self.remote is None:
-            return None
-
-        return self.repository.active_branch.tracking_branch()
-
-    @property
-    def default_branch(self) -> Optional[str]:
-        """The main branch of the repository."""
-        if self.remote is None:
-            if not self.repository.heads:
-                return None
-
-            return self.repository.heads[0].name.split("/")[-1]
-
-        with self:
-            return self._connection.get_repo(self.name).default_branch
-
-    @property
-    def branch(self) -> Optional[str]:
-        """The current branch of the repository."""
-        if self.repository.head.is_detached:
-            return None
-
-        return self.repository.active_branch.name.split("/")[-1]
-
-    @property
-    def requirements_path(self) -> Path:
-        """Path to the requirements.txt path of the repo, if present."""
-        return self.path / "requirements.txt"
-
-    @property
-    def authenticated(self) -> bool:
-        """Whether the current session is authenticated."""
-        if self._connection is None:
-            return False
-
-        try:
-            self._connection.get_user().login
-        except GithubException:
-            return False
-        else:
-            return True
-
-    @property
-    def worktrees_path(self) -> Path:
-        """Path to the worktrees directory."""
-        with self.config:
-            return Path(self.config.get("paths", "repositories")).parent / ".worktrees"

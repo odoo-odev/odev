@@ -26,6 +26,7 @@ class DatabaseStore(PostgresTable):
     """A class for managing Odoo databases."""
 
     name = "databases"
+
     _columns = {
         "id": "SERIAL PRIMARY KEY",
         "name": "VARCHAR NOT NULL",
@@ -34,6 +35,21 @@ class DatabaseStore(PostgresTable):
         "whitelisted": "BOOLEAN NOT NULL DEFAULT FALSE",
     }
     _constraints = {"databases_unique_name": "UNIQUE(name)"}
+
+    def get(self, database: LocalDatabase) -> Optional[DatabaseInfo]:
+        """Get the saved values of a database."""
+        result = self.database.query(
+            f"""
+            SELECT * FROM {self.name}
+            WHERE name = {database.name!r}
+            LIMIT 1
+            """
+        )
+
+        if not result:
+            return None
+
+        return DatabaseInfo(*result[0][1:])
 
     def set(self, database: LocalDatabase, arguments: str = None):
         """Save values for a database."""
@@ -52,21 +68,6 @@ class DatabaseStore(PostgresTable):
                 UPDATE SET {", ".join(f'{key} = {value}' for key, value in values.items())}
             """
         )
-
-    def get(self, database: LocalDatabase) -> Optional[DatabaseInfo]:
-        """Get the saved values of a database."""
-        result = self.database.query(
-            f"""
-            SELECT * FROM {self.name}
-            WHERE name = {database.name!r}
-            LIMIT 1
-            """
-        )
-
-        if not result:
-            return None
-
-        return DatabaseInfo(*result[0][1:])
 
     def delete(self, database: LocalDatabase):
         """Delete the saved values of a database."""

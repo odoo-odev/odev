@@ -101,13 +101,12 @@ class Command(OdevFrameworkMixin, ABC):
     def __str__(self) -> str:
         return self.name
 
-    @abstractmethod
-    def run(self) -> None:
-        """Executes the command."""
-        raise NotImplementedError()
-
-    def cleanup(self) -> None:
-        """Cleanup after the command execution."""
+    @classmethod
+    def __reversed_mro(cls):
+        """Return the reversed MRO of the class, excluding non command-based classes."""
+        for base_cls in reversed(cls.mro()):
+            if issubclass(base_cls, Command):
+                yield base_cls
 
     @classmethod
     def is_abstract(cls) -> bool:
@@ -222,6 +221,14 @@ class Command(OdevFrameworkMixin, ABC):
 
         return None
 
+    @abstractmethod
+    def run(self) -> None:
+        """Executes the command."""
+        raise NotImplementedError()
+
+    def cleanup(self) -> None:
+        """Cleanup after the command execution."""
+
     def print(self, text: str, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
         if self.odev._console.is_terminal and self.odev._console.height < len(text.splitlines()):
@@ -270,12 +277,3 @@ class Command(OdevFrameworkMixin, ABC):
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""
         return CommandError(self, message, *args, **kwargs)
-
-    # --- Private methods ------------------------------------------------------
-
-    @classmethod
-    def __reversed_mro(cls):
-        """Return the reversed MRO of the class, excluding non command-based classes."""
-        for base_cls in reversed(cls.mro()):
-            if issubclass(base_cls, Command):
-                yield base_cls

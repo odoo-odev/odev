@@ -78,6 +78,10 @@ class RestConnector(Connector, ABC):
         return self.parsed_url.netloc.split(".", 1)[0]
 
     @abstractproperty
+    def exists(self) -> bool:
+        """Return whether the endpoint exists."""
+
+    @abstractproperty
     def login(self) -> str:
         """Login for authenticating to the endpoint."""
 
@@ -217,7 +221,3 @@ class RestConnector(Connector, ABC):
         :rtype: requests.Response
         """
         return self.request("POST", path, params=params, authenticate=authenticate, **kwargs)
-
-    @abstractproperty
-    def exists(self) -> bool:
-        """Return whether the endpoint exists."""

@@ -97,6 +97,40 @@ class PaasConnector(RestConnector):
         """Return the URL to log in to Odoo SH."""
         return "/web/login"
 
+    @property
+    def authenticated(self) -> bool:
+        """Test whether the session is valid and we are signed in."""
+        with self.nocache():
+            return self.profile is not None
+
+    @property
+    def profile(self) -> Mapping[str, Any]:
+        """Return the current user profile."""
+        result = self.rpc("/project/json/user/profile")
+        assert isinstance(result, dict)
+        return result
+
+    @property
+    def repository(self) -> Mapping[str, Any]:
+        """Return the repository for the current project."""
+        if self._repository is None:
+            self._repository = self.select_repository()
+
+        return self._repository
+
+    @property
+    def user(self) -> Mapping[str, Any]:
+        """Return the user for the current project."""
+        if self._user is None:
+            self._user = self.select_user()
+
+        return self._user
+
+    @property
+    def exists(self) -> bool:
+        """Return whether the PaaS project exists."""
+        return bool(self.repository)
+
     def extract_form_inputs(self, response: Response) -> MutableMapping[str, str]:
         """Extract the input fields from the response's content.
         :param response: A requests.Response object to extract the fields from.
@@ -204,35 +238,6 @@ class PaasConnector(RestConnector):
 
         return result
 
-    @property
-    def authenticated(self) -> bool:
-        """Test whether the session is valid and we are signed in."""
-        with self.nocache():
-            return self.profile is not None
-
-    @property
-    def profile(self) -> Mapping[str, Any]:
-        """Return the current user profile."""
-        result = self.rpc("/project/json/user/profile")
-        assert isinstance(result, dict)
-        return result
-
-    @property
-    def repository(self) -> Mapping[str, Any]:
-        """Return the repository for the current project."""
-        if self._repository is None:
-            self._repository = self.select_repository()
-
-        return self._repository
-
-    @property
-    def user(self) -> Mapping[str, Any]:
-        """Return the user for the current project."""
-        if self._user is None:
-            self._user = self.select_user()
-
-        return self._user
-
     def list_repositories(self) -> List[Mapping[str, Any]]:
         """Return the list of repositories for the current project."""
         result = self.rpc("/support/json/repos")
@@ -244,6 +249,19 @@ class PaasConnector(RestConnector):
         result = self.rpc("/support/json/repo_users", params={"repository_id": self.repository["id"]})
         assert isinstance(result, list)
         return result
+
+    def _filter_repositories(self) -> List[Mapping[str, Any]]:
+        """Filter the list of repositories for the current project."""
+        re_full_name = re.compile(rf"(?<=/)(?:ps\w{2}-)?{self._name}", re.IGNORECASE)
+        re_project_name = re.compile(rf"(?:odoo-ps-)?(?:ps\w{2}-)?{self._name}", re.IGNORECASE)
+
+        return [
+            repo
+            for repo in self.list_repositories()
+            if repo["full_name"] == self._name
+            or re_full_name.search(repo["full_name"])
+            or re_project_name.search(repo["project_name"])
+        ]
 
     def select_repository(self) -> Mapping[str, Any]:
         """Return the repository for the current project."""
@@ -261,24 +279,6 @@ class PaasConnector(RestConnector):
             return next(repo for repo in repositories if repo["full_name"] == selected)
 
         return repositories[0]
-
-    @property
-    def exists(self) -> bool:
-        """Return whether the PaaS project exists."""
-        return bool(self.repository)
-
-    def _filter_repositories(self) -> List[Mapping[str, Any]]:
-        """Filter the list of repositories for the current project."""
-        re_full_name = re.compile(rf"(?<=/)(?:ps\w{2}-)?{self._name}", re.IGNORECASE)
-        re_project_name = re.compile(rf"(?:odoo-ps-)?(?:ps\w{2}-)?{self._name}", re.IGNORECASE)
-
-        return [
-            repo
-            for repo in self.list_repositories()
-            if repo["full_name"] == self._name
-            or re_full_name.search(repo["full_name"])
-            or re_project_name.search(repo["project_name"])
-        ]
 
     def select_user(self) -> Mapping[str, Any]:
         """Filter the list of users for the current project.

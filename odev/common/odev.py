@@ -79,6 +79,9 @@ class Odev:
         with progress.spinner("Loading commands"):
             self.register_commands()
 
+    def __repr__(self) -> str:
+        return f"Odev(version={self.version})"
+
     @property
     def name(self) -> str:
         """Name of the framework."""
@@ -109,9 +112,6 @@ class Odev:
         """Local path to the directory where database dumps are stored."""
         with self.config:
             return Path(self.config.get("paths", "repositories")).parent / "dumps"
-
-    def __repr__(self) -> str:
-        return f"Odev(version={self.version})"
 
     def update(self) -> bool:
         """

@@ -73,12 +73,6 @@ class OdooBinProcess(OdevFrameworkMixin):
     def __repr__(self) -> str:
         return f"OdooBinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid!r})"
 
-    def with_version(self, version: OdooVersion = None) -> "OdooBinProcess":
-        """Return the OdooBinProcess instance with the given version forced."""
-        self._version = version
-        self._venv = None
-        return self
-
     @property
     def venv(self):
         """Python virtual environment used by the Odoo installation."""
@@ -127,37 +121,6 @@ class OdooBinProcess(OdevFrameworkMixin):
         with self.config:
             return Path(self.config.get("paths", "repositories")).parent / ".virtualenvs" / str(self.version)
 
-    @lru_cache
-    def _get_ps_process(self) -> Optional[str]:
-        """Return the process currently running odoo, if any.
-        Grep-ed `ps aux` output.
-        """
-        process = bash.execute(
-            f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}(\\s+|$)' || echo -n ''"
-        )
-
-        if process is not None:
-            return process.stdout.decode()
-
-        return None
-
-    def _get_python_version(self) -> Optional[str]:
-        """Return the Python version used by the current Odoo installation."""
-        if self.version is None:
-            return None
-
-        if self.version == OdooVersion("master"):
-            return ODOO_PYTHON_VERSIONS.get(max(ODOO_PYTHON_VERSIONS.keys()), None)
-
-        return ODOO_PYTHON_VERSIONS.get(self.version.major, "2.7" if self.version.major < 11 else None)
-
-    def _get_odoo_branch(self) -> str:
-        """Return the branch of the current Odoo installation."""
-        if self.version is None:
-            return "master"
-
-        return str(self.version)
-
     @property
     def pid(self) -> Optional[int]:
         """Return the process id of the current database if it is running."""
@@ -191,6 +154,91 @@ class OdooBinProcess(OdevFrameworkMixin):
     def is_running(self) -> bool:
         """Return whether Odoo is currently running on the database."""
         return self.pid is not None
+
+    @property
+    def odoo_repositories(self) -> Generator[GithubConnector, None, None]:
+        """Return the list of Odoo repositories the current version."""
+        repo_names: List[str] = ["odoo", "design-themes"]
+
+        with self.database:
+            if self.database.odoo_edition == "enterprise" or self._force_enterprise:
+                repo_names.insert(1, "enterprise")
+
+        for repo_name in repo_names:
+            yield GithubConnector(f"odoo/{repo_name}")
+
+    @property
+    def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
+        """Return the list of Odoo worktrees the current version."""
+        branch = self._get_odoo_branch()
+
+        for repo in self.odoo_repositories:
+            yield repo.get_worktree(branch)
+
+    @property
+    def odoo_addons_paths(self) -> List[Path]:
+        """Return the list of Odoo addons paths."""
+        return [
+            worktree.path / addon
+            for addon in ["", "addons", "odoo/addons", "openerp/addons"]
+            for worktree in self.odoo_worktrees
+            if self.check_addons_path(worktree.path / addon)
+        ]
+
+    @property
+    def addons_paths(self) -> List[Path]:
+        """Return the list of addons paths."""
+        return [path for path in self.odoo_addons_paths + self.additional_addons_paths if self.check_addons_path(path)]
+
+    @property
+    def addons_requirements(self) -> Generator[Path, None, None]:
+        """Return the list of addons requirements files."""
+        globs = (
+            path.glob("requirements.txt")
+            for path in (
+                self.addons_paths
+                + [Path(__file__).parents[1] / "static"]
+                + [worktree.path for worktree in self.odoo_worktrees]
+            )
+        )
+        return (path for glob in globs for path in glob)
+
+    def with_version(self, version: OdooVersion = None) -> "OdooBinProcess":
+        """Return the OdooBinProcess instance with the given version forced."""
+        self._version = version
+        self._venv = None
+        return self
+
+    @lru_cache
+    def _get_ps_process(self) -> Optional[str]:
+        """Return the process currently running odoo, if any.
+        Grep-ed `ps aux` output.
+        """
+        process = bash.execute(
+            f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}(\\s+|$)' || echo -n ''"
+        )
+
+        if process is not None:
+            return process.stdout.decode()
+
+        return None
+
+    def _get_python_version(self) -> Optional[str]:
+        """Return the Python version used by the current Odoo installation."""
+        if self.version is None:
+            return None
+
+        if self.version == OdooVersion("master"):
+            return ODOO_PYTHON_VERSIONS.get(max(ODOO_PYTHON_VERSIONS.keys()), None)
+
+        return ODOO_PYTHON_VERSIONS.get(self.version.major, "2.7" if self.version.major < 11 else None)
+
+    def _get_odoo_branch(self) -> str:
+        """Return the branch of the current Odoo installation."""
+        if self.version is None:
+            return "master"
+
+        return str(self.version)
 
     def kill(self, hard: bool = False):
         """Kill the process of the current database.
@@ -325,54 +373,6 @@ class OdooBinProcess(OdevFrameworkMixin):
 
             if not repo.branch == "master":
                 repo.checkout("master")
-
-    @property
-    def odoo_repositories(self) -> Generator[GithubConnector, None, None]:
-        """Return the list of Odoo repositories the current version."""
-        repo_names: List[str] = ["odoo", "design-themes"]
-
-        with self.database:
-            if self.database.odoo_edition == "enterprise" or self._force_enterprise:
-                repo_names.insert(1, "enterprise")
-
-        for repo_name in repo_names:
-            yield GithubConnector(f"odoo/{repo_name}")
-
-    @property
-    def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
-        """Return the list of Odoo worktrees the current version."""
-        branch = self._get_odoo_branch()
-
-        for repo in self.odoo_repositories:
-            yield repo.get_worktree(branch)
-
-    @property
-    def odoo_addons_paths(self) -> List[Path]:
-        """Return the list of Odoo addons paths."""
-        return [
-            worktree.path / addon
-            for addon in ["", "addons", "odoo/addons", "openerp/addons"]
-            for worktree in self.odoo_worktrees
-            if self.check_addons_path(worktree.path / addon)
-        ]
-
-    @property
-    def addons_paths(self) -> List[Path]:
-        """Return the list of addons paths."""
-        return [path for path in self.odoo_addons_paths + self.additional_addons_paths if self.check_addons_path(path)]
-
-    @property
-    def addons_requirements(self) -> Generator[Path, None, None]:
-        """Return the list of addons requirements files."""
-        globs = (
-            path.glob("requirements.txt")
-            for path in (
-                self.addons_paths
-                + [Path(__file__).parents[1] / "static"]
-                + [worktree.path for worktree in self.odoo_worktrees]
-            )
-        )
-        return (path for glob in globs for path in glob)
 
     def check_addons_path(self, path: Path) -> bool:
         """Return whether the given path is a valid Odoo addons path.

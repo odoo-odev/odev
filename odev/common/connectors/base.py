@@ -25,14 +25,6 @@ class Connector(ABC):
 
         self._framework = framework
 
-    @abstractmethod
-    def connect(self):
-        """Connect to the external service."""
-
-    @abstractmethod
-    def disconnect(self):
-        """Disconnect from the external service."""
-
     def __enter__(self):
         """Open a connection to the external service."""
         self.connect()
@@ -61,3 +53,11 @@ class Connector(ABC):
     def store(self) -> "DataStore":
         """Return the Odev data store."""
         return self.odev.store
+
+    @abstractmethod
+    def connect(self):
+        """Connect to the external service."""
+
+    @abstractmethod
+    def disconnect(self):
+        """Disconnect from the external service."""
