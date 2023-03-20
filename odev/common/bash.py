@@ -33,15 +33,30 @@ sudo_password: Optional[str] = None
 # --- Helpers ------------------------------------------------------------------
 
 
-def __run_command(command: str, capture: bool = True) -> CompletedProcess[bytes]:
+def __run_command(command: str, capture: bool = True, sudo_password: str = None) -> CompletedProcess[bytes]:
     """Execute a command as a subprocess.
+    If `sudo_password` is provided and not `None`, the command will be executed with
+    elevated privileges.
 
     :param str command: The command to execute.
     :param bool capture: Whether to capture the output of the command.
+    :param str sudo_password: The password to use when executing the command with
+        elevated privileges.
     :return: The result of the command execution.
     :rtype: CompletedProcess
     """
-    return run_subprocess(command, shell=True, check=True, capture_output=capture)
+
+    if sudo_password is not None:
+        command = f"sudo -Sks {command}"
+        sudo_password = quote(f"{sudo_password}\n")
+
+    return run_subprocess(
+        command,
+        shell=True,
+        check=True,
+        capture_output=capture,
+        input=sudo_password,
+    )
 
 
 def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
@@ -93,10 +108,9 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
             return None
 
         try:
-            process_result = __run_command(f"echo {quote(sudo_password)} | sudo -Sks {command}")
+            process_result = __run_command(command, sudo_password=sudo_password)
         except CalledProcessError as exception:
             logger.debug(f"Process failed with elevated privileges: {quote(command)}")
-            exception.cmd = exception.cmd.replace(quote(sudo_password), "*" * len(sudo_password))
             sudo_password = None
             __raise_or_log(exception, raise_on_error)
             return None
