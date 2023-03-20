@@ -1,3 +1,6 @@
+from typing import Any, List
+
+
 def shortest_path(env, model_a, model_b, n=10, display=True):
     """
     Return the n shortest paths from model_a to model_b using a BFS algorithm.
@@ -8,7 +11,7 @@ def shortest_path(env, model_a, model_b, n=10, display=True):
             f"Model(s) {', '.join(missing_models)} not found in database. Please install the module(s) that define it"
         )
 
-    paths_to_return = []
+    paths_to_return: List[Any] = []
     path_list = [[(model_a, "self")]]
     path_index = 0
     models_done = {model_a}
