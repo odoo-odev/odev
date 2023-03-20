@@ -151,7 +151,7 @@ class PostgresTable(ABC):
 
         if self._constraints is not None:
             for name, definition in self._constraints.items():
-                logger.debug(f"Creating constraint {name!r} on table {self.name!r} in database {self.database!r}")
+                logger.debug(f"Creating constraint {name!r} on table {self.name!r} in database {self.database.name!r}")
                 self.database.constraint(self.name, name, definition)
 
     def clear(self):
