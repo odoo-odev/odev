@@ -1,0 +1,79 @@
+name: Bug report
+description: Report a bug or an technical issue that happened while running Odev.
+labels: [bug]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > *Note*
+        >
+        > Before you file an issue:
+        >
+        > - Read the [Contributing guide](https://github.com/odoo-ps/ps-tech-odev/blob/main/CONTRIBUTING.md).
+        > - Check to make sure someone hasn't already opened a similar [issue](https://github.com/odoo-ps/ps-tech-odev/issues).
+  
+  - type: dropdown
+    id: criticality
+    attributes:
+      label: Criticality
+      description: |
+        What is the criticality of the issue you faced?
+        - **Styling:** Styling issue or typo, not important but nice to have.
+        - **Low:** Unimportant issue that does not prevent the good functioning of `odev` or a workaround exists.
+        - **Blocking:** `odev` or one of its features is crashing and cannot be used.
+        - **Catastrophic:** Other parts of the system are impacted by an action taken by `odev`.
+      multiple: false
+      options:
+        - Styling
+        - Low
+        - Blocking
+        - Catastrophic
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: |
+        - Give as much detail as you can to help us understand the issue you faced.
+        - What command did you run when facing the issue? What happened then?
+        - What did you do before running `odev`?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What is expected?
+      description: |
+        - What is the expected outcome?
+        - Why should the code be changed? What use cases does it support?
+    validations:
+      required: true
+
+  - type: textarea
+    id: resolution
+    attributes:
+      label: Possible implementation
+      description: If you already have an idea on how this issue could be solved, feel free to share it here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional information
+      description: Add any other context or screenshots about the issue here.
+    validations:
+      required: false
