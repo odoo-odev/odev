@@ -1,8 +1,10 @@
 """Interact with remote endpoints using REST."""
 
 import json
+import platform
 import re
 from abc import ABC, abstractmethod, abstractproperty
+from contextlib import contextmanager
 from typing import (
     Any,
     ClassVar,
@@ -16,6 +18,7 @@ from urllib.parse import ParseResult, urlparse
 
 from requests import Response, Session
 
+from odev._version import __version__
 from odev.common import prompt
 from odev.common.connectors.base import Connector
 from odev.common.logging import LOG_LEVEL, logging
@@ -63,6 +66,13 @@ class RestConnector(Connector, ABC):
         return f"{self.parsed_url.scheme}://{self.parsed_url.netloc}"
 
     @property
+    def user_agent(self) -> str:
+        """Build and return a credible User-Agent string to use in HTTP requests."""
+        python = f"{platform.python_implementation()} {platform.python_version()}"
+        system = f"{platform.system()} {platform.release()}"
+        return f"Odev/{__version__} ({python}; {system})"
+
+    @property
     def name(self) -> str:
         """Return the name of the endpoint."""
         return self.parsed_url.netloc.split(".", 1)[0]
@@ -99,6 +109,14 @@ class RestConnector(Connector, ABC):
             self.__class__._cache[key] = value
 
         return self.__class__._cache.get(key)
+
+    @contextmanager
+    def nocache(self):
+        """Context manager to disable caching of HTTP requests."""
+        cache = self.__class__._cache
+        self.__class__._cache = {}
+        yield
+        self.__class__._cache = cache
 
     def _request(
         self,
@@ -143,6 +161,7 @@ class RestConnector(Connector, ABC):
 
         logger.debug(logger_message)
 
+        self._connection.headers.update({"User-Agent": self.user_agent})
         response = self._connection.request(method, self.url + path, **params, **kwargs)
         response.raise_for_status()
 

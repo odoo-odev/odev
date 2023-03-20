@@ -190,7 +190,7 @@ class GithubConnector(Connector):
     _connection: Github = None
     """The connection to the Github API."""
 
-    _token_vault_key: str = "github_token"
+    _token_vault_key: str = "github.com:token"
     """The key to use to store the Github API token in the vault."""
 
     _organization: str = None

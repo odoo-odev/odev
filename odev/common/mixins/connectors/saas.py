@@ -1,4 +1,4 @@
-"""Mixins for commands that need to use a connection to GitHub."""
+"""Mixins for commands that need to use a connection to a SaaS database."""
 
 from typing import Type
 
