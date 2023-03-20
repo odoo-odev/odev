@@ -55,6 +55,8 @@ class SecretStore(PostgresTable):
         key: str,
         fields: Sequence[Union[Literal["login"], Literal["password"]]] = None,
         prompt_format: str = None,
+        ask_missing: bool = True,
+        force_ask: bool = False,
     ) -> Secret:
         """Get a secret from the vault.
 
@@ -66,25 +68,56 @@ class SecretStore(PostgresTable):
             - {field}: The field to get.
 
         Default: "{field} for '{key}':"
+        :param ask_missing: Whether to prompt the user for the missing fields.
         :return: The login and password.
         :rtype: Tuple[str, str]
         """
         secret = self._get(key) or Secret(key, "", "")
+        old_secret = Secret(key, secret.login, secret.password)
 
         if fields is None:
             fields = ("login", "password")
 
         for field in fields:
-            if not getattr(secret, field, ""):
-                logger.debug(f"Secret {key!r} has no {field!r} in vault")
+            if prompt_format is None:
+                prompt_format = "{field} for '{key}':".capitalize()
 
-                if prompt_format is None:
-                    prompt_format = "{field} for '{key}':".capitalize()
+            prompt_label = prompt_format.format(key=key, field=field)
+            current_value = getattr(secret, field, "")
 
-                prompt_method = prompt.secret if field == "password" else prompt.text
-                setattr(secret, field, prompt_method(prompt_format.format(key=key, field=field)))
-                self._set(secret)
+            if current_value and not force_ask:
+                continue
 
+            if not current_value:
+                if force_ask:
+                    logger.debug(f"Re-asking field {field!r} for secret {key!r}")
+                else:
+                    logger.debug(f"Secret {key!r} has no {field!r} in vault")
+
+                    if not ask_missing:
+                        continue
+
+            if field == "password":
+                value = prompt.secret(prompt_label)
+            else:
+                value = prompt.text(prompt_label, default=current_value)
+
+            setattr(secret, field, value)
+
+        if secret.login != old_secret.login or secret.password != old_secret.password:
+            self._set(secret)
+
+        return secret
+
+    def set(self, key: str, login: str, password: str) -> Secret:
+        """Save a secret to the vault.
+
+        :param key: The key for the secret.
+        :param login: The login.
+        :param password: The password.
+        """
+        secret = Secret(key, login, password)
+        self._set(secret)
         return secret
 
     def invalidate(self, key: str):
