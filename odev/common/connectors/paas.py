@@ -295,7 +295,7 @@ class PaasConnector(RestConnector):
             logger.warning(
                 f"""
                 GitHub user {self.github_login!r} is not a member of the {self._name!r} project, consider adding
-                her/him to the list of users. Now impersonating the the project owner instead: {user["username"]!r}.
+                her/him to the list of users. Now impersonating the project owner instead: {user["username"]!r}.
                 """
             )
 
