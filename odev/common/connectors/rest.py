@@ -19,8 +19,8 @@ from urllib.parse import ParseResult, urlparse
 from requests import Response, Session
 
 from odev._version import __version__
-from odev.common import prompt
 from odev.common.connectors.base import Connector
+from odev.common.console import console
 from odev.common.logging import LOG_LEVEL, logging
 
 
@@ -169,7 +169,7 @@ class RestConnector(Connector, ABC):
         response = self._connection.request(method, self.url + path, **params, **kwargs)
         response.raise_for_status()
 
-        prompt.clear_line(int(LOG_LEVEL == "DEBUG"))
+        console.clear_line(int(LOG_LEVEL == "DEBUG"))
         logger.debug(
             logger_message
             + f" -> [{response.status_code}] {response.reason} ({response.elapsed.total_seconds():.3f} seconds)"

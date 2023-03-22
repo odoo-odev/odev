@@ -3,7 +3,8 @@ from unittest.mock import patch
 
 import pytest
 
-from odev.common import bash, prompt
+from odev.common import bash
+from odev.common.console import console
 
 
 class TestCommonBash:
@@ -25,7 +26,7 @@ class TestCommonBash:
 
     def test_execute_sudo_no_password(self):
         """A command that fails should be re-executed with sudo and fail if the password is not set"""
-        with pytest.raises(CalledProcessError) as _, patch.object(prompt, "secret") as mock_secret:
+        with pytest.raises(CalledProcessError) as _, patch.object(console, "secret") as mock_secret:
             mock_secret.return_value = None
             bash.execute("cat /etc/shadow", sudo=True)
 
@@ -33,7 +34,7 @@ class TestCommonBash:
         """A command that fails should be re-executed with sudo and return None if the password is not set
         and raise_on_error is False
         """
-        with patch.object(prompt, "secret") as mock_secret:
+        with patch.object(console, "secret") as mock_secret:
             mock_secret.return_value = None
             exec_result = bash.execute("cat /etc/shadow", sudo=True, raise_on_error=False)
         assert exec_result is None, "should return None"

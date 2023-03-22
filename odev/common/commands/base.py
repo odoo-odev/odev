@@ -22,8 +22,9 @@ from rich import box
 from rich.console import RenderableType
 from rich.table import Table
 
-from odev.common import prompt, string
+from odev.common import string
 from odev.common.actions import ACTIONS_MAPPING
+from odev.common.console import console
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
@@ -89,11 +90,11 @@ class Command(OdevFrameworkMixin, ABC):
         self.args: Namespace = args
         self.args.log_level = LOG_LEVEL
 
-        prompt.bypass_prompt = self.args.bypass_prompt
+        console.bypass_prompt = self.args.bypass_prompt
 
     def __del__(self):
         """Reset the bypass prompt flag."""
-        prompt.bypass_prompt = not self.args.bypass_prompt
+        console.bypass_prompt = not self.args.bypass_prompt
 
     def __repr__(self) -> str:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
@@ -230,8 +231,11 @@ class Command(OdevFrameworkMixin, ABC):
     def cleanup(self) -> None:
         """Cleanup after the command execution."""
 
-    def print(self, renderable: RenderableType, *args: Any, **kwargs: Any) -> None:
+    def print(self, renderable: RenderableType = None, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
+        if renderable is None:
+            renderable = ""
+
         if (
             self.odev._console.is_terminal
             and isinstance(renderable, str)

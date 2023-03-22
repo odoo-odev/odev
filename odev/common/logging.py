@@ -21,7 +21,7 @@ from rich.logging import RichHandler
 from rich.text import Text
 
 from odev.common import string
-from odev.common.style import repr_console as console
+from odev.common.console import console
 
 
 __all__ = ["logging", "console", "LOG_LEVEL"]

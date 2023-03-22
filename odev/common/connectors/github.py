@@ -18,8 +18,9 @@ from typing import (
 from git import GitCommandError, Remote, RemoteReference, Repo
 from github import Github, GithubException
 
-from odev.common import bash, prompt, style
+from odev.common import bash
 from odev.common.connectors.base import Connector
+from odev.common.console import Colors, console
 from odev.common.errors import CommandError
 from odev.common.logging import logging
 from odev.common.progress import Progress, spinner
@@ -375,7 +376,7 @@ class GithubConnector(Connector):
         self._git_progress(Repo.clone_from, self.ssh_url, self.path, multi_options=options)
         self.repository = Repo(self.path)
         logger.info(
-            f"Cloned repository [bold {style.CYAN}]{self.name!s}[/bold {style.CYAN}]"
+            f"Cloned repository [bold {Colors.CYAN}]{self.name!s}[/bold {Colors.CYAN}]"
             + (f" on branch {branch!r}" if branch else "")
         )
 
@@ -387,7 +388,7 @@ class GithubConnector(Connector):
         logger.info(f"Repository {self.name!r} has pending changes on branch {self.branch!r}")
         self.check_requirements()
 
-        if force or prompt.confirm("Pull changes now?", True):
+        if force or console.confirm("Pull changes now?", True):
             with Stash(self.repository):
                 self._git_progress(self.remote.pull, ff_only=True)
 
@@ -434,7 +435,7 @@ class GithubConnector(Connector):
 
         if diff == requirements_file.as_posix():
             logger.debug(
-                f"Repository [bold {style.CYAN}]{self.name}[/bold {style.CYAN}] "
+                f"Repository [bold {Colors.CYAN}]{self.name}[/bold {Colors.CYAN}] "
                 "requirements have changed since last version"
             )
 
@@ -443,7 +444,7 @@ class GithubConnector(Connector):
     def _git_progress(self, operation: Callable, *args, **kwargs):
         """Display a progress bar when performing time-consuming git operations."""
         progress = Progress()
-        repo_name = f"[bold {style.CYAN}]{self.name}[/bold {style.CYAN}]"
+        repo_name = f"[bold {Colors.CYAN}]{self.name}[/bold {Colors.CYAN}]"
         task_description_clone = f"Downloading repository {repo_name}"
         task_description_delta = f"Resolving deltas in {repo_name}"
         task = progress.add_task(task_description_clone, total=None, start=False)
@@ -498,7 +499,7 @@ class GithubConnector(Connector):
         if not path.is_absolute():
             path = (self.worktrees_path / path).resolve()
 
-        message = f"worktree [bold]{branch!s}[/bold] for [bold {style.CYAN}]{self.name}[/bold {style.CYAN}]"
+        message = f"worktree [bold]{branch!s}[/bold] for [bold {Colors.CYAN}]{self.name}[/bold {Colors.CYAN}]"
 
         with spinner(f"Creating {message}"):
             self.worktrees_path.mkdir(parents=True, exist_ok=True)

@@ -2,8 +2,9 @@
 
 import shutil
 
-from odev.common import progress, prompt
+from odev.common import progress
 from odev.common.commands import OdoobinCommand
+from odev.common.console import console
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 
@@ -66,7 +67,7 @@ class RenameCommand(OdoobinCommand):
             return
 
         if self.new_filestore.exists():
-            if not prompt.confirm(f"Filestore {self.new_filestore} already exists, overwrite?"):
+            if not console.confirm(f"Filestore {self.new_filestore} already exists, overwrite?"):
                 raise self.error("Command aborted")
 
             shutil.rmtree(self.new_filestore)

@@ -2,7 +2,6 @@
 stacked on top of each other.
 """
 
-from contextlib import nullcontext
 from typing import ClassVar, List
 
 from rich.markup import escape
@@ -16,8 +15,11 @@ from rich.progress import (
 )
 from rich.status import Status
 
-from odev.common.logging import LOG_LEVEL, logging
-from odev.common.style import console, repr_console
+from odev.common.console import console
+from odev.common.logging import logging
+
+
+__all__ = ["Progress", "StackedStatus", "spinner"]
 
 
 logger = logging.getLogger(__name__)
@@ -53,12 +55,14 @@ class Progress(RichProgress):
     def start(self) -> None:
         """Start the progress bar and pause running spinners."""
         StackedStatus.pause_stack()
+        console.is_live = True
         return super().start()
 
     def stop(self) -> None:
         """Stop the progress bar and restart paused spinners."""
         res = super().stop()
         StackedStatus.resume_stack()
+        console.is_live = False
         return res
 
 
@@ -80,12 +84,10 @@ class StackedStatus(Status):
         """
         logger.debug(f"Starting: {self.status}")
 
-        if not StackedStatus.is_live():
-            return nullcontext()
-
         if self.stack:
             self.stack[-1].stop()
 
+        console.is_live = True
         self.stack.append(self)
         return super().__enter__()
 
@@ -98,6 +100,8 @@ class StackedStatus(Status):
 
         if self.stack:
             self.stack[-1].start()
+        else:
+            console.is_live = False
 
         logger.debug(f"Ending: {self.status}")
 
@@ -107,22 +111,12 @@ class StackedStatus(Status):
         return self.__class__._stack
 
     @classmethod
-    def is_live(cls) -> bool:
-        """Return whether the status is live."""
-        if LOG_LEVEL != "DEBUG":
-            return False
-
-        if not cls._stack or cls._paused:
-            return False
-
-        return True
-
-    @classmethod
     def pause_stack(cls):
         """Pause all statuses in the stack.
         Useful for displaying a prompt or logging in between spinners.
         """
         if cls._stack:
+            console.is_live = False
             cls._paused = True
             cls._stack[-1].stop()
 
@@ -132,6 +126,7 @@ class StackedStatus(Status):
         Useful for displaying a prompt or logging in between spinners.
         """
         if cls._stack and cls._paused:
+            console.is_live = True
             cls._stack[-1].start()
             cls._paused = False
 
@@ -142,6 +137,6 @@ def spinner(message: str):
     :param message: The message to display.
     :type message: str
     """
-    status = StackedStatus(repr_console.render_str(message), console=repr_console, spinner="arc")
+    status = StackedStatus(console.render_str(message), console=console, spinner="arc")
     status._spinner.frames = [f"[{frame}]" for frame in status._spinner.frames]
     return status

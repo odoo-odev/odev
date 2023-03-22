@@ -4,8 +4,8 @@ import shutil
 from pathlib import Path
 from typing import Optional, Union
 
-from odev.common import prompt
 from odev.common.config import ConfigManager
+from odev.common.console import console
 from odev.common.logging import logging
 
 
@@ -50,12 +50,12 @@ def __move(old: Path, new: Path) -> None:
 def __ask_dir(message: str, default: str = None, path: Optional[Path] = None) -> Optional[Path]:
     """Prompt for a directory path."""
     if path is None:
-        path = __resolve(prompt.directory(message, default))
+        path = __resolve(console.directory(message, default))
 
         if not __is_empty(path):
             logger.warning(f"Directory {path} is not empty")
 
-            if not prompt.confirm("Use this directory without moving files?"):
+            if not console.confirm("Use this directory without moving files?"):
                 path = None
 
     return path

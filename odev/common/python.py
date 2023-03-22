@@ -16,7 +16,8 @@ from typing import (
 import virtualenv
 from packaging import version
 
-from odev.common import bash, progress, prompt, style
+from odev.common import bash, progress
+from odev.common.console import Colors, console
 from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 
 
@@ -84,7 +85,7 @@ class PythonEnv:
         debug_mode = int(LOG_LEVEL != "DEBUG")
 
         if debug_mode:
-            style.console.print()
+            console.print()
 
         buffer: List[str] = []
         progress.StackedStatus.pause_stack()
@@ -101,36 +102,36 @@ class PythonEnv:
                     continue
 
                 buffer.clear()
-                prompt.clear_line(debug_mode)
+                console.clear_line(debug_mode)
                 logger.info(
                     "Collecting python package "
-                    f"[bold {style.PURPLE}]{match.group('name')}[/bold {style.PURPLE}]"
+                    f"[bold {Colors.PURPLE}]{match.group('name')}[/bold {Colors.PURPLE}]"
                     f"{match.group('op') or ''}"
-                    f"[bold {style.CYAN}]{match.group('version') or ''}[/bold {style.CYAN}]"
+                    f"[bold {Colors.CYAN}]{match.group('version') or ''}[/bold {Colors.CYAN}]"
                 )
 
             elif line.startswith("Building wheels for collected packages:"):
                 buffer.clear()
-                prompt.clear_line(debug_mode)
+                console.clear_line(debug_mode)
                 packages = line.replace(",", "").split(" ")[5:]
                 logger.debug("Building python packages:\n" + "\n".join(packages))
                 logger.info(f"Building wheels for {len(packages)} python packages")
 
             elif line.startswith("Failed to build"):
-                prompt.clear_line(debug_mode)
+                console.clear_line(debug_mode)
                 logger.error("Failed to build python packages:\n" + "\n".join(buffer))
                 break
 
             elif line.startswith("Installing collected packages:"):
                 buffer.clear()
-                prompt.clear_line(debug_mode)
+                console.clear_line(debug_mode)
                 packages = line.replace(",", "").split(" ")[3:]
                 logger.debug("Installing python packages:\n" + "\n".join(packages))
                 logger.info(f"Installing {len(packages)} python packages")
 
             elif line.startswith("Successfully installed"):
                 buffer.clear()
-                prompt.clear_line(debug_mode)
+                console.clear_line(debug_mode)
                 packages = line.split(" ")[2:]
                 logger.debug("Installed python packages:\n" + "\n".join(packages))
                 logger.info(f"Successfully installed {len(packages)} python packages")
@@ -281,7 +282,7 @@ class PythonEnv:
         if progress is None:
             return bash.run(command)
 
-        progress = progress if progress is not None else style.console.print
+        progress = progress if progress is not None else console.print
 
         for line in bash.stream(command):
             progress(line)

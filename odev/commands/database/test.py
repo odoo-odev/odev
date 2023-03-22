@@ -4,8 +4,9 @@ import re
 from pathlib import Path
 from typing import List, Mapping, MutableMapping
 
-from odev.common import string, style
+from odev.common import string
 from odev.common.commands import OdoobinCommand
+from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 
@@ -132,23 +133,23 @@ class TestCommand(OdoobinCommand):
         if match is None:
             if self.last_test_level in ("warning", "error"):
                 self.test_buffer.append(line)
-            return self.print(f"[{style.RED}]{line}[/{style.RED}]")
+            return self.print(f"[{Colors.RED}]{line}[/{Colors.RED}]")
 
         self.last_test_level = match.group("level").lower()
         level_color = (
-            f"bold {style.GREEN}"
+            f"bold {Colors.GREEN}"
             if self.last_test_level == "info"
-            else style.LOGGING_THEME_VALUES[f"logging.level.{self.last_test_level}"]
+            else RICH_THEME_LOGGING[f"logging.level.{self.last_test_level}"]
         )
 
         if self.last_test_level in ("warning", "error"):
             self.test_buffer.append(line)
 
         self.print(
-            f"[{style.BLACK}]{match.group('time')}[/{style.BLACK}] "
+            f"[{Colors.BLACK}]{match.group('time')}[/{Colors.BLACK}] "
             f"[{level_color}]{match.group('level')}[/{level_color}] "
-            f"[{style.PURPLE}]{match.group('database')}[/{style.PURPLE}] "
-            f"[{style.BLACK}]{match.group('logger')}:[/{style.BLACK}] {match.group('description')}"
+            f"[{Colors.PURPLE}]{match.group('database')}[/{Colors.PURPLE}] "
+            f"[{Colors.BLACK}]{match.group('logger')}:[/{Colors.BLACK}] {match.group('description')}"
         )
 
     def run(self):
@@ -180,7 +181,7 @@ class TestCommand(OdoobinCommand):
         for test in self.__tests_details():
             self.__print_test_details(test)
 
-        style.console.print()
+        self.print()
 
     def __tests_details(self):
         """Loop through the tests buffer and compile a list of tests information."""
@@ -227,14 +228,14 @@ class TestCommand(OdoobinCommand):
 
         :param test: The test details.
         """
-        style.console.print()
+        self.print()
         self.table(
             [
-                {"name": "Status", "style": f"bold {style.RED}"},
+                {"name": "Status", "style": f"bold {Colors.RED}"},
                 {"name": "Class"},
                 {"name": "Method"},
                 {"name": "Module"},
-                {"name": "Path", "style": style.BLACK},
+                {"name": "Path", "style": Colors.BLACK},
             ],
             [
                 [
@@ -247,4 +248,4 @@ class TestCommand(OdoobinCommand):
             ],
         )
 
-        self.print(string.indent(test["traceback"].rstrip(), 2), style=style.RED)
+        self.print(string.indent(test["traceback"].rstrip(), 2), style=Colors.RED)

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from odev.setup.completion import logger, prompt, setup
+from odev.setup.completion import console, logger, setup
 from tests.fixtures import Patch
 
 
@@ -11,7 +11,7 @@ class TestSetupSymlink:
         """
         with (
             Patch(logger, "warning"),
-            Patch(prompt, "confirm", return_value=True),
+            Patch(console, "confirm", return_value=True),
         ):
             setup()
 

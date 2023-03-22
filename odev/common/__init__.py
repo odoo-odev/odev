@@ -5,16 +5,15 @@
 from . import actions
 from . import bash
 from . import config
+from . import console
 from . import logging
 from . import odev
 from . import odoo
 from . import postgres
 from . import progress
-from . import prompt
 from . import python
 from . import signal_handling
 from . import string
-from . import style
 from . import thread
 from . import version
 

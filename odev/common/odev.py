@@ -22,8 +22,9 @@ from git import Repo
 from packaging import version
 
 from odev._version import __version__
-from odev.common import bash, progress, prompt, style
+from odev.common import bash, progress
 from odev.common.config import ConfigManager
+from odev.common.console import console
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
@@ -90,7 +91,7 @@ class Odev:
     @property
     def _console(self) -> "Console":
         """Rich console instance to display information to users."""
-        return style.console
+        return console
 
     @property
     def commands_path(self) -> Path:
@@ -357,7 +358,7 @@ class Odev:
         assert update_mode in ("ask", "always", "never")
 
         if update_mode == "ask":
-            return prompt.confirm("An update is available for odev, do you want to download it now?")
+            return console.confirm("An update is available for odev, do you want to download it now?")
 
         return update_mode == "always"
 

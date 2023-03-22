@@ -3,10 +3,12 @@
 import textwrap
 from typing import List, Tuple
 
+from rich.console import RenderableType
 from rich.markup import escape
 
-from odev.common import string, style
+from odev.common import string
 from odev.common.commands import Command
+from odev.common.console import Colors
 from odev.common.logging import logging
 
 
@@ -64,11 +66,11 @@ class HelpCommand(Command):
         usage = escape(parser.format_usage().replace("usage:", executable).strip())
 
         message = f"""
-            [bold {style.PURPLE}]{executable.upper()} {command.name.upper()}[/bold {style.PURPLE}]
+            [bold {Colors.PURPLE}]{executable.upper()} {command.name.upper()}[/bold {Colors.PURPLE}]
 
             {{command.description}}
 
-            [bold][underline]Usage:[/underline] [{style.CYAN}]{usage}[/{style.CYAN}][/bold]
+            [bold][underline]Usage:[/underline] [{Colors.CYAN}]{usage}[/{Colors.CYAN}][/bold]
         """
 
         message_indent = string.min_indent(message)
@@ -118,13 +120,13 @@ class HelpCommand(Command):
         """
         executable = self.odev.executable.stem
         message = f"""
-            [bold {style.PURPLE}]{executable.upper()} {self.odev.version}[/bold {style.PURPLE}]
+            [bold {Colors.PURPLE}]{executable.upper()} {self.odev.version}[/bold {Colors.PURPLE}]
 
             [italic]Automate common tasks relative to working with Odoo development databases.[/italic]
 
-            [bold underline]Usage:[/bold underline] [bold {style.CYAN}]{executable} <command> <args>[/bold {style.CYAN}]
+            [bold underline]Usage:[/bold underline] [bold {Colors.CYAN}]{executable} <command> <args>[/bold {Colors.CYAN}]
 
-            For help on a specific command, use [bold {style.CYAN}]{executable} <command> --help[/bold {style.CYAN}]
+            For help on a specific command, use [bold {Colors.CYAN}]{executable} <command> --help[/bold {Colors.CYAN}]
 
             Arguments in square brackets ('\\[arg]') are optional and can be omitted,
             arguments in curvy brackets ('{{arg}}') are options to choose from,
@@ -154,9 +156,10 @@ class HelpCommand(Command):
         """
         return "\n".join(sorted(filter(lambda name: not name.startswith("-"), self.odev.commands.keys())))
 
-    def print(self, text: str, *args, **kwargs) -> None:
+    def print(self, renderable: RenderableType = None, *args, **kwargs) -> None:
         """Print a message to the standard output.
 
         :param message: The message to print.
         """
-        super().print(textwrap.dedent(text).strip(), *args, **kwargs)
+        assert isinstance(renderable, str)
+        super().print(textwrap.dedent(renderable).strip(), *args, **kwargs)

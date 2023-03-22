@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Optional
 
 from odev._version import __version__
-from odev.common import prompt
 from odev.common.config import ConfigManager
+from odev.common.console import console
 from odev.common.logging import logging
 from odev.constants import DEFAULT_DATETIME_FORMAT
 
@@ -21,7 +21,7 @@ def setup(config: Optional[ConfigManager] = None) -> None:
 
     :param config: Configuration manager
     """
-    update_mode = prompt.select(
+    update_mode = console.select(
         "What should happen when a new version of odev becomes available?",
         default=config.get("update", "mode", "ask"),
         choices=[
@@ -31,7 +31,7 @@ def setup(config: Optional[ConfigManager] = None) -> None:
         ],
     )
 
-    update_interval = prompt.integer(
+    update_interval = console.integer(
         "How often should odev check for updates (in days)?",
         default=int(config.get("update", "interval", 1)),
         min_value=1,

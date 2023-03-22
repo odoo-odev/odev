@@ -16,7 +16,7 @@ from subprocess import (
 )
 from typing import Generator, Optional
 
-from odev.common import prompt
+from odev.common.console import console
 from odev.common.logging import logging
 
 
@@ -101,7 +101,7 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
             return None
 
         global sudo_password
-        sudo_password = sudo_password or prompt.secret("Session password:")
+        sudo_password = sudo_password or console.secret("Session password:")
 
         if sudo_password is None:
             __raise_or_log(exception, raise_on_error)

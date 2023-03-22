@@ -5,7 +5,7 @@ from typing import Literal, Optional, Sequence, Union
 
 from agentcrypt.io import Container
 
-from odev.common import prompt
+from odev.common.console import console
 from odev.common.logging import logging
 from odev.common.postgres import PostgresTable
 
@@ -129,9 +129,9 @@ class SecretStore(PostgresTable):
                         continue
 
             if field == "password":
-                value = prompt.secret(prompt_label)
+                value = console.secret(prompt_label)
             else:
-                value = prompt.text(prompt_label, default=current_value)
+                value = console.text(prompt_label, default=current_value)
 
             setattr(secret, field, value)
 

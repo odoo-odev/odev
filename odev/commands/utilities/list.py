@@ -10,8 +10,9 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from odev.common import progress, string, style
+from odev.common import progress, string
 from odev.common.commands import Command
+from odev.common.console import Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin
@@ -39,7 +40,7 @@ TABLE_MAPPING: List[_Mapped] = [
         justify=None,
         display=True,
         format=lambda value: (
-            value is not None and "[{style}]⚪[/{style}]".format(style=style.GREEN if value else style.RED) or ""
+            value is not None and "[{style}]⚪[/{style}]".format(style=Colors.GREEN if value else Colors.RED) or ""
         ),
     ),
     _Mapped(
@@ -117,9 +118,9 @@ TABLE_MAPPING: List[_Mapped] = [
         title="Whitelisted",
         justify="center",
         display=lambda args: args.details,
-        format=lambda value: f"[bold {style.GREEN}]✔[bold {style.GREEN}]"
+        format=lambda value: f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
         if value
-        else f"[bold {style.RED}] ❌[bold {style.RED}]",
+        else f"[bold {Colors.RED}] ❌[bold {Colors.RED}]",
     ),
 ]
 

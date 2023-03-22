@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Mapping, Optional
 from zipfile import ZipFile
 
-from odev.common import bash, progress, prompt
+from odev.common import bash, progress
 from odev.common.connectors import PostgresConnector
+from odev.common.console import console
 from odev.common.databases import Database
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoo import OdooBinProcess
@@ -27,6 +28,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     """Whether the database is whitelisted and should not be removed automatically."""
 
     _platform: str = "local"
+    _platform_display: str = "Local"
 
     def __init__(self, name: str):
         super().__init__(name)
@@ -298,7 +300,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         filename = self._get_dump_filename(filestore, suffix="neutralized" if self.neutralized else None)
         file = path / filename
 
-        if file.exists() and not prompt.confirm(f"File {file} already exists. Overwrite it?"):
+        if file.exists() and not console.confirm(f"File {file} already exists. Overwrite it?"):
             return None
 
         file.unlink(missing_ok=True)

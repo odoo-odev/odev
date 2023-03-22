@@ -5,8 +5,9 @@ import re
 from io import StringIO
 from typing import List, MutableMapping, Optional, Sequence
 
-from odev.common import string, style
+from odev.common import string
 from odev.common.commands import OdoobinCommand
+from odev.common.console import Colors
 
 
 class ClocCommand(OdoobinCommand):
@@ -50,7 +51,7 @@ class ClocCommand(OdoobinCommand):
             {"name": "Module", "justify": "left"},
             {"name": "All", "justify": "right"},
             {"name": "Other", "justify": "right"},
-            {"name": "Code", "justify": "right", "style": style.PURPLE},
+            {"name": "Code", "justify": "right", "style": Colors.PURPLE},
         ]
         lines, total = self.parse(process.stdout.decode())
 
@@ -104,7 +105,7 @@ class ClocCommand(OdoobinCommand):
 
             if not line[0].startswith(" "):
                 last_module = line[0]
-                line[0] = f"[{style.CYAN}]{line[0]}[/{style.CYAN}]"
+                line[0] = f"[{Colors.CYAN}]{line[0]}[/{Colors.CYAN}]"
             else:
                 line[0] = string.indent(re.sub(rf"^.*?/{last_module}/", "", line[0]).lstrip(), 2)
 

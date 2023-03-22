@@ -4,8 +4,8 @@ import stat
 from pathlib import Path
 from typing import Optional
 
-from odev.common import prompt
 from odev.common.config import ConfigManager
+from odev.common.console import console
 from odev.common.logging import logging
 
 
@@ -30,7 +30,7 @@ def setup(config: Optional[ConfigManager] = None) -> None:
     if link_path.exists():
         logger.warning(f"Symlink path {link_path} already exists")
 
-        if prompt.confirm("Would you like to overwrite it?"):
+        if console.confirm("Would you like to overwrite it?"):
             logger.debug(f"Removing symlink path {link_path}")
             link_path.unlink(missing_ok=True)
 

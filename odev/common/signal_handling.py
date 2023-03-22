@@ -19,7 +19,7 @@ from typing import (
     Union,
 )
 
-from odev.common import prompt
+from odev.common.console import console
 from odev.common.logging import logging
 
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 def signal_handler_warning(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
     """Log a warning message with the signal received."""
-    prompt.clear_line(0)  # Hide control characters
+    console.clear_line(0)  # Hide control characters
     logger.warning(message or f"Received signal ({signal_number})")
 
 

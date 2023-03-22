@@ -2,8 +2,9 @@
 
 import shutil
 
-from odev.common import progress, prompt
+from odev.common import progress
 from odev.common.commands import OdoobinCommand
+from odev.common.console import console
 from odev.common.logging import logging
 
 
@@ -33,11 +34,11 @@ class DeleteCommand(OdoobinCommand):
 
     def run(self):
         """Create a new database locally."""
-        if not prompt.confirm(f"Are you sure you want to delete the database {self.database.name!r}?"):
+        if not console.confirm(f"Are you sure you want to delete the database {self.database.name!r}?"):
             raise self.error("Command aborted")
 
         if self.database.whitelisted:
-            if not prompt.confirm(f"Database {self.database.name!r} is whitelisted, are you really sure?"):
+            if not console.confirm(f"Database {self.database.name!r} is whitelisted, are you really sure?"):
                 raise self.error("Command aborted")
 
         if "template" not in self.args.keep:

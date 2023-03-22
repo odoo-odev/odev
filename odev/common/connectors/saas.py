@@ -6,8 +6,8 @@ from typing import Literal, Optional, Union
 
 from requests import Response
 
-from odev.common import prompt
 from odev.common.connectors.rest import RestConnector
+from odev.common.console import console
 from odev.common.logging import logging
 from odev.common.progress import Progress
 from odev.common.signal_handling import capture_signals
@@ -106,7 +106,7 @@ class SaasConnector(RestConnector):
 
         progress.stop_task(task)
         progress.stop()
-        prompt.clear_line()
+        console.clear_line()
         return path
 
     def database_info(self) -> dict:

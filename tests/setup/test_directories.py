@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from odev.common.config import ConfigManager
-from odev.setup.directories import logger, prompt, setup
+from odev.setup.directories import console, logger, setup
 from tests.fixtures import Patch
 
 
@@ -37,8 +37,8 @@ class TestSetupDirectories:
         """
         with (
             Patch(logger, "warning"),
-            Patch(prompt, "directory", side_effect=lambda m, d=None: f"/tmp/odev-tests/{uuid4()}"),
-            Patch(prompt, "confirm", return_value=True),
+            Patch(console, "directory", side_effect=lambda m, d=None: f"/tmp/odev-tests/{uuid4()}"),
+            Patch(console, "confirm", return_value=True),
         ):
             setup(setup_config)
 
@@ -53,8 +53,8 @@ class TestSetupDirectories:
         with (
             Patch(logger, "warning"),
             Patch(logger, "debug") as logger_debug,
-            Patch(prompt, "directory", side_effect=lambda m, d=None: setup_config.get("paths", "repositories")),
-            Patch(prompt, "confirm", return_value=True),
+            Patch(console, "directory", side_effect=lambda m, d=None: setup_config.get("paths", "repositories")),
+            Patch(console, "confirm", return_value=True),
         ):
             setup(setup_config)
 
@@ -69,8 +69,8 @@ class TestSetupDirectories:
         with (
             Patch(logger, "warning"),
             Patch(logger, "debug") as logger_debug,
-            Patch(prompt, "directory", side_effect=lambda m, d=None: f"/tmp/odev-tests/{uuid4()}"),
-            Patch(prompt, "confirm", return_value=True),
+            Patch(console, "directory", side_effect=lambda m, d=None: f"/tmp/odev-tests/{uuid4()}"),
+            Patch(console, "confirm", return_value=True),
         ):
             setup(setup_config)
 
@@ -84,8 +84,8 @@ class TestSetupDirectories:
         with (
             Patch(logger, "warning"),
             Patch(logger, "debug") as logger_debug,
-            Patch(prompt, "directory", side_effect=lambda m, d=None: "/tmp/odev-tests/repositories"),
-            Patch(prompt, "confirm", return_value=True),
+            Patch(console, "directory", side_effect=lambda m, d=None: "/tmp/odev-tests/repositories"),
+            Patch(console, "confirm", return_value=True),
         ):
             Path("/tmp/odev-tests/repositories").mkdir(parents=True, exist_ok=True)
             setup(setup_config)

@@ -11,8 +11,9 @@ from typing import (
 from rich.box import HORIZONTALS
 from rich.panel import Panel
 
-from odev.common import string, style
+from odev.common import progress, string
 from odev.common.commands import DatabaseCommand
+from odev.common.console import Colors
 from odev.common.databases import LocalDatabase, SaasDatabase
 from odev.common.logging import logging
 from odev.common.version import OdooVersion
@@ -34,7 +35,9 @@ class InfoCommand(DatabaseCommand):
 
     def print_info(self):
         """Print information about the database."""
-        info = self.database.info()
+        with progress.spinner("Fetching database information"):
+            info = self.database.info()
+
         table_headers, table_rows = self._info_table_data(info)
         panel_title, panel_content = self._info_panel_data(info)
         panel = Panel(
@@ -57,20 +60,13 @@ class InfoCommand(DatabaseCommand):
         name: str = info.get("name")
         version: OdooVersion = info.get("odoo_version")
         edition: str = info.get("odoo_edition")
-        platform: str = info.get("platform")
+        platform: str = info.get("platform_display_name")
 
-        if platform == "saas":
-            platform = "SaaS"
-        elif platform == "paas":
-            platform = "Odoo SH"
-        else:
-            platform = platform.capitalize()
-
-        title: str = f"[bold {style.PURPLE}]{name}[/bold {style.PURPLE}]"
+        title: str = f"[bold {Colors.PURPLE}]{name}[/bold {Colors.PURPLE}]"
         content: str = string.normalize_indent(
             f"""
             {version.major}.{version.minor} - {edition.capitalize()} Edition
-            [{style.BLACK}]Hosting: {platform}[/{style.BLACK}]
+            [{Colors.BLACK}]Hosting: {platform}[/{Colors.BLACK}]
             """
         )
 
