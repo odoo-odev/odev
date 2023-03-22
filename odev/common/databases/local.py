@@ -149,7 +149,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and datetime.strptime(result[0][0], "%Y-%m-%d") or None
+        date_format = "%Y-%m-%d %H:%M:%S" if self.odoo_version.major >= 15 else "%Y-%m-%d"
+        return result and datetime.strptime(result[0][0], date_format) or None
 
     @property
     def uuid(self) -> Optional[str]:
