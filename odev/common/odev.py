@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     from odev.common.commands.base import CommandType
 
 
+__all__ = ["Odev"]
+
+
 logger = logging.getLogger(__name__)
 
 

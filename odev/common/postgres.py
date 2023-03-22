@@ -8,6 +8,9 @@ from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 
 
+__all__ = ["PostgresDatabase"]
+
+
 logger = logging.getLogger(__name__)
 
 

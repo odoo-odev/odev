@@ -7,6 +7,9 @@ import re
 from packaging.version import InvalidVersion, _BaseVersion
 
 
+__all__ = ["OdooVersion"]
+
+
 _Version = collections.namedtuple("_Version", ["major", "minor", "module", "saas", "master"])
 
 

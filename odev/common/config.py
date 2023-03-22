@@ -14,6 +14,9 @@ from typing import (
 )
 
 
+__all__ = ["ConfigManager"]
+
+
 ConfigSectionType = MutableMapping[str, str]
 ConfigType = MutableMapping[str, ConfigSectionType]
 

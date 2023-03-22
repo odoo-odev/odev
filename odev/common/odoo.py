@@ -29,6 +29,10 @@ from odev.common.version import OdooVersion
 if TYPE_CHECKING:
     from odev.common.databases import LocalDatabase
 
+
+__all__ = ["OdooBinProcess", "ODOO_PYTHON_VERSIONS"]
+
+
 logger = logging.getLogger(__name__)
 
 

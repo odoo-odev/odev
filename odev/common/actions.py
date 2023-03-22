@@ -12,6 +12,9 @@ from typing import (
 )
 
 
+__all__ = ["ACTIONS_MAPPING"]
+
+
 class Action(BaseAction, ABC):
     """Base class for custom actions."""
 

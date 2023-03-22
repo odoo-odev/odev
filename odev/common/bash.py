@@ -20,7 +20,7 @@ from odev.common.console import console
 from odev.common.logging import logging
 
 
-__all__ = ["execute"]
+__all__ = ["execute", "detached", "run", "stream"]
 
 
 logger = logging.getLogger(__name__)

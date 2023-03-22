@@ -3,6 +3,9 @@
 from threading import Thread as BaseThread
 
 
+__all__ = ["Thread"]
+
+
 class Thread(BaseThread):
     """Thread implementation with propagation of exceptions to the calling thread."""
 

@@ -23,7 +23,7 @@ from odev.common.console import console
 from odev.common.logging import logging
 
 
-__all__ = ["signal_handler_warning", "signal_handler_exit"]
+__all__ = ["signal_handler_warning", "signal_handler_exit", "signal_handler_subprocess", "capture_signals"]
 
 
 logger = logging.getLogger(__name__)

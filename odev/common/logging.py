@@ -8,8 +8,6 @@ logger = logging.getLogger(__name__)
 ```
 """
 
-# TODO: Implement tree line (command-defined color)
-
 import logging
 import re
 import sys
@@ -24,7 +22,7 @@ from odev.common import string
 from odev.common.console import console
 
 
-__all__ = ["logging", "console", "LOG_LEVEL"]
+__all__ = ["logging", "LOG_LEVEL", "silence_loggers"]
 
 
 # --- Logging configuration ----------------------------------------------------
