@@ -101,7 +101,7 @@ class PythonEnv:
                     continue
 
                 buffer.clear()
-                prompt.clear_line(int(debug_mode))
+                prompt.clear_line(debug_mode)
                 logger.info(
                     "Collecting python package "
                     f"[bold {style.PURPLE}]{match.group('name')}[/bold {style.PURPLE}]"
@@ -111,26 +111,26 @@ class PythonEnv:
 
             elif line.startswith("Building wheels for collected packages:"):
                 buffer.clear()
-                prompt.clear_line(int(debug_mode))
+                prompt.clear_line(debug_mode)
                 packages = line.replace(",", "").split(" ")[5:]
                 logger.debug("Building python packages:\n" + "\n".join(packages))
                 logger.info(f"Building wheels for {len(packages)} python packages")
 
             elif line.startswith("Failed to build"):
-                prompt.clear_line(int(debug_mode))
+                prompt.clear_line(debug_mode)
                 logger.error("Failed to build python packages:\n" + "\n".join(buffer))
                 break
 
             elif line.startswith("Installing collected packages:"):
                 buffer.clear()
-                prompt.clear_line(int(debug_mode))
+                prompt.clear_line(debug_mode)
                 packages = line.replace(",", "").split(" ")[3:]
                 logger.debug("Installing python packages:\n" + "\n".join(packages))
                 logger.info(f"Installing {len(packages)} python packages")
 
             elif line.startswith("Successfully installed"):
                 buffer.clear()
-                prompt.clear_line(int(debug_mode))
+                prompt.clear_line(debug_mode)
                 packages = line.split(" ")[2:]
                 logger.debug("Installed python packages:\n" + "\n".join(packages))
                 logger.info(f"Successfully installed {len(packages)} python packages")
