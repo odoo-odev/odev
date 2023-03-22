@@ -19,6 +19,7 @@ from typing import (
 )
 
 from rich import box
+from rich.console import RenderableType
 from rich.table import Table
 
 from odev.common import prompt, string
@@ -229,13 +230,17 @@ class Command(OdevFrameworkMixin, ABC):
     def cleanup(self) -> None:
         """Cleanup after the command execution."""
 
-    def print(self, text: str, *args: Any, **kwargs: Any) -> None:
+    def print(self, renderable: RenderableType, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
-        if self.odev._console.is_terminal and self.odev._console.height < len(text.splitlines()):
+        if (
+            self.odev._console.is_terminal
+            and isinstance(renderable, str)
+            and self.odev._console.height < len(renderable.splitlines())
+        ):
             with self.odev._console.pager(styles=not self.odev._console.is_dumb_terminal):
-                self.odev._console.print(text, *args, **kwargs)
+                self.odev._console.print(renderable, *args, **kwargs)
         else:
-            self.odev._console.print(text, *args, **kwargs)
+            self.odev._console.print(renderable, *args, **kwargs)
 
     def table(
         self,

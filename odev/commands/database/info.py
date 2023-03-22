@@ -44,7 +44,7 @@ class InfoCommand(DatabaseCommand):
             box=HORIZONTALS,
         )
 
-        style.repr_console.print(panel)
+        self.print(panel)
         self.table(table_headers, table_rows, show_header=False, box=None)
 
     def _info_panel_data(self, info: Mapping[str, Any]) -> Tuple[str, str]:
