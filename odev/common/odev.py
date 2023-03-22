@@ -18,7 +18,7 @@ from typing import (
     MutableMapping,
 )
 
-from git import Remote, Repo
+from git import Repo
 from packaging import version
 
 from odev._version import __version__
@@ -298,20 +298,19 @@ class Odev:
         if remote_branch is None:
             return False
 
-        remote: Remote = self.repo.remotes[remote_branch.remote_name]
-        rev_list: str = self.repo.git.rev_list("--left-right", "--count", f"{remote.name}...HEAD")
+        rev_list: str = self.repo.git.rev_list("--left-right", "--count", f"{remote_branch.name}...HEAD")
         commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
         message_behind = f"{commits_behind} commit{'s' if commits_behind > 1 else ''} behind"
         message_ahead = f"{commits_ahead} commit{'s' if commits_ahead > 1 else ''} ahead of"
 
         if commits_behind and commits_ahead:
-            logger.debug(f"Odev is {message_behind} and {message_ahead} {remote.name}")
+            logger.debug(f"Odev is {message_behind} and {message_ahead} {remote_branch.name!r}")
         elif commits_behind:
-            logger.debug(f"Odev is {message_behind} {remote.name}")
+            logger.debug(f"Odev is {message_behind} {remote_branch.name!r}")
         elif commits_ahead:
-            logger.debug(f"Odev is {message_ahead} {remote.name}")
+            logger.debug(f"Odev is {message_ahead} {remote_branch.name!r}")
         else:
-            logger.debug(f"Odev is up-to-date with {remote.name}")
+            logger.debug(f"Odev is up-to-date with {remote_branch.name!r}")
 
         if commits_ahead:
             logger.debug("Running in development mode (no self-update)")
