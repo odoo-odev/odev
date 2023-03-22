@@ -9,6 +9,7 @@ from InquirerPy.validator import EmptyInputValidator, NumberValidator, PathValid
 from prompt_toolkit.validation import ValidationError
 
 from odev.common import style
+from odev.common.progress import StackedStatus
 
 
 # --- Bypass confirmation prompts ----------------------------------------------
@@ -34,6 +35,10 @@ STYLE = get_style(
         "checkbox": style.CYAN,
     },
 )
+
+ANSI_LINE_UP = "\x1b[F"
+ANSI_LINE_ERASE = "\x1b[2K"
+ANSI_CURSOR_RESET = "\x1b[0G"
 
 
 # --- Validators ---------------------------------------------------------------
@@ -69,8 +74,12 @@ def clear_line(count: int = 1) -> None:
 
     :param int count: Number of lines to clear
     """
+    if StackedStatus.is_live():
+        return
 
-    print("\x1b[F".join(["\x1b[2K\x1b[0G" for _ in range(count + 1)]), end="")
+    count = max(count, 0)
+    ansi_erase: str = f"{ANSI_LINE_ERASE}{ANSI_CURSOR_RESET}"
+    return print(ANSI_LINE_UP.join([ansi_erase for _ in range(count + 1)]), end="")
 
 
 def text(message: str, default: str = "") -> Optional[str]:

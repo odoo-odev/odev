@@ -2,6 +2,7 @@
 stacked on top of each other.
 """
 
+from contextlib import nullcontext
 from typing import ClassVar, List
 
 from rich.markup import escape
@@ -15,7 +16,7 @@ from rich.progress import (
 )
 from rich.status import Status
 
-from odev.common.logging import logging
+from odev.common.logging import LOG_LEVEL, logging
 from odev.common.style import console, repr_console
 
 
@@ -77,6 +78,11 @@ class StackedStatus(Status):
         """Start the status and add it to the stack,
         stopping already running statuses.
         """
+        logger.debug(f"Starting: {self.status}")
+
+        if not StackedStatus.is_live():
+            return nullcontext()
+
         if self.stack:
             self.stack[-1].stop()
 
@@ -86,15 +92,30 @@ class StackedStatus(Status):
     def __exit__(self, *args, **kwargs):
         """Remove the status from the stack and restart the previous one."""
         super().__exit__(*args, **kwargs)
-        self.stack.pop()
+
+        if self.stack:
+            self.stack.pop()
 
         if self.stack:
             self.stack[-1].start()
+
+        logger.debug(f"Ending: {self.status}")
 
     @property
     def stack(self) -> List[Status]:
         """Return the stack of active statuses."""
         return self.__class__._stack
+
+    @classmethod
+    def is_live(cls) -> bool:
+        """Return whether the status is live."""
+        if LOG_LEVEL != "DEBUG":
+            return False
+
+        if not cls._stack or cls._paused:
+            return False
+
+        return True
 
     @classmethod
     def pause_stack(cls):
