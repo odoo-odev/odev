@@ -1,6 +1,6 @@
 """Base abstract connector class to extend."""
 
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from typing import TYPE_CHECKING, Optional
 
 
@@ -33,6 +33,14 @@ class Connector(ABC):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Close the connection to the external service."""
         self.disconnect()
+
+    def __repr__(self) -> str:
+        """Return the representation of the connector."""
+        return f"{self.__class__.__name__}({self.url!r})"
+
+    @abstractproperty
+    def url(self) -> str:
+        """Return the URL to the external service."""
 
     @property
     def connected(self) -> bool:

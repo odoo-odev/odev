@@ -69,6 +69,11 @@ class PostgresConnector(Connector):
         self.database: str = database or self._fallback_database
         """The name of the database to connect to."""
 
+    @property
+    def url(self) -> str:
+        """Return the URL of the database."""
+        return f"postgresql://localhost/{self.database}"
+
     def connect(self):
         """Connect to the database engine."""
         if self._connection is None:
