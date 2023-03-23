@@ -6,7 +6,6 @@ from typing import List, Optional
 
 from odev.common import progress
 from odev.common.commands import OdoobinCommand
-from odev.common.console import console
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoo import OdooBinProcess
@@ -86,7 +85,7 @@ class CreateCommand(OdoobinCommand):
         if self.database.exists:
             logger.warning(f"Database {self.database.name!r} already exists")
 
-            if not console.confirm("Overwrite it?"):
+            if not self.console.confirm("Overwrite it?"):
                 raise self.error(f"Cannot create database with already existing name {self.database.name!r}")
 
             with progress.spinner(f"Dropping database {self.database.name!r}"):
@@ -115,7 +114,7 @@ class CreateCommand(OdoobinCommand):
                 if database_filestore.exists():
                     logger.warning(f"Filestore for {self.database.name!r} already exists")
 
-                    if not console.confirm("Overwrite it?"):
+                    if not self.console.confirm("Overwrite it?"):
                         raise self.error(f"Cannot copy template filestore to existing directory {database_filestore!s}")
 
                     with progress.spinner(f"Removing {database_filestore!s}"):

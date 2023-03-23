@@ -17,7 +17,7 @@ from typing import (
 
 from odev.common import bash
 from odev.common.connectors import GithubConnector, GitWorktree
-from odev.common.console import Colors, console
+from odev.common.console import Colors
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.progress import spinner
@@ -309,7 +309,7 @@ class OdooBinProcess(OdevFrameworkMixin):
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
 
             logger.info(f"{info_message} using command:")
-            console.print(
+            self.console.print(
                 f"\n[{Colors.CYAN}]{self.venv.python} {self.odoobin_path} {' '.join(odoobin_args)}[/{Colors.CYAN}]\n",
                 soft_wrap=True,
             )
@@ -319,7 +319,7 @@ class OdooBinProcess(OdevFrameworkMixin):
                     process = self.venv.run_script(self.odoobin_path, odoobin_args, stream=stream, progress=progress)
             except CalledProcessError as error:
                 if not stream:
-                    console.print(error.stderr.decode())
+                    self.console.print(error.stderr.decode())
 
                 return logger.error("Odoo exited with an error, check the output above for more information")
             else:

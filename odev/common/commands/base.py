@@ -24,7 +24,6 @@ from rich.table import Table
 
 from odev.common import string
 from odev.common.actions import ACTIONS_MAPPING
-from odev.common.console import console
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
@@ -90,11 +89,12 @@ class Command(OdevFrameworkMixin, ABC):
         self.args: Namespace = args
         self.args.log_level = LOG_LEVEL
 
-        console.bypass_prompt = self.args.bypass_prompt
+        self._bypass_prompt_orig: bool = self.console.bypass_prompt
+        self.console.bypass_prompt = self.args.bypass_prompt
 
     def __del__(self):
         """Reset the bypass prompt flag."""
-        console.bypass_prompt = not self.args.bypass_prompt
+        self.console.bypass_prompt = self._bypass_prompt_orig
 
     def __repr__(self) -> str:
         args = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
@@ -237,14 +237,14 @@ class Command(OdevFrameworkMixin, ABC):
             renderable = ""
 
         if (
-            self.odev._console.is_terminal
+            self.console.is_terminal
             and isinstance(renderable, str)
-            and self.odev._console.height < len(renderable.splitlines())
+            and self.console.height < len(renderable.splitlines())
         ):
-            with self.odev._console.pager(styles=not self.odev._console.is_dumb_terminal):
-                self.odev._console.print(renderable, *args, **kwargs)
+            with self.console.pager(styles=not self.console.is_dumb_terminal):
+                self.console.print(renderable, *args, **kwargs)
         else:
-            self.odev._console.print(renderable, *args, **kwargs)
+            self.console.print(renderable, *args, **kwargs)
 
     def table(
         self,
@@ -281,7 +281,7 @@ class Command(OdevFrameworkMixin, ABC):
         if total:
             table.add_row(*total, style="bold")
 
-        self.odev._console.print(table)
+        self.console.print(table)
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""

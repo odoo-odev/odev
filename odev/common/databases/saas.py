@@ -7,7 +7,6 @@ from urllib.parse import urlparse
 
 from odev.common import string
 from odev.common.connectors import SaasConnector
-from odev.common.console import console
 from odev.common.databases import Database
 from odev.common.mixins import SaasConnectorMixin
 from odev.common.version import OdooVersion
@@ -139,7 +138,7 @@ class SaasDatabase(SaasConnectorMixin, Database):
         filename = self._get_dump_filename(filestore, suffix=self.platform, extension="dump" if not filestore else None)
         file = path / filename
 
-        if file.exists() and not console.confirm(f"File {file} already exists. Overwrite it?"):
+        if file.exists() and not self.console.confirm(f"File {file} already exists. Overwrite it?"):
             return None
 
         file.unlink(missing_ok=True)

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
     from odev.common.config import ConfigManager
+    from odev.common.console import Console
     from odev.common.odev import Odev
     from odev.common.store import DataStore
 
@@ -37,3 +38,8 @@ class OdevFrameworkMixin(ABC):
     def store(self) -> "DataStore":
         """Global data store."""
         return self.odev.store
+
+    @property
+    def console(self) -> "Console":
+        """Console instance."""
+        return self.odev.console

@@ -33,9 +33,8 @@ from odev.constants import DEFAULT_DATETIME_FORMAT
 
 
 if TYPE_CHECKING:
-    from rich.console import Console
-
     from odev.common.commands.base import CommandType
+    from odev.common.console import Console
 
 
 __all__ = ["Odev"]
@@ -92,7 +91,7 @@ class Odev:
         return "odev"
 
     @property
-    def _console(self) -> "Console":
+    def console(self) -> "Console":
         """Rich console instance to display information to users."""
         return console
 
@@ -361,7 +360,7 @@ class Odev:
         assert update_mode in ("ask", "always", "never")
 
         if update_mode == "ask":
-            return console.confirm("An update is available for odev, do you want to download it now?")
+            return self.console.confirm("An update is available for odev, do you want to download it now?")
 
         return update_mode == "always"
 
