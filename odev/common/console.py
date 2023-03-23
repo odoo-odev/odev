@@ -86,6 +86,7 @@ RICH_THEME = Theme(
 )
 
 INQUIRER_MARK = "[?]"
+
 INQUIRER_STYLE = get_style(
     style_override=False,
     style={
@@ -100,6 +101,12 @@ INQUIRER_STYLE = get_style(
     },
 )
 
+INQUIRER_DEFAULTS = {
+    "raise_keyboard_interrupt": True,
+    "style": INQUIRER_STYLE,
+    "amark": INQUIRER_MARK,
+    "qmark": INQUIRER_MARK,
+}
 
 # --- Logging highlighter customization ----------------------------------------
 # This is not useful at all, but it's fun to have. I guess...
@@ -208,15 +215,15 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.text(
+        self.pause_live()
+        result = inquirer.text(
+            **INQUIRER_DEFAULTS,
             message=message,
             default=default,
             validate=EmptyInputValidator(),
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def integer(
         self,
@@ -236,7 +243,9 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.number(
+        self.pause_live()
+        result = inquirer.number(
+            **INQUIRER_DEFAULTS,
             message=message,
             default=default,
             min_allowed=min_value,
@@ -244,11 +253,9 @@ class Console(RichConsole):
             validate=NumberValidator(
                 message=f"Input should be an integer {self.__number_bounds_message(min_value, max_value)}",
             ),
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def floating(
         self,
@@ -268,7 +275,9 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.number(
+        self.pause_live()
+        result = inquirer.number(
+            **INQUIRER_DEFAULTS,
             message=message,
             default=default,
             min_allowed=min_value,
@@ -278,11 +287,9 @@ class Console(RichConsole):
                 message=f"Input should be a floating point number {self.__number_bounds_message(min_value, max_value)}",
                 float_allowed=True,
             ),
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def secret(self, message: str = "Password") -> Optional[str]:
         """Prompt for a secret value hidden to the reader.
@@ -290,15 +297,15 @@ class Console(RichConsole):
         :return: The secret entered by the user
         :rtype: str
         """
-        return inquirer.secret(
+        self.pause_live()
+        result = inquirer.secret(
+            **INQUIRER_DEFAULTS,
             message=message,
             mandatory=True,
             mandatory_message="A value is required",
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def confirm(self, message: str, default: bool = False) -> bool:
         """Prompt for a confirmation.
@@ -310,14 +317,14 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.confirm(
+        self.pause_live()
+        result = inquirer.confirm(
+            **INQUIRER_DEFAULTS,
             message=message,
             default=default,
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def directory(self, message: str, default: str = None) -> Optional[str]:
         """Prompt for a directory path.
@@ -329,16 +336,16 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.filepath(
+        self.pause_live()
+        result = inquirer.filepath(
+            **INQUIRER_DEFAULTS,
             message=message,
             default=default,
             only_directories=True,
             validate=PurportedPathValidator(message="Path must not be a file", is_dir=True),
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def filepath(self, message: str, default: str = None) -> Optional[str]:
         """Prompt for a file path.
@@ -350,16 +357,16 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.filepath(
+        self.pause_live()
+        result = inquirer.filepath(
+            **INQUIRER_DEFAULTS,
             message=message,
             default=default,
             only_directories=True,
             validate=PurportedPathValidator(message="Path must not be a directory", is_file=True),
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def select(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[str]:
         """Prompt for a selection.
@@ -374,15 +381,15 @@ class Console(RichConsole):
         if self.bypass_prompt and default:
             return default
 
-        return inquirer.select(
+        self.pause_live()
+        result = inquirer.select(
+            **INQUIRER_DEFAULTS,
             message=message,
             choices=[Choice(choice[0], name=choice[-1]) for choice in choices],
             default=default,
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def checkbox(self, message: str, choices: List[Tuple[str, Optional[str]]], defaults: List[str] = None):
         """Prompt for a checkbox selection.
@@ -399,15 +406,15 @@ class Console(RichConsole):
         if self.bypass_prompt and defaults:
             return defaults
 
-        return inquirer.checkbox(
+        self.pause_live()
+        result = inquirer.checkbox(
+            **INQUIRER_DEFAULTS,
             message=message,
             choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in defaults) for choice in choices],
             transformer=lambda selected: f"{', '.join(selected[:-1])} and {selected[-1]}" if selected else "None",
-            raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
-            amark=INQUIRER_MARK,
-            qmark=INQUIRER_MARK,
         ).execute()
+        self.resume_live()
+        return result
 
     def __number_bounds_message(
         self, min_value: Optional[Union[int, float]], max_value: Optional[Union[int, float]]
@@ -430,6 +437,18 @@ class Console(RichConsole):
             message += f"less than {max_value}"
 
         return message
+
+    def pause_live(self):
+        """Perform any pre-prompt actions."""
+        from odev.common.progress import StackedStatus
+
+        StackedStatus.pause_stack()
+
+    def resume_live(self):
+        """Perform any post-prompt actions."""
+        from odev.common.progress import StackedStatus
+
+        StackedStatus.resume_stack()
 
 
 # --- Export the console instance ----------------------------------------------
