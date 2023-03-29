@@ -37,8 +37,8 @@ class RenameCommand(OdoobinCommand):
         if new_database.exists:
             raise self.error(f"Database with name {self.args.name!r} already exists")
 
-        self.old_filestore = self.database.odoo_filestore_path
-        self.new_filestore = new_database._odoo_filestore_path()
+        self.old_filestore = self.database.filestore.path
+        self.new_filestore = new_database.filestore.path
 
     def run(self):
         with progress.spinner(f"Renaming database {self.database.name!r} to {self.args.name!r}"):

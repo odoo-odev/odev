@@ -9,7 +9,7 @@ from zipfile import ZipFile
 
 from odev.common import bash, progress
 from odev.common.connectors import PostgresConnector
-from odev.common.databases import Database
+from odev.common.databases import Database, Filestore
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoo import OdooBinProcess
 from odev.common.version import OdooVersion
@@ -26,8 +26,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _whitelisted: bool = False
     """Whether the database is whitelisted and should not be removed automatically."""
 
-    _platform: str = "local"
-    _platform_display: str = "Local"
+    _filestore: Optional[Filestore] = None
+    """The filestore of the database."""
+
+    _platform = "local"
+    _platform_display = "Local"
 
     def __init__(self, name: str):
         super().__init__(name)
@@ -45,7 +48,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         self.psql(self.name).__exit__(*args)
 
     @property
-    def odoo_rpc_port(self):
+    def rpc_port(self):
         return self.process and self.process.rpc_port
 
     @property
@@ -57,7 +60,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return self.table_exists("ir_module_module")
 
     @property
-    def odoo_venv(self) -> Optional[Path]:
+    def venv(self) -> Optional[Path]:
         if not self.is_odoo:
             return None
 
@@ -69,7 +72,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return Path(info.virtualenv)
 
     @property
-    def odoo_version(self) -> Optional[OdooVersion]:
+    def version(self) -> Optional[OdooVersion]:
         if not self.is_odoo:
             return None
 
@@ -86,7 +89,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return result and result[0][0] and OdooVersion(result[0][0]) or None
 
     @property
-    def odoo_edition(self) -> Optional[str]:
+    def edition(self) -> Optional[str]:
         if not self.is_odoo:
             return None
 
@@ -104,18 +107,16 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return result and result[0][0] and "enterprise" or "community"
 
     @property
-    def odoo_filestore_path(self) -> Optional[Path]:
-        return self.is_odoo and self._odoo_filestore_path() or None
+    def filestore(self) -> Filestore:
+        if self._filestore is None:
+            path: Path = Path.home() / ".local/share/Odoo/filestore/" / self.name
+            size: int = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+            self._filestore = Filestore(path=path, size=size)
+
+        return self._filestore
 
     @property
-    def odoo_filestore_size(self) -> Optional[int]:
-        if not self.is_odoo:
-            return None
-
-        return sum(f.stat().st_size for f in self.odoo_filestore_path.rglob("*") if f.is_file())
-
-    @property
-    def odoo_url(self) -> Optional[str]:
+    def url(self) -> Optional[str]:
         if not self.is_odoo:
             return None
 
@@ -150,7 +151,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        date_format = "%Y-%m-%d %H:%M:%S" if self.odoo_version.major >= 15 else "%Y-%m-%d"
+        date_format = "%Y-%m-%d %H:%M:%S" if self.version.major >= 15 else "%Y-%m-%d"
         return result and datetime.strptime(result[0][0], date_format) or None
 
     @property
@@ -172,6 +173,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def last_date(self) -> Optional[datetime]:
+        """The last date the database was used or accessed."""
         last_access = self.last_access_date
         last_usage = self.last_usage_date
 
@@ -182,6 +184,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def last_usage_date(self) -> Optional[datetime]:
+        """The last date the database was used in a command (with odev)."""
         if not self.is_odoo:
             return None
 
@@ -260,24 +263,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             )
         )
 
-    def info(self):
-        return {
-            **super().info(),
-            "is_odoo_running": self.process.is_running
-            if (self.process and self.process.is_running) or self.is_odoo
-            else None,
-            "odoo_process_id": self.process and self.process.pid,
-            "odoo_process_command": self.process and self.process.command,
-            "odoo_url": self.process and self.odoo_url,
-            "last_date": self.last_date,
-            "whitelisted": self.whitelisted,
-            "odoo_venv_path": self.odoo_venv,
-        }
-
-    def _odoo_filestore_path(self) -> Path:
-        """Return the path to the filestore of the database without checking if linked to an Odoo database."""
-        return Path.home() / ".local/share/Odoo/filestore/" / self.name
-
     def create(self, template: str = None) -> bool:
         """Create the database.
 
@@ -319,7 +304,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 shutil.move(temp_file, file)
             else:
                 with progress.spinner(f"Writing dump to archive {file}"):
-                    shutil.make_archive(file.parent / file.stem, "zip", self.odoo_filestore_path)
+                    shutil.make_archive(file.parent / file.stem, "zip", self.filestore.path)
 
                     with ZipFile(file, "w") as zip_file:
                         zip_file.write(temp_file.as_posix(), "dump.sql")

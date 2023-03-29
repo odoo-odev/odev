@@ -1,12 +1,16 @@
 """Gets help about commands."""
 
-import collections
+from argparse import Namespace
+from dataclasses import dataclass
 from typing import (
     Any,
+    Callable,
     List,
     MutableMapping,
+    Optional,
     Sequence,
     Tuple,
+    Union,
 )
 from urllib.parse import urlparse
 
@@ -21,106 +25,122 @@ from odev.common.mixins import PostgresConnectorMixin
 logger = logging.getLogger(__name__)
 
 
-_Mapped = collections.namedtuple("_Mapped", ["info_key", "title", "justify", "display", "format"])
+@dataclass
+class Mapped:
+    """A mapping of database information to table headers."""
 
-# Mapping of database information to table headers.
-# Format: (info_key, title, justify, display, format)
-#
-# - info_key: The key of the database information to display in the table (from Database.info()).
-# - title: The title of the column in the table.
-# - justify: The justification of the column in the table, one of "center", "left", "right".
-# - display: Whether to display the column in the table.
-#     Either a boolean or a callable that takes the commands arguments and returns a boolean.
-# - format: A callable that takes the value of the database information and returns
-#     the formatted value to display in the table.
-TABLE_MAPPING: List[_Mapped] = [
-    _Mapped(
-        info_key="is_odoo_running",
+    value: Callable[[LocalDatabase], Any]
+    """A lambda expression to fetch a value from a database object."""
+
+    title: Optional[str]
+    """The title of the column in the table."""
+
+    justify: str
+    """The justification of the column in the table, one of "center", "left"
+    or "right".
+    """
+
+    display: Union[bool, Callable[[Namespace], bool]]
+    """Whether to display the column in the table.
+    Either a boolean or a callable that takes the commands arguments and
+    returns a boolean.
+    """
+
+    format: Callable[[Any], str]
+    """A callable that takes the value and returns and formats it to display
+    it in the table.
+    """
+
+    total: bool
+    """Whether to display a total (sum of all values) at the bottom
+    of the rendered table.
+    """
+
+
+TABLE_MAPPING: List[Mapped] = [
+    Mapped(
+        value=lambda database: database.process.is_running if database.process else False,
         title=None,
         justify=None,
         display=True,
-        format=lambda value: (
-            value is not None and "[{style}]⚪[/{style}]".format(style=Colors.GREEN if value else Colors.RED) or ""
-        ),
+        format=lambda value: value is not None
+        and "[{style}]⚪[/{style}]".format(style=Colors.GREEN if value else Colors.RED)
+        or "",
+        total=False,
     ),
-    _Mapped(
-        info_key="name",
+    Mapped(
+        value=lambda database: database.name,
         title="Name",
         justify=None,
         display=True,
         format=None,
+        total=False,
     ),
-    _Mapped(
-        info_key="odoo_version",
+    Mapped(
+        value=lambda database: database.version,
         title="Version",
         justify="right",
         display=True,
         format=lambda value: str(value or ""),
+        total=False,
     ),
-    _Mapped(
-        info_key="odoo_edition",
+    Mapped(
+        value=lambda database: database.edition,
         title="Edition",
         justify=None,
         display=True,
         format=lambda value: (value or "").capitalize(),
+        total=False,
     ),
-    _Mapped(
-        info_key="size",
+    Mapped(
+        value=lambda database: database.size,
         title="Size (SQL)",
         justify="right",
         display=lambda args: args.details,
         format=lambda value: string.bytes_size(value or 0),
+        total=True,
     ),
-    _Mapped(
-        info_key="odoo_filestore_size",
+    Mapped(
+        value=lambda database: database.filestore.size if database.filestore else 0,
         title="Size (FS)",
         justify="right",
         display=lambda args: args.details,
         format=lambda value: string.bytes_size(value) if value else "",
+        total=True,
     ),
-    _Mapped(
-        info_key="odoo_filestore_path",
-        title="Filestore",
-        justify=None,
-        display=lambda args: args.details,
-        format=lambda value: value and f"[link={value.as_posix()}]{value.name}/[/link]" or "",
-    ),
-    _Mapped(
-        info_key="odoo_venv_path",
-        title="Virtualenv",
-        justify=None,
-        display=lambda args: args.details,
-        format=lambda value: value and f"[link={value.as_posix()}]{value.parent.name}/{value.name}[/link]" or "",
-    ),
-    _Mapped(
-        info_key="last_date",
+    Mapped(
+        value=lambda database: database.last_date,
         title="Last Use",
         justify=None,
         display=lambda args: args.details,
         format=lambda value: value and value.strftime("%Y-%m-%d %X") or "",
+        total=False,
     ),
-    _Mapped(
-        info_key="odoo_process_id",
-        title="PID",
-        justify="right",
-        display=lambda args: args.details,
-        format=lambda value: value and str(value) or "",
-    ),
-    _Mapped(
-        info_key="odoo_url",
-        title="URL",
-        justify=None,
-        display=lambda args: args.details,
-        format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
-    ),
-    _Mapped(
-        info_key="whitelisted",
+    Mapped(
+        value=lambda database: database.whitelisted,
         title="Whitelisted",
         justify="center",
         display=lambda args: args.details,
         format=lambda value: f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
         if value
         else f"[bold {Colors.RED}] ❌[bold {Colors.RED}]",
+        total=False,
+    ),
+    Mapped(
+        value=lambda database: database.process.pid,
+        title="PID",
+        justify="right",
+        display=lambda args: args.details,
+        format=lambda value: str(value or ""),
+        total=False,
+    ),
+    Mapped(
+        value=lambda database: database.url,
+        title="URL",
+        justify=None,
+        display=lambda args: args.details,
+        format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
+        total=False,
     ),
 ]
 
@@ -210,21 +230,21 @@ class ListCommand(PostgresConnectorMixin, Command):
         totals: List[int] = []
 
         for mapped in TABLE_MAPPING:
-            if mapped[3] is True or (callable(mapped[3]) and mapped[3](self.args)):
-                headers.append({"name": mapped[1] or "", "justify": mapped[2] or "left"})
+            if mapped.display is True or (callable(mapped.display) and mapped.display(self.args)):
+                headers.append({"name": mapped.title or "", "justify": mapped.justify or "left"})
                 totals.append(0)
 
         for database in databases:
             row: List[Any] = []
-            info = self.get_database_info(database)
 
-            for index, mapped in enumerate(TABLE_MAPPING):
-                if mapped[3] is True or (callable(mapped[3]) and mapped[3](self.args)):
-                    info.setdefault(mapped[0], "")
-                    row.append(mapped[4](info[mapped[0]]) if callable(mapped[4]) else info[mapped[0]])
+            with LocalDatabase(database) as db:
+                for index, mapped in enumerate(TABLE_MAPPING):
+                    if mapped.display is True or (callable(mapped.display) and mapped.display(self.args)):
+                        value = mapped.value(db)
+                        row.append(mapped.format(value) if callable(mapped.format) else value)
 
-                    if mapped[0] in ("size", "odoo_filestore_size"):
-                        totals[index] += info[mapped[0]] or 0
+                        if mapped.total:
+                            totals[index] += value or 0
 
             rows.append(row)
 

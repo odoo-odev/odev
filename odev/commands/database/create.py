@@ -60,7 +60,7 @@ class CreateCommand(OdoobinCommand):
 
         if version is None and self.template is not None:
             with self.template:
-                version = self.template.odoo_version
+                version = self.template.version
 
         if version is None:
             version = OdooVersion("master")
@@ -104,25 +104,22 @@ class CreateCommand(OdoobinCommand):
 
     def copy_template_filestore(self):
         """Copy the template filestore to the new database."""
-        with self.template:
-            template_filestore = self.template.odoo_filestore_path
+        fs_template = self.template.filestore.path
+        fs_database = self.database.filestore.path
 
-        if template_filestore is not None and template_filestore.exists():
-            database_filestore = self.database._odoo_filestore_path()
+        if fs_template is not None and fs_template.exists() and fs_database is not None:
+            if fs_database.exists():
+                logger.warning(f"Filestore for {self.database.name!r} already exists")
 
-            if database_filestore is not None:
-                if database_filestore.exists():
-                    logger.warning(f"Filestore for {self.database.name!r} already exists")
+                if not self.console.confirm("Overwrite it?"):
+                    raise self.error(f"Cannot copy template filestore to existing directory {fs_database!s}")
 
-                    if not self.console.confirm("Overwrite it?"):
-                        raise self.error(f"Cannot copy template filestore to existing directory {database_filestore!s}")
+                with progress.spinner(f"Removing {fs_database!s}"):
+                    shutil.rmtree(fs_database)
 
-                    with progress.spinner(f"Removing {database_filestore!s}"):
-                        shutil.rmtree(database_filestore)
-
-                with progress.spinner(f"Copying filestore from {template_filestore!s} to {database_filestore!s}"):
-                    database_filestore.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copytree(template_filestore, database_filestore)
+            with progress.spinner(f"Copying filestore from {fs_template!s} to {fs_database!s}"):
+                fs_database.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(fs_template, fs_database)
 
     def create_database(self):
         """Create the database and copy the template if needed.

@@ -1,27 +1,59 @@
 """Handling of database information."""
 
 from abc import ABC, abstractmethod, abstractproperty
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, MutableMapping, Optional
+from typing import ClassVar, Literal, Optional
 
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.version import OdooVersion
 
 
+@dataclass
+class Platform:
+    """Information about the platform on which a database is running."""
+
+    name: Literal["local", "saas", "paas"]
+    """The name of the platform."""
+
+    display: str
+    """The display name of the platform."""
+
+
+@dataclass
+class Filestore:
+    """Information about the filestore of an Odoo database."""
+
+    path: Optional[Path]
+    """The path to the filestore."""
+
+    size: int
+    """The size of the filestore in bytes."""
+
+
 class Database(OdevFrameworkMixin, ABC):
     """Base abstract class for manipulating databases."""
 
-    name: str = None
+    _name: str = None
     """The name of the database."""
 
-    _platform: str = None
+    _platform: ClassVar[Literal["local", "saas", "paas"]] = None
     """The platform on which the database is running."""
+
+    _platform_display: ClassVar[str] = None
+    """The display name of the platform on which the database is running."""
+
+    _filestore: Optional[Filestore] = None
+    """The filestore of the database."""
 
     def __init__(self, name: str, *args, **kwargs):
         """Initialize the database."""
         super().__init__(*args, **kwargs)
-        self.name = name
+        self._name = name
+
+        if self._platform is None:
+            raise NotImplementedError(f"Missing `_platform` attribute in class {self.__class__.name}")
 
     def __repr__(self):
         """Return the representation of the database."""
@@ -39,49 +71,31 @@ class Database(OdevFrameworkMixin, ABC):
     def __exit__(self):
         """Close connection with the required underlying systems."""
 
-    def info(self) -> MutableMapping[str, Any]:
-        """Return information about the database."""
-        return {
-            "name": self.name,
-            "platform": self.platform,
-            "size": self.size,
-            "exists": self.exists,
-            "is_odoo": self.is_odoo,
-            "odoo_version": self.odoo_version,
-            "odoo_edition": self.odoo_edition,
-            "odoo_filestore_path": self.odoo_filestore_path,
-            "odoo_filestore_size": self.odoo_filestore_size,
-            "odoo_rpc_port": self.odoo_rpc_port,
-            "odoo_url": self.odoo_url,
-            "last_access_date": self.last_access_date,
-            "expiration_date": self.expiration_date,
-            "uuid": self.uuid,
-        }
+    @property
+    def name(self) -> str:
+        """The name of the database."""
+        return self._name
 
     @property
-    def platform(self) -> str:
+    def platform(self) -> Platform:
         """The platform on which the database is running."""
-        return self._platform
+        return Platform(self._platform, self._platform_display or self._platform.title())
 
     @abstractproperty
     def is_odoo(self) -> bool:
         """Return whether the database is an Odoo database."""
 
     @abstractproperty
-    def odoo_version(self) -> Optional[OdooVersion]:
+    def version(self) -> Optional[OdooVersion]:
         """Return the Odoo version of the database."""
 
     @abstractproperty
-    def odoo_edition(self) -> Optional[str]:
+    def edition(self) -> Optional[str]:
         """Return the Odoo edition of the database."""
 
     @abstractproperty
-    def odoo_filestore_path(self) -> Optional[Path]:
-        """Return the path to the Odoo filestore on the local filesystem."""
-
-    @abstractproperty
-    def odoo_filestore_size(self) -> Optional[int]:
-        """Return the size of the Odoo filestore in bytes."""
+    def filestore(self) -> Filestore:
+        """Return information about the Odoo filestore."""
 
     @abstractproperty
     def size(self) -> int:
@@ -100,7 +114,7 @@ class Database(OdevFrameworkMixin, ABC):
         """Return the date of the last access to the database."""
 
     @abstractproperty
-    def odoo_url(self) -> Optional[str]:
+    def url(self) -> Optional[str]:
         """Return the URL to access the database."""
 
     @abstractproperty
@@ -108,7 +122,7 @@ class Database(OdevFrameworkMixin, ABC):
         """Return whether the database exists."""
 
     @abstractproperty
-    def odoo_rpc_port(self) -> Optional[int]:
+    def rpc_port(self) -> Optional[int]:
         """Return the port used by the Odoo RPC interface."""
 
     def create(self):

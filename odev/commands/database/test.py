@@ -88,8 +88,8 @@ class TestCommand(OdoobinCommand):
         """Return the arguments to pass to the create command."""
         args = ["--bare"]
 
-        if self.database.odoo_version is not None:
-            args.extend(["--version", str(self.database.odoo_version)])
+        if self.database.version is not None:
+            args.extend(["--version", str(self.database.version)])
 
         args.append(self.test_database.name)
 
@@ -112,8 +112,8 @@ class TestCommand(OdoobinCommand):
             args.extend(self.args.odoo_args)
 
         assert self.test_database.process
-        odoobin = self.test_database.process.with_version(self.database.odoo_version)
-        odoobin._venv_name = self.database.odoo_venv.name
+        odoobin = self.test_database.process.with_version(self.database.version)
+        odoobin._venv_name = self.database.venv.name
         odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
 
         try:

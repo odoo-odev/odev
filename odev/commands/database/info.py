@@ -1,25 +1,27 @@
 """Display information about a local or remote database."""
 
-from typing import (
-    Any,
-    List,
-    Mapping,
-    MutableMapping,
-    Tuple,
-)
+import re
+from typing import Any, List, MutableMapping
 
-from rich.box import HORIZONTALS
-from rich.panel import Panel
-
-from odev.common import progress, string
+from odev.common import string
 from odev.common.commands import DatabaseCommand
 from odev.common.console import Colors
-from odev.common.databases import LocalDatabase, SaasDatabase
+from odev.common.databases import LocalDatabase, PaasDatabase, SaasDatabase
 from odev.common.logging import logging
-from odev.common.version import OdooVersion
 
 
 logger = logging.getLogger(__name__)
+
+
+DISPLAY_NA = "N/A"
+DISPLAY_NEVER = "Never"
+DISPLAY_TRUE = f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
+DISPLAY_FALSE = f"[bold {Colors.RED}]❌[bold {Colors.RED}]"
+
+TABLE_HEADERS: List[MutableMapping[str, Any]] = [
+    {"name": "", "style": "bold", "min_width": 15},
+    {"name": ""},
+]
 
 
 class InfoCommand(DatabaseCommand):
@@ -31,135 +33,192 @@ class InfoCommand(DatabaseCommand):
     aliases = ["i"]
 
     def run(self):
+        if isinstance(self.database, LocalDatabase) and not self.database.is_odoo:
+            raise self.error(f"Database '{self.database.name}' is not an Odoo database")
+
         return self.print_info()
 
     def print_info(self):
         """Print information about the database."""
-        with progress.spinner("Fetching database information"):
-            info = self.database.info()
 
-        table_headers, table_rows = self._info_table_data(info)
-        panel_title, panel_content = self._info_panel_data(info)
-        panel = Panel(
-            panel_content,
-            title=panel_title,
-            title_align="left",
-            box=HORIZONTALS,
+        self.print_table(
+            self.info_table_rows_base(),
+            self.database.name.upper(),
+            style=f"bold {Colors.PURPLE}",
         )
 
-        self.print(panel)
-        self.table(table_headers, table_rows, show_header=False, box=None)
-
-    def _info_panel_data(self, info: Mapping[str, Any]) -> Tuple[str, str]:
-        """Return a string representation of the database info to be displayed
-        in a panel.
-        :param info: The database info.
-        :return: A tuple of the panel title and content.
-        :rtype: Tuple[str, str]
-        """
-        name: str = info.get("name")
-        version: OdooVersion = info.get("odoo_version")
-        edition: str = info.get("odoo_edition")
-        platform: str = info.get("platform_display_name")
-
-        title: str = f"[bold {Colors.PURPLE}]{name}[/bold {Colors.PURPLE}]"
-        content: str = string.normalize_indent(
-            f"""
-            {version.major}.{version.minor} - {edition.capitalize()} Edition
-            [{Colors.BLACK}]Hosting: {platform}[/{Colors.BLACK}]
-            """
-        )
-
-        return title, content
-
-    def _info_table_data(self, info: Mapping[str, Any]) -> Tuple[List[MutableMapping[str, str]], List[List[str]]]:
-        """Return the data to be displayed in a table.
-        :param info: The database info.
-        :return: A tuple of the table headers and rows.
-        :rtype: Tuple[List[MutableMapping[str, str]], List[List[str]]]
-        """
-        rows: List[List[str]] = []
-        headers: List[MutableMapping[str, Any]] = [
-            {"name": "", "style": "bold", "justify": "right"},
-            {"name": ""},
-        ]
-
-        rows.extend(self._info_table_rows_common(info))
+        self.print_table(self.info_table_rows_database(), "Database")
 
         if isinstance(self.database, LocalDatabase):
-            rows.extend(self._info_table_rows_local(info))
+            self.print_table(
+                self.info_table_rows_local(),
+                self.database.platform.display,
+            )
 
         elif isinstance(self.database, SaasDatabase):
-            rows.insert(1, ["Support URL", f"{info.get('odoo_url', '')}/_odoo/support"])
-            rows.extend(self._info_table_rows_saas(info))
+            self.print_table(
+                self.info_table_rows_saas(),
+                self.database.platform.display,
+            )
 
-        return headers, rows
+        elif isinstance(self.database, PaasDatabase):
+            self.print_table(
+                self.info_table_rows_paas(),
+                self.database.platform.display,
+            )
+            self.print_table(self.info_table_rows_paas_build(), "Build")
 
-    def _info_table_rows_common(self, info: Mapping[str, Any]) -> List[List[str]]:
+    def print_table(self, rows: List[List[str]], name: str = None, style: str = None):
+        """Print a table.
+        :param rows: The table rows.
+        :param name: The table name.
+        :type rows: List[List[str]]
+        """
+        self.print()
+
+        if name is not None:
+            if style is None:
+                style = f"bold {Colors.CYAN}"
+
+            rule_char: str = "─"
+            title: str = f"{rule_char} [{style}]{name}[/{style}]"
+            self.console.rule(title, align="left", style="", characters=rule_char)
+
+        self.table([{**header} for header in TABLE_HEADERS], rows, show_header=False, box=None)
+
+    def stylize(self, value: str, style: str) -> str:
+        """Stylize a value.
+        :param value: The value to stylize.
+        :param style: The style to apply.
+        :return: The stylized value.
+        :rtype: str
+        """
+        return f"[{style}]{value}[/{style}]"
+
+    def info_table_rows_base(self) -> List[List[str]]:
+        """Return the basic rows to be displayed in a table.
+        :param info: The database info.
+        :return: The rows.
+        :rtype: List[List[str]]
+        """
+        name: str = self.stylize(self.database.name, Colors.PURPLE)
+        version: str = self.stylize(f"{self.database.version.major}.{self.database.version.minor}", Colors.CYAN)
+
+        return [
+            ["Name", name],
+            ["Version", version],
+            ["Edition", self.database.edition.capitalize()],
+            ["Hosting", self.database.platform.display],
+        ]
+
+    def info_table_rows_database(self) -> List[List[str]]:
         """Return the common rows to be displayed in a table.
         :param info: The database info.
         :return: The rows.
         :rtype: List[List[str]]
         """
-        rows: List[List[str]] = []
-        url: str = info.get("odoo_url", "")
-        port: int = info.get("odoo_rpc_port", 0)
-        expiration_date = (
-            info.get("expiration_date").strftime("%Y-%m-%d %X") if info.get("expiration_date") is not None else "Never"
+        url: str = f"{self.database.url}/web?debug=1" if self.database.url else DISPLAY_NA
+        port: str = str(self.database.rpc_port) if self.database.rpc_port else DISPLAY_NA
+        expiration_date: str = (
+            self.database.expiration_date.strftime("%Y-%m-%d %X")
+            if self.database.expiration_date is not None
+            else DISPLAY_NEVER
         )
+        filestore_size: int = self.database.filestore.size if self.database.filestore is not None else 0
 
-        if url and port:
-            rows.extend(
-                [
-                    ["Backend URL", f"{url}/web?debug=1"],
-                    ["RPC Port", str(info.get("odoo_rpc_port"))],
-                ]
-            )
+        return [
+            ["Backend URL", url],
+            ["RPC Port", port],
+            ["Expiration Date", expiration_date],
+            ["Database UUID", self.database.uuid or DISPLAY_NA],
+            ["Database Size", string.bytes_size(self.database.size)],
+            ["Filestore Size", string.bytes_size(filestore_size)],
+        ]
 
-        rows.extend(
-            [
-                ["Expiration Date", expiration_date],
-                ["Database UUID", info.get("uuid", "")],
-                ["Database Size", string.bytes_size(info.get("size"))],
-                ["Filestore Size", string.bytes_size(info.get("odoo_filestore_size"))],
-            ]
-        )
-
-        return rows
-
-    def _info_table_rows_local(self, info: Mapping[str, Any]) -> List[List[str]]:
+    def info_table_rows_local(self) -> List[List[str]]:
         """Return the local-specific rows to be displayed in a table.
         :param info: The database info.
         :return: The rows.
         :rtype: List[List[str]]
         """
-        filestore_path = info.get("odoo_filestore_path")
-        venv_path = info.get("odoo_venv_path")
+        assert isinstance(self.database, LocalDatabase)
+        last_used: str = (
+            self.database.last_date.strftime("%Y-%m-%d %X") if self.database.last_date is not None else DISPLAY_NEVER
+        )
+        filestore_path: str = (
+            self.database.filestore.path.as_posix()
+            if self.database.filestore is not None and self.database.filestore.path is not None
+            else DISPLAY_NA
+        )
+        venv_path: str = self.database.venv.as_posix() if self.database.venv is not None else DISPLAY_NA
+        running: bool = self.database.process.is_running
+        process_id: str = str(self.database.process.pid) if self.database.process.pid else DISPLAY_NA
+        addons: List[str] = [DISPLAY_NA]
 
-        rows: List[List[str]] = [
-            ["Filestore Path", filestore_path.as_posix() if filestore_path else ""],
-            ["Virtualenv Path", venv_path.as_posix() if venv_path else ""],
+        if running:
+            addons_match = re.search(r"--addons-path(?:=|\s)([^\s]+)", self.database.process.command)
+
+            if addons_match is not None:
+                addons = addons_match.group(1).split(",")
+
+        return [
+            ["Last Used", last_used],
+            ["Filestore Path", filestore_path],
+            ["Virtualenv Path", venv_path],
+            ["Whitelisted", DISPLAY_TRUE if self.database.whitelisted else DISPLAY_FALSE],
+            ["Running", DISPLAY_TRUE if running else DISPLAY_FALSE],
+            ["Odoo-Bin PID", process_id],
+            ["Addons Paths", "\n".join(addons)],
         ]
 
-        if info.get("is_odoo_running"):
-            self.database: LocalDatabase
-            rows.extend(
-                [
-                    ["Odoo-Bin PID", str(info.get("odoo_process_id"))],
-                    ["Addons Paths", "\n".join(path.as_posix() for path in self.database.process.addons_paths)],
-                ]
-            )
-
-        return rows
-
-    def _info_table_rows_saas(self, info: Mapping[str, Any]) -> List[List[str]]:
+    def info_table_rows_saas(self) -> List[List[str]]:
         """Return the SaaS-specific rows to be displayed in a table.
         :param info: The database info.
         :return: The rows.
         :rtype: List[List[str]]
         """
+        assert isinstance(self.database, SaasDatabase)
         return [
-            ["Mode", info.get("mode").capitalize()],
-            ["Status", "Active" if info.get("active", False) else "Inactive"],
-            ["Domain Names", "\n".join(info.get("domains", []))],
+            ["Support URL", f"{self.database.url}/_odoo/support"],
+            ["Mode", self.database.mode.capitalize()],
+            ["Status", "Active" if self.database.active else "Inactive"],
+            ["Domain Names", "\n".join(self.database.domains or [DISPLAY_NA])],
+        ]
+
+    def info_table_rows_paas(self) -> List[List[str]]:
+        """Return the PaaS-specific rows to be displayed in a table.
+        :param info: The database info.
+        :return: The rows.
+        :rtype: List[List[str]]
+        """
+        assert isinstance(self.database, PaasDatabase)
+        return [
+            ["Project", self.database.project.name],
+            ["Project Page", self.database.project.url],
+            ["Repository", self.database.repository.full_name],
+            ["Repository URL", self.database.repository.url],
+            ["Support URL", f"{self.database.url}/_odoo/support"],
+            ["Webshell", self.database.webshell_url],
+            ["Monitoring", self.database.monitoring_url],
+            ["Status", self.database.status_url],
+            ["Worker", self.database.worker_url],
+            ["Subscription", self.database.subscription_url],
+        ]
+
+    def info_table_rows_paas_build(self) -> List[List[str]]:
+        """Return the build-specific rows to be displayed in a table.
+        :param info: The database info.
+        :return: The rows.
+        :rtype: List[List[str]]
+        """
+        assert isinstance(self.database, PaasDatabase)
+        return [
+            ["Environment", self.database.environment.capitalize()],
+            ["Branch", self.database.branch.name],
+            ["Branch URL", self.database.branch.url],
+            ["Commit", f"({self.database.commit.hash[:8]}) {self.database.commit.message}"],
+            ["Commit URL", self.database.commit.url],
+            ["Build", self.database.build.name],
+            ["Status", f"{self.database.build.status.capitalize()} ({self.database.build.result.capitalize()})"],
+            ["Latest Build", DISPLAY_TRUE if self.database.build.latest else DISPLAY_FALSE],
         ]

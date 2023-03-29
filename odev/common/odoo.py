@@ -96,7 +96,7 @@ class OdooBinProcess(OdevFrameworkMixin):
             return None
 
         with self.database:
-            return self.database.odoo_version
+            return self.database.version
 
     @property
     def odoo_path(self) -> Path:
@@ -166,7 +166,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         repo_names: List[str] = ["odoo", "design-themes"]
 
         with self.database:
-            if self.database.odoo_edition == "enterprise" or self._force_enterprise:
+            if self.database.edition == "enterprise" or self._force_enterprise:
                 repo_names.insert(1, "enterprise")
 
         for repo_name in repo_names:

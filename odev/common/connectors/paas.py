@@ -1,13 +1,16 @@
 """Connect to Odoo PaaS (Odoo SH) projects and databases."""
 
 import re
+from contextlib import contextmanager
 from typing import (
     Any,
+    Generator,
     List,
     Literal,
     Mapping,
     MutableMapping,
     Optional,
+    Tuple,
     Union,
 )
 from urllib.parse import urlparse
@@ -16,8 +19,8 @@ from parsel.selector import Selector
 from requests import Response
 from requests.exceptions import HTTPError
 
-from odev.common import prompt
 from odev.common.connectors.rest import RestConnector
+from odev.common.console import console
 from odev.common.logging import logging
 
 
@@ -26,6 +29,13 @@ logger = logging.getLogger(__name__)
 
 ODOOSH_DOMAIN = "www.odoo.sh"
 ODOOSH_URL_BASE = f"https://{ODOOSH_DOMAIN}/"
+
+Domain = List[
+    Union[
+        Literal["&", "|"],
+        Tuple[str, str, Union[str, int, float, bool]],
+    ]
+]
 
 
 class PaasConnector(RestConnector):
@@ -37,20 +47,22 @@ class PaasConnector(RestConnector):
     _user: Optional[Mapping[str, str]] = None
     """The user used for impersonation on the Odoo SH project."""
 
+    _url: str = None
+    """The URL of the endpoint, not sanitized."""
+
     def __init__(self, project: str):
         """Initialize the connector.
         :param project: The name or URL of the Odoo SH project.
         """
+        super().__init__(ODOOSH_URL_BASE)
+
         self._name: str = project
         """The name or URL of the Odoo SH project."""
-
-        super().__init__(ODOOSH_URL_BASE)
 
     @property
     def name(self) -> str:
         """Return the name of the PaaS project."""
-        return self._name
-        # return re.sub(r"(\.dev)?\.odoo\.com$", "", self.parsed_url.netloc)
+        return self.repository.get("project_name", self._name)
 
     @property
     def login(self) -> str:
@@ -98,15 +110,20 @@ class PaasConnector(RestConnector):
         return "/web/login"
 
     @property
+    def profile_path(self) -> str:
+        """Return the URL to the user profile."""
+        return "/project/json/user/profile"
+
+    @property
     def authenticated(self) -> bool:
         """Test whether the session is valid and we are signed in."""
         with self.nocache():
-            return self.profile is not None
+            return self.rpc(self.profile_path, skip_expired=True) is not None
 
     @property
     def profile(self) -> Mapping[str, Any]:
         """Return the current user profile."""
-        result = self.rpc("/project/json/user/profile")
+        result = self.rpc(self.profile_path)
         assert isinstance(result, dict)
         return result
 
@@ -130,6 +147,17 @@ class PaasConnector(RestConnector):
     def exists(self) -> bool:
         """Return whether the PaaS project exists."""
         return bool(self.repository)
+
+    @contextmanager
+    def with_url(self, url: str) -> Generator["PaasConnector", None, None]:
+        """A context manager for using the same connector while targeting another
+        base URL.
+        :param url: The URL to use as the base URL for the connector.
+        """
+        origin_url = self._url
+        self._url = url
+        yield self
+        self._url = origin_url
 
     def extract_form_inputs(self, response: Response) -> MutableMapping[str, str]:
         """Extract the input fields from the response's content.
@@ -208,6 +236,7 @@ class PaasConnector(RestConnector):
         path: str,
         method: str = "call",
         params: MutableMapping[str, Any] = None,
+        skip_expired: bool = False,
         **kwargs,
     ) -> Optional[Union[Mapping[str, Any], List[Mapping[str, Any]]]]:
         """Make a JSON-RPC request to Odoo SH support backend and fetch additional
@@ -215,6 +244,8 @@ class PaasConnector(RestConnector):
         :param path: The path to the resource.
         :param method: The JSON-RPC method to call.
         :param params: The parameters to pass to the request.
+        :param skip_expired: If set to `True` and the session has expired,
+            return `None` instead of invalidating the session and retrying.
         :param kwargs: Additional keyword arguments to pass to the request.
         :return: The result of the JSON-RPC call.
         :rtype: dict | list | None
@@ -231,12 +262,45 @@ class PaasConnector(RestConnector):
 
         if error is not None:
             if "session expired" in error.lower():
+                if skip_expired:
+                    return None
+
                 self.invalidate_session()
                 return self.rpc(path, method, params, **kwargs)
 
             raise RuntimeError(result["error"])
 
         return result
+
+    def call_kw(
+        self,
+        model: str,
+        method: str,
+        rpc_args: Optional[List[Any]] = None,
+        rpc_kwargs: Optional[Mapping[str, Any]] = None,
+        **kwargs,
+    ) -> Any:
+        """Make a call to an Odoo model method using JSON RPC.
+        :param model: The model to call.
+        :param method: The method to call on the model.
+        :param rpc_args: The positional arguments to pass in the RPC payload.
+        :param rpc_kwargs: The keyword arguments to pass in the RPC payload.
+        :param kwargs: Additional keyword arguments to pass to the request.
+        :return: The result of the method call.
+        """
+        if not self.authenticated:
+            self._impersonate()
+
+        return self.rpc(
+            f"/web/dataset/call_kw/{model}/{method}",
+            params={
+                "model": model,
+                "method": method,
+                "args": rpc_args or [],
+                "kwargs": rpc_kwargs or {},
+            },
+            **kwargs,
+        )
 
     def list_repositories(self) -> List[Mapping[str, Any]]:
         """Return the list of repositories for the current project."""
@@ -250,18 +314,33 @@ class PaasConnector(RestConnector):
         assert isinstance(result, list)
         return result
 
-    def _filter_repositories(self) -> List[Mapping[str, Any]]:
-        """Filter the list of repositories for the current project."""
-        re_full_name = re.compile(rf"(?<=/)(?:ps\w{2}-)?{self._name}", re.IGNORECASE)
-        re_project_name = re.compile(rf"(?:odoo-ps-)?(?:ps\w{2}-)?{self._name}", re.IGNORECASE)
+    def _filter_repositories(self, name: str = None) -> List[Mapping[str, Any]]:
+        """Filter the list of repositories for the current project.
+        :param name: The name of the repository to filter on, defaults to the current project's name.
+        :return: The list of repositories matching the filter.
+        :rtype: list
+        """
+        name = re.escape(name or self._name)
+        re_full_name = re.compile(rf"(?<=/)(?:ps\w{2}-)?{name}", re.IGNORECASE)
+        re_project_name = re.compile(rf"(?:odoo-ps-)?(?:ps\w{2}-)?{name}$", re.IGNORECASE)
 
-        return [
+        repositories: List[Mapping[str, Any]] = [
             repo
             for repo in self.list_repositories()
             if repo["full_name"] == self._name
             or re_full_name.search(repo["full_name"])
             or re_project_name.search(repo["project_name"])
         ]
+
+        if len(repositories) > 1:
+            exact_match: List[Mapping[str, Any]] = [
+                repo for repo in repositories if name in [repo["full_name"], repo["project_name"]]
+            ]
+
+            if exact_match and len(exact_match) == 1:
+                return exact_match
+
+        return repositories
 
     def select_repository(self) -> Mapping[str, Any]:
         """Return the repository for the current project."""
@@ -271,7 +350,7 @@ class PaasConnector(RestConnector):
             raise ValueError(f"No repository found for project {self._name!r}")
 
         if len(repositories) > 1:
-            selected = prompt.select(
+            selected = console.select(
                 f"Multiple repositories found for project {self._name!r}:",
                 choices=[(repo["full_name"], f"{repo['project_name']} ({repo['full_name']})") for repo in repositories],
             )
@@ -327,4 +406,41 @@ class PaasConnector(RestConnector):
             f"Impersonated {profile['username']!r} ({profile['email']!r}) "
             f"with {self.user['access_level']} access level "
             f"in project {self.repository['project_name']!r} ({self.repository['full_name']!r})"
+        )
+
+    def project_info(self) -> Optional[Mapping[str, Any]]:
+        """Fetch information about the current project."""
+        domain: Domain = [("id", "=", self.repository["id"])]
+        fields: List[str] = []
+        result: List[Mapping[str, Any]] = self.call_kw(
+            "paas.repository",
+            "search_read",
+            [domain, fields],
+            {"limit": 1},
+        )
+
+        return result[0] if result else None
+
+    def branches_info(self) -> List[Mapping[str, Any]]:
+        """Fetch information about the branches of the current project."""
+        domain: Domain = [("repository_id", "=", self.repository["id"])]
+        fields: List[str] = []
+        return self.call_kw(
+            "paas.branch",
+            "search_read",
+            [domain, fields],
+        )
+
+    def builds_info(self) -> List[Mapping[str, Any]]:
+        """Fetch information about the builds of the current project."""
+        model: str = "paas.build"
+        domain: Domain = [("repository_id", "=", self.repository["id"])]
+        fields: List[str] = list(self.call_kw(model, "fields_get").keys())
+        fields = [field for field in fields if field not in ["analysis_ids", "analysis_data"]]
+
+        return self.call_kw(
+            model,
+            "search_read",
+            [domain, fields],
+            {"order": "start_datetime desc"},
         )

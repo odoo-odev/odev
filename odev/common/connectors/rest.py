@@ -33,9 +33,6 @@ class RestConnector(Connector, ABC):
     _connection: Optional[Session] = None
     """The session used to connect to the endpoint."""
 
-    _url: str = None
-    """The URL of the endpoint, not sanitized."""
-
     _cache: ClassVar[MutableMapping[str, Any]] = {}
     """Cache for storing the results of HTTP requests against the endpoints."""
 
@@ -45,7 +42,9 @@ class RestConnector(Connector, ABC):
         :param url: The URL of the endpoint.
         """
         super().__init__()
+
         self._url: str = url
+        """The URL of the endpoint, not sanitized."""
 
     @property
     def parsed_url(self) -> ParseResult:
@@ -158,7 +157,7 @@ class RestConnector(Connector, ABC):
         logger_message = f"{method} {self.url}{path}"
 
         if method == "GET" and params:
-            logger_message += f"?{'&'.join(f'{key}={value}' for key, value in obfuscated.items())}"
+            logger_message += f"?{'&'.join(f'{key}={value}' for key, value in {**params, **obfuscated}.items())}"
             params = {"params": params}
         elif method == "POST" and params and "json" not in kwargs:
             params = {"json": {"params": params}}

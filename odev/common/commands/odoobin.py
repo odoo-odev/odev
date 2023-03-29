@@ -51,6 +51,8 @@ class OdoobinCommand(DatabaseCommand, ABC):
         },
     ]
 
+    _database_allowed_platforms = ["local"]
+
     _odoo_log_regex: re.Pattern = re.compile(
         r"""
             (?:

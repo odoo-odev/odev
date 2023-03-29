@@ -1,13 +1,31 @@
 import re
 from abc import ABC
-from typing import ClassVar, Optional, Union
+from typing import (
+    ClassVar,
+    Mapping,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+)
 
+from odev.common import progress
 from odev.common.commands import Command
-from odev.common.databases import LocalDatabase, SaasDatabase
+from odev.common.databases import Database, LocalDatabase, PaasDatabase, SaasDatabase
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
+
+
+DatabaseType = Union[LocalDatabase, SaasDatabase, PaasDatabase]
+
+
+DATABASE_PLATFORM_MAPPING: Mapping[str, Type[Database]] = {
+    "local": LocalDatabase,
+    "saas": SaasDatabase,
+    "paas": PaasDatabase,
+}
 
 
 class DatabaseCommand(Command, ABC):
@@ -19,14 +37,27 @@ class DatabaseCommand(Command, ABC):
     _database_exists_required: ClassVar[bool] = True
     """Whether the database must exist before running the command."""
 
+    _database_allowed_platforms: ClassVar[Sequence[str]] = []
+    """The list of allowed database platforms for this command.
+    An empty sequence means all platforms are allowed.
+    """
+
     arguments = [
         {
             "name": "database",
             "help": "The database to target.",
         },
+        {
+            "name": "branch",
+            "aliases": ["-b", "--branch"],
+            "help": """
+            The branch to target, only used with PaaS (Odoo SH) databases
+            to force using a specific branch after project detection.
+            """,
+        },
     ]
 
-    database: Optional[Union[LocalDatabase, SaasDatabase]] = None
+    database: Optional[DatabaseType] = None
     """The database instance associated with the command."""
 
     def __init__(self, *args, **kwargs):
@@ -38,32 +69,46 @@ class DatabaseCommand(Command, ABC):
             self.database = self.infer_database_instance()
 
             if self._database_exists_required and not self.database.exists:
-                raise self.error(f"Database {self.database.name!r} does not exist.")
+                raise self.error(f"Database {self.database.name!r} does not exist")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
         super().prepare_command(*args, **kwargs)
 
+        if not cls._database_allowed_platforms:
+            cls._database_allowed_platforms = list(DATABASE_PLATFORM_MAPPING.keys())
+
         if not cls._database_arg_required:
             cls.update_argument("database", {"nargs": "?"})
 
-    def infer_database_instance(self) -> Optional[Union[LocalDatabase, SaasDatabase]]:
+    def infer_database_instance(self) -> Optional[DatabaseType]:
         """Return the database instance to use with this command, inferred from the database's name."""
         if not self.database_name:
             return None
 
-        for database_cls in (
-            LocalDatabase,
-            SaasDatabase,
-        ):
-            database = database_cls(self.database_name)
+        allowed_database_classes = [
+            DatabaseClass
+            for key, DatabaseClass in DATABASE_PLATFORM_MAPPING.items()
+            if key in self._database_allowed_platforms
+        ]
 
-            if database.exists:
-                logger.debug(f"Found existing {database_cls.__name__} {database!r}")
-                return database
+        for DatabaseClass in allowed_database_classes:
+            with progress.spinner(
+                f"Searching for existing {DatabaseClass._platform_display} database {self.database_name!r}"
+            ):
+                if DatabaseClass == PaasDatabase and self.args.branch:
+                    database = DatabaseClass(self.database_name, branch=self.args.branch)
+                else:
+                    database = DatabaseClass(self.database_name)
+
+                if database.exists:
+                    logger.debug(f"Found existing {DatabaseClass._platform_display} database {database.name!r}")
+                    return database
 
         if re.match(r"^[a-z0-9][a-z0-9$_.-]+$", self.database_name, re.IGNORECASE):
-            logger.debug(f"Falling back to non-existing {LocalDatabase.__name__} {self.database_name!r}")
+            logger.debug(
+                f"Falling back to non-existing {LocalDatabase._platform_display} database {self.database_name!r}"
+            )
             return LocalDatabase(self.database_name)
 
         raise ValueError(f"Could not determine database type from name: {self.database_name!r}")

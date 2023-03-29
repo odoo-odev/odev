@@ -68,7 +68,7 @@ class DeleteCommand(OdoobinCommand):
 
     def remove_venv(self):
         """Remove the venv linked to this database if not used by any other database."""
-        venv = self.database.odoo_venv
+        venv = self.database.venv
 
         if venv is None or not venv.exists():
             return logger.debug(f"No virtual environment found for database {self.database.name!r}")
@@ -93,7 +93,7 @@ class DeleteCommand(OdoobinCommand):
 
     def remove_filestore(self):
         """Remove the filestore linked to this database."""
-        filestore = self.database.odoo_filestore_path
+        filestore = self.database.filestore.path
 
         if filestore is None or not filestore.exists():
             return logger.debug(f"No filestore found for database {self.database.name!r}")

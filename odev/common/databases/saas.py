@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 from odev.common import string
 from odev.common.connectors import SaasConnector
-from odev.common.databases import Database
+from odev.common.databases import Database, Filestore
 from odev.common.mixins import SaasConnectorMixin
 from odev.common.version import OdooVersion
 
@@ -20,10 +20,14 @@ class SaasDatabase(SaasConnectorMixin, Database):
 
     connector: SaasConnector
 
-    url: str = None
+    _url: str = None
     """The URL of the SaaS database."""
 
+    _filestore: Optional[Filestore] = None
+    """The filestore of the database."""
+
     _platform: str = "saas"
+    _platform_display: str = "Odoo Online (SaaS)"
 
     def __init__(self, name: str):
         """Initialize the Odoo SaaS database and infer its name or URL."""
@@ -37,11 +41,11 @@ class SaasDatabase(SaasConnectorMixin, Database):
             if not parsed.netloc.endswith(ODOO_DOMAIN_SUFFIX):
                 raise ValueError(f"Invalid SaaS database name or URL {name!r}")
 
-            self.name: str = parsed.netloc.removesuffix(ODOO_DOMAIN_SUFFIX)
-            self.url: str = f"{parsed.scheme}://{parsed.netloc}"
+            self._name: str = parsed.netloc.removesuffix(ODOO_DOMAIN_SUFFIX)
+            self._url: str = f"{parsed.scheme}://{parsed.netloc}"
         else:
-            self.name = name.removesuffix(ODOO_DOMAIN_SUFFIX)
-            self.url = f"https://{name}{ODOO_DOMAIN_SUFFIX}"
+            self._name = name.removesuffix(ODOO_DOMAIN_SUFFIX)
+            self._url = f"https://{name}{ODOO_DOMAIN_SUFFIX}"
 
         self.saas = self._saas(self.url)
         """The SaaS connector for this database."""
@@ -54,6 +58,11 @@ class SaasDatabase(SaasConnectorMixin, Database):
         self.saas.__exit__(*args)
 
     @property
+    def url(self) -> str:
+        """Return the URL of the database."""
+        return self._url
+
+    @property
     def exists(self) -> bool:
         return self.saas.exists
 
@@ -62,11 +71,7 @@ class SaasDatabase(SaasConnectorMixin, Database):
         return self.exists
 
     @property
-    def odoo_url(self) -> str:
-        return self.url
-
-    @property
-    def odoo_version(self) -> Optional[OdooVersion]:
+    def version(self) -> Optional[OdooVersion]:
         version = self.saas.database_info().get("base_version")
 
         if version is None:
@@ -75,20 +80,22 @@ class SaasDatabase(SaasConnectorMixin, Database):
         return OdooVersion(version)
 
     @property
-    def odoo_edition(self) -> Optional[str]:
+    def edition(self) -> Optional[str]:
         return "enterprise"
 
     @property
-    def odoo_filestore_path(self) -> Optional[Path]:
-        return None
+    def filestore(self) -> Filestore:
+        if self._filestore is None:
+            self._filestore = Filestore(
+                path=None,
+                size=string.bytes_from_string(self.saas.database_info().get("size_filestore", "0")),
+            )
 
-    @property
-    def odoo_filestore_size(self) -> Optional[int]:
-        return string.bytes_from_string(self.saas.database_info().get("size_filestore"))
+        return self._filestore
 
     @property
     def size(self) -> int:
-        return string.bytes_from_string(self.saas.database_info().get("size_backup"))
+        return string.bytes_from_string(self.saas.database_info().get("size_backup", "0"))
 
     @property
     def expiration_date(self) -> Optional[datetime]:
@@ -118,17 +125,8 @@ class SaasDatabase(SaasConnectorMixin, Database):
         return None
 
     @property
-    def odoo_rpc_port(self) -> Optional[int]:
+    def rpc_port(self) -> Optional[int]:
         return 443
-
-    def info(self):
-        return {
-            **super().info(),
-            "is_odoo_running": self.is_odoo,
-            "mode": self.mode,
-            "active": self.active,
-            "domains": self.domains,
-        }
 
     def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
         if path is None:
