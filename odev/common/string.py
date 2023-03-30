@@ -4,7 +4,7 @@ import random
 import re
 import string as string_module
 import textwrap
-from typing import List, Tuple, Union
+from typing import List, Sequence, Tuple, Union
 
 
 __all__ = [
@@ -132,3 +132,40 @@ def suid() -> str:
     """
     alphabet = string_module.ascii_lowercase + string_module.digits
     return "".join(random.choices(alphabet, k=8))
+
+
+def join(parts: Sequence[str], last_delimiter: str = None) -> str:
+    """Join parts, optionally adding a last delimiter between the last two items.
+    :param parts: Parts to join.
+    :param last_delimiter: The last delimiter to add.
+    :return: The joined parts.
+    :rtype: str
+    """
+    if not parts:
+        return ""
+
+    if len(parts) == 1:
+        return parts[0]
+
+    if last_delimiter is None:
+        return ", ".join(parts)
+
+    return ", ".join(parts[:-1]) + f" {last_delimiter} {parts[-1]}"
+
+
+def join_and(parts: Sequence[str]) -> str:
+    """Join parts adding "and" between the two lasts items.
+    :param parts: Parts to join.
+    :return: The joined parts.
+    :rtype: str
+    """
+    return join(parts, "and")
+
+
+def join_or(parts: Sequence[str]) -> str:
+    """Join parts adding "or" between the two lasts items.
+    :param parts: Parts to join.
+    :return: The joined parts.
+    :rtype: str
+    """
+    return join(parts, "or")

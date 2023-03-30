@@ -3,18 +3,24 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from time import sleep
+from types import FrameType
 from typing import (
     Any,
     List,
     Literal,
     Mapping,
+    MutableMapping,
     Optional,
+    Tuple,
+    Union,
 )
 from urllib.parse import ParseResult, parse_qs, urlparse
 
 import requests
 from parsel.selector import Selector
-from requests import Response
+from requests import HTTPError, Response
 
 from odev.common import progress
 from odev.common.connectors import PaasConnector
@@ -22,6 +28,7 @@ from odev.common.databases import Database, Filestore
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 from odev.common.mixins import PaasConnectorMixin
+from odev.common.signal_handling import capture_signals
 from odev.common.version import OdooVersion
 
 
@@ -197,6 +204,40 @@ class PaasBuildCommit:
         return self.database.build
 
 
+@dataclass(frozen=True)
+class PaasBackup:
+    """Represents a backup on Odoo SH."""
+
+    database: "PaasDatabase"
+    """Current Database instance linked to the backup."""
+
+    name: str
+    """Name of the backup."""
+
+    date: datetime
+
+    type: Literal["automatic", "manual"]
+    """Type of the backup."""
+
+    path: str
+    """Path of the backup on the remote server."""
+
+    comment: str
+    """Comment of the backup."""
+
+    @property
+    def id(self) -> str:
+        """Return a unique ID for the backup."""
+        return f"{self.date.strftime('%Y%m%d%H%M%S')}_{self.name}_{self.type}"
+
+    def __eq__(self, other: Any) -> bool:
+        """Return True if the backup is equal to another backup."""
+        if not isinstance(other, PaasBackup):
+            return False
+
+        return self.id == other.id
+
+
 class PaasDatabase(PaasConnectorMixin, Database):
     """Odoo Online (SaaS) database class."""
 
@@ -243,6 +284,14 @@ class PaasDatabase(PaasConnectorMixin, Database):
 
     _filestore: Optional[Filestore] = None
     """The filestore of the database."""
+
+    _backups_info: Optional[List[Mapping[str, Any]]] = None
+    """The backups information for this database, from the Odoo SH worker
+    running the current build.
+    """
+
+    _backups: Optional[List[PaasBackup]] = None
+    """The backups for this database."""
 
     def __init__(self, name: str, branch: Optional[str] = None):
         """Initialize the Odoo SH database and infer its name or URL."""
@@ -434,6 +483,37 @@ class PaasDatabase(PaasConnectorMixin, Database):
         return self._branch
 
     @property
+    def backups_info(self) -> List[Mapping[str, Any]]:
+        """Return the backups information for this database."""
+        if self._backups_info is None:
+            with progress.spinner(f"Fetching backups information for database {self.name!r}"):
+                self._backups_info: List[Mapping[str, Any]] = [
+                    info
+                    for info in self.paas.rpc(self.backups_url, params={"token": self.token})
+                    if info["branch"] == self.branch.name and info["downloadable"] is True
+                ]
+
+        return self._backups_info
+
+    @property
+    def backups(self) -> List[PaasBackup]:
+        """Return the backups for this database."""
+        if self._backups is None:
+            self._backups = [
+                PaasBackup(
+                    database=self,
+                    name=backup["name"],
+                    path=backup["path"],
+                    type=backup["type"].lower(),
+                    comment=backup["comment"] or "",
+                    date=datetime.strptime(backup["backup_datetime_utc"], "%Y-%m-%d %H:%M:%S"),
+                )
+                for backup in self.backups_info
+            ]
+
+        return sorted(self._backups, key=lambda b: b.date, reverse=True)
+
+    @property
     def commit(self) -> PaasBuildCommit:
         """Return the commit for this database."""
         return self.build.commit
@@ -467,6 +547,16 @@ class PaasDatabase(PaasConnectorMixin, Database):
     def worker_url(self) -> str:
         """Return the worker URL of the database."""
         return self.build_info.get("worker_url")
+
+    @property
+    def backups_url(self) -> str:
+        """Return the backups URL of the database."""
+        return f"{self.worker_url}/paas/build/{str(self.build.id)}/backups/list?branch={self.branch.name}"
+
+    @property
+    def dump_path(self) -> str:
+        """Return the URL path for downloading a backup of the database."""
+        return f"/build/{str(self.build.id)}/dump"
 
     @property
     def webshell_url(self) -> str:
@@ -626,6 +716,9 @@ class PaasDatabase(PaasConnectorMixin, Database):
             with self.paas.with_url(self.url):
                 web_login = self.paas.get(self.paas.support_path, authenticate=False)
 
+            if self._parse_url(web_login.url).path == self.paas.support_path:
+                return web_login
+
             fields = self.paas.extract_form_inputs(web_login)
             fields.update({"login": self.paas.login, "password": self.paas.password})
 
@@ -640,22 +733,182 @@ class PaasDatabase(PaasConnectorMixin, Database):
                 # Obfuscate the password before raising because locals are
                 # displayed in tracebacks
                 fields.update({"password": "*****"})
-                raise RuntimeError("Unexpected redirect after logging in to Odoo SH")
+                raise ConnectorError("Unexpected redirect after logging in to Odoo SH")
 
         with self.paas.with_url(self.url):
             return self.paas.get(self.paas.support_path)
 
-    # def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
-    #     if path is None:
-    #         path = self.odev.dumps_path
+    def dump(self, filestore: bool = False, test: bool = True, path: Path = None) -> Optional[Path]:
+        """Download a backup of the database.
+        :param filestore: Whether to include the filestore in the backup.
+        :param test: Whether to download a testing or an exact dump.
+        :param path: The path where to store the backup.
+        :return: The path to the downloaded backup.
+        :rtype: Path
+        """
 
-    #     path.mkdir(parents=True, exist_ok=True)
-    #     filename = self._get_dump_filename(filestore, suffix=self.platform, extension="dump" if not filestore else None)
-    #     file = path / filename
+        if path is None:
+            path = self.odev.dumps_path
 
-    #     if file.exists() and not self.console.confirm(f"File {file} already exists. Overwrite it?"):
-    #         return None
+        path.mkdir(parents=True, exist_ok=True)
+        filename = self._get_dump_filename(
+            filestore=filestore,
+            test=test,
+            suffix=self.platform.name,
+        )
+        file = path / filename
 
-    #     file.unlink(missing_ok=True)
-    #     self.saas.dump(file, filestore)
-    #     return file
+        if file.exists() and not self.console.confirm(f"File {file} already exists. Overwrite it?"):
+            return None
+
+        file.unlink(missing_ok=True)
+        self._download_backup(file, filestore=filestore, test=test)
+        return file
+
+    def _get_dump_filename(
+        self,
+        filestore: bool = False,
+        test: bool = True,
+        suffix: str = None,
+        extension: str = "zip",
+    ) -> str:
+        """Return the filename of the dump file.
+        :param filestore: Whether to include the filestore in the dump.
+        :param test: Whether to download a testing or an exact dump.
+        :param suffix: An optional suffix to add to the filename.
+        :param extension: The extension of the dump file.
+        :return: The filename of the dump file.
+        :rtype: str
+        """
+        prefix = datetime.now().strftime("%Y%m%d")
+        suffix = f".{suffix}" if suffix else ""
+        suffix += f".{'' if filestore else 'no'}fs.{'neutralized' if test else 'exact'}"
+        return f"{prefix}-{self.name}.dump{suffix}.{extension}"
+
+    def _select_backup(self, filestore: bool = False, test: bool = True) -> PaasBackup:
+        """Select a backup to download amongst those already available on the worker,
+        or create a new backup to download.
+        :param filestore: Whether to include the filestore in the backup.
+        :param test: Whether to download a testing or an exact dump.
+        """
+        choices: List[Tuple[Union[PaasBackup, None], str]] = [(None, "Create a new manual backup")]
+        choices += [
+            (
+                b,
+                f"[{b.date.strftime('%Y-%m-%d %X UTC')}] "
+                f"{b.name + (f': {b.comment}' if b.comment else '')} "
+                f"({b.type})",
+            )
+            for b in self.backups
+        ]
+
+        if self.backups:
+            selected: Optional[PaasBackup] = self.console.select(
+                f"Existing backup(s) found for database {self.name!r}:",
+                choices=choices,
+            )
+
+            if selected is not None:
+                return PaasBackup(**selected) if isinstance(selected, dict) else selected
+
+        self._create_backup(filestore, test)
+        return self.backups[0]
+
+    def _refresh_backups(self) -> List[PaasBackup]:
+        """Refresh the list of backups available on the remote worker."""
+        logger.debug(f"Refreshing backups list for database {self.name!r}")
+        self._backups_info = None
+        self._backups = None
+
+        with self.paas.nocache():
+            return self.backups
+
+    def _count_backup_notifications(self) -> int:
+        """Return the number of dump ready notifications in the notifications list."""
+        with self.paas.nocache():
+            return self.paas.count_backup_notifications()
+
+    def _create_backup(self, filestore: bool = False, test: bool = True, date: datetime = None):
+        """Create a new backup for the database on the remote worker
+        and wait for the dump to be ready.
+        :param filestore: Whether to include the filestore in the backup.
+        :param test: Whether to create a testing or an exact dump.
+        """
+        action = "Creating new" if date is None else "Preparing"
+
+        with progress.spinner(f"{action} manual backup for database {self.name!r}"):
+            notifications_count: int = self._count_backup_notifications()
+            params: MutableMapping[str, str] = {
+                "backup_only": "0",
+                "filestore": str(int(filestore)),
+                "test_dump": str(int(test)),
+            }
+
+            if date is not None:
+                params["backup_datetime_utc"] = date.strftime("%Y-%m-%d %H:%M:%S")
+
+            self.paas.rpc(self.dump_path, params=params)
+
+            while self._count_backup_notifications() <= notifications_count:
+                sleep(5)
+
+            self._refresh_backups()
+
+    def _download_backup(
+        self,
+        path: Path,
+        filestore: bool = False,
+        test: bool = True,
+        backup: Optional[PaasBackup] = None,
+    ) -> Path:
+        """Download the backup from the remote worker.
+        :param filestore: Whether to include the filestore in the backup.
+        :param test: Whether to download a testing or an exact dump.
+        """
+        backup = backup or self._select_backup(filestore, test)
+        dump_url = f"{self.worker_url}/paas/build/{self.build.id}/download/dump"
+        dump_params = {
+            "backup_datetime_utc": backup.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "test_dump": int(test),
+            "filestore": int(filestore),
+            "token": self.token,
+        }
+
+        progress_bar = progress.Progress()
+        task = progress_bar.add_task(
+            f"Dumping database [repr.url]{self.url}[/repr.url] {'with' if filestore else 'without'} filestore",
+            total=None,
+        )
+
+        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+            progress_bar.stop_task(task)
+            progress_bar.stop()
+            logger.warning(f"{progress_bar._tasks.get(task).description}: task interrupted by user")
+            raise KeyboardInterrupt
+
+        progress_bar.start()
+
+        try:
+            with (
+                capture_signals(handler=signal_handler_progress),
+                self.paas.get(dump_url, params=dump_params, stream=True, retry=False) as response,
+            ):
+                content_length = int(response.headers.get("content-length", 0))
+                progress_bar.update(task, total=content_length)
+                progress_bar.start_task(task)
+
+                with path.open("wb") as dump_file:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        dump_file.write(chunk)
+                        progress_bar.advance(task, advance=len(chunk))
+        except HTTPError:
+            progress_bar.stop_task(task)
+            progress_bar.stop()
+            self.console.clear_line()
+            self._create_backup(filestore, test, date=backup.date)
+            return self._download_backup(path, filestore, test, backup)
+
+        progress_bar.stop_task(task)
+        progress_bar.stop()
+        self.console.clear_line()
+        return path

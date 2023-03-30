@@ -182,6 +182,7 @@ class PaasConnector(RestConnector):
         path: str,
         authenticate: bool = True,
         params: MutableMapping[str, Any] = None,
+        retry: bool = True,
         **kwargs,
     ) -> Response:
         """Make a request to Odoo SH.
@@ -189,6 +190,7 @@ class PaasConnector(RestConnector):
         :param path: The path to the resource.
         :param authenticate: Whether to authenticate the request.
         :param params: The parameters to pass to the request.
+        :param no_retry: Whether to retry the request if it fails.
         :param kwargs: Additional keyword arguments to pass to the request.
         :return: The response from Odoo SH.
         :rtype: requests.Response
@@ -201,7 +203,7 @@ class PaasConnector(RestConnector):
         try:
             response = self._request(method, path, params=params, **kwargs)
         except HTTPError as error:
-            if authenticate and self.cookie is not None:
+            if authenticate and self.cookie is not None and retry:
                 self.invalidate_session()
                 return self.request(method, path, authenticate, params, **kwargs)
 
@@ -448,4 +450,17 @@ class PaasConnector(RestConnector):
             "search_read",
             [domain, fields],
             {"order": "start_datetime desc"},
+        )
+
+    def count_backup_notifications(self) -> int:
+        """Return the number of dump ready notifications in the notifications list."""
+        domain: Domain = [
+            ("repository_id", "=", self.repository["id"]),
+            ("display_name", "=ilike", "Database dump ready"),
+        ]
+
+        return self.call_kw(
+            "paas.notification",
+            "search_count",
+            [domain],
         )

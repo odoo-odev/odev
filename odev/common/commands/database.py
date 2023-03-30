@@ -9,7 +9,7 @@ from typing import (
     Union,
 )
 
-from odev.common import progress
+from odev.common import progress, string
 from odev.common.commands import Command
 from odev.common.databases import Database, LocalDatabase, PaasDatabase, SaasDatabase
 from odev.common.errors import CommandError
@@ -47,6 +47,17 @@ class DatabaseCommand(Command, ABC):
         {
             "name": "database",
             "help": "The database to target.",
+        },
+        {
+            "name": "platform",
+            "aliases": ["-p", "--platform"],
+            "help": f"""
+            Force searching for the database on the specified platform, useful when
+            different databases have the same name on different hosting (usually one
+            local database being a copy of a remote one). One of
+            {string.join_or(list(DATABASE_PLATFORM_MAPPING.keys()))}.
+            """,
+            "choices": list(DATABASE_PLATFORM_MAPPING.keys()),
         },
         {
             "name": "branch",
@@ -87,11 +98,14 @@ class DatabaseCommand(Command, ABC):
         if not self.database_name:
             return None
 
-        allowed_database_classes = [
-            DatabaseClass
-            for key, DatabaseClass in DATABASE_PLATFORM_MAPPING.items()
-            if key in self._database_allowed_platforms
-        ]
+        if self.args.platform:
+            allowed_database_classes = [DATABASE_PLATFORM_MAPPING[self.args.platform]]
+        else:
+            allowed_database_classes = [
+                DatabaseClass
+                for key, DatabaseClass in DATABASE_PLATFORM_MAPPING.items()
+                if key in self._database_allowed_platforms
+            ]
 
         for DatabaseClass in allowed_database_classes:
             with progress.spinner(

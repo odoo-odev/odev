@@ -3,6 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 from typing import (
+    Any,
     ClassVar,
     List,
     Optional,
@@ -368,7 +369,7 @@ class Console(RichConsole):
         self.resume_live()
         return result
 
-    def select(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[str]:
+    def select(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[Any]:
         """Prompt for a selection.
         :param message: Question to ask the user
         :param choices: List of choices to select from

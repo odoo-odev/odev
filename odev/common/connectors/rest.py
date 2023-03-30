@@ -14,7 +14,7 @@ from typing import (
     Sequence,
     Union,
 )
-from urllib.parse import ParseResult, urlparse
+from urllib.parse import ParseResult, quote, urlparse
 
 from requests import Response, Session
 
@@ -127,6 +127,7 @@ class RestConnector(Connector, ABC):
         method: Union[Literal["GET"], Literal["POST"]],
         path: str,
         obfuscate_params: Sequence[str] = None,
+        raise_for_status: bool = True,
         **kwargs,
     ) -> Response:
         """Low-level execution of an HTTP request to the endpoint to enable caching and logging.
@@ -142,23 +143,32 @@ class RestConnector(Connector, ABC):
         if not self.connected:
             self.connect()
 
-        if not path.startswith("/"):
-            path = f"/{path}"
+        parsed = urlparse(path)
+
+        if parsed.scheme and parsed.netloc:
+            url = path
+        else:
+            if not path.startswith("/"):
+                path = f"/{path}"
+
+            url = self.url + path
 
         params = kwargs.pop("params", {})
         obfuscate_params = obfuscate_params or []
         obfuscated = {k: "xxxxx" for k in obfuscate_params if k in params}
 
-        cache_key = f"{method}:{self.url + path}:{json.dumps(obfuscated, sort_keys=True)}"
+        cache_key = f"{method}:{url}:{json.dumps(obfuscated, sort_keys=True)}"
         cached = self.cache(cache_key)
 
         if cached is not None:
             return cached
 
-        logger_message = f"{method} {self.url}{path}"
+        logger_message = f"{method} {url}"
 
         if method == "GET" and params:
-            logger_message += f"?{'&'.join(f'{key}={value}' for key, value in {**params, **obfuscated}.items())}"
+            logger_message += (
+                f"?{'&'.join(f'{key}={quote(str(value))}' for key, value in {**params, **obfuscated}.items())}"
+            )
             params = {"params": params}
         elif method == "POST" and params and "json" not in kwargs:
             params = {"json": {"params": params}}
@@ -166,8 +176,10 @@ class RestConnector(Connector, ABC):
         logger.debug(logger_message)
 
         self._connection.headers.update({"User-Agent": self.user_agent})
-        response = self._connection.request(method, self.url + path, **params, **kwargs)
-        response.raise_for_status()
+        response = self._connection.request(method, url, **params, **kwargs)
+
+        if raise_for_status:
+            response.raise_for_status()
 
         console.clear_line(int(LOG_LEVEL == "DEBUG"))
         logger.debug(

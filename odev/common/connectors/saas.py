@@ -27,7 +27,7 @@ class SaasConnector(RestConnector):
     @property
     def exists(self) -> bool:
         """Return whether the SaaS database exists."""
-        response = self.get("saas_worker/noop", allow_redirects=False, authenticate=False)
+        response = self.get("saas_worker/noop", allow_redirects=False, authenticate=False, raise_for_status=False)
         return response.status_code == 200
 
     @property
