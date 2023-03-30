@@ -12,6 +12,7 @@ from typing import (
 from odev.common import progress
 from odev.common.commands import Command
 from odev.common.databases import Database, LocalDatabase, PaasDatabase, SaasDatabase
+from odev.common.errors import CommandError
 from odev.common.logging import logging
 
 
@@ -105,10 +106,16 @@ class DatabaseCommand(Command, ABC):
                     logger.debug(f"Found existing {DatabaseClass._platform_display} database {database.name!r}")
                     return database
 
+        if self.args.platform:
+            raise CommandError(
+                f"Could not find {allowed_database_classes[0]._platform_display} database {self.database_name!r}",
+                self,
+            )
+
         if re.match(r"^[a-z0-9][a-z0-9$_.-]+$", self.database_name, re.IGNORECASE):
             logger.debug(
                 f"Falling back to non-existing {LocalDatabase._platform_display} database {self.database_name!r}"
             )
             return LocalDatabase(self.database_name)
 
-        raise ValueError(f"Could not determine database type from name: {self.database_name!r}")
+        raise CommandError(f"Could not determine database type from name: {self.database_name!r}", self)

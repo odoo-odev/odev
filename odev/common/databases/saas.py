@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from odev.common import string
 from odev.common.connectors import SaasConnector
 from odev.common.databases import Database, Filestore
+from odev.common.errors import ConnectorError
 from odev.common.mixins import SaasConnectorMixin
 from odev.common.version import OdooVersion
 
@@ -39,7 +40,7 @@ class SaasDatabase(SaasConnectorMixin, Database):
 
         if parsed.netloc:
             if not parsed.netloc.endswith(ODOO_DOMAIN_SUFFIX):
-                raise ValueError(f"Invalid SaaS database name or URL {name!r}")
+                raise ConnectorError(f"Invalid SaaS database name or URL {name!r}", None)
 
             self._name: str = parsed.netloc.removesuffix(ODOO_DOMAIN_SUFFIX)
             self._url: str = f"{parsed.scheme}://{parsed.netloc}"
@@ -133,7 +134,11 @@ class SaasDatabase(SaasConnectorMixin, Database):
             path = self.odev.dumps_path
 
         path.mkdir(parents=True, exist_ok=True)
-        filename = self._get_dump_filename(filestore, suffix=self.platform, extension="dump" if not filestore else None)
+        filename = self._get_dump_filename(
+            filestore,
+            suffix=self.platform.name,
+            extension="dump" if not filestore else None,
+        )
         file = path / filename
 
         if file.exists() and not self.console.confirm(f"File {file} already exists. Overwrite it?"):

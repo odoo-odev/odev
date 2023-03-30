@@ -21,6 +21,7 @@ from requests import Response, Session
 from odev._version import __version__
 from odev.common.connectors.base import Connector
 from odev.common.console import console
+from odev.common.errors import ConnectorError
 from odev.common.logging import LOG_LEVEL, logging
 
 
@@ -60,7 +61,7 @@ class RestConnector(Connector, ABC):
     def url(self) -> str:
         """Return the sanitized URL to the endpoint."""
         if not self.parsed_url.netloc:
-            raise ValueError(f"Invalid URL {self._url}")
+            raise ConnectorError(f"Invalid URL {self._url}", self)
 
         return f"{self.parsed_url.scheme}://{self.parsed_url.netloc}"
 

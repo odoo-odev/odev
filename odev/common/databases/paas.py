@@ -19,6 +19,7 @@ from requests import Response
 from odev.common import progress
 from odev.common.connectors import PaasConnector
 from odev.common.databases import Database, Filestore
+from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 from odev.common.mixins import PaasConnectorMixin
 from odev.common.version import OdooVersion
@@ -494,7 +495,10 @@ class PaasDatabase(PaasConnectorMixin, Database):
             branch_info = next((info for info in self.paas.branches_info() if info["name"] == branch), None)
 
             if branch_info is None:
-                raise ValueError(f"Branch {branch!r} not found in repository {self.repository_info['full_name']!r}")
+                raise ConnectorError(
+                    f"Branch {branch!r} not found in repository {self.repository_info['full_name']!r}",
+                    self.paas,
+                )
 
             self._name = branch_info["last_build_id"][1]
             self._url = None
@@ -562,7 +566,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
         ).attrib.get("href")
 
         if selection_url is None:
-            raise ValueError(f"Cannot guess the project name for database {self.name!r}")
+            raise ConnectorError(f"Cannot guess the project name for database {self.name!r}", self.paas)
 
         parsed = urlparse(selection_url)
 
@@ -577,7 +581,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
         )
 
         if repository_id is None or not repository_id.isdigit():
-            raise ValueError(f"Cannot find repository ID for database {self.name!r}")
+            raise ConnectorError(f"Cannot find repository ID for database {self.name!r}", self.paas)
 
         return next(
             repository for repository in self.paas.list_repositories() if repository["id"] == int(repository_id)
@@ -597,7 +601,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
             split.pop()
 
         if not repositories:
-            raise ValueError(f"Cannot guess the project name for database {self.name!r}")
+            raise ConnectorError(f"Cannot guess the project name for database {self.name!r}", self.paas)
 
         if len(repositories) > 1:
             selected = self.console.select(

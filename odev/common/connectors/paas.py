@@ -21,6 +21,7 @@ from requests.exceptions import HTTPError
 
 from odev.common.connectors.rest import RestConnector
 from odev.common.console import console
+from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 
 
@@ -229,7 +230,7 @@ class PaasConnector(RestConnector):
                 # Obfuscate the password before raising because locals are
                 # displayed in tracebacks
                 fields.update({"password": "*****"})
-                raise RuntimeError("Unexpected redirect after logging in to Odoo SH")
+                raise ConnectorError("Unexpected redirect after logging in to Odoo SH", self)
 
     def rpc(
         self,
@@ -258,7 +259,10 @@ class PaasConnector(RestConnector):
 
         response = self.post(path, json=payload, **kwargs)
         result = response.json().get("result")
-        error = result.get("error") if isinstance(result, dict) else response.json().get("error", {}).get("message")
+        error = result.get("error") if isinstance(result, dict) else response.json().get("error", {})
+
+        if isinstance(error, dict):
+            error = error.get("data", {}).get("message") or error.get("message")
 
         if error is not None:
             if "session expired" in error.lower():
@@ -268,7 +272,7 @@ class PaasConnector(RestConnector):
                 self.invalidate_session()
                 return self.rpc(path, method, params, **kwargs)
 
-            raise RuntimeError(result["error"])
+            raise ConnectorError(error, self)
 
         return result
 
@@ -347,7 +351,7 @@ class PaasConnector(RestConnector):
         repositories = self._filter_repositories()
 
         if not repositories:
-            raise ValueError(f"No repository found for project {self._name!r}")
+            raise ConnectorError(f"No repository found for project {self._name!r}", self)
 
         if len(repositories) > 1:
             selected = console.select(
@@ -397,8 +401,9 @@ class PaasConnector(RestConnector):
             self.post("/support/impersonate", data=fields)
 
         if self.profile is None or self.profile.get("errors"):
-            raise RuntimeError(
-                f"Failed to impersonate {self.user['username']!r} in project {self.repository['project_name']!r}"
+            raise ConnectorError(
+                f"Failed to impersonate {self.user['username']!r} in project {self.repository['project_name']!r}",
+                self,
             )
 
         profile = self.profile.get("values")

@@ -126,7 +126,7 @@ class TestCommand(OdoobinCommand):
     def odoobin_progress(self, line: str):
         """Handle odoo-bin output and fetch information real-time."""
         if re.match(r"^(i?pu?db)?>+", line):
-            raise RuntimeError("Debugger detected in odoo-bin output, remove breakpoints and try again")
+            raise self.error("Debugger detected in odoo-bin output, remove breakpoints and try again")
 
         match = re.match(self._odoo_log_regex, line)
 

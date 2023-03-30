@@ -25,7 +25,7 @@ from odev._version import __version__
 from odev.common import bash, progress
 from odev.common.config import ConfigManager
 from odev.common.console import console
-from odev.common.errors import CommandError
+from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
@@ -249,7 +249,7 @@ class Odev:
 
             logger.debug(f"Dispatching {command!r}")
             command.run()
-        except CommandError as exception:
+        except OdevError as exception:
             logger.error(str(exception))
         else:
             if history:

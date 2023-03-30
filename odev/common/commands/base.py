@@ -285,4 +285,4 @@ class Command(OdevFrameworkMixin, ABC):
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""
-        return CommandError(self, message, *args, **kwargs)
+        return CommandError(message, self, *args, **kwargs)

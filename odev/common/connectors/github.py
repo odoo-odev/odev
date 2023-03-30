@@ -21,7 +21,7 @@ from github import Github, GithubException
 from odev.common import bash
 from odev.common.connectors.base import Connector
 from odev.common.console import Colors, console
-from odev.common.errors import CommandError
+from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
@@ -220,7 +220,10 @@ class GithubConnector(Connector):
         repo_values = repo.split("/")
 
         if len(repo_values) != 2:
-            raise ValueError(f"Invalid repository format: expected 'organization/repository' but received {repo!r}")
+            raise ConnectorError(
+                f"Invalid repository format: expected 'organization/repository' but received {repo!r}",
+                self,
+            )
 
         self._organization, self._repository = repo_values
         self.repository = Repo(self.path) if self.path.exists() and self.path.is_dir() else None
@@ -515,7 +518,7 @@ class GithubConnector(Connector):
             except GitCommandError as error:
                 if "fatal: invalid reference" in error.stderr:
                     logger.error(f"Git branch {branch!r} does not exist for repository {self.name!r}")
-                    raise CommandError(None, "Did you forget to use '--version master'?") from error
+                    raise ConnectorError("Did you forget to use '--version master'?", self) from error
 
                 raise error
 
