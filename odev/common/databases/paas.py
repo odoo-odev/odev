@@ -904,11 +904,9 @@ class PaasDatabase(PaasConnectorMixin, Database):
         except HTTPError:
             progress_bar.stop_task(task)
             progress_bar.stop()
-            self.console.clear_line()
             self._create_backup(filestore, test, date=backup.date)
             return self._download_backup(path, filestore, test, backup)
 
         progress_bar.stop_task(task)
         progress_bar.stop()
-        self.console.clear_line()
         return path
