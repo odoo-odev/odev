@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from time import sleep
-from types import FrameType
 from typing import (
     Any,
     List,
@@ -28,7 +27,6 @@ from odev.common.databases import Database, Filestore
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 from odev.common.mixins import PaasConnectorMixin
-from odev.common.signal_handling import capture_signals
 from odev.common.version import OdooVersion
 
 
@@ -746,7 +744,6 @@ class PaasDatabase(PaasConnectorMixin, Database):
         :return: The path to the downloaded backup.
         :rtype: Path
         """
-
         if path is None:
             path = self.odev.dumps_path
 
@@ -834,9 +831,9 @@ class PaasDatabase(PaasConnectorMixin, Database):
         :param filestore: Whether to include the filestore in the backup.
         :param test: Whether to create a testing or an exact dump.
         """
-        action = "Creating new" if date is None else "Preparing"
+        action = "Creating new manual backup" if date is None else "Preparing backup download"
 
-        with progress.spinner(f"{action} manual backup for database {self.name!r}"):
+        with progress.spinner(f"{action} for database {self.name!r}"):
             notifications_count: int = self._count_backup_notifications()
             params: MutableMapping[str, str] = {
                 "backup_only": "0",
@@ -874,39 +871,18 @@ class PaasDatabase(PaasConnectorMixin, Database):
             "token": self.token,
         }
 
-        progress_bar = progress.Progress()
-        task = progress_bar.add_task(
-            f"Dumping database [repr.url]{self.url}[/repr.url] {'with' if filestore else 'without'} filestore",
-            total=None,
+        progress_message = (
+            f"Dumping database [repr.url]{self.url}[/repr.url] {'with' if filestore else 'without'} filestore"
         )
 
-        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
-            progress_bar.stop_task(task)
-            progress_bar.stop()
-            logger.warning(f"{progress_bar._tasks.get(task).description}: task interrupted by user")
-            raise KeyboardInterrupt
-
-        progress_bar.start()
-
         try:
-            with (
-                capture_signals(handler=signal_handler_progress),
-                self.paas.get(dump_url, params=dump_params, stream=True, retry=False) as response,
-            ):
-                content_length = int(response.headers.get("content-length", 0))
-                progress_bar.update(task, total=content_length)
-                progress_bar.start_task(task)
-
-                with path.open("wb") as dump_file:
-                    for chunk in response.iter_content(chunk_size=1024):
-                        dump_file.write(chunk)
-                        progress_bar.advance(task, advance=len(chunk))
+            return self.paas.download(
+                dump_url,
+                path,
+                progress_message=progress_message,
+                params=dump_params,
+                retry=False,
+            )
         except HTTPError:
-            progress_bar.stop_task(task)
-            progress_bar.stop()
             self._create_backup(filestore, test, date=backup.date)
             return self._download_backup(path, filestore, test, backup)
-
-        progress_bar.stop_task(task)
-        progress_bar.stop()
-        return path

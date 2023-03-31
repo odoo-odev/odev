@@ -5,6 +5,8 @@ import platform
 import re
 from abc import ABC, abstractmethod, abstractproperty
 from contextlib import contextmanager
+from pathlib import Path
+from types import FrameType
 from typing import (
     Any,
     ClassVar,
@@ -23,6 +25,8 @@ from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
 from odev.common.logging import LOG_LEVEL, logging
+from odev.common.progress import Progress
+from odev.common.signal_handling import capture_signals
 
 
 logger = logging.getLogger(__name__)
@@ -233,3 +237,41 @@ class RestConnector(Connector, ABC):
         :rtype: requests.Response
         """
         return self.request("POST", path, params=params, authenticate=authenticate, **kwargs)
+
+    def download(self, path: str, file_path: Path, progress_message: str = "Downloading", **kwargs) -> Path:
+        """Download a file from the endpoint.
+        :param path: The path to the resource.
+        :param filename: The name of the file to save.
+        :param kwargs: Additional keyword arguments to pass to the request.
+        :return: The response from the endpoint.
+        :rtype: requests.Response
+        """
+        progress = Progress(download=True)
+        task = progress.add_task(progress_message, total=None)
+
+        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+            progress.stop_task(task)
+            progress.stop()
+            logger.warning(f"{progress._tasks.get(task).description}: task interrupted by user")
+            raise KeyboardInterrupt
+
+        progress.start()
+
+        try:
+            with capture_signals(handler=signal_handler_progress), self.get(path, **kwargs, stream=True) as response:
+                content_length = int(response.headers.get("content-length", 0))
+                progress.update(task, total=content_length)
+                progress.start_task(task)
+
+                with file_path.open("wb") as file:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        file.write(chunk)
+                        progress.advance(task, advance=len(chunk))
+        except Exception as exception:
+            progress.stop_task(task)
+            progress.stop()
+            raise exception
+
+        progress.stop_task(task)
+        progress.stop()
+        return file_path

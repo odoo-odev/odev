@@ -1,16 +1,12 @@
 """Connect to Odoo SaaS databases."""
 
 from pathlib import Path
-from types import FrameType
-from typing import Literal, Optional, Union
+from typing import Literal, Union
 
 from requests import Response
 
 from odev.common.connectors.rest import RestConnector
-from odev.common.console import console
 from odev.common.logging import logging
-from odev.common.progress import Progress
-from odev.common.signal_handling import capture_signals
 
 
 logger = logging.getLogger(__name__)
@@ -80,34 +76,10 @@ class SaasConnector(RestConnector):
         :param include_filestore: Whether to include the filestore in the dump.
         """
         dump_path = self.dump_path(include_filestore)
-        progress = Progress()
-        task = progress.add_task(
-            f"Dumping database [repr.url]{self.url}[/repr.url] {'with' if include_filestore else 'without'} filestore",
-            total=None,
+        progress_message = (
+            f"Dumping database [repr.url]{self.url}[/repr.url] {'with' if include_filestore else 'without'} filestore"
         )
-
-        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
-            progress.stop_task(task)
-            progress.stop()
-            logger.warning(f"{progress._tasks.get(task).description}: task interrupted by user")
-            raise KeyboardInterrupt
-
-        progress.start()
-
-        with capture_signals(handler=signal_handler_progress), self.get(dump_path, stream=True) as response:
-            content_length = int(response.headers.get("content-length", 0))
-            progress.update(task, total=content_length)
-            progress.start_task(task)
-
-            with path.open("wb") as dump_file:
-                for chunk in response.iter_content(chunk_size=1024):
-                    dump_file.write(chunk)
-                    progress.advance(task, advance=len(chunk))
-
-        progress.stop_task(task)
-        progress.stop()
-        console.clear_line()
-        return path
+        return self.download(dump_path, path, progress_message=progress_message)
 
     def database_info(self) -> dict:
         """Return the information about the SaaS database."""

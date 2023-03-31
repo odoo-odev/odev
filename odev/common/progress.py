@@ -7,6 +7,7 @@ from typing import ClassVar, List
 from rich.markup import escape
 from rich.progress import (
     BarColumn,
+    DownloadColumn,
     Progress as RichProgress,
     TaskProgressColumn,
     TextColumn,
@@ -31,10 +32,10 @@ class Progress(RichProgress):
     having multiple live displays at once.
     """
 
-    def __init__(self):
+    def __init__(self, download: bool = False):
         log_info_symbol: str = escape(logger.root.handlers[0].get_level_symbol_text(logging.INFO))
 
-        super().__init__(
+        columns = [
             TextColumn(
                 f"[logging.level.info]{log_info_symbol}[/logging.level.info] "
                 "[progress.description]{task.description}",
@@ -48,6 +49,13 @@ class Progress(RichProgress):
             TimeRemainingColumn(),
             TimeElapsedColumn(),
             TextColumn("[progress.elapsed](elapsed)"),
+        ]
+
+        if download:
+            columns.append(DownloadColumn())
+
+        super().__init__(
+            *columns,
             transient=True,
             console=console,
         )
