@@ -33,7 +33,10 @@ class DeleteCommand(OdoobinCommand):
 
     def run(self):
         """Create a new database locally."""
-        if not self.console.confirm(f"Are you sure you want to delete the database {self.database.name!r}?"):
+        if not self.console.confirm(
+            f"Are you sure you want to delete the database {self.database.name!r}?",
+            default=True,
+        ):
             raise self.error("Command aborted")
 
         if self.database.whitelisted:

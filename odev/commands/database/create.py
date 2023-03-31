@@ -35,7 +35,7 @@ class CreateCommand(OdoobinCommand):
         },
         {
             "name": "bare",
-            "aliases": ["-b", "--bare", "--no-init"],
+            "aliases": ["--bare", "--no-init"],
             "action": "store_true",
             "help": "Do not initialize the database (create the SQL database then exit).",
         },

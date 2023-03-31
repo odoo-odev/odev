@@ -8,11 +8,13 @@ from typing import (
     List,
     Optional,
     Tuple,
+    Type,
     Union,
 )
 
 from InquirerPy import get_style, inquirer
 from InquirerPy.base.control import Choice
+from InquirerPy.base.simple import BaseSimplePrompt
 from InquirerPy.validator import EmptyInputValidator, NumberValidator, PathValidator
 from prompt_toolkit.validation import ValidationError
 from rich.console import Console as RichConsole
@@ -82,6 +84,7 @@ RICH_THEME = Theme(
         "repr.package_name": f"bold {Colors.PURPLE}",
         "repr.package_op": Colors.GRAY,
         "repr.package_version": f"bold {Colors.CYAN}",
+        "repr.ellipsis": Colors.GRAY,
         "status.spinner": f"bold {Colors.PURPLE}",
     }
 )
@@ -101,13 +104,6 @@ INQUIRER_STYLE = get_style(
         "checkbox": Colors.CYAN,
     },
 )
-
-INQUIRER_DEFAULTS = {
-    "raise_keyboard_interrupt": True,
-    "style": INQUIRER_STYLE,
-    "amark": INQUIRER_MARK,
-    "qmark": INQUIRER_MARK,
-}
 
 # --- Logging highlighter customization ----------------------------------------
 # This is not useful at all, but it's fun to have. I guess...
@@ -201,10 +197,62 @@ class Console(RichConsole):
 
         if not self.is_live:
             self.control(CONTROL_LINE_ERASE, CONTROL_CURSOR_RESET)
-            # return
 
         for _ in range(count):
             self.control(CONTROL_LINE_UP, CONTROL_LINE_ERASE, CONTROL_CURSOR_RESET)
+
+    def __prompt_factory(self, prompt_type: Type[BaseSimplePrompt], message: str, **kwargs) -> Any:
+        """Create a prompt object.
+        :param prompt_type: Type of prompt to create.
+        :param message: Prompt message.
+        :param kwargs: Keyword arguments to pass to the prompt constructor.
+        :return: The result of the prompt.
+        """
+        prompt = prompt_type(
+            raise_keyboard_interrupt=True,
+            style=INQUIRER_STYLE,
+            amark=INQUIRER_MARK,
+            qmark=INQUIRER_MARK,
+            message=message,
+            **kwargs,
+        )
+
+        original_execute = prompt.execute
+        original_run = prompt._run
+
+        def patched_execute():
+            self.pause_live()
+            result = original_execute()
+            self.resume_live()
+            return result
+
+        def patched_run():
+            if self.bypass_prompt:
+                default_key = "defaults" if prompt_type == "checkbox" else "default"
+
+                if default_key in kwargs:
+                    prompt.status = {
+                        "answered": True,
+                        "result": kwargs[default_key],
+                        "skipped": False,
+                    }
+
+                    prompt_message: List[Tuple[str, str]] = prompt._get_prompt_message()
+                    question: str = next(m for m in prompt_message if m[0] == "class:answered_question")[1].strip()
+                    answer: str = next(m for m in prompt_message if m[0] == "class:answer")[1].strip()
+
+                    self.print(
+                        f"[bold {Colors.PURPLE}]{INQUIRER_MARK}[/bold {Colors.PURPLE}] "
+                        f"{question} [{Colors.PURPLE}]{answer}[/{Colors.PURPLE}]",
+                        highlight=False,
+                    )
+                    return kwargs[default_key]
+
+            return original_run()
+
+        prompt.execute = patched_execute
+        prompt._run = patched_run
+        return prompt.execute()
 
     def text(self, message: str, default: str = "") -> Optional[str]:
         """Prompt for some free text.
@@ -213,18 +261,12 @@ class Console(RichConsole):
         :return: The text entered by the user
         :rtype: str or None
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.text(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.text,
             message=message,
             default=default,
             validate=EmptyInputValidator(),
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def integer(
         self,
@@ -241,12 +283,8 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: int or None
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.number(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.number,
             message=message,
             default=default,
             min_allowed=min_value,
@@ -254,9 +292,7 @@ class Console(RichConsole):
             validate=NumberValidator(
                 message=f"Input should be an integer {self.__number_bounds_message(min_value, max_value)}",
             ),
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def floating(
         self,
@@ -273,12 +309,8 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: float or None
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.number(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.number,
             message=message,
             default=default,
             min_allowed=min_value,
@@ -288,25 +320,20 @@ class Console(RichConsole):
                 message=f"Input should be a floating point number {self.__number_bounds_message(min_value, max_value)}",
                 float_allowed=True,
             ),
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
-    def secret(self, message: str = "Password") -> Optional[str]:
+    def secret(self, message: str = "Password") -> str:
         """Prompt for a secret value hidden to the reader.
         :param str message: Question to ask the user
         :return: The secret entered by the user
         :rtype: str
         """
-        self.pause_live()
-        result = inquirer.secret(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.secret,
             message=message,
             mandatory=True,
             mandatory_message="A value is required",
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def confirm(self, message: str, default: bool = False) -> bool:
         """Prompt for a confirmation.
@@ -315,17 +342,11 @@ class Console(RichConsole):
         :return: True if the user confirmed, False otherwise
         :rtype: bool
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.confirm(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.confirm,
             message=message,
             default=default,
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def directory(self, message: str, default: str = None) -> Optional[str]:
         """Prompt for a directory path.
@@ -334,19 +355,13 @@ class Console(RichConsole):
         :return: Path to the directory to use
         :rtype: str or None
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.filepath(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.filepath,
             message=message,
             default=default,
             only_directories=True,
             validate=PurportedPathValidator(message="Path must not be a file", is_dir=True),
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def filepath(self, message: str, default: str = None) -> Optional[str]:
         """Prompt for a file path.
@@ -355,19 +370,13 @@ class Console(RichConsole):
         :return: Path to the file to use
         :rtype: str or None
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.filepath(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.filepath,
             message=message,
             default=default,
             only_directories=True,
             validate=PurportedPathValidator(message="Path must not be a directory", is_file=True),
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def select(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[Any]:
         """Prompt for a selection.
@@ -379,18 +388,12 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: str or None
         """
-        if self.bypass_prompt and default:
-            return default
-
-        self.pause_live()
-        result = inquirer.select(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.select,
             message=message,
             choices=[Choice(choice[0], name=choice[-1]) for choice in choices],
             default=default,
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def checkbox(self, message: str, choices: List[Tuple[str, Optional[str]]], defaults: List[str] = None):
         """Prompt for a checkbox selection.
@@ -404,18 +407,12 @@ class Console(RichConsole):
         """
         defaults = defaults or []
 
-        if self.bypass_prompt and defaults:
-            return defaults
-
-        self.pause_live()
-        result = inquirer.checkbox(
-            **INQUIRER_DEFAULTS,
+        return self.__prompt_factory(
+            inquirer.checkbox,
             message=message,
             choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in defaults) for choice in choices],
             transformer=lambda selected: f"{', '.join(selected[:-1])} and {selected[-1]}" if selected else "None",
-        ).execute()
-        self.resume_live()
-        return result
+        )
 
     def __number_bounds_message(
         self, min_value: Optional[Union[int, float]], max_value: Optional[Union[int, float]]
