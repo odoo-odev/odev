@@ -223,6 +223,16 @@ class Command(OdevFrameworkMixin, ABC):
 
         return None
 
+    @classmethod
+    def remove_argument(cls, name: str):
+        """Remove an argument by name.
+
+        :param name: the name of the argument to remove.
+        """
+        for arg in cls.arguments:
+            if arg["name"] == name or name in arg["aliases"]:
+                cls.arguments.remove(arg)
+
     @abstractmethod
     def run(self) -> None:
         """Executes the command."""

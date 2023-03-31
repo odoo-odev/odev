@@ -93,6 +93,15 @@ class OdoobinCommand(DatabaseCommand, ABC):
             if self.args.version is not None:
                 self.odoobin._version = OdooVersion(self.args.version)
 
+    @classmethod
+    def prepare_command(cls, *args, **kwargs) -> None:
+        super().prepare_command(*args, **kwargs)
+
+        # Remove arguments from the `DatabaseCommand` class that are not relevant
+        # for this command (`platform` and `branch` are only used for PaaS databases)
+        cls.remove_argument("platform")
+        cls.remove_argument("branch")
+
     @property
     def odoobin(self) -> Optional[OdooBinProcess]:
         """The odoo-bin process associated with the database."""
