@@ -18,6 +18,7 @@ MarkupSafe==2.0.0
 odoo-client-lib>=1.2.2,<2
 packaging==20.9
 paramiko>=2.7.2,<3
+parsel
 pre-commit>=2.9,<3
 psycopg2-binary>=2,<3
 PyGithub>=1,<2
