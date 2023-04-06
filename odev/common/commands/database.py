@@ -98,7 +98,7 @@ class DatabaseCommand(Command, ABC):
         if not self.database_name:
             return None
 
-        if self.args.platform:
+        if hasattr(self.args, "platform") and self.args.platform:
             allowed_database_classes = [DATABASE_PLATFORM_MAPPING[self.args.platform]]
         else:
             allowed_database_classes = [
@@ -120,7 +120,7 @@ class DatabaseCommand(Command, ABC):
                     logger.debug(f"Found existing {DatabaseClass._platform_display} database {database.name!r}")
                     return database
 
-        if self.args.platform:
+        if hasattr(self.args, "platform") and self.args.platform:
             raise CommandError(
                 f"Could not find {allowed_database_classes[0]._platform_display} database {self.database_name!r}",
                 self,
