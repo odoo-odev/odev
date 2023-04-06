@@ -76,7 +76,7 @@ class CreateCommand(OdoobinCommand):
         if self.args.copy_filestore and self.template is not None:
             self.copy_template_filestore()
 
-        if self.args.bare:
+        if self.args.bare or self.template is not None:
             return
 
         self.initialize_database()
