@@ -23,4 +23,4 @@ class Thread(BaseThread):
         super().join(*args, **kwargs)
 
         if self._exception is not None:
-            raise RuntimeError(f"Exception in thread {self.name}") from self._exception
+            raise RuntimeError(f"Exception in thread {self.name}: {self._exception}") from self._exception

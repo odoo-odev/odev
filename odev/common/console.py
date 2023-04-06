@@ -19,7 +19,7 @@ from InquirerPy.validator import EmptyInputValidator, NumberValidator, PathValid
 from prompt_toolkit.validation import ValidationError
 from rich.console import Console as RichConsole
 from rich.control import Control, ControlType
-from rich.highlighter import ReprHighlighter, _combine_regex
+from rich.highlighter import ISO8601Highlighter, ReprHighlighter, _combine_regex
 from rich.theme import Theme
 
 
@@ -86,6 +86,7 @@ RICH_THEME = Theme(
         "repr.str": Colors.CYAN,
         "repr.url": Colors.PURPLE,
         "repr.version": f"bold {Colors.CYAN}",
+        "repr.time": f"bold {Colors.CYAN}",
         "status.spinner": f"bold {Colors.PURPLE}",
     }
 )
@@ -115,12 +116,16 @@ class OdevReprHighlighter(ReprHighlighter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.highlights[-1] = _combine_regex(
-            r"(?P<odev>odev)",
-            r"(?P<version>([0-9]+\.){2,}[0-9]+)",
-            r"(?:(?P<package_name>[\w_-]+)(?:(?P<package_op>[<>=]+)(?P<package_version>[\d.]+)))",
-            self.highlights[-1],
-        )
+        self.highlights: List[str] = [
+            *self.highlights[:-1],
+            *ISO8601Highlighter.highlights,
+            _combine_regex(
+                r"(?P<odev>odev)",
+                r"(?P<version>([0-9]+\.){2,}[0-9]+)",
+                r"(?:(?P<package_name>[\w_-]+)(?:(?P<package_op>[<>=]+)(?P<package_version>[\d.]+)))",
+                self.highlights[-1],
+            ),
+        ]
 
 
 # --- Inquirer Validators ------------------------------------------------------

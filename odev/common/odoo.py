@@ -79,7 +79,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         return f"OdooBinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid!r})"
 
     @property
-    def venv(self):
+    def venv(self) -> PythonEnv:
         """Python virtual environment used by the Odoo installation."""
         if self._venv is None:
             self._venv = PythonEnv(self.venv_path / self._venv_name, self._get_python_version())
@@ -303,6 +303,10 @@ class OdooBinProcess(OdevFrameworkMixin):
         with spinner(f"Preparing Odoo {self.version!s} for database {self.database.name!r}"):
             self.prepare_odoobin()
 
+        if stream and progress is not None and self.addons_contain_debugger():
+            logger.warning("Addons contain a call to a debugger, streaming of Odoo logs is deactivated")
+            progress = None
+
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
             info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
@@ -391,3 +395,12 @@ class OdooBinProcess(OdevFrameworkMixin):
 
         globs = (path.glob(f"*/__{manifest}__.py") for manifest in ["manifest", "openerp"])
         return path.is_dir() and any(manifest for glob in globs for manifest in glob)
+
+    def addons_contain_debugger(self):
+        """Check if the source code has a debugger called."""
+        for addon in self.addons_paths:
+            for python_file in addon.glob("**/*.py"):
+                with python_file.open() as file:
+                    for line in file.readlines():
+                        if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
+                            return True

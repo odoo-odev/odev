@@ -39,7 +39,6 @@ class Progress(RichProgress):
             TextColumn(
                 f"[logging.level.info]{log_info_symbol}[/logging.level.info] "
                 "[progress.description]{task.description}",
-                justify="right",
             ),
             BarColumn(),
             TaskProgressColumn(
