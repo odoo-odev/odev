@@ -86,23 +86,14 @@ class InfoCommand(DatabaseCommand):
 
         self.table([{**header} for header in TABLE_HEADERS], rows, show_header=False, box=None)
 
-    def stylize(self, value: str, style: str) -> str:
-        """Stylize a value.
-        :param value: The value to stylize.
-        :param style: The style to apply.
-        :return: The stylized value.
-        :rtype: str
-        """
-        return f"[{style}]{value}[/{style}]"
-
     def info_table_rows_base(self) -> List[List[str]]:
         """Return the basic rows to be displayed in a table.
         :param info: The database info.
         :return: The rows.
         :rtype: List[List[str]]
         """
-        name: str = self.stylize(self.database.name, Colors.PURPLE)
-        version: str = self.stylize(f"{self.database.version.major}.{self.database.version.minor}", Colors.CYAN)
+        name: str = string.stylize(self.database.name, Colors.PURPLE)
+        version: str = string.stylize(f"{self.database.version.major}.{self.database.version.minor}", Colors.CYAN)
 
         return [
             ["Name", name],

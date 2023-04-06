@@ -134,6 +134,16 @@ def suid() -> str:
     return "".join(random.choices(alphabet, k=8))
 
 
+def stylize(value: str, style: str) -> str:
+    """Stylize a value to use with Rich markup.
+    :param value: The value to stylize.
+    :param style: The style to apply.
+    :return: The stylized value.
+    :rtype: str
+    """
+    return f"[{style}]{value}[/{style}]"
+
+
 def join(parts: Sequence[str], last_delimiter: str = None) -> str:
     """Join parts, optionally adding a last delimiter between the last two items.
     :param parts: Parts to join.
