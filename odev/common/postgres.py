@@ -30,8 +30,7 @@ class PostgresDatabase(PostgresConnectorMixin):
         self.name: str = name
         """The name of the database."""
 
-        with self:
-            self.prepare_database()
+        self.prepare_database()
 
     def __enter__(self):
         self.connector = self.psql(self.name).__enter__()
