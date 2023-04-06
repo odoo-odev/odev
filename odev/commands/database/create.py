@@ -47,13 +47,6 @@ class CreateCommand(OdoobinCommand):
             "action": "store_true",
             "help": "Do not initialize the database (create the SQL database then exit).",
         },
-        {
-            "name": "version",
-            "help": """The Odoo version to use for the new database.
-            If not specified and a template is provided, the version of
-            the template database will be used. Otherwise, the version will default to "master".
-            """,
-        },
     ]
 
     _database_exists_required = False
