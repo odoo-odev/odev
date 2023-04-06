@@ -117,7 +117,7 @@ class TestCommand(OdoobinCommand):
         odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
 
         try:
-            odoobin.run(args=args, stream=True, progress=self.odoobin_progress)
+            odoobin.run(args=args, progress=self.odoobin_progress)
             self.print_tests_results()
         except RuntimeError as error:
             self.test_database.process.kill(hard=True)
@@ -149,7 +149,8 @@ class TestCommand(OdoobinCommand):
             f"[{Colors.BLACK}]{match.group('time')}[/{Colors.BLACK}] "
             f"[{level_color}]{match.group('level')}[/{level_color}] "
             f"[{Colors.PURPLE}]{match.group('database')}[/{Colors.PURPLE}] "
-            f"[{Colors.BLACK}]{match.group('logger')}:[/{Colors.BLACK}] {match.group('description')}"
+            f"[{Colors.BLACK}]{match.group('logger')}:[/{Colors.BLACK}] {match.group('description')}",
+            highlight=False,
         )
 
     def run(self):
