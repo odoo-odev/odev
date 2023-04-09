@@ -127,15 +127,15 @@ class Database(OdevFrameworkMixin, ABC):
 
     def create(self):
         """Create the database."""
-        raise NotImplementedError(f"Database creation not implemented for instances of {self.__class__.name}.")
+        raise NotImplementedError(f"Database creation not implemented for {self.platform.display} databases")
 
     def drop(self):
         """Drop the database."""
-        raise NotImplementedError(f"Database deletion not implemented for instances of {self.__class__.name}.")
+        raise NotImplementedError(f"Database deletion not implemented for {self.platform.display} databases")
 
     def neutralize(self):
         """Neutralize the database and make it suitable for development."""
-        raise NotImplementedError(f"Database neutralization not implemented for instances of {self.__class__.name}.")
+        raise NotImplementedError(f"Database neutralization not implemented for {self.platform.display} databases")
 
     def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
         """Generate a dump file for the database.
@@ -144,7 +144,13 @@ class Database(OdevFrameworkMixin, ABC):
         :return: The path to the dump file.
         :rtype: Path
         """
-        raise NotImplementedError(f"Database dump not implemented for instances of {self.__class__.name}.")
+        raise NotImplementedError(f"Database dump not implemented for {self.platform.display} databases")
+
+    def restore(self, file: Path):
+        """Restore the database from a dump file.
+        :param file: The path to the dump file.
+        """
+        raise NotImplementedError(f"Database restore not implemented for {self.platform.display} databases")
 
     def _get_dump_filename(self, filestore: bool = False, suffix: str = None, extension: str = None) -> str:
         """Return the filename of the dump file.

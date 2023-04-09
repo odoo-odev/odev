@@ -2,6 +2,8 @@
 
 from threading import Thread as BaseThread
 
+from odev.common.string import normalize_indent
+
 
 __all__ = ["Thread"]
 
@@ -23,4 +25,11 @@ class Thread(BaseThread):
         super().join(*args, **kwargs)
 
         if self._exception is not None:
-            raise RuntimeError(f"Exception in thread {self.name}: {self._exception}") from self._exception
+            raise RuntimeError(
+                normalize_indent(
+                    f"""
+                    Exception in thread {self.name}:
+                        {self._exception.__class__.__name__}: {self._exception}
+                    """
+                )
+            ) from self._exception

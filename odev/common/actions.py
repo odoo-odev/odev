@@ -3,6 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 from argparse import Action as BaseAction, ArgumentParser, Namespace
+from pathlib import Path
 from typing import (
     Any,
     List,
@@ -59,6 +60,13 @@ class RegexAction(Action):
 
     def _transform_one(self, value: str) -> re.Pattern[str]:
         return re.compile(value)
+
+
+class PathAction(Action):
+    """Converter for command line arguments passed as a string that should be converted to a Path."""
+
+    def _transform_one(self, value: str) -> Path:
+        return Path(value)
 
 
 ACTIONS_MAPPING = {a._action_name(): a for a in Action.__subclasses__()}

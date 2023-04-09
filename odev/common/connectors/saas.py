@@ -36,6 +36,11 @@ class SaasConnector(RestConnector):
         """API key for odoo.com."""
         return self.store.secrets.get("odoo.com:api", fields=["password"], prompt_format="Odoo API key:").password
 
+    @property
+    def support_path(self) -> str:
+        """Return the path to the SaaS database support page."""
+        return "_odoo/support"
+
     def dump_path(self, include_filestore: bool = False) -> str:
         """Return the path to the dump of the SaaS database."""
         return f"saas_worker/dump.{'zip' if include_filestore else 'dump'}"

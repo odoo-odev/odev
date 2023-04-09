@@ -242,6 +242,7 @@ class RestConnector(Connector, ABC):
         """Download a file from the endpoint.
         :param path: The path to the resource.
         :param filename: The name of the file to save.
+        :param progress_message: The message to display in the progress bar.
         :param kwargs: Additional keyword arguments to pass to the request.
         :return: The response from the endpoint.
         :rtype: requests.Response
@@ -255,10 +256,9 @@ class RestConnector(Connector, ABC):
             logger.warning(f"{progress._tasks.get(task).description}: task interrupted by user")
             raise KeyboardInterrupt
 
-        progress.start()
-
         try:
             with capture_signals(handler=signal_handler_progress), self.get(path, **kwargs, stream=True) as response:
+                progress.start()
                 content_length = int(response.headers.get("content-length", 0))
                 progress.update(task, total=content_length)
                 progress.start_task(task)
