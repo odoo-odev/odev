@@ -162,4 +162,4 @@ class HelpCommand(Command):
         :param message: The message to print.
         """
         assert isinstance(renderable, str)
-        super().print(textwrap.dedent(renderable).strip(), *args, **kwargs)
+        super().print(textwrap.dedent(renderable).strip(), highlight=False, *args, **kwargs)

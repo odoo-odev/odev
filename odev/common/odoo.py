@@ -123,8 +123,7 @@ class OdooBinProcess(OdevFrameworkMixin):
     @property
     def venv_path(self):
         """Path to the virtual environment of the Odoo installation."""
-        with self.config:
-            return Path(self.config.get("paths", "repositories")).parent / ".virtualenvs" / str(self.version)
+        return self.config.paths.repositories.parent / ".virtualenvs" / str(self.version)
 
     @property
     def pid(self) -> Optional[int]:

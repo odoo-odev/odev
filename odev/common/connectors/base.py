@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 
 if TYPE_CHECKING:
-    from odev.common.config import ConfigManager
+    from odev.common.config import Config
     from odev.common.odev import Odev
     from odev.common.store import DataStore
 
@@ -53,7 +53,7 @@ class Connector(ABC):
         return self._framework
 
     @property
-    def config(self) -> "ConfigManager":
+    def config(self) -> "Config":
         """Return the Odev config."""
         return self.odev.config
 

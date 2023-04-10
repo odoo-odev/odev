@@ -1,160 +1,299 @@
+import inspect
 from collections import abc
 from configparser import ConfigParser, SectionProxy
+from datetime import datetime
 from pathlib import Path
 from typing import (
     Any,
-    Iterable,
     Iterator,
     List,
-    Mapping,
+    Literal,
     MutableMapping,
     Optional,
-    Tuple,
     Union,
 )
 
 
-__all__ = ["ConfigManager"]
+__all__ = ["Config"]
 
-
-ConfigSectionType = MutableMapping[str, str]
-ConfigType = MutableMapping[str, ConfigSectionType]
 
 CONFIG_DIR: Path = Path.home() / ".config" / "odev"
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+class ConfigSection(abc.MutableMapping):
+    """Light wrapper around configparser section to write and retrieve
+    key/value pairs.
+    """
+
+    def __init__(self, parser: "ConfigManager", name: str):
+        """Light wrapper around configparser section to write and retrieve
+        key/value pairs.
+        """
+
+        self.config: "ConfigManager" = parser
+        """Config parser implementation."""
+
+        self.name: str = name
+        """Name of this config section."""
+
+        if not self.config.parser.has_section(name):
+            self.config.parser.add_section(name)
+
+        self._section: SectionProxy = self.config.parser.__dict__["_sections"][name]
+        """Config parser section implementation."""
+
+    def set(self, key: str, value: Any):
+        """Set a key/value pair."""
+        self.__setitem__(key, value)
+
+    def __getitem__(self, key: str, default: Optional[str] = None) -> str:
+        if not self.config.parser.has_option(self.name, key):
+            if default is not None:
+                return default
+
+            raise KeyError(f"{key!r} is not a valid key")
+
+        return self.config.parser.get(self.name, key)
+
+    def __setitem__(self, key: str, value: Any):
+        self.config.parser.set(self.name, key, value)
+        self.config.save()
+
+    def __delitem__(self, key: str):
+        del self._section[key]
+        self.config.save()
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._section.keys())
+
+    def __len__(self) -> int:
+        return len(self._section.keys())
 
 
 class ConfigManager(abc.MutableMapping):
-    """Light wrapper around configparser to write and retrieve configuration saved on disk."""
+    """Light wrapper around configparser to write and retrieve
+    configuration saved on disk.
+    """
 
-    def __init__(self, name: str, auto_save: bool = True):
-        """Light wrapper around configparser to write and retrieve configuration saved on disk."""
+    sections: MutableMapping[str, ConfigSection] = {}
+    """Config sections."""
+
+    def __init__(self, name: str):
+        """Light wrapper around configparser to write and retrieve
+        configuration saved on disk.
+        """
 
         self.name: str = name
-        """Name of this config manager, also serves as the name of the file to save configuration to."""
+        """Name of this config manager, also serves as the name of the file
+        to save configuration to.
+        """
 
         self.path: Path = CONFIG_DIR / f"{self.name}.cfg"
-        """Path to the file containing configuration options, inferred from the name."""
+        """Path to the file containing configuration options,
+        inferred from the name.
+        """
 
         self.parser: ConfigParser = ConfigParser()
         """Config parser implementation."""
 
-        self.auto_save: bool = auto_save
-
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        self.path.touch(mode=0o600, exist_ok=True)
         self.load()
 
     def __repr__(self) -> str:
-        return f"ConfigManager(name={self.name!r}, path={self.path!r})"
+        return f"{self.__class__.__name__}({self.name!r}, path={self.path!r})"
 
-    def to_dict(self) -> ConfigType:
-        return {section["name"]: dict(section) for section in self.parser.values() if section and "name" in section}
+    def load(self):
+        """Load the content of the config file, creating it if need be."""
+        files_read = self.parser.read(self.path)
 
-    def load(self) -> ConfigParser:
-        """
-        Load the content of an existing config file.
-        :return: A dict containing the config read from file
-        """
-        self.parser.read(self.path)
-        return self.parser
+        if not files_read:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            self.path.touch(mode=0o600, exist_ok=True)
+            return self.load()
 
-    def save(
-        self,
-        *args: Union[ConfigType, Iterable[Tuple[str, ConfigSectionType]]],
-        overwrite: bool = False,
-        **kwargs: ConfigSectionType,
-    ):
-        """
-        Save the configuration file, optionally with the additional provided data.
+        for section in self.parser.sections():
+            self.sections[section] = ConfigSection(self, section)
 
-        :param args: values for the config either as a mapping or as an iterable of tuples.
-        :param kwargs: values for the config with sections as keyword arguments.
-        :param overwrite: Replace the contents of the config file with the provided ones.
-            Defaults to False.
-        :return: The current config data
-        """
+    def reload(self):
+        """Reload the content of the config file."""
+        self.sections = {}
+        self.load()
 
-        if overwrite:
-            self.clear()
-
-        sections_vals: ConfigType = self.to_dict()
-        sections_vals.update(dict(*args, **kwargs))
-
-        self.parser.read_dict(sections_vals)
-
+    def save(self):
+        """Save the configuration file in its current state."""
         with open(self.path, "w") as file:
             self.parser.write(file)
 
-        return self.parser
+        self.reload()
 
-    def clear(self):
-        self.parser.clear()
-        return self.parser
+    def section(self, key: str) -> ConfigSection:
+        """Get a section of the config."""
+        if key not in self.sections:
+            raise KeyError(f"{key!r} is not a valid section")
 
-    def sections(self) -> List[str]:
-        """Return a list of section names, excluding DEFAULT"""
-        return self.parser.sections()
+        return self.sections[key]
 
-    def set(self, section: str, key: str, value: Any) -> ConfigParser:
-        """
-        Set the value for a given key in a specific section
-        """
+    def set(self, section: str, option: str, value: Any):
+        """Set a value in the config."""
+        self.section(section).set(option, value)
 
-        if section not in self.parser:
-            self.parser.add_section(section)
-        self.parser.set(section, key, str(value))
-        if self.auto_save:
-            self.save()
-        return self.parser
+    # Signature doesn't match MutableMapping because we get an option, not a section
+    def get(self, section: str, option: str, default: Optional[str] = None) -> str:  # type: ignore
+        """Get a value from the config."""
+        return self.section(section).get(option, default)
 
-    # NOTE: signature doesn't match MutableMapping because we get an option, not a section
-    def get(self, section: str, key: str, default: Any = None) -> Any:  # type: ignore
-        """
-        Get a value for a given key in a specific section,
-        or a default value if not set
-        """
+    def __check_key(self, key: str):
+        if "." not in key:
+            raise KeyError(f"{key!r} is not a valid key, use format 'section.attribute'")
 
-        return self.parser.get(section, key, fallback=default)
+    def __getitem__(self, key: str) -> Union[ConfigSection, str]:
+        self.__check_key(key)
+        section, attribute = key.split(".", 1)
+        return self.section(section).get(attribute)
 
-    def delete(self, section: str, name: Optional[str] = None):
-        """
-        Removes an option or a section from the config file.
-        """
+    def __setitem__(self, key: str, value: Any):
+        self.__check_key(key)
+        section, attribute = key.split(".", 1)
+        self.section(section).set(attribute, value)
 
-        if section in self.parser:
-            if name:
-                self.parser.remove_option(section, name)
-            else:
-                self.parser.remove_section(section)
-
-        if self.auto_save:
-            self.save()
-        return self.parser
-
-    def __getitem__(self, section: str) -> SectionProxy:
-        if section not in self.parser:
-            self.parser.add_section(section)
-        return self.parser[section]
-
-    def __setitem__(self, section: str, value: Mapping[str, str]) -> None:
-        self.parser.__setitem__(section, value)
-
-    def __delitem__(self, section: str) -> None:
-        self.parser.__delitem__(section)
-
-    def __len__(self) -> int:
-        """Sections in the config file, excluding DEFAULT"""
-        return len(self.sections())
+    def __delitem__(self, key: str):
+        self.__check_key(key)
+        section, attribute = key.split(".", 1)
+        del self.section(section)[attribute]
 
     def __iter__(self) -> Iterator[str]:
-        """Iterate over sections, excluding DEFAULT"""
-        return iter(self.sections())
+        return iter(self.sections.keys())
 
-    def __enter__(self):
-        self.auto_save = False
-        return self
+    def __len__(self) -> int:
+        return len(self.sections.keys())
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if not any((exc_type, exc_val, exc_tb)):
-            self.save()
-            self.auto_save = True
+
+class Section:
+    """Odev configuration section."""
+
+    def __init__(self, name: str, config: "ConfigManager"):
+        self._name: str = name
+        """Name of this section."""
+
+        self._config: "ConfigManager" = config
+        """Configuration manager."""
+
+    def __repr__(self) -> str:
+        return f"Section({self._name!r})"
+
+    def get(self, key: str, default: Optional[str] = None) -> str:
+        """Get a value from this section."""
+        return self._config.get(self._name, key, default)
+
+    def set(self, key: str, value: Any):
+        """Set a value in this section."""
+        self._config.set(self._name, key, str(value))
+
+
+class PathsSection(Section):
+    """Odev paths configuration."""
+
+    @property
+    def repositories(self) -> Path:
+        """Path to the directory where repositories will be saved to and read from."""
+        return Path(self.get("repositories", "~/odoo/repositories")).expanduser()
+
+    @repositories.setter
+    def repositories(self, value: Union[str, Path]):
+        self.set("repositories", value.as_posix() if isinstance(value, Path) else value)
+
+    @property
+    def dumps(self) -> Path:
+        """Path to the directory where dump files will be saved when downloaded."""
+        return Path(self.get("dumps", "~/odoo/dumps")).expanduser()
+
+    @dumps.setter
+    def dumps(self, value: Union[str, Path]):
+        self.set("dumps", value.as_posix() if isinstance(value, Path) else value)
+
+
+class UpdateSection(Section):
+    """Configuration for odev auto-updates."""
+
+    @property
+    def mode(self) -> Literal["ask", "always", "never"]:
+        """Behavior to observe when an update is available."""
+        value = self.get("mode", "ask")
+        assert value in (
+            "ask",
+            "always",
+            "never",
+        ), f"'update.mode' must be one of 'ask', 'always', 'never', got {value!r}"
+        return value  # type: ignore
+
+    @mode.setter
+    def mode(self, value: Literal["ask", "always", "never"]):
+        assert value in (
+            "ask",
+            "always",
+            "never",
+        ), f"'update.mode' must be one of 'ask', 'always', 'never', got {value!r}"
+        self.set("mode", value)
+
+    @property
+    def date(self) -> datetime:
+        """Last time available updates were checked."""
+        return datetime.strptime(self.get("date"), DATETIME_FORMAT)
+
+    @date.setter
+    def date(self, value: Union[str, datetime]):
+        self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
+
+    @property
+    def version(self) -> str:
+        """Last version checked for updates."""
+        return self.get("version", "0.0.0")
+
+    @version.setter
+    def version(self, value: str):
+        self.set("version", value)
+
+    @property
+    def interval(self) -> int:
+        """Interval between update checks."""
+        return int(self.get("interval"))
+
+    @interval.setter
+    def interval(self, value: Union[str, int]):
+        assert str(value).isdigit() and int(value) >= 0, f"'update.interval' must be a positive integer, got {value!r}"
+        self.set("interval", int(value))
+
+
+class Config:
+    """Odev configuration."""
+
+    def __init__(self, name: str):
+        self.name: str = name
+        """Name of this configuration."""
+
+        self._config: "ConfigManager" = ConfigManager(self.name)
+        """Configuration manager."""
+
+        self.paths: PathsSection = PathsSection("paths", self._config)
+        """Paths to filesystem directories or files used by odev."""
+
+        self.update: UpdateSection = UpdateSection("update", self._config)
+        """Configuration for odev auto-updates."""
+
+    def sections(self) -> List[Section]:
+        """Get all sections of this configuration."""
+        return [value for _, value in inspect.getmembers(self, lambda v: isinstance(v, Section))]
+
+    def dict(self) -> MutableMapping[str, MutableMapping[str, str]]:
+        """Get a dictionary representation of this configuration."""
+        sections: MutableMapping[str, MutableMapping[str, str]] = {section._name: {} for section in self.sections()}
+
+        def is_property(v):
+            return not inspect.isfunction(v) and not inspect.isbuiltin(v) and not inspect.ismethod(v)
+
+        for section in sections:
+            for key, value in inspect.getmembers(getattr(self, section), is_property):
+                if not key.startswith("_"):
+                    sections[section][key] = str(value)
+
+        return sections

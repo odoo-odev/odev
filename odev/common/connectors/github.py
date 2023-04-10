@@ -239,8 +239,7 @@ class GithubConnector(Connector):
     @property
     def path(self) -> Path:
         """The path to the repository."""
-        with self.config:
-            return Path(self.config.get("paths", "repositories")) / self.name
+        return self.config.paths.repositories / self.name
 
     @property
     def url(self) -> str:
@@ -312,8 +311,7 @@ class GithubConnector(Connector):
     @property
     def worktrees_path(self) -> Path:
         """Path to the worktrees directory."""
-        with self.config:
-            return Path(self.config.get("paths", "repositories")).parent / ".worktrees"
+        return self.config.paths.repositories.parent / ".worktrees"
 
     def update(self):
         """Update the repository."""

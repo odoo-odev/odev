@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 
 if TYPE_CHECKING:
-    from odev.common.config import ConfigManager
+    from odev.common.config import Config
     from odev.common.console import Console
     from odev.common.odev import Odev
     from odev.common.store import DataStore
@@ -30,7 +30,7 @@ class OdevFrameworkMixin(ABC):
         return self._framework
 
     @property
-    def config(self) -> "ConfigManager":
+    def config(self) -> "Config":
         """Global configuration."""
         return self.odev.config
 

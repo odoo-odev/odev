@@ -23,13 +23,12 @@ from packaging import version
 
 from odev._version import __version__
 from odev.common import bash, progress
-from odev.common.config import ConfigManager
+from odev.common.config import Config
 from odev.common.console import console
 from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
-from odev.constants import DEFAULT_DATETIME_FORMAT
 
 
 if TYPE_CHECKING:
@@ -52,7 +51,7 @@ class Odev:
     path: ClassVar[Path] = Path(__file__).parents[2]
     """Local path to the odev repository."""
 
-    config: ClassVar["ConfigManager"] = None
+    config: ClassVar[Config] = None
     """Odev configuration."""
 
     store: ClassVar["DataStore"] = None
@@ -67,7 +66,7 @@ class Odev:
     def __init__(self):
         logger.debug(f"Starting odev version {self.version}")
         if self.__class__.config is None:
-            self.__class__.config = ConfigManager(self.name)
+            self.__class__.config = Config(self.name)
 
         if self.__class__.store is None:
             self.__class__.store = DataStore(self.name)
@@ -113,8 +112,7 @@ class Odev:
     @property
     def dumps_path(self) -> Path:
         """Local path to the directory where database dumps are stored."""
-        with self.config:
-            return Path(self.config.get("paths", "repositories")).parent / "dumps"
+        return self.config.paths.dumps
 
     def update(self) -> bool:
         """
@@ -137,7 +135,7 @@ class Odev:
         logger.debug(
             f"Pulling latest changes from odev repository on branch {self.repo.active_branch.tracking_branch()}"
         )
-        self.config.set("update", "date", datetime.now().strftime(DEFAULT_DATETIME_FORMAT))
+        self.config.update.date = datetime.now()
         install_requirements = self.__requirements_changed()
         self.repo.remotes.origin.pull()
 
@@ -177,7 +175,7 @@ class Odev:
             logger.debug(f"Running upgrade script [{current_version} -> {script.parent.name}]")
             self.__run_upgrade_script(script)
 
-        self.config.set("update", "version", self.version)
+        self.config.update.version = self.version
 
     def import_commands(self) -> List["CommandType"]:
         """Import all commands from the commands directory.
@@ -343,10 +341,9 @@ class Odev:
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
-        default_date = (datetime.today() - timedelta(days=1)).strftime(DEFAULT_DATETIME_FORMAT)
-        check_date = self.config.get("update", "date", default_date)
-        check_interval = int(self.config.get("update", "interval", 1))
-        check_diff = (datetime.today() - datetime.strptime(check_date, DEFAULT_DATETIME_FORMAT)).days
+        check_date = self.config.update.date or datetime.today() - timedelta(days=1)
+        check_interval = self.config.update.interval or 1
+        check_diff = (datetime.today() - check_date).days
         return check_diff >= check_interval
 
     def __update_prompt(self) -> bool:
@@ -356,13 +353,10 @@ class Odev:
         :return: Whether the user wants to update odev
         :rtype: bool
         """
-        update_mode = self.config.get("update", "mode", "ask")
-        assert update_mode in ("ask", "always", "never")
-
-        if update_mode == "ask":
+        if self.config.update.mode == "ask":
             return self.console.confirm("An update is available for odev, do you want to download it now?")
 
-        return update_mode == "always"
+        return self.config.update.mode == "always"
 
     def __latest_version(self) -> str:
         """Get the latest version of odev from the config file.
@@ -370,7 +364,7 @@ class Odev:
         :return: Latest version of odev
         :rtype: str
         """
-        return self.config.get("update", "version", self.config.get("odev", "version", self.version))
+        return self.config.update.version
 
     def __validate_upgrade_script(self, script: Path) -> bool:
         """Validate the upgrade script's version to check whether it should be run.
