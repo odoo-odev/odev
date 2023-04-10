@@ -30,7 +30,7 @@ class OdoobinCommand(DatabaseCommand, ABC):
         },
         {
             "name": "odoo_args",
-            "nargs": "...",
+            "nargs": "*...",
             "help": """Additional arguments to pass to odoo-bin; Check the documentation at
             https://www.odoo.com/documentation/16.0/fr/developer/cli.html
             for the list of available arguments.

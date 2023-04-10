@@ -80,6 +80,11 @@ class Command(OdevFrameworkMixin, ABC):
     ]
     """Arguments definitions to extend commands capabilities."""
 
+    _unknown_arguments_dest: Optional[str] = None
+    """Key to which unknown arguments will be saved when parsed.
+    If `None` and unknown arguments are found, an error will be raised.
+    """
+
     def __init__(self, args: Namespace):
         """
         Initialize the command runner.
@@ -160,7 +165,11 @@ class Command(OdevFrameworkMixin, ABC):
         for arg in cls.arguments:
             params = dict(arg)
             params.pop("name")
-            aliases = params.pop("aliases")
+            aliases: Sequence[str] = params.pop("aliases")
+
+            if params.get("nargs") == "*...":
+                cls._unknown_arguments_dest = aliases[0]
+                params["nargs"] = "*"
 
             if "action" in params:
                 params["action"] = ACTIONS_MAPPING.get(params["action"], params["action"])
@@ -196,7 +205,11 @@ class Command(OdevFrameworkMixin, ABC):
             sys.stderr = stderr
 
             try:
-                arguments = parser.parse_args(argv)
+                if cls._unknown_arguments_dest is None:
+                    arguments = parser.parse_args(argv)
+                else:
+                    arguments, unknown = parser.parse_known_args(argv)
+                    setattr(arguments, cls._unknown_arguments_dest, unknown)
             except SystemExit as exception:
                 error_message = stderr.getvalue()
                 error = re.search(rf"{cls.name}: error: (.*)$", error_message, re.MULTILINE)
