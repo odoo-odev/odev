@@ -195,7 +195,10 @@ class PathsSection(Section):
 
     @property
     def repositories(self) -> Path:
-        """Path to the directory where repositories will be saved to and read from."""
+        """Path to the directory where repositories will be saved to and read from.
+        Git repositories will be cloned from GitHub and stored under this directory
+        with the path `<directory>/<organization>/<name>`.
+        """
         return Path(self.get("repositories", "~/odoo/repositories")).expanduser()
 
     @repositories.setter
@@ -204,7 +207,9 @@ class PathsSection(Section):
 
     @property
     def dumps(self) -> Path:
-        """Path to the directory where dump files will be saved when downloaded."""
+        """Path to the directory where dump files will be saved when downloaded.
+        When using the dump command, downloaded files will be stored under this path.
+        """
         return Path(self.get("dumps", "~/odoo/dumps")).expanduser()
 
     @dumps.setter
@@ -217,7 +222,11 @@ class UpdateSection(Section):
 
     @property
     def mode(self) -> Literal["ask", "always", "never"]:
-        """Behavior to observe when an update is available."""
+        """Behavior to observe when an update is available, one of:
+        - 'ask': Ask the user if they want to update
+        - 'always': Update automatically
+        - 'never': Never update
+        """
         value = self.get("mode", "ask")
         assert value in (
             "ask",
@@ -237,7 +246,9 @@ class UpdateSection(Section):
 
     @property
     def date(self) -> datetime:
-        """Last time available updates were checked."""
+        """Last time available updates were checked for.
+        You should not have to modify this value as it is updated automatically.
+        """
         return datetime.strptime(self.get("date"), DATETIME_FORMAT)
 
     @date.setter
@@ -246,7 +257,10 @@ class UpdateSection(Section):
 
     @property
     def version(self) -> str:
-        """Last version checked for updates."""
+        """The version of odev after the last update.
+        Used to run upgrade scripts when updating.
+        You should not have to modify this value as it is updated automatically.
+        """
         return self.get("version", "0.0.0")
 
     @version.setter
@@ -255,7 +269,9 @@ class UpdateSection(Section):
 
     @property
     def interval(self) -> int:
-        """Interval between update checks."""
+        """Interval between update checks in days.
+        Updates will be checked for once every `interval` day(s).
+        """
         return int(self.get("interval"))
 
     @interval.setter

@@ -2,13 +2,15 @@
 
 from typing import Any, List, MutableMapping
 
+from odev.common import string
 from odev.common.commands import Command
 from odev.common.console import Colors
 
 
 TABLE_HEADERS: List[MutableMapping[str, Any]] = [
     {"name": "", "style": "bold", "min_width": 15},
-    {"name": ""},
+    {"name": "", "min_width": 30},
+    {"name": "", "style": Colors.BLACK},
 ]
 
 
@@ -62,7 +64,13 @@ class ConfigCommand(Command):
 
             self.print_table(
                 [
-                    [config_key, config_value]
+                    [
+                        config_key,
+                        config_value,
+                        string.normalize_indent(
+                            getattr(getattr(self.config, config_section).__class__, config_key).__doc__
+                        ),
+                    ]
                     for config_key, config_value in config[config_section].items()
                     if key is None or config_key == key
                 ],
@@ -85,6 +93,7 @@ class ConfigCommand(Command):
             title: str = f"{rule_char} [{style}]{name}[/{style}]"
             self.console.rule(title, align="left", style="", characters=rule_char)
 
+        TABLE_HEADERS[-1]["width"] = self.console.width - sum(header["min_width"] for header in TABLE_HEADERS[:-1])
         self.table([{**header} for header in TABLE_HEADERS], rows, show_header=False, box=None)
 
     def set_config(self, section: str, key: str):
