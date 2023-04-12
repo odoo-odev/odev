@@ -16,7 +16,7 @@ from typing import (
 )
 
 from odev.common import bash
-from odev.common.connectors import GithubConnector, GitWorktree
+from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.console import Colors
 from odev.common.databases import Branch, Repository
 from odev.common.logging import LOG_LEVEL, logging
@@ -73,7 +73,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         """Name of the virtual environment to use."""
 
         self.clone_repositories()
-        self.repository: GithubConnector = GithubConnector("odoo/odoo")
+        self.repository: GitConnector = GitConnector("odoo/odoo")
         """Github repository of Odoo."""
 
     def __repr__(self) -> str:
@@ -161,7 +161,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         return self.pid is not None
 
     @property
-    def odoo_repositories(self) -> Generator[GithubConnector, None, None]:
+    def odoo_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of Odoo repositories the current version."""
         repo_names: List[str] = ["odoo", "design-themes"]
 
@@ -170,7 +170,7 @@ class OdooBinProcess(OdevFrameworkMixin):
                 repo_names.insert(1, "enterprise")
 
         for repo_name in repo_names:
-            yield GithubConnector(f"odoo/{repo_name}")
+            yield GitConnector(f"odoo/{repo_name}")
 
     @property
     def additional_addons_paths(self) -> List[Path]:
@@ -184,11 +184,11 @@ class OdooBinProcess(OdevFrameworkMixin):
         self.set_database_repository()
 
     @property
-    def additional_repositories(self) -> Generator[GithubConnector, None, None]:
+    def additional_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of additional repositories linked to this database."""
         for path in self.additional_addons_paths:
             if path.is_dir():
-                yield GithubConnector(f"{path.parent.name}/{path.name}")
+                yield GitConnector(f"{path.parent.name}/{path.name}")
 
     @property
     def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:

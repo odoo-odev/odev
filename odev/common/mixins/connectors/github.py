@@ -2,13 +2,13 @@
 
 from typing import Type
 
-from odev.common.connectors import GithubConnector
+from odev.common.connectors import GitConnector
 from odev.common.mixins.connectors.base import ConnectorMixin
 
 
-class GithubConnectorMixin(ConnectorMixin):
+class GitConnectorMixin(ConnectorMixin):
     """Mixin for commands that need to use a Github connector."""
 
-    _connector_class: Type[GithubConnector] = GithubConnector
+    _connector_class: Type[GitConnector] = GitConnector
     _connector_attribute_name = "github"
-    github: Type[GithubConnector]
+    github: Type[GitConnector]

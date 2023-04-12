@@ -69,7 +69,7 @@ class GitWorktree:
 
     # --- Attributes -----------------------------------------------------------
 
-    connector: "GithubConnector"
+    connector: "GitConnector"
     """The connector to use to connect to the Github API."""
 
     path: Path
@@ -124,7 +124,7 @@ class GitWorktree:
 
     def __init__(
         self,
-        connector: "GithubConnector",
+        connector: "GitConnector",
         worktree: str,
         ref: str = None,
         branch: str = None,
@@ -171,7 +171,7 @@ class GitWorktree:
         return self.connector
 
     @classmethod
-    def parse(cls, connector: "GithubConnector", entry: str) -> "GitWorktree":
+    def parse(cls, connector: "GitConnector", entry: str) -> "GitWorktree":
         """Parse an entry from `git worktree list --porcelain` Git worktree.
 
         :param entry: The entry to parse.
@@ -186,7 +186,7 @@ class GitWorktree:
         return cls(connector, **values)  # type: ignore
 
 
-class GithubConnector(Connector):
+class GitConnector(Connector):
     """A class for connecting to the Github API."""
 
     _token: str = None
@@ -225,7 +225,7 @@ class GithubConnector(Connector):
         self._organization, self._repository = repo_values
 
     def __repr__(self) -> str:
-        return f"GithubConnector({self.name!r})"
+        return f"GitConnector({self.name!r})"
 
     @property
     def name(self) -> str:

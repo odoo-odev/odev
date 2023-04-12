@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 from odev.common import progress, string
-from odev.common.connectors import GithubConnector, SaasConnector
+from odev.common.connectors import GitConnector, SaasConnector
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.errors import ConnectorError
 from odev.common.mixins import SaasConnectorMixin
@@ -211,7 +211,7 @@ class SaasDatabase(SaasConnectorMixin, Database):
         matching_branches: List[Tuple[str, str]] = []
 
         for repository in repositories:
-            git = GithubConnector(repository)
+            git = GitConnector(repository)
 
             with progress.spinner(f"Fetching remote branches from GitHub for SaaS repository {repository!r}"):
                 git.list_remote_branches()
