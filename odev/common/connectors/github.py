@@ -388,7 +388,7 @@ class GithubConnector(Connector):
         logger.info(f"Repository {self.name!r} has pending changes on branch {self.branch!r}")
         self.check_requirements()
 
-        if force or console.confirm("Pull changes now?", True):
+        if force or console.confirm("Pull changes now?", default=True):
             with Stash(self.repository):
                 self._git_progress(self.remote.pull, ff_only=True)
 
@@ -584,6 +584,11 @@ class GithubConnector(Connector):
             logger.debug(f"Worktree at {worktree.path!s} is {commits_behind} commits behind 'origin/{worktree.branch}'")
 
             if commits_behind:
+                logger.info(f"Worktree '{worktree.path.parent.name}/{worktree.path.name}' has pending changes")
+
+                if not console.confirm("Pull changes now?", default=True):
+                    continue
+
                 with Stash(repo):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
                     repo.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
