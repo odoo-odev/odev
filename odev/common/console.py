@@ -214,6 +214,7 @@ class Console(RichConsole):
         :param kwargs: Keyword arguments to pass to the prompt constructor.
         :return: The result of the prompt.
         """
+        self.pause_live()
         prompt = prompt_type(
             raise_keyboard_interrupt=True,
             style=INQUIRER_STYLE,
@@ -222,15 +223,7 @@ class Console(RichConsole):
             message=message,
             **kwargs,
         )
-
-        original_execute = prompt.execute
         original_run = prompt._run
-
-        def patched_execute():
-            self.pause_live()
-            result = original_execute()
-            self.resume_live()
-            return result
 
         def patched_run():
             if self.bypass_prompt:
@@ -256,9 +249,10 @@ class Console(RichConsole):
 
             return original_run()
 
-        prompt.execute = patched_execute
         prompt._run = patched_run
-        return prompt.execute()
+        result = prompt.execute()
+        self.resume_live()
+        return result
 
     def text(self, message: str, default: str = "") -> Optional[str]:
         """Prompt for some free text.
@@ -418,6 +412,26 @@ class Console(RichConsole):
             message=message,
             choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in defaults) for choice in choices],
             transformer=lambda selected: f"{', '.join(selected[:-1])} and {selected[-1]}" if selected else "None",
+        )
+
+    def fuzzy(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[Any]:
+        """Prompt for a fuzzy selection.
+        :param message: Question to ask the user
+        :param choices: List of choices to select from
+            Each option is a tuple in the format `("value", "human-readable name")`
+            with the name being optional (fallback to value)
+        :param default: Set the default text value of the prompt
+        :return: The selected choice
+        :rtype: str or None
+        """
+        return self.__prompt_factory(
+            inquirer.fuzzy,
+            message=message,
+            choices=[Choice(choice[0], name=choice[-1]) for choice in choices],
+            default=default,
+            max_height=10,
+            match_exact=True,
+            exact_symbol="",
         )
 
     def __number_bounds_message(

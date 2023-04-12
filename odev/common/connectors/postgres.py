@@ -235,3 +235,38 @@ class PostgresConnector(Connector):
         """
         sql_columns: str = ", ".join(f"{name} {attributes}" for name, attributes in columns.items())
         return bool(self.query(f"CREATE TABLE IF NOT EXISTS {table} ({sql_columns})"))
+
+    def column_exists(self, table: str, column: str) -> bool:
+        """Check whether a column exists in a table.
+        :param table: The name of the table to check.
+        :param column: The name of the column to check.
+        :return: Whether the column exists.
+        :rtype: bool
+        """
+        return bool(
+            self.query(
+                f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{table}' AND column_name = '{column}'
+                """,
+                nocache=True,
+            )
+        )
+
+    def create_column(self, table: str, column: str, attributes: str) -> bool:
+        """Create a column in a table.
+        :param table: The name of the table to create the column in.
+        :param column: The name of the column to create.
+        :param attributes: The attributes of the column.
+        :return: Whether the column was created.
+        :rtype: bool
+        """
+        return bool(
+            self.query(
+                f"""
+                ALTER TABLE {table}
+                ADD COLUMN IF NOT EXISTS {column} {attributes}
+                """
+            )
+        )

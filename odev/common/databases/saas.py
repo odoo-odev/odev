@@ -1,19 +1,28 @@
 """Odoo Online (SaaS) database class."""
 
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
-from odev.common import string
-from odev.common.connectors import SaasConnector
-from odev.common.databases import Database, Filestore
+from odev.common import progress, string
+from odev.common.connectors import GithubConnector, SaasConnector
+from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.errors import ConnectorError
 from odev.common.mixins import SaasConnectorMixin
-from odev.common.version import OdooVersion
+from odev.common.version import ODOO_VERSION_PATTERN, OdooVersion
 
 
 ODOO_DOMAIN_SUFFIX = ".odoo.com"
+
+SAAS_REPOSITORIES: List[str] = [
+    "odoo-ps/psae-custom",
+    "odoo-ps/psbe-custom",
+    "odoo-ps/pshk-custom",
+    "odoo-ps/psus-custom",
+    "odoo/ps-custom",
+]
 
 
 class SaasDatabase(SaasConnectorMixin, Database):
@@ -26,6 +35,12 @@ class SaasDatabase(SaasConnectorMixin, Database):
 
     _filestore: Optional[Filestore] = None
     """The filestore of the database."""
+
+    _repository: Optional[Repository] = None
+    """The repository containing custom code for the database."""
+
+    _branch: Optional[Branch] = None
+    """The branch of the repository containing custom code for the database."""
 
     _platform: str = "saas"
     _platform_display: str = "Odoo Online (SaaS)"
@@ -95,6 +110,28 @@ class SaasDatabase(SaasConnectorMixin, Database):
         return self._filestore
 
     @property
+    def repository(self) -> Optional[Repository]:
+        if self._repository is None:
+            self._set_repository_branch()
+
+        return self._repository
+
+    @repository.setter
+    def repository(self, value: Repository):
+        self._repository = value
+
+    @property
+    def branch(self) -> Optional[Branch]:
+        if self._branch is None:
+            self._set_repository_branch()
+
+        return self._branch
+
+    @branch.setter
+    def branch(self, value: Branch):
+        self._branch = value
+
+    @property
     def size(self) -> int:
         return string.bytes_from_string(self.saas.database_info().get("size_backup", "0"))
 
@@ -147,3 +184,63 @@ class SaasDatabase(SaasConnectorMixin, Database):
         file.unlink(missing_ok=True)
         self.saas.dump(file, filestore)
         return file
+
+    def _set_repository_branch(self):
+        """Set the repository and branch of the database."""
+        info = self.store.databases.get(self)
+
+        if info is not None:
+            organization, repository = info.repository.split("/", 1)
+            self._repository = Repository(organization=organization, name=repository)
+            self._branch = Branch(info.branch, self._repository)
+
+    def _select_repository_branch(self):
+        """Select a repository and a branch within it from the list of available
+        SaaS repositories.
+        """
+        repositories = self.console.checkbox(
+            "In what repositories could the custom code for this database be found?",
+            choices=[(repository,) for repository in SAAS_REPOSITORIES],
+        )
+
+        if not repositories:
+            return
+
+        re_branch_name = re.compile(rf"{ODOO_VERSION_PATTERN}-[a-z-_]*{self.name}[a-z-_]*")
+        all_branches: List[Tuple[str, str]] = []
+        matching_branches: List[Tuple[str, str]] = []
+
+        for repository in repositories:
+            git = GithubConnector(repository)
+
+            with progress.spinner(f"Fetching remote branches from GitHub for SaaS repository {repository!r}"):
+                git.list_remote_branches()
+
+            all_branches.extend(
+                (
+                    f"{repository}@{branch.name.split('/', 1)[1]}",
+                    f"{branch.name.split('/', 1)[1]} ({repository})",
+                )
+                for branch in git.repository.remote().refs
+            )
+
+        for branch, display in all_branches:
+            if re_branch_name.match(branch.split("@", 1)[1]) is not None:
+                matching_branches.append((branch, display))
+
+        if len(matching_branches) == 1:
+            selected_branch: str = matching_branches[0][0]
+        else:
+            if matching_branches:
+                all_branches = matching_branches
+                search_message: str = f"Multiple potential branches found for database {self.name!r}, select one:"
+            else:
+                search_message = f"No branch found for database {self.name!r}, select one manually:"
+
+            selected_branch = self.console.fuzzy(search_message, all_branches)
+
+        repository, selected_branch = selected_branch.split("@", 1)
+        organization, repository = repository.split("/", 1)
+        self.repository = Repository(organization=organization, name=repository)
+        self.branch = Branch(name=selected_branch, repository=self._repository)
+        self.store.databases.set(self)

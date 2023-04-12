@@ -160,6 +160,10 @@ class InfoCommand(DatabaseCommand):
             ["Running", DISPLAY_TRUE if running else DISPLAY_FALSE],
             ["Odoo-Bin PID", process_id],
             ["Addons Paths", "\n".join(addons)],
+            ["Repository", self.database.repository.full_name if self.database.repository else DISPLAY_NA],
+            ["Repository URL", self.database.repository.url if self.database.repository else DISPLAY_NA],
+            ["Branch", self.database.branch.name if self.database.branch else DISPLAY_NA],
+            ["Branch URL", self.database.branch.url if self.database.branch else DISPLAY_NA],
         ]
 
     def info_table_rows_saas(self) -> List[List[str]]:
@@ -173,6 +177,10 @@ class InfoCommand(DatabaseCommand):
             ["Support URL", f"{self.database.url}/_odoo/support"],
             ["Mode", self.database.mode.capitalize()],
             ["Status", "Active" if self.database.active else "Inactive"],
+            ["Repository", self.database.repository.full_name if self.database.repository else DISPLAY_NA],
+            ["Repository URL", self.database.repository.url if self.database.repository else DISPLAY_NA],
+            ["Branch", self.database.branch.name if self.database.branch else DISPLAY_NA],
+            ["Branch URL", self.database.branch.url if self.database.branch else DISPLAY_NA],
             ["Domain Names", "\n".join(self.database.domains or [DISPLAY_NA])],
         ]
 

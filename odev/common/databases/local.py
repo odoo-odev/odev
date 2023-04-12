@@ -23,7 +23,7 @@ from zipfile import ZipFile
 from odev.common import bash, progress, string
 from odev.common.connectors import PostgresConnector
 from odev.common.console import Colors
-from odev.common.databases import Database, Filestore
+from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoo import OdooBinProcess
@@ -52,6 +52,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     _filestore: Optional[Filestore] = None
     """The filestore of the database."""
+
+    _repository: Optional[Repository] = None
+    """The repository containing custom code for the database."""
+
+    _branch: Optional[Branch] = None
+    """The branch of the repository containing custom code for the database."""
 
     _platform = "local"
     _platform_display = "Local"
@@ -259,6 +265,49 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 self._process = OdooBinProcess(self)
 
         return self._process
+
+    @property
+    def repository(self) -> Optional[Repository]:
+        if self._repository is None:
+            if not self.is_odoo:
+                return None
+
+            info = self.store.databases.get(self)
+
+            if not info or not info.repository:
+                return None
+
+            organization, name = info.repository.split("/", 1)
+            self._repository = Repository(organization=organization, name=name)
+
+        return self._repository
+
+    @repository.setter
+    def repository(self, value: Repository):
+        """Set the repository of the database."""
+        self._repository = value
+        self.store.databases.set(self)
+
+    @property
+    def branch(self) -> Optional[Branch]:
+        if self._branch is None:
+            if not self.is_odoo:
+                return None
+
+            info = self.store.databases.get(self)
+
+            if not info or not info.branch:
+                return None
+
+            self._branch = Branch(name=info.branch, repository=self.repository)
+
+        return self._branch
+
+    @branch.setter
+    def branch(self, value: Branch):
+        """Set the branch of the database."""
+        self._branch = value
+        self.store.databases.set(self)
 
     @property
     def whitelisted(self) -> bool:

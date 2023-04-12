@@ -18,6 +18,7 @@ from typing import (
 from odev.common import bash
 from odev.common.connectors import GithubConnector, GitWorktree
 from odev.common.console import Colors
+from odev.common.databases import Branch, Repository
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.progress import spinner
@@ -49,7 +50,7 @@ ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
 class OdooBinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
 
-    additional_addons_paths: List[Path] = []
+    _additional_addons_paths: List[Path] = []
     """List of additional addons paths to use when starting the Odoo process."""
 
     _venv: Optional[PythonEnv] = None
@@ -170,6 +171,24 @@ class OdooBinProcess(OdevFrameworkMixin):
 
         for repo_name in repo_names:
             yield GithubConnector(f"odoo/{repo_name}")
+
+    @property
+    def additional_addons_paths(self) -> List[Path]:
+        """Return the list of additional addons paths."""
+        return self._additional_addons_paths
+
+    @additional_addons_paths.setter
+    def additional_addons_paths(self, value: List[Path]):
+        """Set the list of additional addons paths."""
+        self._additional_addons_paths = value
+        self.set_database_repository()
+
+    @property
+    def additional_repositories(self) -> Generator[GithubConnector, None, None]:
+        """Return the list of additional repositories linked to this database."""
+        for path in self.additional_addons_paths:
+            if path.is_dir():
+                yield GithubConnector(f"{path.parent.name}/{path.name}")
 
     @property
     def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
@@ -403,3 +422,18 @@ class OdooBinProcess(OdevFrameworkMixin):
                     for line in file.readlines():
                         if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
                             return True
+
+    def set_database_repository(self):
+        """Link the database to the first repository in additional addons-paths."""
+        repository = next(self.additional_repositories, None)
+
+        if repository is None:
+            return
+
+        info = self.database.store.databases.get(self.database)
+
+        if info is not None and info.repository == repository.name:
+            return
+
+        self.database.repository = Repository(repository._repository, repository._organization)
+        self.database.branch = Branch(repository.branch, self.database.repository)

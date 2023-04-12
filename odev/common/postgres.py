@@ -93,6 +93,16 @@ class PostgresDatabase(PostgresConnectorMixin):
         return self.connector.create_table(table, columns)
 
     @ensure_connected
+    def column_exists(self, table: str, column: str) -> bool:
+        """Check if a column exists in a table."""
+        return self.connector.column_exists(table, column)
+
+    @ensure_connected
+    def create_column(self, table: str, column: str, definition: str):
+        """Check if a column exists in a table."""
+        return self.connector.create_column(table, column, definition)
+
+    @ensure_connected
     def query(self, query: str):
         """Execute a query on the database."""
         return self.connector.query(query)
@@ -147,9 +157,17 @@ class PostgresTable(ABC):
 
     def prepare_database_table(self):
         """Prepare the table and ensures it has the correct definition and constraints applied."""
-        if self._columns is not None and not self.database.table_exists(self.name):
-            logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
-            self.database.create_table(self.name, self._columns)
+        if self._columns is not None:
+            if not self.database.table_exists(self.name):
+                logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
+                self.database.create_table(self.name, self._columns)
+            else:
+                for column_name, column_def in self._columns.items():
+                    if not self.database.column_exists(self.name, column_name):
+                        logger.debug(
+                            f"Adding column {column_name!r} to table {self.name!r} in database {self.database!r}"
+                        )
+                        self.database.create_column(self.name, column_name, column_def)
 
         if self._constraints is not None:
             for name, definition in self._constraints.items():

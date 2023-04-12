@@ -32,6 +32,43 @@ class Filestore:
     """The size of the filestore in bytes."""
 
 
+@dataclass(frozen=True)
+class Branch:
+    """Information about a branch of a repository."""
+
+    name: str
+    """Name of the branch."""
+
+    repository: "Repository"
+    """The repository containing the branch."""
+
+    @property
+    def url(self) -> str:
+        """Return the URL of the branch."""
+        return f"{self.repository.url}/tree/{self.name}"
+
+
+@dataclass(frozen=True)
+class Repository:
+    """Information about the repository of an Odoo database."""
+
+    name: str
+    """Name of the repository."""
+
+    organization: str
+    """Name of the organization owning the repository."""
+
+    @property
+    def full_name(self) -> str:
+        """Return the full name of the repository."""
+        return f"{self.organization}/{self.name}"
+
+    @property
+    def url(self) -> str:
+        """Return the URL of the repository."""
+        return f"https://github.com/{self.full_name}"
+
+
 class Database(OdevFrameworkMixin, ABC):
     """Base abstract class for manipulating databases."""
 
@@ -46,6 +83,9 @@ class Database(OdevFrameworkMixin, ABC):
 
     _filestore: Optional[Filestore] = None
     """The filestore of the database."""
+
+    _branch: Optional[Branch] = None
+    """The branch of the repository containing custom code for the database."""
 
     def __init__(self, name: str, *args, **kwargs):
         """Initialize the database."""
@@ -124,6 +164,16 @@ class Database(OdevFrameworkMixin, ABC):
     @abstractproperty
     def rpc_port(self) -> Optional[int]:
         """Return the port used by the Odoo RPC interface."""
+
+    @abstractproperty
+    def repository(self) -> Optional[Repository]:
+        """The repository containing custom code for the database."""
+
+    @abstractproperty
+    def branch(self) -> Branch:
+        """Return information about the branch of the repository containing custom
+        code for the database.
+        """
 
     def create(self):
         """Create the database."""

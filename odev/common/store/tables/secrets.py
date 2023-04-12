@@ -128,14 +128,11 @@ class SecretStore(PostgresTable):
                     if not ask_missing:
                         continue
 
-            console.pause_live()
-
             if field == "password":
                 value = console.secret(prompt_label)
             else:
                 value = console.text(prompt_label, default=current_value)
 
-            console.resume_live()
             setattr(secret, field, value)
 
         if secret.login != old_secret.login or secret.password != old_secret.password:

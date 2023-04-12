@@ -207,9 +207,6 @@ class GithubConnector(Connector):
     _requirements_changed: bool = False
     """Whether the requirements.txt file has been modified since the last pull."""
 
-    repository: Repo = None
-    """The repository object."""
-
     def __init__(self, repo: str):
         """Initialize the Github connector.
 
@@ -226,7 +223,6 @@ class GithubConnector(Connector):
             )
 
         self._organization, self._repository = repo_values
-        self.repository = Repo(self.path) if self.path.exists() and self.path.is_dir() else None
 
     def __repr__(self) -> str:
         return f"GithubConnector({self.name!r})"
@@ -250,6 +246,11 @@ class GithubConnector(Connector):
     def ssh_url(self) -> str:
         """The SSH URL to the repository."""
         return f"git@github.com:{self.name}.git"
+
+    @property
+    def repository(self) -> Repo:
+        """The repository object."""
+        return Repo(self.path) if self.path.exists() and self.path.is_dir() else None
 
     @property
     def remote(self) -> Optional[Remote]:
@@ -339,9 +340,6 @@ class GithubConnector(Connector):
             self._disconnect()
             return self.connect()
 
-        if self.repository is None and self.path.exists() and self.path.is_dir():
-            self.repository = Repo(self.path)
-
         logger.debug("Connected to Github API")
 
     def disconnect(self):
@@ -366,6 +364,8 @@ class GithubConnector(Connector):
     def clone(self, branch: str = None):
         """Clone the repository locally."""
         if self.path.exists():
+            if branch is not None:
+                self.checkout(branch)
             return
 
         options = ["--recurse-submodules"]
@@ -375,7 +375,6 @@ class GithubConnector(Connector):
 
         logger.debug(f"Cloning repository {self.name!r} to {self.path}" + (f" on branch {branch!r}" if branch else ""))
         self._git_progress(Repo.clone_from, self.ssh_url, self.path, multi_options=options)
-        self.repository = Repo(self.path)
         logger.info(
             f"Cloned repository [bold {Colors.CYAN}]{self.name!s}[/bold {Colors.CYAN}]"
             + (f" on branch {branch!r}" if branch else "")
@@ -588,3 +587,14 @@ class GithubConnector(Connector):
                 with Stash(repo):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
                     repo.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
+
+    def list_remote_branches(self) -> List[str]:
+        """List all remote branches of the repository.
+
+        :return: A list of all remote branches of the repository.
+        :rtype: List[str]
+        """
+        with self:
+            branches = self._connection.get_repo(self.name).get_branches()
+
+        return [branch.name for branch in branches]

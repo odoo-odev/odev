@@ -23,7 +23,7 @@ from requests import HTTPError, Response
 
 from odev.common import progress
 from odev.common.connectors import PaasConnector
-from odev.common.databases import Database, Filestore
+from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 from odev.common.mixins import PaasConnectorMixin
@@ -37,7 +37,7 @@ ODOO_DOMAIN_SUFFIX = ".odoo.com"
 
 
 @dataclass(frozen=True)
-class PaasRepository:
+class PaasRepository(Repository):
     """Represents a repository linked to an Odoo SH project."""
 
     database: "PaasDatabase"
@@ -48,16 +48,6 @@ class PaasRepository:
 
     organization: str
     """Name of the organization owning the repository."""
-
-    @property
-    def full_name(self) -> str:
-        """Return the full name of the repository."""
-        return f"{self.organization}/{self.name}"
-
-    @property
-    def url(self) -> str:
-        """Return the URL of the repository."""
-        return f"https://github.com/{self.full_name}"
 
     @property
     def project(self) -> "PaasProject":
@@ -87,7 +77,7 @@ class PaasProject:
 
 
 @dataclass(frozen=True)
-class PaasBranch:
+class PaasBranch(Branch):
     """Represents a branch on Odoo SH."""
 
     database: "PaasDatabase"
@@ -591,14 +581,21 @@ class PaasDatabase(PaasConnectorMixin, Database):
             self._name = branch_info["last_build_id"][1]
             self._url = None
 
+    def _set_name(self, name: str):
+        """Set the database name and URL from a given input."""
+        parsed = self._parse_url(name)
+        self._url = f"{parsed.scheme}://{parsed.netloc}"
+        self._name = re.sub(rf"(\.dev)?{re.escape(ODOO_DOMAIN_SUFFIX)}$", "", parsed.netloc)
+
     def _set_paas_connector(self):
         """Set the PaaS connector for this database."""
         self.paas = self._paas("odev")
 
         if self._name is None or self._url is None:
-            parsed = self._parse_url(self._input_name)
-            self._url = f"{parsed.scheme}://{parsed.netloc}"
-            self._name = re.sub(rf"(\.dev)?{re.escape(ODOO_DOMAIN_SUFFIX)}$", "", parsed.netloc)
+            self._set_name(self._input_name)
+
+        if self._input_name != self.repository_info["project_name"]:
+            self._set_name(self.repository_info["project_name"])
 
         self.paas = self._paas(self.repository_info["full_name"])
 
