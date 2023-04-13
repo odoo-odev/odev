@@ -264,7 +264,7 @@ class GitConnector(Connector):
         return f"git@github.com:{self.name}.git"
 
     @property
-    def repository(self) -> Repo:
+    def repository(self) -> Optional[Repo]:
         """The repository object."""
         return Repo(self.path) if self.exists else None
 
@@ -302,7 +302,7 @@ class GitConnector(Connector):
     @property
     def branch(self) -> Optional[str]:
         """The current branch of the repository."""
-        if self.repository.head.is_detached:
+        if self.repository is None or self.repository.head.is_detached:
             return None
 
         return self.repository.active_branch.name.split("/")[-1]
