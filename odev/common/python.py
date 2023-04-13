@@ -261,6 +261,7 @@ class PythonEnv:
         args: Optional[List[str]] = None,
         stream: bool = False,
         progress: Callable[[str], None] = None,
+        script_input: Optional[str] = None,
     ) -> Optional[CompletedProcess]:
         """Run a python script.
 
@@ -278,6 +279,9 @@ class PythonEnv:
 
         logger.debug(f"Running python script {script_path}")
         command = f"{self.python} {script_path} {' '.join(args)}"
+
+        if script_input is not None:
+            command = f"{script_input} | {command}"
 
         if not stream:
             return bash.execute(command)

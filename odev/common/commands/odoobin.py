@@ -1,4 +1,5 @@
 import re
+import shlex
 from abc import ABC
 from pathlib import Path
 from typing import Optional
@@ -106,3 +107,90 @@ class OdoobinCommand(DatabaseCommand, ABC):
     def odoobin(self) -> Optional[OdooBinProcess]:
         """The odoo-bin process associated with the database."""
         return self.database.process
+
+
+class OdoobinShellCommand(OdoobinCommand, ABC):
+    """Base class for commands that interact with an odoo-bin shell process
+    with the added ability to run scripts inside its environment."""
+
+    arguments = [
+        {
+            "name": "script",
+            "aliases": ["--script"],
+            "help": """
+            Run a script inside of odoo-bin shell and exit. Can be a path
+            to a file containing python code or a string representing
+            python code to be executed inside the shell environment.
+            """,
+        },
+    ]
+
+    @property
+    def script_run_after(self) -> str:
+        """The python code to be executed inside the shell environment after the script
+        has been loaded. May be used to call the script function if the script is a file.
+        """
+        return ""
+
+    def run(self):
+        """Run the odoo-bin process for the selected database locally."""
+        if self.args.script:
+            result = self.run_script()
+
+            if result is not None:
+                logger.info("Executed custom script:")
+                return self.run_script_handle_result(result)
+
+        else:
+            self.odoobin.run(args=self.args.odoo_args, subcommand="shell")
+
+    def run_script(self) -> Optional[str]:
+        """Run a script inside of odoo-bin shell and exit.
+        :return: The output of the script.
+        """
+        if Path(self.args.script).is_file():
+            subcommand_input = f"cat {self.args.script}"
+        else:
+            subcommand_input = f"echo {shlex.quote(self.args.script)}"
+
+        if self.script_run_after:
+            run_after: str = self.script_run_after
+
+            if not run_after.startswith("print("):
+                run_after = f"print({self.script_run_after})"
+
+            subcommand_input = f"{subcommand_input}; echo {shlex.quote(run_after)}"
+
+        process = self.odoobin.run(
+            args=self.args.odoo_args,
+            subcommand="shell",
+            subcommand_input=f"{{ {subcommand_input}; }}",
+            stream=False,
+        )
+
+        if process is None or process.stdout is None:
+            return None
+
+        return process.stdout.decode()
+
+    def run_script_handle_result(self, result: str):
+        """Handle the result of the script execution.
+        This is designed to be overridden by subclasses.
+        By default, prints to result to the console.
+        """
+        self.print(result, highlight=False)
+
+
+class OdoobinShellScriptCommand(OdoobinShellCommand, ABC):
+    """Base class for commands that interact with an odoo-bin shell process
+    by running a predefined script inside its environment.
+    """
+
+    def __init__(self, args):
+        super().__init__(args)
+        self.args.script = (self.odev.scripts_path / f"{self.name}.py").as_posix()
+
+    @classmethod
+    def prepare_command(cls, *args, **kwargs) -> None:
+        super().prepare_command(*args, **kwargs)
+        cls.remove_argument("script")

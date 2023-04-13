@@ -1,13 +1,13 @@
 """Run an Odoo database locally."""
 
-from odev.common.commands import OdoobinCommand
+from odev.common.commands import OdoobinShellCommand
+from odev.common.logging import logging
 
 
-class ShellCommand(OdoobinCommand):
+logger = logging.getLogger(__name__)
+
+
+class ShellCommand(OdoobinShellCommand):
     """Run the odoo-bin process in shell mode for the selected database locally."""
 
     name = "shell"
-
-    def run(self):
-        """Run the odoo-bin process for the selected database locally."""
-        self.odoobin.run(args=self.args.odoo_args, subcommand=self.name)

@@ -110,6 +110,11 @@ class Odev:
         return self.path / "odev" / "setup"
 
     @property
+    def scripts_path(self) -> Path:
+        """Local path to the directory where odoo-bin shell scripts are stored."""
+        return self.path / "odev" / "scripts"
+
+    @property
     def dumps_path(self) -> Path:
         """Local path to the directory where database dumps are stored."""
         return self.config.paths.dumps

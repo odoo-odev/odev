@@ -15,7 +15,7 @@ from typing import (
     Sequence,
 )
 
-from odev.common import bash
+from odev.common import bash, string
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.console import Colors
 from odev.common.databases import Branch, Repository
@@ -310,6 +310,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         self,
         args: List[str] = None,
         subcommand: str = None,
+        subcommand_input: Optional[str] = None,
         stream: bool = True,
         progress: Callable[[str], None] = None,
     ) -> Optional[CompletedProcess]:
@@ -339,14 +340,25 @@ class OdooBinProcess(OdevFrameworkMixin):
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
 
             logger.info(f"{info_message} using command:")
+            formatted_command = f"{self.venv.python} {self.odoobin_path} {' '.join(odoobin_args)}"
+
+            if subcommand_input is not None:
+                formatted_command = f"{subcommand_input} | {formatted_command}"
+
             self.console.print(
-                f"\n[{Colors.CYAN}]{self.venv.python} {self.odoobin_path} {' '.join(odoobin_args)}[/{Colors.CYAN}]\n",
+                f"\n{string.stylize(formatted_command, Colors.CYAN)}\n",
                 soft_wrap=True,
             )
 
             try:
                 with spinner(info_message) if not stream else nullcontext():
-                    process = self.venv.run_script(self.odoobin_path, odoobin_args, stream=stream, progress=progress)
+                    process = self.venv.run_script(
+                        self.odoobin_path,
+                        odoobin_args,
+                        stream=stream,
+                        progress=progress,
+                        script_input=subcommand_input,
+                    )
             except CalledProcessError as error:
                 if not stream:
                     self.console.print(error.stderr.decode())
