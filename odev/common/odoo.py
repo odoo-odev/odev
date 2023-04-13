@@ -37,6 +37,13 @@ __all__ = ["OdooBinProcess", "ODOO_PYTHON_VERSIONS"]
 logger = logging.getLogger(__name__)
 
 
+ODOO_COMMUNITY_REPOSITORIES: List[str] = [
+    "odoo/odoo",
+    "odoo/design-themes",
+]
+
+ODOO_ENTERPRISE_REPOSITORIES: List[str] = ["odoo/enterprise"]
+
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
     16: "3.10",
     15: "3.8",
@@ -163,14 +170,15 @@ class OdooBinProcess(OdevFrameworkMixin):
     @property
     def odoo_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of Odoo repositories the current version."""
-        repo_names: List[str] = ["odoo", "design-themes"]
+        repo_names: List[str] = [*ODOO_COMMUNITY_REPOSITORIES]
 
         with self.database:
             if self.database.edition == "enterprise" or self._force_enterprise:
-                repo_names.insert(1, "enterprise")
+                for repo_name in ODOO_ENTERPRISE_REPOSITORIES:
+                    repo_names.insert(1, repo_name)
 
         for repo_name in repo_names:
-            yield GitConnector(f"odoo/{repo_name}")
+            yield GitConnector(repo_name)
 
     @property
     def additional_addons_paths(self) -> List[Path]:

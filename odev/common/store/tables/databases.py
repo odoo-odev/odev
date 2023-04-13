@@ -23,10 +23,10 @@ class DatabaseInfo:
     whitelisted: bool
     """Whether the database is whitelisted and should not be removed automatically."""
 
-    repository: str
+    repository: Optional[str]
     """Custom repository linked to the database."""
 
-    branch: str
+    branch: Optional[str]
     """Branch in the custom repository with the code for the database."""
 
 

@@ -22,6 +22,8 @@ from rich.control import Control, ControlType
 from rich.highlighter import ISO8601Highlighter, ReprHighlighter, _combine_regex
 from rich.theme import Theme
 
+from odev.common import string
+
 
 __all__ = ["Colors", "console"]
 
@@ -411,7 +413,7 @@ class Console(RichConsole):
             inquirer.checkbox,
             message=message,
             choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in defaults) for choice in choices],
-            transformer=lambda selected: f"{', '.join(selected[:-1])} and {selected[-1]}" if selected else "None",
+            transformer=lambda selected: string.join_and(selected) if selected else "None",
         )
 
     def fuzzy(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[Any]:

@@ -89,18 +89,13 @@ class PaasBranch(Branch):
     name: str
     """Name of the branch."""
 
-    url: str
-    """URL of the branch."""
+    repository: Repository
+    """Repository linked to this branch."""
 
     @property
     def project(self) -> PaasProject:
         """Return the project linked to this branch."""
         return self.database.project
-
-    @property
-    def repository(self) -> PaasRepository:
-        """Return the repository linked to this branch."""
-        return self.database.repository
 
 
 @dataclass(frozen=True)
@@ -465,7 +460,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
                 database=self,
                 id=self.branch_info["id"],
                 name=self.branch_info["name"],
-                url=self.branch_info["provider_url"],
+                repository=self.repository,
             )
 
         return self._branch

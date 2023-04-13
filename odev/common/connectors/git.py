@@ -12,6 +12,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     Union,
 )
 
@@ -20,7 +21,7 @@ from github import Github, GithubException
 
 from odev.common import bash
 from odev.common.connectors.base import Connector
-from odev.common.console import Colors, console
+from odev.common.console import console
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 from odev.common.progress import Progress, spinner
@@ -168,7 +169,7 @@ class GitWorktree:
         :return: The repository object.
         :rtype: Repo
         """
-        return self.connector
+        return Repo(self.path)
 
     @classmethod
     def parse(cls, connector: "GitConnector", entry: str) -> "GitWorktree":
@@ -184,6 +185,16 @@ class GitWorktree:
             for key, value in matched_values.items()
         }
         return cls(connector, **values)  # type: ignore
+
+    def pending_changes(self) -> Tuple[int, int]:
+        """Check for changes in the worktree and return a tuple of commits behind and ahead.
+        :return: A tuple of commits behind and ahead.
+        :rtype: Tuple[int, int]
+        """
+        repo = Repo(self.path)
+        rev_list: str = repo.git.rev_list("--left-right", "--count", "@{u}...HEAD")
+        commits_behind, commits_ahead = [int(commits) for commits in rev_list.split("\t")]
+        return commits_behind, commits_ahead
 
 
 class GitConnector(Connector):
@@ -238,6 +249,11 @@ class GitConnector(Connector):
         return self.config.paths.repositories / self.name
 
     @property
+    def exists(self) -> bool:
+        """Whether the repository exists locally."""
+        return self.path.is_dir() and self.path / ".git" in self.path.iterdir()
+
+    @property
     def url(self) -> str:
         """The URL to the repository."""
         return f"https://github.com/{self.name}"
@@ -250,7 +266,7 @@ class GitConnector(Connector):
     @property
     def repository(self) -> Repo:
         """The repository object."""
-        return Repo(self.path) if self.path.exists() and self.path.is_dir() else None
+        return Repo(self.path) if self.exists else None
 
     @property
     def remote(self) -> Optional[Remote]:
@@ -374,11 +390,21 @@ class GitConnector(Connector):
             options.extend(["--branch", branch, "--single-branch"])
 
         logger.debug(f"Cloning repository {self.name!r} to {self.path}" + (f" on branch {branch!r}" if branch else ""))
-        self._git_progress(Repo.clone_from, self.ssh_url, self.path, multi_options=options)
-        logger.info(
-            f"Cloned repository [bold {Colors.CYAN}]{self.name!s}[/bold {Colors.CYAN}]"
-            + (f" on branch {branch!r}" if branch else "")
-        )
+
+        try:
+            self._git_progress(Repo.clone_from, self.ssh_url, self.path, multi_options=options)
+        except GitCommandError as error:
+            message: str = f"Failed to clone repository {self.name!r} to {self.path}"
+
+            if error.stderr:
+                message += f": {error.stderr}"
+
+            raise ConnectorError(message, self) from error
+        else:
+            logger.info(
+                f"Cloned repository {self.name!r} to {self.path.as_posix()}"
+                + (f" on branch {branch!r}" if branch else "")
+            )
 
     def pull(self, force: bool = False):
         """Pull the latest modifications from the remote repository."""
@@ -389,8 +415,16 @@ class GitConnector(Connector):
         self.check_requirements()
 
         if force or console.confirm("Pull changes now?", default=True):
-            with Stash(self.repository):
-                self._git_progress(self.remote.pull, ff_only=True)
+            try:
+                with Stash(self.repository):
+                    self._git_progress(self.remote.pull, ff_only=True)
+            except GitCommandError as error:
+                message: str = f"Failed to pull changes in repository {self.name!r}"
+
+                if error.stderr:
+                    message += f": {error.stderr}"
+
+                raise ConnectorError(message, self) from error
 
     def checkout(self, branch: str = None):
         """Checkout a branch in the repository."""
@@ -398,15 +432,37 @@ class GitConnector(Connector):
             branch = self.default_branch
 
         logger.debug(f"Checking out branch {branch!r} in repository {self.name!r}")
-        self.repository.git.checkout(branch, quiet=True)
+
+        try:
+            self.repository.git.checkout(branch, quiet=True)
+        except GitCommandError as error:
+            message: str = f"Failed to checkout branch {branch!r} in repository {self.name!r}"
+
+            if error.stderr:
+                message += f": {error.stderr}"
+
+            raise ConnectorError(message, self) from error
+        else:
+            logger.info(f"Checked out branch {branch!r} in repository {self.name!r}")
+
+    def pending_changes(self) -> Tuple[int, int]:
+        """Get the number of pending commits to be pulled and pushed.
+        :return: A tuple of the number of commits behind and the number of commits ahead.
+        :rtype: Tuple[int, int]
+        """
+        if self.remote_branch is None:
+            return 0, 0
+
+        rev_list: str = self.repository.git.rev_list("--left-right", "--count", "@{u}...HEAD")
+        commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
+        return commits_behind, commits_ahead
 
     def has_pending_changes(self):
         """Check whether the current branch in the repository has pending changes ready to be pulled."""
         if self.remote_branch is None:
             return False
 
-        rev_list: str = self.repository.git.rev_list("--left-right", "--count", "@{u}...HEAD")
-        commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
+        commits_behind, commits_ahead = self.pending_changes()
         message_behind = f"{commits_behind} commit{'s' if commits_behind > 1 else ''} behind"
         message_ahead = f"{commits_ahead} commit{'s' if commits_ahead > 1 else ''} ahead of"
         message_repo = f"Repository {self.name!r}"
@@ -434,26 +490,22 @@ class GitConnector(Connector):
         diff = self.repository.git.diff("--name-only", "HEAD", "--", requirements_file).strip()
 
         if diff == requirements_file.as_posix():
-            logger.debug(
-                f"Repository [bold {Colors.CYAN}]{self.name}[/bold {Colors.CYAN}] "
-                "requirements have changed since last version"
-            )
+            logger.debug(f"Repository {self.name!r} requirements have changed since last version")
 
         self._requirements_changed = bool(diff)
 
     def _git_progress(self, operation: Callable, *args, **kwargs):
         """Display a progress bar when performing time-consuming git operations."""
         progress = Progress()
-        repo_name = f"[bold {Colors.CYAN}]{self.name}[/bold {Colors.CYAN}]"
-        task_description_clone = f"Downloading repository {repo_name}"
-        task_description_delta = f"Resolving deltas in {repo_name}"
+        task_description_clone = f"Downloading repository {self.name!r}"
+        task_description_delta = f"Resolving deltas in {self.name!r}"
         task = progress.add_task(task_description_clone, total=None, start=False)
 
         def update_progress(operation_code: int, current_count: int, max_count: int = None, message: str = None):
             if operation_code == 66:
                 progress.stop_task(task)
                 progress.stop()
-                logger.debug(f"Cloned repository {repo_name}")
+                logger.debug(f"Cloned repository {self.name!r}")
                 return
             elif operation_code == 33:
                 progress.start_task(task)
@@ -472,9 +524,15 @@ class GitConnector(Connector):
 
         with capture_signals(handler=signal_handler_progress):
             try:
-                return operation(*args, **kwargs, progress=update_progress)
-            except GitCommandError:
-                pass
+                result = operation(*args, **kwargs, progress=update_progress)
+            except GitCommandError as error:
+                progress.stop_task(task)
+                progress.stop()
+                raise error
+            else:
+                progress.stop_task(task)
+                progress.stop()
+                return result
 
     def worktrees(self) -> Generator[GitWorktree, None, None]:
         """Iterate over the working trees of the git repository."""
@@ -499,7 +557,7 @@ class GitConnector(Connector):
         if not path.is_absolute():
             path = (self.worktrees_path / path).resolve()
 
-        message = f"worktree [bold]{branch!s}[/bold] for [bold {Colors.CYAN}]{self.name}[/bold {Colors.CYAN}]"
+        message = f"worktree {branch!r} for {self.name!r}"
 
         with spinner(f"Creating {message}"):
             self.worktrees_path.mkdir(parents=True, exist_ok=True)
@@ -572,26 +630,25 @@ class GitConnector(Connector):
             logger.debug(f"Fetching changes in worktree {worktree.path!s}")
             bash.detached(f"cd {worktree.path!s} && git fetch")
 
-    def pull_worktrees(self, worktrees: Sequence[GitWorktree] = None):
+    def pull_worktrees(self, worktrees: Sequence[GitWorktree] = None, force: bool = False):
         """Pull all worktrees of the repository.
 
         :param worktrees: A list of worktrees to pull. If not specified, all worktrees will be pulled.
         """
         for worktree in self._filter_worktrees(worktrees):
-            repo = Repo(worktree.path)
-            rev_list: str = repo.git.rev_list("--left-right", "--count", "@{u}...HEAD")
-            commits_behind = int(rev_list.split("\t")[0])
+            commits_behind, _ = worktree.pending_changes()
             logger.debug(f"Worktree at {worktree.path!s} is {commits_behind} commits behind 'origin/{worktree.branch}'")
 
             if commits_behind:
-                logger.info(f"Worktree '{worktree.path.parent.name}/{worktree.path.name}' has pending changes")
+                if not force:
+                    logger.info(f"Worktree '{worktree.path.parent.name}/{worktree.path.name}' has pending changes")
 
-                if not console.confirm("Pull changes now?", default=True):
-                    continue
+                    if not console.confirm("Pull changes now?", default=True):
+                        continue
 
-                with Stash(repo):
+                with Stash(worktree.repository):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
-                    repo.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
+                    worktree.repository.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
 
     def list_remote_branches(self) -> List[str]:
         """List all remote branches of the repository.

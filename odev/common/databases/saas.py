@@ -189,7 +189,7 @@ class SaasDatabase(SaasConnectorMixin, Database):
         """Set the repository and branch of the database."""
         info = self.store.databases.get(self)
 
-        if info is not None:
+        if info is not None and info.repository is not None:
             organization, repository = info.repository.split("/", 1)
             self._repository = Repository(organization=organization, name=repository)
             self._branch = Branch(info.branch, self._repository)
