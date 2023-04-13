@@ -641,7 +641,7 @@ class GitConnector(Connector):
 
             if commits_behind:
                 if not force:
-                    logger.info(f"Worktree '{worktree.path.parent.name}/{worktree.path.name}' has pending changes")
+                    logger.info(f"Repository {self.name!r} on version {worktree.branch!r} has pending changes")
 
                     if not console.confirm("Pull changes now?", default=True):
                         continue
