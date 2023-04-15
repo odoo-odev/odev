@@ -162,6 +162,10 @@ class Database(OdevFrameworkMixin, ABC):
         """Return whether the database exists."""
 
     @abstractproperty
+    def running(self) -> bool:
+        """Return whether the database is currently running and accessible."""
+
+    @abstractproperty
     def rpc_port(self) -> Optional[int]:
         """Return the port used by the Odoo RPC interface."""
 

@@ -259,6 +259,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return bool(psql.database_exists(self.name))
 
     @property
+    def running(self) -> bool:
+        """Check if the database is running."""
+        return self.process and self.process.is_running
+
+    @property
     def process(self) -> Optional[OdoobinProcess]:
         if self._process is None and self.exists:
             with self:

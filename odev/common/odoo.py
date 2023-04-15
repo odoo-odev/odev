@@ -306,6 +306,42 @@ class OdoobinProcess(OdevFrameworkMixin):
         self.update_worktrees()
         self.prepare_venv()
 
+    def deploy(self, module: Path, args: List[str] = None, url: str = None) -> Optional[CompletedProcess]:
+        """Run odoo-bin deploy to import a module on the database at the given URL.
+        :param url: URL of the database to which import the module.
+        :param args: Additional arguments to pass to odoo-bin.
+        """
+        odoo_subcommand: str = "deploy"
+        odoo_command: str = f"odoo-bin {odoo_subcommand}"
+        odoo_args: List[str] = [
+            odoo_subcommand,
+            *args,
+            module.as_posix(),
+            url if url else self.database.url,
+        ]
+
+        info_message: str = (
+            f"Running {odoo_command!r} in version {self.version!s} "
+            f"on {self.database.platform.display} database {self.database.name!r}"
+        )
+
+        logger.info(f"{info_message} using command:")
+        formatted_command = f"{self.venv.python} {self.odoobin_path} {' '.join(odoo_args)}"
+        self.console.print(
+            f"\n{string.stylize(formatted_command, Colors.CYAN)}\n",
+            soft_wrap=True,
+        )
+
+        with capture_signals():
+            try:
+                with spinner(info_message):
+                    process = self.venv.run_script(self.odoobin_path, odoo_args, stream=False)
+            except CalledProcessError as error:
+                error_message: str = error.stderr.strip().decode().rstrip(".").replace("ERROR: ", "")
+                return logger.error(f"Odoo exited with an error: {error_message}")
+            else:
+                return process
+
     def run(
         self,
         args: List[str] = None,

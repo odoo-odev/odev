@@ -83,6 +83,10 @@ class SaasDatabase(SaasConnectorMixin, Database):
         return self.saas.exists
 
     @property
+    def running(self) -> bool:
+        return self.exists
+
+    @property
     def is_odoo(self) -> bool:
         return self.exists
 

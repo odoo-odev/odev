@@ -332,6 +332,10 @@ class PaasDatabase(PaasConnectorMixin, Database):
         return self._check_url(self.url)
 
     @property
+    def running(self) -> bool:
+        return self.exists and self._check_url(self.url)
+
+    @property
     def is_odoo(self) -> bool:
         return self.exists
 
