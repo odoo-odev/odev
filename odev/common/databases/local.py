@@ -26,7 +26,7 @@ from odev.common.console import Colors
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
-from odev.common.odoo import OdooBinProcess
+from odev.common.odoo import OdoobinProcess
 from odev.common.signal_handling import capture_signals
 from odev.common.thread import Thread
 from odev.common.version import OdooVersion
@@ -42,7 +42,7 @@ ARCHIVE_FILESTORE = "filestore/"
 class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
 
-    _process: Optional[OdooBinProcess] = None
+    _process: Optional[OdoobinProcess] = None
     """The Odoo process running the database."""
 
     connector: PostgresConnector
@@ -259,10 +259,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return bool(psql.database_exists(self.name))
 
     @property
-    def process(self) -> Optional[OdooBinProcess]:
+    def process(self) -> Optional[OdoobinProcess]:
         if self._process is None and self.exists:
             with self:
-                self._process = OdooBinProcess(self)
+                self._process = OdoobinProcess(self)
 
         return self._process
 

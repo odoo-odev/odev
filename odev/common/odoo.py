@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from odev.common.databases import LocalDatabase
 
 
-__all__ = ["OdooBinProcess", "ODOO_PYTHON_VERSIONS"]
+__all__ = ["OdoobinProcess", "ODOO_PYTHON_VERSIONS"]
 
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
 }
 
 
-class OdooBinProcess(OdevFrameworkMixin):
+class OdoobinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
 
     _additional_addons_paths: List[Path] = []
@@ -67,7 +67,7 @@ class OdooBinProcess(OdevFrameworkMixin):
     """Force using the enterprise version of Odoo."""
 
     def __init__(self, database: "LocalDatabase", venv: str = None, version: OdooVersion = None):
-        """Initialize the OdooBinProcess object."""
+        """Initialize the OdoobinProcess object."""
         super().__init__()
 
         self.database: LocalDatabase = database
@@ -84,7 +84,7 @@ class OdooBinProcess(OdevFrameworkMixin):
         """Github repository of Odoo."""
 
     def __repr__(self) -> str:
-        return f"OdooBinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid!r})"
+        return f"OdoobinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid!r})"
 
     @property
     def venv(self) -> PythonEnv:
@@ -234,8 +234,8 @@ class OdooBinProcess(OdevFrameworkMixin):
         )
         return (path for glob in globs for path in glob)
 
-    def with_version(self, version: OdooVersion = None) -> "OdooBinProcess":
-        """Return the OdooBinProcess instance with the given version forced."""
+    def with_version(self, version: OdooVersion = None) -> "OdoobinProcess":
+        """Return the OdoobinProcess instance with the given version forced."""
         self._version = version
         self._venv = None
         return self

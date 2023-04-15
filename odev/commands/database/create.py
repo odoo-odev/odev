@@ -8,7 +8,7 @@ from odev.common import progress
 from odev.common.commands import OdoobinCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
-from odev.common.odoo import OdooBinProcess
+from odev.common.odoo import OdoobinProcess
 from odev.common.version import OdooVersion
 
 
@@ -157,7 +157,7 @@ class CreateCommand(OdoobinCommand):
         if not re.search(r"--st(op-after-init)?", joined_args):
             args.append("--stop-after-init")
 
-        process = (self.odoobin or OdooBinProcess(self.database)).with_version(self.version).run(args=args, stream=True)
+        process = (self.odoobin or OdoobinProcess(self.database)).with_version(self.version).run(args=args, stream=True)
 
         if process is None:
             raise self.error(f"Failed to initialize database {self.database.name!r}")

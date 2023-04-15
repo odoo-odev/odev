@@ -7,7 +7,7 @@ from typing import Optional
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
-from odev.common.odoo import OdooBinProcess
+from odev.common.odoo import OdoobinProcess
 from odev.common.version import OdooVersion
 
 
@@ -104,7 +104,7 @@ class OdoobinCommand(DatabaseCommand, ABC):
         cls.remove_argument("branch")
 
     @property
-    def odoobin(self) -> Optional[OdooBinProcess]:
+    def odoobin(self) -> Optional[OdoobinProcess]:
         """The odoo-bin process associated with the database."""
         return self.database.process
 
