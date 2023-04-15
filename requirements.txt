@@ -27,6 +27,7 @@ requests>=2,<3
 rich==12.6.*
 scp>=0.14.2,<1
 texttable>=1.6.4
+timeago>=1.0.15
 tldextract>=3.1,<4
 Unidecode>=1,<2
 virtualenv>=20,<21

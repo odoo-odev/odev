@@ -126,7 +126,9 @@ class DatabaseCommand(Command, ABC):
                 self,
             )
 
-        if re.match(r"^[a-z0-9][a-z0-9$_.-]+$", self.database_name, re.IGNORECASE):
+        if LocalDatabase in allowed_database_classes and re.match(
+            r"^[a-z0-9][a-z0-9$_.-]+$", self.database_name, re.IGNORECASE
+        ):
             logger.debug(
                 f"Falling back to non-existing {LocalDatabase._platform_display} database {self.database_name!r}"
             )

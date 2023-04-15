@@ -1,10 +1,13 @@
 """Shared methods for working with strings."""
 
+import datetime
 import random
 import re
 import string as string_module
 import textwrap
 from typing import List, Sequence, Tuple, Union
+
+import timeago  # type: ignore [import]
 
 
 __all__ = [
@@ -179,3 +182,21 @@ def join_or(parts: Sequence[str]) -> str:
     :rtype: str
     """
     return join(parts, "or")
+
+
+def seconds_to_time(seconds: int) -> str:
+    """Convert seconds to a human readable time.
+    :param seconds: The number of seconds.
+    :return: The human readable time.
+    :rtype: str
+    """
+    return str(datetime.timedelta(seconds=seconds))
+
+
+def ago(date: datetime.datetime) -> str:
+    """Return a human readable representation of a datetime to show how long ago it was.
+    :param date: The datetime to convert.
+    :return: The human readable representation.
+    :rtype: str
+    """
+    return timeago.format(date, datetime.datetime.utcnow())

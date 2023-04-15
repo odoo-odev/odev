@@ -45,6 +45,7 @@ class Colors(StrEnum):
     PURPLE = "#af5faf"
     RED = "#ec6047"
     YELLOW = "#d19a66"
+    WHITE = "#"
 
 
 RICH_THEME_LOGGING = {

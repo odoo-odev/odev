@@ -213,7 +213,7 @@ class Database(OdevFrameworkMixin, ABC):
         :param extension: Force the extension for the filename, by default inferred
             from whether the filestore is present.
         """
-        prefix = datetime.now().strftime("%Y%m%d")
+        prefix = datetime.utcnow().strftime("%Y%m%d")
         suffix = f".{suffix}" if suffix else ""
         extension = extension if extension is not None else "zip" if filestore else "sql"
         return f"{prefix}-{self.name}.dump{suffix}.{extension}"

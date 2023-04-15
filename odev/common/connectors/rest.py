@@ -19,6 +19,7 @@ from typing import (
 from urllib.parse import ParseResult, quote, urlparse
 
 from requests import Response, Session
+from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from odev._version import __version__
 from odev.common.connectors.base import Connector
@@ -132,6 +133,7 @@ class RestConnector(Connector, ABC):
         path: str,
         obfuscate_params: Sequence[str] = None,
         raise_for_status: bool = True,
+        retry_on_error: bool = True,
         **kwargs,
     ) -> Response:
         """Low-level execution of an HTTP request to the endpoint to enable caching and logging.
@@ -180,7 +182,22 @@ class RestConnector(Connector, ABC):
         logger.debug(logger_message)
 
         self._connection.headers.update({"User-Agent": self.user_agent})
-        response = self._connection.request(method, url, **params, **kwargs)
+
+        try:
+            response = self._connection.request(method, url, **params, **kwargs)
+        except RequestsConnectionError as error:
+            if retry_on_error:
+                logger.debug(error)
+                return self._request(
+                    method,
+                    path,
+                    obfuscate_params=obfuscate_params,
+                    raise_for_status=raise_for_status,
+                    retry_on_error=False,
+                    **kwargs,
+                )
+
+            raise ConnectorError(f"Could not connect to {self.name}", self) from error
 
         if raise_for_status:
             response.raise_for_status()

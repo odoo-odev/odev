@@ -48,6 +48,13 @@ class Action(BaseAction, ABC):
         return "store_" + re.sub(r"(?<!^)(?=[A-Z])", "_", re.sub(r"Action$", "", cls.__name__)).lower()
 
 
+class IntAction(Action):
+    """Converter for command line arguments passed as a string that should be converted to an int."""
+
+    def _transform_one(self, value: str) -> int:
+        return int(value)
+
+
 class CommaSplitAction(Action):
     """Converter for command line arguments passed as comma-separated lists of values."""
 

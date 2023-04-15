@@ -140,7 +140,7 @@ class Odev:
         logger.debug(
             f"Pulling latest changes from odev repository on branch {self.repo.active_branch.tracking_branch()}"
         )
-        self.config.update.date = datetime.now()
+        self.config.update.date = datetime.utcnow()
         install_requirements = self.__requirements_changed()
         self.repo.remotes.origin.pull()
 

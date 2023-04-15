@@ -7,6 +7,7 @@ from pathlib import Path
 from time import sleep
 from typing import (
     Any,
+    Generator,
     List,
     Literal,
     Mapping,
@@ -20,9 +21,12 @@ from urllib.parse import ParseResult, parse_qs, urlparse
 import requests
 from parsel.selector import Selector
 from requests import HTTPError, Response
+from rich import box
+from rich.panel import Panel
 
-from odev.common import progress
+from odev.common import progress, string
 from odev.common.connectors import PaasConnector
+from odev.common.console import Colors
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
@@ -102,6 +106,9 @@ class PaasBranch(Branch):
 class PaasBuild:
     """Represents a build on Odoo SH."""
 
+    info: Mapping[str, Any]
+    """Raw information about the build."""
+
     database: "PaasDatabase"
     """Current Database instance linked to the repository."""
 
@@ -122,6 +129,34 @@ class PaasBuild:
 
     commit: "PaasBuildCommit"
     """Commit linked to this build."""
+
+    @property
+    def start(self) -> datetime:
+        """Return the start date of the build."""
+        date: str = self.info.get("start_datetime")
+
+        if not date:
+            date = self.info.get("create_date")
+
+        return datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+
+    @property
+    def end(self) -> datetime:
+        """Return the end date of the build."""
+        if not self.info["end_datetime"]:
+            return datetime.utcnow()
+
+        return datetime.strptime(self.info["end_datetime"], "%Y-%m-%d %H:%M:%S")
+
+    @property
+    def duration(self) -> int:
+        """Return the duration of the build in seconds."""
+        return int((self.end - self.start).total_seconds())
+
+    @property
+    def final(self) -> bool:
+        """Return True if the build is done, dropped or killed."""
+        return self.status in ("done", "dropped", "killed", "skipped")
 
     @property
     def latest(self) -> bool:
@@ -329,11 +364,11 @@ class PaasDatabase(PaasConnectorMixin, Database):
     @property
     def exists(self) -> bool:
         """Whether the database exists and can be reached at the current URL."""
-        return self._check_url(self.url)
+        return self.build_info is not None
 
     @property
     def running(self) -> bool:
-        return self.exists and self._check_url(self.url)
+        return self.build.status == "done" and self._check_url(self.url)
 
     @property
     def is_odoo(self) -> bool:
@@ -416,10 +451,9 @@ class PaasDatabase(PaasConnectorMixin, Database):
     def build_info(self) -> Mapping[str, Any]:
         """Return the builds information for this database."""
         if self._build_info is None:
-            with progress.spinner(f"Fetching build information for database {self.name!r}"):
-                self._build_info = next(
-                    build for build in self.paas.builds_info() if build["url"] == self.url or build["name"] == self.name
-                )
+            self._build_info = next(
+                build for build in self.paas.builds_info() if build["url"] == self.url or build["name"] == self.name
+            )
 
         return self._build_info
 
@@ -428,12 +462,13 @@ class PaasDatabase(PaasConnectorMixin, Database):
         """Return the build for this database."""
         if self._build is None:
             self._build = PaasBuild(
+                info=self.build_info,
                 database=self,
                 id=self.build_info["id"],
                 name=self.build_info["name"],
                 url=self.build_info["url"],
-                status=self.build_info["status"],
-                result=self.build_info["result"],
+                status=self.build_info["status"] if isinstance(self.build_info["status"], str) else "pending",
+                result=self.build_info["result"] if isinstance(self.build_info["result"], str) else "unknown",
                 commit=PaasBuildCommit(
                     database=self,
                     hash=self.build_info["head_commit_id"][1],
@@ -454,6 +489,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
 
             with progress.spinner(f"Fetching information for branch {branch_name!r}"):
                 self._branch_info = next(branch for branch in self.paas.branches_info() if branch["id"] == branch_id)
+
         return self._branch_info
 
     @property
@@ -508,7 +544,12 @@ class PaasDatabase(PaasConnectorMixin, Database):
     @property
     def environment(self) -> Literal["production", "staging", "development"]:
         """Return the environment of the database."""
-        return self.branch_info.get("stage")
+        environment: Literal["production", "staging", "dev"] = self.branch_info.get("stage")
+
+        if environment == "dev":
+            return "development"
+
+        return environment
 
     @property
     def subscription_url(self) -> str:
@@ -623,14 +664,24 @@ class PaasDatabase(PaasConnectorMixin, Database):
         if not parsed.netloc.endswith(ODOO_DOMAIN_SUFFIX):
             return False
 
-        formatted_url = f"{parsed.scheme}://{parsed.netloc}/"
-        response = requests.head(formatted_url)
-        location = response.headers.get("Location", "")
-        return not self._parse_url(location).path.startswith("/typo")
+        try:
+            formatted_url = f"{parsed.scheme}://{parsed.netloc}/"
+            response = requests.head(formatted_url)
+        except requests.exceptions.SSLError:
+            error_message: str = f"Invalid SSL certificate for {url!r}"
+
+            if self.build.name:
+                error_message += f", build {self.build.name!r} has probably been dropped"
+
+            logger.debug(error_message)
+            return False
+        else:
+            location = response.headers.get("Location", "")
+            return not self._parse_url(location).path.startswith("/typo")
 
     def _guess_project(self) -> Mapping[str, Any]:
         """Guess the name of the Odoo SH project based on the database name or URL."""
-        if self.exists:
+        if self._check_url(self.url):
             return self._guess_project_from_url()
 
         return self._guess_project_from_name()
@@ -882,3 +933,140 @@ class PaasDatabase(PaasConnectorMixin, Database):
         except HTTPError:
             self._create_backup(filestore, test, date=backup.date)
             return self._download_backup(path, filestore, test, backup)
+
+    def rebuild(self):
+        """Rebuild the database.
+        :param wait: Whether to wait for the rebuild to complete.
+        """
+        environment: str
+
+        if self.environment == "production":
+            environment = string.stylize(self.environment, f"bold {Colors.RED}")
+            raise ConnectorError(
+                f"Cannot rebuild a {environment} database, use the Odoo SH web UI if this is really necessary",
+                self.paas,
+            )
+
+        elif self.environment == "staging":
+            environment = string.stylize(self.environment, f"bold {Colors.YELLOW}")
+            logger.warning(
+                f"""
+                You are about to rebuild a {environment} database, the current database will be replaced with
+                a copy of the production branch and all data currently existing on {self.build.name!r} will be lost
+                """
+            )
+
+            if not self.console.confirm("Rebuild anyway?", default=False):
+                raise ConnectorError("Rebuild cancelled", self.paas)
+
+        elif self.build.status != "done":
+            raise ConnectorError(f"Another build is already in progress for branch {self.branch.name!r}", self.paas)
+
+        self.paas.rpc(f"project/{self.project.name}/branch/rebuild", params={"branch": self.branch.name})
+
+    def await_build(self, refresh: int = 10) -> Generator[PaasBuild, None, None]:
+        """Wait for the last build to be done by fetching the build status at regular
+        intervals until "done" is returned. Yields the build object at each iteration
+        to allow for custom handling of the build status in real-time.
+        :param refresh: The number of seconds to wait between each status check.
+        """
+        counter: int = 0
+
+        while not self.build.final:
+            if not counter % (refresh * 4):
+                del self._build
+                del self._build_info
+                counter = 0
+
+            with self.paas.nocache():
+                yield self.build
+
+            counter += 1
+            sleep(0.25)
+
+        yield self.build
+
+    def build_panel(self, build: PaasBuild = None, width: int = 70) -> Panel:
+        """Return a rich panel containing information about the current build."""
+        if build is None:
+            build = self.build
+
+        result_color: str
+
+        if build.result == "success":
+            result_color = Colors.GREEN
+        elif build.result == "failed":
+            result_color = Colors.RED
+        elif build.result == "warning":
+            result_color = Colors.YELLOW
+        else:
+            result_color = Colors.BLACK
+
+        max_len: int = width - 4
+        commit_message: str = build.commit.message.splitlines()[0]
+
+        if len(commit_message) > max_len:
+            commit_message = commit_message[:max_len] + "…"
+
+        commit_message = string.stylize(commit_message, "bold")
+        status_message: str = string.stylize(build.info["status_info"] or "", Colors.BLACK)
+        build_message: str = string.stylize(f" {build.status.capitalize()} ", "bold reverse")
+        result_message: str = string.stylize(f" {build.result.capitalize()} ", f"bold on {result_color}")
+        version_message: str = string.stylize(f" {build.info['odoo_branch']} ", f"bold on {Colors.CYAN}")
+        author_message: str = f"Author: {build.commit.author}"
+        summary_message: str = f"{build_message}{version_message}{result_message}"
+        time_rjust: int = max_len - self.console.measure(summary_message).maximum
+        time_message: str = f"{string.ago(build.start)} | {string.seconds_to_time(build.duration)}".rjust(time_rjust)
+        time_message = time_message.replace("|", string.stylize("|", Colors.BLACK))
+
+        content: str = string.normalize_indent(
+            f"""
+            {commit_message}
+            {author_message}
+            {status_message}
+
+            {summary_message}{time_message}
+            """
+        )
+
+        return Panel(
+            content,
+            title=build.info["name"],
+            title_align="left",
+            subtitle=f"{build.info['branch_id'][1]} ─ {build.info['stage'].capitalize()}",
+            subtitle_align="right",
+            box=box.SQUARE,
+            border_style=f"bold {result_color}",
+            width=width,
+        )
+
+    def builds_for_branch(self, branch: str = None) -> List[PaasBuild]:
+        """Return all builds for the current database on a given branch.
+        If no branch is specified, use the current branch.
+        """
+        if branch is None:
+            branch = self.branch.name
+
+        builds: List[PaasBuild] = [
+            PaasBuild(
+                info=build,
+                database=self,
+                id=build["id"],
+                name=build["name"],
+                url=build["url"],
+                status=build["status"] if isinstance(build["status"], str) else "pending",
+                result=build["result"] if isinstance(build["result"], str) else "pending",
+                commit=PaasBuildCommit(
+                    database=self,
+                    hash=build["head_commit_id"][1],
+                    message=build["head_commit_msg"],
+                    author=build["head_commit_author"],
+                    date=datetime.strptime(build["head_commit_timestamp"], "%Y-%m-%d %H:%M:%S"),
+                    url=self.build_info["head_commit_url"],
+                ),
+            )
+            for build in self.paas.builds_info()
+            if build["branch_id"][1] == branch
+        ]
+
+        return sorted(builds, key=lambda build: build.start, reverse=True)

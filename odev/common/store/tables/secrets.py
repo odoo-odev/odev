@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from io import StringIO
 from typing import Literal, Optional, Sequence, Union
 
-from agentcrypt.io import Container
+from agentcrypt.io import Container  # type: ignore [import]
 
 from odev.common.console import console
 from odev.common.logging import logging

@@ -2,8 +2,9 @@
 stacked on top of each other.
 """
 
-from typing import ClassVar, List
+from typing import ClassVar, List, Optional
 
+from rich.console import RenderableType
 from rich.markup import escape
 from rich.progress import (
     BarColumn,
@@ -15,7 +16,9 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.status import Status
+from rich.style import StyleType
 
+from odev.common import string
 from odev.common.console import console
 from odev.common.logging import logging
 
@@ -89,8 +92,6 @@ class StackedStatus(Status):
         """Start the status and add it to the stack,
         stopping already running statuses.
         """
-        logger.debug(f"Starting: {self.status}")
-
         if self.stack:
             self.stack[-1].stop()
 
@@ -109,8 +110,6 @@ class StackedStatus(Status):
             self.stack[-1].start()
         else:
             console.is_live = False
-
-        logger.debug(f"Ending: {self.status}")
 
     @property
     def stack(self) -> List[Status]:
@@ -137,8 +136,23 @@ class StackedStatus(Status):
             cls._stack[-1].start()
             cls._paused = False
 
+    def update(
+        self,
+        status: Optional[RenderableType] = None,
+        *,
+        spinner: Optional[str] = None,
+        spinner_style: Optional[StyleType] = None,
+        speed: Optional[float] = None,
+    ) -> None:
+        if status is not None:
+            if isinstance(status, str):
+                status = string.normalize_indent(status)
+                status = console.render_str(status)
 
-def spinner(message: str):
+        return super().update(status, spinner=spinner, spinner_style=spinner_style, speed=speed)
+
+
+def spinner(message: str) -> StackedStatus:
     """Context manager to display a spinner while executing code.
 
     :param message: The message to display.

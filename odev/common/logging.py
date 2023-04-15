@@ -39,7 +39,14 @@ if __log_level:
     LOG_LEVEL = str(__log_level.group(1)).upper()
     sys.argv = " ".join(sys.argv).replace(__log_level.group(0), "").split()
 
-SILENCED_LOGGERS = ["git.cmd", "asyncio", "urllib3", "rich", "pip._internal", "github.Requester"]
+SILENCED_LOGGERS = [
+    "asyncio",
+    "git.cmd",
+    "github.Requester",
+    "pip._internal",
+    "rich",
+    "urllib3",
+]
 
 
 # --- Logging handler customization --------------------------------------------
@@ -103,7 +110,7 @@ logging.basicConfig(
 )
 
 for logger in SILENCED_LOGGERS:
-    logging.getLogger(logger).setLevel(logging.WARNING)
+    logging.getLogger(logger).setLevel(logging.CRITICAL)
 
 
 @contextmanager
@@ -117,7 +124,7 @@ def silence_loggers(*names: str):
     levels = [logger.level for logger in loggers]
 
     for logger in loggers:
-        logger.setLevel(logging.WARNING)
+        logger.setLevel(logging.CRITICAL)
 
     yield
 
