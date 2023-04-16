@@ -75,7 +75,7 @@ class RenameCommand(OdoobinCommand):
 
     def move_configuration(self):
         """Rename the database in the stored configuration."""
-        with self.database.psql("odev") as psql:
+        with self.database.psql(self.odev.name) as psql:
             psql.query(
                 f"""
                 UPDATE databases

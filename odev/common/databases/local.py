@@ -223,7 +223,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if not self.is_odoo:
             return None
 
-        with self.psql("odev") as psql:
+        with self.psql(self.odev.name) as psql:
             result = psql.query(
                 f"""
                 SELECT date

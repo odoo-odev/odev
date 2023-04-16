@@ -38,7 +38,7 @@ class DeployCommand(DatabaseCommand):
                 f"{self.database.platform.display} database {self.database.name!r} must be running to deploy a module"
             )
 
-        odoobin: OdoobinProcess = OdoobinProcess(LocalDatabase("odev"), version=self.database.version)
+        odoobin: OdoobinProcess = OdoobinProcess(LocalDatabase(self.odev.name), version=self.database.version)
         process = odoobin.deploy(
             url=self.database.url,
             module=self.args.module,

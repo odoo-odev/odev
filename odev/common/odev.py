@@ -15,6 +15,7 @@ from typing import (
     Any,
     ClassVar,
     List,
+    Literal,
     MutableMapping,
 )
 
@@ -86,7 +87,7 @@ class Odev:
         return f"Odev(version={self.version})"
 
     @property
-    def name(self) -> str:
+    def name(self) -> Literal["odev"]:
         """Name of the framework."""
         return "odev"
 
@@ -98,27 +99,27 @@ class Odev:
     @property
     def commands_path(self) -> Path:
         """Local path to the commands directory."""
-        return self.path / "odev" / "commands"
+        return self.path / self.name / "commands"
 
     @property
     def upgrades_path(self) -> Path:
         """Local path to the upgrades directory."""
-        return self.path / "odev" / "upgrades"
+        return self.path / self.name / "upgrades"
 
     @property
     def setup_path(self) -> Path:
         """Local path to the setup directory."""
-        return self.path / "odev" / "setup"
+        return self.path / self.name / "setup"
 
     @property
     def scripts_path(self) -> Path:
         """Local path to the directory where odoo-bin shell scripts are stored."""
-        return self.path / "odev" / "scripts"
+        return self.path / self.name / "scripts"
 
     @property
     def static_path(self) -> Path:
         """Local path to the static directory where common immutable files are stored."""
-        return self.path / "odev" / "static"
+        return self.path / self.name / "static"
 
     @property
     def dumps_path(self) -> Path:

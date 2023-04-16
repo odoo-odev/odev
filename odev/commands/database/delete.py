@@ -1,26 +1,30 @@
 """Create a new database."""
 
+import os
 import shutil
 
-from odev.common import progress
-from odev.common.commands import OdoobinCommand
-from odev.common.logging import logging
+from odev.common import progress, string
+from odev.common.commands import LocalDatabaseCommand
+from odev.common.databases import LocalDatabase
+from odev.common.logging import logging, silence_loggers
+from odev.common.mixins import ListLocalDatabasesMixin
 
 
 logger = logging.getLogger(__name__)
 
 
-class DeleteCommand(OdoobinCommand):
-    """Remove a local PostgreSQL database and its associated files."""
+class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
+    """Remove a local PostgreSQL database and its associated resources.
+    If no database is provided, prune all databases that are not whitelisted.
+    """
 
     name = "delete"
-    aliases = ["remove", "rm"]
+    aliases = ["remove", "rm", "prune"]
     arguments = [
         {
             "name": "keep",
             "aliases": ["-k", "--keep"],
             "action": "store_comma_split",
-            "nargs": "?",
             "default": [],
             "help": """List of associated resources to keep, separated by commas. Possible values are:
                 - filestore: keep the database filestore
@@ -29,83 +33,143 @@ class DeleteCommand(OdoobinCommand):
                 - config: keep saved attributes for the database (i.e. whitelist, saved arguments,...)
             """,
         },
+        {
+            "name": "expression",
+            "aliases": ["-e", "--expression"],
+            "action": "store_regex",
+            "help": """
+            Regular expression pattern to filter databases to delete.
+            Ignored if a database was provided.
+            """,
+        },
+        {
+            "name": "include_whitelisted",
+            "aliases": ["-w", "--include-whitelisted"],
+            "action": "store_true",
+            "help": """Delete whitelisted databases as well.""",
+        },
     ]
 
+    _database_arg_required = False
+    _database_exists_required = False
+
     def run(self):
-        """Create a new database locally."""
-        if not self.console.confirm(
-            f"Are you sure you want to delete the database {self.database.name!r}?",
-            default=True,
-        ):
+        if self.database is not None:
+            self.confirm_delete()
+
+            with progress.spinner(f"Dropping database {self.database.name!r}"):
+                return self.delete_one(self.database)
+
+        with progress.spinner("Listing databases"):
+            databases = self.list_databases(
+                predicate=lambda database: database not in (self.odev.name, "postgres", os.getlogin())
+                and (self.args.include_whitelisted or not LocalDatabase(database).whitelisted)
+                and (not self.args.expression or self.args.expression.search(database))
+            )
+
+        if not databases:
+            message = "No database found" if self.args.include_whitelisted else "No non-whitelisted database found"
+
+            if self.args.expression:
+                message += f" matching pattern '{self.args.expression.pattern}'"
+
+            raise self.error(message)
+
+        databases_list: str = string.join_and([f"{db!r}" for db in databases])
+        logger.warning(f"You are about to delete the following databases: {databases_list}")
+
+        if not self.console.confirm("Are you sure?", default=False):
             raise self.error("Command aborted")
 
-        if self.database.whitelisted:
-            if not self.console.confirm(f"Database {self.database.name!r} is whitelisted, are you really sure?"):
-                raise self.error("Command aborted")
+        tracker = progress.Progress()
+        task = tracker.add_task(f"Deleting {len(databases)} databases", total=len(databases))
+        tracker.start()
 
+        for database in databases:
+            with silence_loggers(__name__):
+                self.delete_one(LocalDatabase(database))
+
+            tracker.update(task, advance=1)
+
+        tracker.stop()
+        logger.info(f"Deleted {len(databases)} databases")
+
+    def confirm_delete(self):
+        """Confirm the deletion of the database."""
+        confirm: bool = self.console.confirm(
+            f"Are you sure you want to delete the database {self.database.name!r}?",
+            default=True,
+        )
+
+        if confirm and not self.args.include_whitelisted and self.database.whitelisted:
+            confirm = not self.console.confirm(f"Database {self.database.name!r} is whitelisted, are you really sure?")
+
+        if not confirm:
+            raise self.error("Command aborted")
+
+    def delete_one(self, database: LocalDatabase):
+        """Delete a single database and its resources.
+        :param delete_whitelisted: if True, delete the database even if it is whitelisted.
+        """
         if "template" not in self.args.keep:
-            self.remove_template_databases()
+            self.remove_template_databases(database)
 
         if "venv" not in self.args.keep:
-            self.remove_venv()
+            self.remove_venv(database)
 
         if "filestore" not in self.args.keep:
-            self.remove_filestore()
+            self.remove_filestore(database)
 
         if "config" not in self.args.keep:
-            self.remove_configuration()
+            self.remove_configuration(database)
 
-        self.drop_database()
-        logger.info(f"Dropped database {self.database.name!r}")
+        self.drop_database(database)
+        logger.info(f"Dropped database {database.name!r}")
 
-    def drop_database(self):
+    def drop_database(self, database: LocalDatabase):
         """Drop the database if it exists."""
-        if not self.database.exists:
-            return logger.info(f"PostgreSQL database {self.database.name!r} does not exist, cleaning up resources")
+        if not database.exists:
+            return logger.info(f"PostgreSQL database {database.name!r} does not exist, cleaning up resources")
 
-        with progress.spinner(f"Dropping database {self.database.name!r}"):
-            self.database.drop()
+        database.drop()
 
-    def remove_template_databases(self):
+    def remove_template_databases(self, database: LocalDatabase):
         pass
 
-    def remove_venv(self):
+    def remove_venv(self, database: LocalDatabase):
         """Remove the venv linked to this database if not used by any other database."""
-        venv = self.database.venv
+        venv = database.venv
 
         if venv is None or not venv.exists():
-            return logger.debug(f"No virtual environment found for database {self.database.name!r}")
+            return logger.debug(f"No virtual environment found for database {database.name!r}")
 
         venv_path = venv.as_posix()
 
-        with self.database.psql("odev") as psql:
+        with database.psql(self.odev.name) as psql, psql.nocache():
             using_venv = psql.query(
                 f"""
                 SELECT COUNT(*)
                 FROM databases
                 WHERE virtualenv = '{venv_path}'
-                    AND name != '{self.database.name}'
+                    AND name != '{database.name}'
                 """
             )
 
         if using_venv[0][0] > 0:
             return logger.info(f"Virtual environment {venv_path} is used by other databases, keeping it")
 
-        with progress.spinner(f"Removing virtual environment {venv_path}"):
-            shutil.rmtree(venv_path)
+        shutil.rmtree(venv_path)
 
-    def remove_filestore(self):
+    def remove_filestore(self, database: LocalDatabase):
         """Remove the filestore linked to this database."""
-        filestore = self.database.filestore.path
+        filestore = database.filestore.path
 
         if filestore is None or not filestore.exists():
-            return logger.debug(f"No filestore found for database {self.database.name!r}")
+            return logger.debug(f"No filestore found for database {database.name!r}")
 
         filestore_path = filestore.as_posix()
+        shutil.rmtree(filestore_path)
 
-        with progress.spinner(f"Removing filestore {filestore_path}"):
-            shutil.rmtree(filestore_path)
-
-    def remove_configuration(self):
+    def remove_configuration(self, database: LocalDatabase):
         """Remove references to this database in the database store."""
-        self.store.databases.delete(self.database)
+        self.store.databases.delete(database)

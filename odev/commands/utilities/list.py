@@ -19,7 +19,7 @@ from odev.common.commands import Command
 from odev.common.console import Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
-from odev.common.mixins import PostgresConnectorMixin
+from odev.common.mixins import ListLocalDatabasesMixin
 
 
 logger = logging.getLogger(__name__)
@@ -59,13 +59,13 @@ class Mapped:
 
 TABLE_MAPPING: List[Mapped] = [
     Mapped(
-        value=lambda database: database.process.is_running if database.process else False,
+        value=lambda database: database.process.is_running if database.is_odoo else None,
         title=None,
         justify=None,
         display=True,
-        format=lambda value: value is not None
-        and "[{style}]⚪[/{style}]".format(style=Colors.GREEN if value else Colors.RED)
-        or "",
+        format=lambda value: "[{style}]⚪[/{style}]".format(style=Colors.GREEN if value else Colors.RED)
+        if value is not None
+        else "",
         total=False,
     ),
     Mapped(
@@ -145,7 +145,7 @@ TABLE_MAPPING: List[Mapped] = [
 ]
 
 
-class ListCommand(PostgresConnectorMixin, Command):
+class ListCommand(ListLocalDatabasesMixin, Command):
     """List local databases and provide information about them."""
 
     name = "list"
@@ -178,8 +178,11 @@ class ListCommand(PostgresConnectorMixin, Command):
     ]
 
     def run(self) -> None:
-        with progress.spinner("Listing databases..."):
-            databases = self.list_databases()
+        with progress.spinner("Listing databases"):
+            databases = self.list_databases(
+                predicate=lambda database: (not self.args.expression or self.args.expression.search(database))
+                and (self.args.include_other or LocalDatabase(database).is_odoo)
+            )
 
             if not databases:
                 message = "No database found"
@@ -195,31 +198,6 @@ class ListCommand(PostgresConnectorMixin, Command):
             data = self.get_table_data(databases)
 
         self.table(*data)
-
-    def list_databases(self) -> List[str]:
-        """List the names of all local databases, excluding templates
-        and the default 'postgres' database.
-        """
-        with self.psql() as psql:
-            databases = psql.query(
-                """
-                SELECT datname
-                FROM pg_database
-                WHERE datistemplate = false
-                ORDER by datname
-                """
-            )
-
-        databases = [
-            database[0]
-            for database in databases
-            if not self.args.expression or self.args.expression.search(database[0])
-        ]
-
-        if not self.args.include_other:
-            databases = [database for database in databases if self.is_odoo(database)]
-
-        return databases
 
     def get_table_data(
         self, databases: Sequence[str]
@@ -256,8 +234,3 @@ class ListCommand(PostgresConnectorMixin, Command):
         """Get information about a database."""
         with LocalDatabase(database) as db:
             return db.info()
-
-    def is_odoo(self, database: str) -> bool:
-        """Check if a database is an Odoo database."""
-        with LocalDatabase(database) as db:
-            return db.is_odoo

@@ -629,7 +629,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
 
     def _set_paas_connector(self):
         """Set the PaaS connector for this database."""
-        self.paas = self._paas("odev")
+        self.paas = self._paas(self.odev.name)
 
         if self._name is None or self._url is None:
             self._set_name(self._input_name)
