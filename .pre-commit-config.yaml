@@ -75,7 +75,7 @@ repos:
       rev: v0.931
       hooks:
           - id: mypy
-            exclude: (odev/scripts/.*\.py)
+            exclude: (odev/(scripts|upgrades)/.*\.py)
             args:
                 - --no-strict-optional
                 - --ignore-missing-imports

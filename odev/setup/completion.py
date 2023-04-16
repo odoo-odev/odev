@@ -8,7 +8,7 @@ See:
 from pathlib import Path
 from typing import Optional
 
-from odev.common.config import ConfigManager
+from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
 
@@ -26,14 +26,14 @@ comp_path = Path("~/.local/share/bash-completion/completions/complete_odev.sh").
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[ConfigManager] = None) -> None:
+def setup(config: Optional[Config] = None) -> None:
     """Setup auto completion script for odev commands and databases.
 
     See:
     - https://github.com/scop/bash-completion/
     - https://www.gnu.org/savannah-checkouts/gnu/bash/manual/html_node/Programmable-Completion.html
 
-    :param config: Configuration manager
+    :param config: Odev configuration
     """
 
     if not comp_path.parent.exists():

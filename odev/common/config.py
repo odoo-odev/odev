@@ -142,6 +142,13 @@ class ConfigManager(abc.MutableMapping):
         """Get a value from the config."""
         return self.section(section).get(option, default)
 
+    def delete(self, section: str, option: str = None) -> bool:
+        """Delete a value from the config."""
+        if option is None:
+            return self.parser.remove_section(section)
+
+        return self.parser.remove_option(section, option)
+
     def __check_key(self, key: str):
         if "." not in key:
             raise KeyError(f"{key!r} is not a valid key, use format 'section.attribute'")

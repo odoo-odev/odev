@@ -4,7 +4,7 @@ import stat
 from pathlib import Path
 from typing import Optional
 
-from odev.common.config import ConfigManager
+from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
 
@@ -15,10 +15,9 @@ logger = logging.getLogger(__name__)
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[ConfigManager] = None) -> None:
+def setup(config: Optional[Config] = None) -> None:
     """Setup symlinks to odev for using it as a shell command.
-
-    :param config: Configuration manager
+    :param config: Odev configuration
     """
     main_path = Path(__file__).parents[2] / "main.py"
     link_path = Path("~/.local/bin/odev").expanduser()

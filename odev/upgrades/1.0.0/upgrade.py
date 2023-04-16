@@ -2,8 +2,8 @@ import re
 import shutil
 from pathlib import Path
 
-from odev.utils import logging
-from odev.utils.config import ConfigManager
+from odev.common.config import ConfigManager
+from odev.common.logging import logging
 
 
 _logger = logging.getLogger(__name__)

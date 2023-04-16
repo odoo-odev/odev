@@ -170,14 +170,14 @@ class Odev:
         :rtype: bool
         """
         logger.debug("Checking for existing odev upgrades")
-        return version.parse(self.version) > version.parse(self.__latest_version())
+        return version.parse(self.version) > version.parse(self.config.update.version)
 
     def upgrade(self) -> None:
         """Upgrade the current version of odev."""
         if not self.check_upgrade():
             return
 
-        current_version = self.__latest_version()
+        current_version = self.config.update.version
 
         logger.debug(f"Upgrading odev from version {current_version} to {self.version}")
         scripts = self.__list_upgrade_scripts()
@@ -376,14 +376,6 @@ class Odev:
 
         return self.config.update.mode == "always"
 
-    def __latest_version(self) -> str:
-        """Get the latest version of odev from the config file.
-
-        :return: Latest version of odev
-        :rtype: str
-        """
-        return self.config.update.version
-
     def __validate_upgrade_script(self, script: Path) -> bool:
         """Validate the upgrade script's version to check whether it should be run.
 
@@ -397,7 +389,7 @@ class Odev:
             [
                 not script.is_file(),
                 re.match(r"^(\d+\.){2}\d+$", script.parent.name) is None,
-                script_version <= version.parse(self.__latest_version()),
+                script_version <= version.parse(self.config.update.version),
                 script_version > version.parse(self.version),
             ]
         )

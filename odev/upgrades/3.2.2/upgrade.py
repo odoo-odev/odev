@@ -1,12 +1,14 @@
 import os
 from pathlib import Path
 
-from odev.constants import DEFAULT_VENV_NAME
-from odev.utils import logging
-from odev.utils.config import ConfigManager
+from odev.common.config import ConfigManager
+from odev.common.logging import logging
 
 
 _logger: logging.Logger = logging.getLogger(__name__)
+
+
+DEFAULT_VENV_NAME = "venv"
 
 
 def run() -> None:

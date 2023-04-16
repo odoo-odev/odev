@@ -4,10 +4,9 @@ from datetime import datetime
 from typing import Optional
 
 from odev._version import __version__
-from odev.common.config import ConfigManager
+from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
-from odev.constants import DEFAULT_DATETIME_FORMAT
 
 
 logger = logging.getLogger(__name__)
@@ -16,14 +15,14 @@ logger = logging.getLogger(__name__)
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[ConfigManager] = None) -> None:
+def setup(config: Optional[Config] = None) -> None:
     """Configure self-update behavior.
 
     :param config: Configuration manager
     """
     update_mode = console.select(
         "What should happen when a new version of odev becomes available?",
-        default=config.get("update", "mode", "ask"),
+        default=config.update.mode,
         choices=[
             ("always", "Update odev automatically"),
             ("never", "Never update odev"),
@@ -33,11 +32,11 @@ def setup(config: Optional[ConfigManager] = None) -> None:
 
     update_interval = console.integer(
         "How often should odev check for updates (in days)?",
-        default=int(config.get("update", "interval", 1)),
+        default=config.update.interval,
         min_value=1,
     )
 
-    config.set("update", "mode", update_mode)
-    config.set("update", "interval", update_interval)
-    config.set("update", "date", datetime.now().strftime(DEFAULT_DATETIME_FORMAT))
-    config.set("update", "version", __version__)
+    config.update.mode = update_mode
+    config.update.interval = update_interval
+    config.update.date = datetime.utcnow()
+    config.update.version = __version__

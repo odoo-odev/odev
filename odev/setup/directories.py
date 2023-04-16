@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Union
 
-from odev.common.config import ConfigManager
+from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
 
@@ -64,21 +64,17 @@ def __ask_dir(message: str, default: str = None, path: Optional[Path] = None) ->
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[ConfigManager] = None) -> None:
+def setup(config: Optional[Config] = None) -> None:
     """Setup working directories for odev.
-
-    :param config: Configuration manager
+    :param config: Odev configuration
     """
     new_path: Optional[Path] = None
-
-    config_section, config_option = "paths", "repositories"
-
-    old_path: Path = __resolve(Path(config.get(config_section, config_option, "~/odoo/versions")))
+    old_path: Path = config.paths.repositories
 
     while new_path is None:
-        new_path = __ask_dir("Where do you want to keep odoo standard repositories?", old_path.as_posix(), new_path)
+        new_path = __ask_dir("Where do you want to keep odoo repositories?", old_path.as_posix(), new_path)
 
     __move(old_path, new_path)
 
     logger.debug("Saving directories to configuration file")
-    config.set(config_section, config_option, new_path.as_posix())
+    config.paths.repositories = new_path

@@ -1,29 +1,44 @@
 """Upgrade to odev 4.0.0"""
 
 from datetime import datetime
+from pathlib import Path
 
 from odev._version import __version__
-from odev.common.config import ConfigManager
+from odev.common.config import Config
 from odev.constants import DEFAULT_DATETIME_FORMAT
 
 
-def run(config: ConfigManager) -> None:
+def run(config: Config) -> None:
 
     # --- Update config file ---------------------------------------------------
 
-    check_date = config.get("update", "last_check", datetime.now().strftime(DEFAULT_DATETIME_FORMAT))
-    check_interval = config.get("update", "check_interval", "1")
-    version = config.get("odev", "version", __version__)
+    check_date_value: str = config._config.get("update", "last_check", "")
 
-    config.set("update", "date", check_date)
-    config.set("update", "interval", check_interval)
-    config.set("update", "version", version)
-    config.set("update", "mode", "ask")
+    if check_date_value:
+        check_date = datetime.strptime(check_date_value, DEFAULT_DATETIME_FORMAT)
+    else:
+        check_date = datetime.utcnow()
 
-    config.delete("update", "last_check")
-    config.delete("update", "check_interval")
-    config.delete("odev")
+    check_interval = config._config.get("update", "check_interval", "1")
+    version = config._config.get("odev", "version", __version__)
 
-    config.set("paths", "repositories", config.get("paths", "custom", "~/odoo/repositories"))
-    config.delete("paths", "standard")
-    config.delete("paths", "custom")
+    config.update.date = check_date
+    config.update.interval = int(check_interval)
+    config.update.version = version
+    config.update.mode = "ask"
+
+    config._config.delete("update", "last_check")
+    config._config.delete("update", "check_interval")
+
+    config.paths.repositories = Path(config._config.get("paths", "custom", "~/odoo/repositories"))
+    config.paths.dumps = config.paths.repositories.parent / "dumps"
+    config._config.delete("paths", "standard")
+    config._config.delete("paths", "custom")
+    config._config.delete("paths", "odev")
+    config._config.delete("paths", "odoo")
+    config._config.delete("paths", "dump")
+    config._config.delete("paths", "dev")
+
+    config._config.delete("odev")
+    config._config.delete("cleaning")
+    config._config.delete("repos")

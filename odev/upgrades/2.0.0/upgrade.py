@@ -1,4 +1,4 @@
-from odev.utils.config import ConfigManager
+from odev.common.config import ConfigManager
 
 
 def run():
