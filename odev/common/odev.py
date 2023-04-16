@@ -253,11 +253,14 @@ class Odev:
         command = None  # Avoid UnboundLocalError during cleanup
 
         try:
-            if database is not None:
+            if database is None:
+                arguments = self.parse_arguments(command_cls, *cli_args)
+                command = command_cls(arguments)
+            else:
                 cli_args = (database.name, *cli_args)
+                arguments = self.parse_arguments(command_cls, *cli_args)
+                command = command_cls(arguments, database=database)
 
-            arguments = self.parse_arguments(command_cls, *cli_args)
-            command = command_cls(arguments, database=database)
             command.argv = " ".join(cli_args)
 
             logger.debug(f"Dispatching {command!r}")

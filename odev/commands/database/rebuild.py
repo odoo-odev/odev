@@ -3,19 +3,17 @@ from time import sleep
 from rich.console import Group
 
 from odev.common import progress
-from odev.common.commands import DatabaseCommand
-from odev.common.databases import PaasDatabase
+from odev.common.commands import PaasDatabaseCommand
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class RebuildCommand(DatabaseCommand):
+class RebuildCommand(PaasDatabaseCommand):
     """Rebuild an Odoo SH (PaaS) database."""
 
     name = "rebuild"
-    database: PaasDatabase
 
     arguments = [
         {
@@ -26,8 +24,6 @@ class RebuildCommand(DatabaseCommand):
             "help": "Do not wait for the rebuild to complete.",
         },
     ]
-
-    _database_allowed_platforms = ["paas"]
 
     def run(self):
         build_id: int = self.database.build.id

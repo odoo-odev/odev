@@ -1,19 +1,15 @@
-from odev.common.commands import DatabaseCommand
-from odev.common.databases import LocalDatabase
+from odev.common.commands import LocalDatabaseCommand
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class NeutralizeCommand(DatabaseCommand):
+class NeutralizeCommand(LocalDatabaseCommand):
     """Neutralize a local database and make it suitable for development."""
 
     name = "neutralize"
     aliases = ["clean", "cl"]
-    database: LocalDatabase
-
-    _database_allowed_platforms = ["local"]
 
     def run(self):
         self.database.neutralize()

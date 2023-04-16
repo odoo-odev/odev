@@ -75,7 +75,7 @@ class Command(OdevFrameworkMixin, ABC):
             "aliases": ["-f", "--force"],
             "dest": "bypass_prompt",
             "action": "store_true",
-            "help": "Bypass confirmation prompts and assume 'yes' to all, use with caution!",
+            "help": "Bypass confirmation prompts and assume a default value to all, use with caution!",
         },
     ]
     """Arguments definitions to extend commands capabilities."""

@@ -41,7 +41,6 @@ class RestoreCommand(DatabaseCommand):
         self.restore_backup()
 
         if isinstance(self.database, LocalDatabase) and self.args.neutralize:
-            # self.database.neutralize()
             self.odev.run_command("neutralize", database=self.database, history=False)
 
     def restore_backup(self):

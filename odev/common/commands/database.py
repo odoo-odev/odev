@@ -3,6 +3,7 @@ from abc import ABC
 from argparse import Namespace
 from typing import (
     ClassVar,
+    List,
     Mapping,
     Optional,
     Sequence,
@@ -28,6 +29,8 @@ DATABASE_PLATFORM_MAPPING: Mapping[str, Type[Database]] = {
     "saas": SaasDatabase,
     "paas": PaasDatabase,
 }
+
+DATABASE_PLATFORM_KEYS: List[str] = list(DATABASE_PLATFORM_MAPPING.keys())
 
 
 class DatabaseCommand(Command, ABC):
@@ -55,10 +58,9 @@ class DatabaseCommand(Command, ABC):
             "help": f"""
             Force searching for the database on the specified platform, useful when
             different databases have the same name on different hosting (usually one
-            local database being a copy of a remote one). One of
-            {string.join_or(list(DATABASE_PLATFORM_MAPPING.keys()))}.
+            local database being a copy of a remote one). One of {string.join_or(DATABASE_PLATFORM_KEYS)}.
             """,
-            "choices": list(DATABASE_PLATFORM_MAPPING.keys()),
+            "choices": DATABASE_PLATFORM_KEYS,
         },
         {
             "name": "branch",
@@ -138,3 +140,53 @@ class DatabaseCommand(Command, ABC):
             return LocalDatabase(self.database_name)
 
         raise CommandError(f"Could not determine database type from name: {self.database_name!r}", self)
+
+
+class LocalDatabaseCommand(DatabaseCommand):
+    """Base class for commands that require a local database to work."""
+
+    database: LocalDatabase
+
+    _database_allowed_platforms = ["local"]
+
+    @classmethod
+    def prepare_command(cls, *args, **kwargs) -> None:
+        super().prepare_command(*args, **kwargs)
+
+        # Remove arguments from the `DatabaseCommand` class that are not relevant
+        # for this command (`branch` is only used for PaaS databases)
+        cls.remove_argument("platform")
+        cls.remove_argument("branch")
+
+
+class SaasDatabaseCommand(DatabaseCommand):
+    """Base class for commands that require a SaaS database to work."""
+
+    database: SaasDatabase
+
+    _database_allowed_platforms = ["saas"]
+
+    @classmethod
+    def prepare_command(cls, *args, **kwargs) -> None:
+        super().prepare_command(*args, **kwargs)
+
+        # Remove arguments from the `DatabaseCommand` class that are not relevant
+        # for this command (`branch` is only used for PaaS databases)
+        cls.remove_argument("platform")
+        cls.remove_argument("branch")
+
+
+class PaasDatabaseCommand(DatabaseCommand):
+    """Base class for commands that require a PaaS database to work."""
+
+    database: PaasDatabase
+
+    _database_allowed_platforms = ["paas"]
+
+    @classmethod
+    def prepare_command(cls, *args, **kwargs) -> None:
+        super().prepare_command(*args, **kwargs)
+
+        # Remove arguments from the `DatabaseCommand` class that are not relevant
+        # for this command
+        cls.remove_argument("platform")

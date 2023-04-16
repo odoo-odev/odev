@@ -5,7 +5,7 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Optional
 
-from odev.common.commands import DatabaseCommand
+from odev.common.commands import LocalDatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoo import OdoobinProcess
@@ -15,10 +15,9 @@ from odev.common.version import OdooVersion
 logger = logging.getLogger(__name__)
 
 
-class OdoobinCommand(DatabaseCommand, ABC):
+class OdoobinCommand(LocalDatabaseCommand, ABC):
     """Base class for commands that interact with an odoo-bin process."""
 
-    database: LocalDatabase
     arguments = [
         {
             "name": "addons",
@@ -52,8 +51,6 @@ class OdoobinCommand(DatabaseCommand, ABC):
             """,
         },
     ]
-
-    _database_allowed_platforms = ["local"]
 
     _odoo_log_regex: re.Pattern = re.compile(
         r"""
@@ -95,15 +92,6 @@ class OdoobinCommand(DatabaseCommand, ABC):
             if self.args.version is not None:
                 self.odoobin._version = OdooVersion(self.args.version)
 
-    @classmethod
-    def prepare_command(cls, *args, **kwargs) -> None:
-        super().prepare_command(*args, **kwargs)
-
-        # Remove arguments from the `DatabaseCommand` class that are not relevant
-        # for this command (`platform` and `branch` are only used for PaaS databases)
-        cls.remove_argument("platform")
-        cls.remove_argument("branch")
-
     @property
     def odoobin(self) -> Optional[OdoobinProcess]:
         """The odoo-bin process associated with the database."""
@@ -139,7 +127,6 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             result = self.run_script()
 
             if result is not None:
-                logger.info("Executed custom script:")
                 return self.run_script_handle_result(result)
 
         else:
@@ -179,7 +166,7 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
         This is designed to be overridden by subclasses.
         By default, prints to result to the console.
         """
-        self.print(result, highlight=False)
+        self.print(result)
 
 
 class OdoobinShellScriptCommand(OdoobinShellCommand, ABC):

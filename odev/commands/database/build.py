@@ -1,20 +1,18 @@
 from rich.console import Group
 
 from odev.common import progress
-from odev.common.commands import DatabaseCommand
-from odev.common.databases import PaasDatabase
+from odev.common.commands import PaasDatabaseCommand
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class BuildCommand(DatabaseCommand):
+class BuildCommand(PaasDatabaseCommand):
     """Monitor the last build(s) of an instance of a PaaS database."""
 
     name = "build"
     aliases = ["builds"]
-    database: PaasDatabase
 
     arguments = [
         {
@@ -34,7 +32,6 @@ class BuildCommand(DatabaseCommand):
         },
     ]
 
-    _database_allowed_platforms = ["paas"]
     _database_exists_required = False
 
     def __init__(self, *args, **kwargs):
