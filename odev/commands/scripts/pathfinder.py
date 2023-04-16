@@ -66,6 +66,7 @@ class PathfinderCommand(OdoobinShellScriptCommand):
 
             cardinality: str = f"{cardinality_from}2{cardinality_to}".capitalize()
             details: str = string.stylize(f"─ {len(path) - 1} steps ─ {cardinality}", "default")
+            self.console.clear_line()
             self.print_table(rows, name=f"{'.'.join(chain)} {details}")
 
     def print_table(self, rows: List[List[str]], name: str = None, style: str = None):

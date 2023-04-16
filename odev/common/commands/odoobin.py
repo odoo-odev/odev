@@ -166,7 +166,7 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
         This is designed to be overridden by subclasses.
         By default, prints to result to the console.
         """
-        self.print(result)
+        logger.info(result.strip())
 
 
 class OdoobinShellScriptCommand(OdoobinShellCommand, ABC):
