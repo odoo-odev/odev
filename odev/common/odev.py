@@ -34,6 +34,7 @@ from odev.common.store import DataStore
 if TYPE_CHECKING:
     from odev.common.commands.base import CommandType
     from odev.common.console import Console
+    from odev.common.databases import Database
 
 
 __all__ = ["Odev"]
@@ -113,6 +114,11 @@ class Odev:
     def scripts_path(self) -> Path:
         """Local path to the directory where odoo-bin shell scripts are stored."""
         return self.path / "odev" / "scripts"
+
+    @property
+    def static_path(self) -> Path:
+        """Local path to the static directory where common immutable files are stored."""
+        return self.path / "odev" / "static"
 
     @property
     def dumps_path(self) -> Path:
@@ -231,12 +237,13 @@ class Odev:
             raise command_cls.error(None, str(exception))
         return arguments
 
-    def run_command(self, name: str, *cli_args: str, history: bool = False) -> None:
+    def run_command(self, name: str, *cli_args: str, history: bool = False, database: "Database" = None) -> None:
         """Run a command with the given arguments.
 
-        :param name: Name of the command to run
-        :param cli_args: Arguments to pass to the command
+        :param name: Name of the command to run.
+        :param cli_args: Arguments to pass to the command.
         :param history: Whether to add the command to the command history.
+        :param database: Database to pass to the command.
         """
         command_cls = self.commands.get(name)
 
@@ -246,8 +253,11 @@ class Odev:
         command = None  # Avoid UnboundLocalError during cleanup
 
         try:
+            if database is not None:
+                cli_args = (database.name, *cli_args)
+
             arguments = self.parse_arguments(command_cls, *cli_args)
-            command = command_cls(arguments)
+            command = command_cls(arguments, database=database)
             command.argv = " ".join(cli_args)
 
             logger.debug(f"Dispatching {command!r}")

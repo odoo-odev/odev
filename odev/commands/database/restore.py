@@ -24,6 +24,7 @@ class RestoreCommand(DatabaseCommand):
         },
         {
             "name": "neutralize",
+            "dest": "neutralize",
             "aliases": ["--no-clean", "--no-neutralize"],
             "action": "store_false",
             "help": """Do not neutralize the database after the dump has been restored.
@@ -39,9 +40,9 @@ class RestoreCommand(DatabaseCommand):
         self.check_database()
         self.restore_backup()
 
-        # TODO: neutralize database
-        # if isinstance(self.database, LocalDatabase) and self.args.neutralize:
-        #     self.database.neutralize()
+        if isinstance(self.database, LocalDatabase) and self.args.neutralize:
+            # self.database.neutralize()
+            self.odev.run_command("neutralize", database=self.database, history=False)
 
     def restore_backup(self):
         """Restore the backup to the selected database."""

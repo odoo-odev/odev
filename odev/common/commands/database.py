@@ -1,5 +1,6 @@
 import re
 from abc import ABC
+from argparse import Namespace
 from typing import (
     ClassVar,
     Mapping,
@@ -72,16 +73,18 @@ class DatabaseCommand(Command, ABC):
     database: Optional[DatabaseType] = None
     """The database instance associated with the command."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, args: Namespace, database: Database = None, **kwargs):
+        super().__init__(args, **kwargs)
         self.database_name: Optional[str] = self.args.database or None
         """The database name specified by the user."""
 
-        if self._database_arg_required or self.database_name is not None:
+        if database is not None:
+            self.database = database
+        elif self._database_arg_required or self.database_name is not None:
             self.database = self.infer_database_instance()
 
-            if self._database_exists_required and not self.database.exists:
-                raise self.error(f"Database {self.database.name!r} does not exist")
+        if self._database_exists_required and not self.database.exists:
+            raise self.error(f"Database {self.database.name!r} does not exist")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:

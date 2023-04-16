@@ -12,7 +12,7 @@ def run(config: ConfigManager) -> None:
     # --- Update config file ---------------------------------------------------
 
     check_date = config.get("update", "last_check", datetime.now().strftime(DEFAULT_DATETIME_FORMAT))
-    check_interval = config.get("update", "check_interval", 1)
+    check_interval = config.get("update", "check_interval", "1")
     version = config.get("odev", "version", __version__)
 
     config.set("update", "date", check_date)

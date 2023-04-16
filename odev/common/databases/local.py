@@ -346,6 +346,19 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             )
         )
 
+    @property
+    def installed_modules(self) -> List[str]:
+        """List modules that are currently installed on the database."""
+        modules: List[Tuple[str]] = self.query(
+            """
+            SELECT name
+            FROM ir_module_module
+            WHERE state IN ('installed', 'to upgrade', 'to remove');
+            """
+        )
+
+        return [module[0] for module in modules]
+
     def create(self, template: str = None) -> bool:
         """Create the database.
 
@@ -358,6 +371,34 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         self.connector.disconnect()
         with self.psql() as psql:
             return psql.drop_database(self.name)
+
+    def neutralize(self):
+        installed_modules: List[str] = self.installed_modules
+        scripts: List[Path] = [self.odev.static_path / "neutralize-pre.sql"]
+
+        with progress.spinner(f"Looking up neutralization scripts in {len(installed_modules)} installed modules"):
+            for addon in self.process.addons_paths:
+                for module in installed_modules:
+                    neutralize_path: Path = addon / module / "data" / "neutralize.sql"
+
+                    if neutralize_path.is_file():
+                        scripts.append(neutralize_path)
+
+        scripts.append(self.odev.static_path / "neutralize-post.sql")
+
+        if self.version.major < 15:
+            scripts.append(self.odev.static_path / "neutralize-post-before-15.0.sql")
+
+        tracker = progress.Progress()
+
+        task = tracker.add_task(f"Running {len(scripts)} neutralization scripts", total=len(scripts))
+        tracker.start()
+
+        for python_file in scripts:
+            tracker.update(task, advance=1, description=self.console.render_str(f"Running {python_file.as_posix()}"))
+            self.query(python_file.read_text())
+
+        tracker.stop()
 
     def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
         if path is None:
@@ -423,6 +464,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             else:
                 self.console.error(f"Unrecognized extension {file.suffix!r} for dump {file}")
 
+        self = LocalDatabase(self.name)
         tracker.stop()
 
     def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile):

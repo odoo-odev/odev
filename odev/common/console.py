@@ -20,6 +20,7 @@ from prompt_toolkit.validation import ValidationError
 from rich.console import Console as RichConsole
 from rich.control import Control, ControlType
 from rich.highlighter import ISO8601Highlighter, ReprHighlighter, _combine_regex
+from rich.syntax import Syntax
 from rich.theme import Theme
 
 from odev.common import string
@@ -209,6 +210,16 @@ class Console(RichConsole):
 
         for _ in range(count):
             self.control(CONTROL_LINE_UP, CONTROL_LINE_ERASE, CONTROL_CURSOR_RESET)
+
+    def code(self, text: str, language: str = "python", **kwargs):
+        """Display a code block.
+        :param text: Code to display.
+        :param language: Language of the code.
+        :param kwargs: Keyword arguments to pass to `rich.syntax.Syntax`.
+        """
+        kwargs.setdefault("background_color", "default")
+        kwargs.setdefault("theme", "github-dark")
+        self.print(Syntax(text, language, **kwargs))
 
     def __prompt_factory(self, prompt_type: Type[BaseSimplePrompt], message: str, **kwargs) -> Any:
         """Create a prompt object.

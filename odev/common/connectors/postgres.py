@@ -5,6 +5,7 @@ from contextlib import contextmanager, nullcontext
 from typing import (
     ClassVar,
     List,
+    Literal,
     Mapping,
     MutableMapping,
     Optional,
@@ -16,8 +17,10 @@ from typing import (
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, QueryCanceledError, cursor as PsycopgCursor
 
+from odev.common import string
 from odev.common.connectors import Connector
-from odev.common.logging import logging
+from odev.common.console import console
+from odev.common.logging import LOG_LEVEL, logging
 from odev.common.signal_handling import capture_signals
 from odev.common.thread import Thread
 
@@ -56,7 +59,7 @@ class PostgresConnector(Connector):
     _connection: Optional[psycopg2.extensions.connection] = None
     """The instance of a connection to the database engine."""
 
-    _query_cache: ClassVar[MutableMapping[Tuple[str, str], List[tuple]]] = {}
+    _query_cache: ClassVar[MutableMapping[Tuple[str, str], Union[List[tuple], Literal[False]]]] = {}
     """Simple cache of queries."""
 
     cr: Optional[Cursor] = None
@@ -98,20 +101,28 @@ class PostgresConnector(Connector):
         """Invalidate the cache for a given database."""
         database = database or self.database
         logger.debug(f"Invalidating SQL cache for database {database!r}")
-        PostgresConnector._query_cache = {key: value for key, value in self._query_cache.items() if key[0] != database}
+        PostgresConnector._query_cache = {
+            key: value for key, value in self.__class__._query_cache.items() if key[0] != database
+        }
+
+    @contextmanager
+    def nocache(self):
+        """Context manager to disable caching of SQL queries."""
+        cache = self.__class__._query_cache
+        self.__class__._query_cache = {}
+        yield
+        self.__class__._query_cache = cache
 
     def query(
         self,
         query: str,
         params: Optional[Sequence] = None,
-        nocache: bool = False,
         transaction: bool = True,
     ) -> Union[Optional[List[tuple]], bool]:
         """Execute a query and return its result.
 
         :param query: The query to execute.
         :param params: Additional parameters to pass to the cursor.
-        :param nocache: Whether to bypass the cache. Select statements are cached by default.
         :param transaction: Whether to execute the query in a transaction.
         """
         assert self.cr, "The cursor is not initialized, connect first"
@@ -120,8 +131,8 @@ class PostgresConnector(Connector):
         is_select = query_lower.startswith("select")
         expect_result = is_select or " returning " in query_lower
 
-        if not nocache and is_select and (self.database, query) in self._query_cache:
-            return self._query_cache[(self.database, query)]
+        if is_select and (self.database, query) in self.__class__._query_cache:
+            return self.__class__._query_cache[(self.database, query)]
 
         def signal_handler_cancel_statement(*args, **kwargs):
             """Cancel the SQL query currently running."""
@@ -133,7 +144,10 @@ class PostgresConnector(Connector):
             self.cr.transaction() if transaction else nullcontext(),
             capture_signals(handler=signal_handler_cancel_statement),
         ):
-            logger.debug(f"Executing PostgreSQL query against database {self.database!r}:\n{query}")
+            if LOG_LEVEL == "DEBUG":
+                logger.debug(f"Executing PostgreSQL query against database {self.database!r}:")
+                console.code(string.indent(query, 4), "postgresql")
+
             thread = Thread(target=self.cr.execute, args=(query, params))
 
             try:
@@ -146,8 +160,8 @@ class PostgresConnector(Connector):
 
             result = expect_result and self.cr.fetchall()
 
-        if not nocache and is_select and result:
-            self._query_cache[(self.database, query)] = result
+        if is_select:
+            self.__class__._query_cache[(self.database, query)] = result
 
         return result if expect_result else True
 
@@ -221,7 +235,6 @@ class PostgresConnector(Connector):
                     AND c.relkind IN ('r', 'v', 'm')
                     AND n.nspname = current_schema
                 """,
-                nocache=True,
             )
         )
 
@@ -250,7 +263,6 @@ class PostgresConnector(Connector):
                 FROM information_schema.columns
                 WHERE table_name = '{table}' AND column_name = '{column}'
                 """,
-                nocache=True,
             )
         )
 

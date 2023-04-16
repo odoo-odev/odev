@@ -1,6 +1,7 @@
 import re
 import shlex
 from abc import ABC
+from argparse import Namespace
 from pathlib import Path
 from typing import Optional
 
@@ -70,8 +71,8 @@ class OdoobinCommand(DatabaseCommand, ABC):
     )
     """Regular expression to match the output of odoo-bin."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, args: Namespace, **kwargs):
+        super().__init__(args, **kwargs)
         if not isinstance(self.database, LocalDatabase):
             raise self.error(f"Database must be an instance of {LocalDatabase.__name__}.")
 
@@ -186,8 +187,8 @@ class OdoobinShellScriptCommand(OdoobinShellCommand, ABC):
     by running a predefined script inside its environment.
     """
 
-    def __init__(self, args):
-        super().__init__(args)
+    def __init__(self, args: Namespace, **kwargs):
+        super().__init__(args, **kwargs)
         self.args.script = (self.odev.scripts_path / f"{self.name}.py").as_posix()
 
     @classmethod
