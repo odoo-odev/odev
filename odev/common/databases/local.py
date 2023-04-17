@@ -255,7 +255,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def exists(self) -> bool:
         """Check if the database exists."""
-        with self.psql() as psql:
+        with self.psql() as psql, psql.nocache():
             return bool(psql.database_exists(self.name))
 
     @property
