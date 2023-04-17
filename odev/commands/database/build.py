@@ -17,7 +17,6 @@ class BuildCommand(PaasDatabaseCommand):
     arguments = [
         {
             "name": "show_count",
-            "dest": "show_count",
             "aliases": ["-s", "--show"],
             "action": "store_int",
             "help": "How many builds should be shown, defaults to 1 (only the last build is shown).",
@@ -25,7 +24,6 @@ class BuildCommand(PaasDatabaseCommand):
         },
         {
             "name": "wait",
-            "dest": "wait",
             "aliases": ["--no-wait"],
             "action": "store_false",
             "help": "Do not wait for the rebuild to complete.",

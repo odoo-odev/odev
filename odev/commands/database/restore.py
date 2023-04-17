@@ -24,7 +24,6 @@ class RestoreCommand(DatabaseCommand):
         },
         {
             "name": "neutralize",
-            "dest": "neutralize",
             "aliases": ["--no-clean", "--no-neutralize"],
             "action": "store_false",
             "help": """Do not neutralize the database after the dump has been restored.

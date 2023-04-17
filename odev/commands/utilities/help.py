@@ -32,8 +32,8 @@ class HelpCommand(Command):
             """,
         },
         {
+            "name": "names_only",
             "aliases": ["-1", "--one-column", "--names-only"],
-            "dest": "names_only",
             "action": "store_true",
             "help": "List command names one per line - useful for parsing",
         },

@@ -243,7 +243,7 @@ class PythonEnv:
         if "python_version" in conditional:
             conditional = re.sub(
                 r"(?:'|\")(3.\d+)(?:'|\")",
-                lambda m: m.group(1) and str(int(m.group(1).replace(".", ""))),
+                lambda m: m.group(1) and " {} ".format(int(m.group(1).replace(".", ""))),
                 conditional,
             )
 

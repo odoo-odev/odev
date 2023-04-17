@@ -102,7 +102,7 @@ class OdooVersion(_BaseVersion):
 
     @property
     def master(self) -> bool:
-        """Get version this is the master version."""
+        """Get whether this is the master version."""
         return self._version.master
 
 

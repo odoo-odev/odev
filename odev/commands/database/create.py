@@ -36,7 +36,6 @@ class CreateCommand(OdoobinCommand):
         },
         {
             "name": "copy_filestore",
-            "dest": "copy_filestore",
             "aliases": ["--no-filestore"],
             "action": "store_false",
             "help": "Do not copy the filestore from the template.",

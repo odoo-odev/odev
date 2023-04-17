@@ -18,7 +18,6 @@ class RebuildCommand(PaasDatabaseCommand):
     arguments = [
         {
             "name": "wait",
-            "dest": "wait",
             "aliases": ["--no-wait"],
             "action": "store_false",
             "help": "Do not wait for the rebuild to complete.",

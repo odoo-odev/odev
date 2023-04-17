@@ -181,6 +181,11 @@ class OdoobinProcess(OdevFrameworkMixin):
             yield GitConnector(repo_name)
 
     @property
+    def odoo_support_repository(self) -> GitConnector:
+        """Return a connector to the odoo/support-tools repository."""
+        return GitConnector("odoo/support-tools")
+
+    @property
     def additional_addons_paths(self) -> List[Path]:
         """Return the list of additional addons paths."""
         return self._additional_addons_paths
@@ -363,7 +368,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.is_running and subcommand is None:
             raise RuntimeError("Odoo is already running on this database")
 
-        with spinner(f"Preparing Odoo {self.version!s} for database {self.database.name!r}"):
+        with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
             self.prepare_odoobin()
 
         if stream and progress is not None and self.addons_contain_debugger():
@@ -452,10 +457,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def clone_repositories(self):
         """Clone the missing Odoo repositories."""
         for repo in self.odoo_repositories:
-            repo.clone()
-
-            if not repo.branch == "master":
-                repo.checkout("master")
+            repo.clone(branch="master")
 
     def check_addons_path(self, path: Path) -> bool:
         """Return whether the given path is a valid Odoo addons path.
@@ -493,3 +495,41 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         self.database.repository = Repository(repository._repository, repository._organization)
         self.database.branch = Branch(repository.branch, self.database.repository)
+
+    def standardize(self, remove_studio: bool = False, dry: bool = False) -> Optional[CompletedProcess]:
+        """Remove customizations from a database using the `clean_database.py` script
+        from the `odoo/support-tools` repository.
+        :param remove_studio: Whether to remove Studio customizations.
+        :param dry: Whether to only print the command that would be executed without running it.
+        """
+        if self.is_running:
+            raise RuntimeError("Odoo is already running on this database")
+
+        with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
+            self.prepare_odoobin()
+            self.odoo_support_repository.clone(branch="master")
+
+            if any(self.venv.missing_requirements(self.odoo_support_repository.path)):
+                self.venv.install_requirements(self.odoo_support_repository.path)
+
+        with capture_signals():
+            command_args: List[str] = []
+            command_args.append(self.database.name)
+            command_args.extend(["--addons-path-list", ",".join(path.as_posix() for path in self.addons_paths)])
+
+            if remove_studio:
+                command_args.append("--remove-studio")
+
+            if dry:
+                command_args.extend(["--dry-run", "--verbose"])
+
+            try:
+                process = self.venv.run_script(
+                    self.odoo_support_repository.path / "clean_database.py",
+                    command_args,
+                )
+            except CalledProcessError as error:
+                self.console.print(error.stderr.decode())
+                return logger.error("Odoo exited with an error, check the output above for more information")
+            else:
+                return process

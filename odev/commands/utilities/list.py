@@ -152,7 +152,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
     aliases = ["ls"]
     arguments = [
         {
-            "dest": "names_only",
+            "name": "names_only",
             "aliases": ["-1", "--one-column", "--names-only"],
             "action": "store_true",
             "help": "List database names one per line - useful for parsing.",

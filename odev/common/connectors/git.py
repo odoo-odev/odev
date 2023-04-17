@@ -431,6 +431,9 @@ class GitConnector(Connector):
         if branch is None:
             branch = self.default_branch
 
+        if branch == self.branch:
+            return logger.debug(f"Branch {branch!r} already checked out in repository {self.name!r}")
+
         logger.debug(f"Checking out branch {branch!r} in repository {self.name!r}")
 
         try:

@@ -17,8 +17,8 @@ class ClocCommand(OdoobinCommand):
 
     arguments = [
         {
+            "name": "csv",
             "aliases": ["--csv"],
-            "dest": "csv",
             "action": "store_true",
             "help": "Format output as CSV.",
         }

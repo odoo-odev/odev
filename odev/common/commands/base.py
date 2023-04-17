@@ -60,20 +60,21 @@ class Command(OdevFrameworkMixin, ABC):
 
     arguments: ClassVar[List[MutableMapping[str, Any]]] = [
         {
+            "name": "log_level",
             "aliases": ["-v", "--log-level"],
             "choices": ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
             "default": "INFO",
             "help": "Set logging verbosity for the execution of odev.",
         },
         {
+            "name": "show_help",
             "aliases": ["-h", "--help"],
-            "dest": "show_help",
             "action": "store_true",
             "help": "Show help for the current command.",
         },
         {
+            "name": "bypass_prompt",
             "aliases": ["-f", "--force"],
-            "dest": "bypass_prompt",
             "action": "store_true",
             "help": "Bypass confirmation prompts and assume a default value to all, use with caution!",
         },
@@ -150,6 +151,7 @@ class Command(OdevFrameworkMixin, ABC):
                 merged_arg: Dict[str, Any] = dict(merged_args.pop(arg_name, {}))
                 merged_arg.update(arg)
                 merged_arg.setdefault("name", arg_name)
+                merged_arg.setdefault("dest", arg_name)
                 merged_arg.setdefault("aliases", [arg_name])
 
                 if arg_name not in merged_arg["aliases"] and not merged_arg["aliases"][0].startswith("-"):
@@ -173,6 +175,9 @@ class Command(OdevFrameworkMixin, ABC):
 
             if "action" in params:
                 params["action"] = ACTIONS_MAPPING.get(params["action"], params["action"])
+
+            if len(aliases) == 1 and aliases[0][0] != "-":
+                params.pop("dest")
 
             parser.add_argument(*aliases, **params)
 
@@ -230,7 +235,7 @@ class Command(OdevFrameworkMixin, ABC):
         :rtype: Optional[MutableMapping[str, Any]]
         """
         for arg in cls.arguments:
-            if arg["name"] == name or name in arg["aliases"]:
+            if name in (arg["name"], arg["dest"], *arg["aliases"]):
                 arg.update(**values)
                 return arg
 
@@ -243,7 +248,7 @@ class Command(OdevFrameworkMixin, ABC):
         :param name: the name of the argument to remove.
         """
         for arg in cls.arguments:
-            if arg["name"] == name or name in arg["aliases"]:
+            if name in (arg["name"], arg["dest"], *arg["aliases"]):
                 cls.arguments.remove(arg)
 
     @abstractmethod
