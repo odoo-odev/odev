@@ -474,7 +474,10 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def addons_contain_debugger(self):
         """Check if the source code has a debugger called."""
-        for addon in self.addons_paths:
+        odoo_base_path: Path = self.odoo_path / "odoo"
+        addons_paths = {(odoo_base_path if odoo_base_path in path.parents else path) for path in self.addons_paths}
+
+        for addon in addons_paths:
             for python_file in addon.glob("**/*.py"):
                 with python_file.open() as file:
                     for line in file.readlines():
