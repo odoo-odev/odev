@@ -25,7 +25,7 @@ from rich import box
 from rich.panel import Panel
 
 from odev.common import progress, string
-from odev.common.connectors import PaasConnector
+from odev.common.connectors import ODOOSH_URL_BASE, PaasConnector
 from odev.common.console import Colors
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.errors import ConnectorError
@@ -354,7 +354,8 @@ class PaasDatabase(PaasConnectorMixin, Database):
         """Return the token used to access the support backend features for this database."""
         if self._token is None:
             web_support = self._get_support_backend()
-            parsed = urlparse(web_support.url)
+            logs_url = Selector(text=web_support.text).xpath("//div[@id='oe-logs']//a[@href]").attrib.get("href")
+            parsed = urlparse(logs_url)
 
             if parsed.query:
                 self._token = parse_qs(parsed.query).get("token", [None])[0]
@@ -703,7 +704,10 @@ class PaasDatabase(PaasConnectorMixin, Database):
         if selection_url is None:
             raise ConnectorError(f"Cannot guess the project name for database {self.name!r}", self.paas)
 
-        parsed = urlparse(selection_url)
+        parsed = urlparse(selection_url, scheme="https")
+
+        if not parsed.netloc:
+            parsed = parsed._replace(netloc=urlparse(ODOOSH_URL_BASE).netloc)
 
         with self.paas.with_url(f"{parsed.scheme}://{parsed.netloc}"):
             web_selection = self.paas.get(
@@ -764,24 +768,48 @@ class PaasDatabase(PaasConnectorMixin, Database):
             if self._parse_url(web_login.url).path == self.paas.support_path:
                 return web_login
 
-            fields = self.paas.extract_form_inputs(web_login)
-            fields.update({"login": self.paas.login, "password": self.paas.password})
+            with progress.spinner(f"Logging in to {self.name!r} {self.platform.display} database' support backend"):
+                # Fill-in the login form and post it
+                fields = self.paas.extract_form_inputs(web_login)
+                web_login = self.paas.post(web_login.url, authenticate=False, data=fields)
 
-            web_login = self.paas.post(self.paas.login_path, authenticate=False, data=fields)
-            web_login_path: str = urlparse(web_login.url).path
+                fields = self.paas.extract_form_inputs(web_login)
+                fields.update({"login": self.paas.login, "password": self.paas.password})
+                web_login = self.paas.post(web_login.url, authenticate=False, data=fields)
+
+                # Post the TOTP token
+                web_login = self._post_totp(web_login)
+                web_login_path: str = urlparse(web_login.url).path
 
             if web_login.status_code != 200 or web_login_path == self.paas.login_path:
                 logger.warning("Failed to log in to Odoo SH, please check your credentials")
                 self.store.secrets.get("odoo.com:pass", prompt_format="Odoo account {field}:", force_ask=True)
-                return self._get_support_page()
-            elif web_login_path != self.paas.support_path:
-                # Obfuscate the password before raising because locals are
-                # displayed in tracebacks
-                fields.update({"password": "*****"})
-                raise ConnectorError("Unexpected redirect after logging in to Odoo SH")
+                return self._get_support_backend()
+            elif not web_login_path.endswith("/support"):
+                raise ConnectorError(f"Unexpected redirect after logging in to Odoo SH: {web_login.url}", self.paas)
 
         with self.paas.with_url(self.url):
             return self.paas.get(self.paas.support_path)
+
+    def _post_totp(self, web_login: Response) -> Response:
+        """Post the TOTP token to the login form."""
+        fields = self.paas.extract_form_inputs(web_login)
+        fields.update({"totp_token": self.paas.totp_token})
+        fields.pop("remember", None)
+
+        self.paas._connection.headers["User-Agent"] = self.paas.user_agent_totp
+
+        with self.paas.nocache():
+            web_login = self.paas.post(web_login.url, authenticate=False, data=fields)
+
+        self.paas._connection.headers["User-Agent"] = self.paas.user_agent
+
+        if urlparse(web_login.url).path.endswith("/totp"):
+            logger.error("Failed to log in to Odoo SH, please check your TOTP token")
+            self.paas.totp_token = None
+            return self._post_totp(web_login)
+
+        return web_login
 
     def dump(self, filestore: bool = False, test: bool = True, path: Path = None) -> Optional[Path]:
         """Download a backup of the database.

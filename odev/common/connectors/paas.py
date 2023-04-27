@@ -4,6 +4,7 @@ import re
 from contextlib import contextmanager
 from typing import (
     Any,
+    ClassVar,
     Generator,
     List,
     Literal,
@@ -50,6 +51,9 @@ class PaasConnector(RestConnector):
 
     _url: str = None
     """The URL of the endpoint, not sanitized."""
+
+    _totp_token: ClassVar[Optional[str]] = None
+    """The TOTP token to use for authentication, shared across class instances."""
 
     def __init__(self, project: str):
         """Initialize the connector.
@@ -99,6 +103,21 @@ class PaasConnector(RestConnector):
             return None
 
         return self._connection.cookies.get("session_id", None, domain=ODOOSH_DOMAIN)
+
+    @property
+    def totp_token(self) -> str:
+        """TOTP token for odoo.sh."""
+        if self.__class__._totp_token is None:
+            self.__class__._totp_token = console.secret(
+                f"Two-factor authentication token for {self.parsed_url.netloc} (6-digits):"
+            )
+
+        return self.__class__._totp_token
+
+    @totp_token.setter
+    def totp_token(self, value: Optional[str]):
+        """Set the TOTP token for the class."""
+        self.__class__._totp_token = value
 
     @property
     def support_path(self) -> str:
@@ -173,8 +192,9 @@ class PaasConnector(RestConnector):
 
     def invalidate_session(self):
         """Clear the session cookies."""
-        logger.debug("Invalidating Odoo SH session cookies.")
-        self._connection.cookies.clear(domain=ODOOSH_DOMAIN)
+        logger.debug("Invalidating Odoo SH session cookies")
+        self._connection.cookies.clear(domain=self.name)
+        self.store.secrets.invalidate(f"{self.parsed_url.netloc}:cookie")
 
     def request(
         self,
@@ -216,23 +236,29 @@ class PaasConnector(RestConnector):
         requiring authentication.
         """
         with self.nocache():
+            # Get the login page
             web_login = self.get(self.support_path, authenticate=False)
+
+            # Fill-in the login form and post it
+            fields = self.extract_form_inputs(web_login)
+            web_login = self.post(web_login.url, authenticate=False, data=fields)
 
             fields = self.extract_form_inputs(web_login)
             fields.update({"login": self.login, "password": self.password})
+            web_login = self.post(web_login.url, authenticate=False, data=fields)
 
-            web_login = self.post(self.login_path, authenticate=False, data=fields)
-            web_login_path: str = urlparse(web_login.url).path
+            # Fill-in form inputs for the TOTP (2FA) and post it
+            fields = self.extract_form_inputs(web_login)
+            fields.update({"totp_token": self.totp_token})
+            fields.pop("remember", None)
+            self._connection.headers["User-Agent"] = self.user_agent_totp
+            web_login = self.post(web_login.url, authenticate=False, data=fields)
+            self._connection.headers["User-Agent"] = self.user_agent
 
-            if web_login.status_code != 200 or web_login_path == self.login_path:
+            if web_login.status_code != 200 or urlparse(web_login.url).path == self.login_path:
                 logger.warning("Failed to log in to Odoo SH, please check your credentials")
                 self.store.secrets.get("odoo.com:pass", prompt_format="Odoo account {field}:", force_ask=True)
                 return self._login()
-            elif web_login_path != self.support_path:
-                # Obfuscate the password before raising because locals are
-                # displayed in tracebacks
-                fields.update({"password": "*****"})
-                raise ConnectorError("Unexpected redirect after logging in to Odoo SH", self)
 
     def rpc(
         self,

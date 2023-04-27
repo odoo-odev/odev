@@ -78,6 +78,17 @@ class RestConnector(Connector, ABC):
         return f"Odev/{__version__} ({python}; {system})"
 
     @property
+    def user_agent_totp(self) -> str:
+        """Build and return a credible User-Agent string to use in HTTP requests
+        but spoof an existing browser implementation as Odoo Oauth crashes
+        on unknown browsers and platforms during device registration.
+        """
+        return (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            f"Chrome/112.0.0.0 Safari/537.36; {self.user_agent} (TOTP)"
+        )
+
+    @property
     def name(self) -> str:
         """Return the name of the endpoint."""
         return self.parsed_url.netloc.split(".", 1)[0]
@@ -101,9 +112,24 @@ class RestConnector(Connector, ABC):
 
         self._connection = Session()
 
+        session_cookie = self.store.secrets.get(
+            f"{self.parsed_url.netloc}:cookie",
+            fields=("password",),
+            ask_missing=False,
+        ).password
+
+        if session_cookie:
+            self._connection.cookies.set("session_id", session_cookie, domain=self.parsed_url.netloc)
+
     def disconnect(self):
         """Disconnect from the endpoint and invalidate the current session."""
         if self._connection is not None:
+            self.store.secrets.set(
+                f"{self.parsed_url.netloc}:cookie",
+                "",
+                self._connection.cookies.get("session_id", domain=self.parsed_url.netloc),
+            )
+
             self._connection.close()
             del self._connection
 
@@ -209,6 +235,11 @@ class RestConnector(Connector, ABC):
         )
 
         self.cache(cache_key, response)
+        self.store.secrets.set(
+            f"{self.parsed_url.netloc}:cookie",
+            "",
+            self._connection.cookies.get("session_id", domain=self.parsed_url.netloc),
+        )
         return response
 
     @abstractmethod
