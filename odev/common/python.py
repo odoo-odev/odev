@@ -9,6 +9,7 @@ from typing import (
     Generator,
     List,
     Mapping,
+    MutableMapping,
     Optional,
     Union,
 )
@@ -150,7 +151,20 @@ class PythonEnv:
         logger.debug(f"Running pip freeze in {self.path}")
         result = bash.execute(f"{self.pip} freeze --all")
         packages = result.stdout.decode().splitlines()
-        return {package.split("==")[0].lower(): version.parse(package.split("==")[1]) for package in packages}
+        installed: MutableMapping[str, version.Version] = {}
+
+        for package in packages:
+            if "==" in package:
+                package_name, package_version = package.split("==")
+            elif " @ " in package:
+                package_name, _ = package.split(" @ ")
+                package_version = "1.0.0"
+            else:
+                raise ValueError(f"Invalid package spec {package}")
+
+            installed[package_name.strip().lower()] = version.parse(package_version.strip())
+
+        return installed
 
     def missing_requirements(self, path: Union[Path, str]) -> Generator[str, None, None]:
         """Check for missing packages in a requirements.txt file.
