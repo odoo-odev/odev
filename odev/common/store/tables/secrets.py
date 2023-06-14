@@ -100,6 +100,7 @@ class SecretStore(PostgresTable):
 
         Default: "{field} for '{key}':"
         :param ask_missing: Whether to prompt the user for the missing fields.
+        :param force_ask: Whether to prompt the user for all fields, even if they are already set.
         :return: The login and password.
         :rtype: Tuple[str, str]
         """

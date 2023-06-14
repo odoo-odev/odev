@@ -238,7 +238,7 @@ class RestConnector(Connector, ABC):
         self.store.secrets.set(
             f"{self.parsed_url.netloc}:cookie",
             "",
-            self._connection.cookies.get("session_id", domain=self.parsed_url.netloc),
+            self._connection.cookies.get("session_id", domain=self.parsed_url.netloc) or "",
         )
         return response
 

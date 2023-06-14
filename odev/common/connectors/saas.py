@@ -32,7 +32,7 @@ class SaasConnector(RestConnector):
         return self.store.secrets.get("odoo.com:pass", fields=["login"], prompt_format="Odoo {field}:").login
 
     @property
-    def password(self):
+    def password(self) -> str:
         """API key for odoo.com."""
         return self.store.secrets.get("odoo.com:api", fields=["password"], prompt_format="Odoo API key:").password
 

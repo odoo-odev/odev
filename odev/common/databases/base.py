@@ -4,8 +4,11 @@ from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar, Literal, Optional
+from typing import ClassVar, Literal, Mapping, Optional
 
+from odoolib import Model  # type: ignore [import]
+
+from odev.common.connectors.rpc import RpcConnector
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.version import OdooVersion
 
@@ -95,6 +98,9 @@ class Database(OdevFrameworkMixin, ABC):
         if self._platform is None:
             raise NotImplementedError(f"Missing `_platform` attribute in class {self.__class__.name}")
 
+        self.rpc = RpcConnector(self)
+        """The RPC proxy to the database."""
+
     def __repr__(self):
         """Return the representation of the database."""
         return f"{self.__class__.__name__}({self.name!r})"
@@ -178,6 +184,13 @@ class Database(OdevFrameworkMixin, ABC):
         """Return information about the branch of the repository containing custom
         code for the database.
         """
+
+    @property
+    def models(self) -> Mapping[str, Model]:
+        """Accessor for the models in the database, interfaced through the odoolib proxy.
+        >>> self.models["res.partner"].search_count([])
+        """
+        return self.rpc
 
     def create(self):
         """Create the database."""
