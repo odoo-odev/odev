@@ -1,6 +1,6 @@
 """Interact with the terminal and the user."""
 
-from enum import StrEnum
+from abc import ABC
 from pathlib import Path
 from typing import (
     Any,
@@ -38,15 +38,32 @@ CONTROL_CURSOR_RESET = Control((ControlType.CURSOR_MOVE_TO_COLUMN, 0))
 # Colors for logging levels and other objects rendered to the terminal.
 
 
-class Colors(StrEnum):
+class Colors(ABC):
+    """Terminal colors definitions to use with Rich themes."""
+
     BLACK = "dim"
+    """Dimmed text color from terminal settings."""
+
     CYAN = "#00afaf"
-    GRAY = ""  # Default text color from terminal settings
+    """Odoo cyan (secondary) color."""
+
+    GRAY = ""
+    """Default text color from terminal settings."""
+
     GREEN = "#98C379"
+    """Green."""
+
     PURPLE = "#af5faf"
+    """Odoo purple (primary) color."""
+
     RED = "#ec6047"
+    """Red used for errors."""
+
     YELLOW = "#d19a66"
-    WHITE = "#"
+    """Yellow used for warnings."""
+
+    RESET = "#"
+    """Color reset."""
 
 
 RICH_THEME_LOGGING = {

@@ -22,7 +22,7 @@ shortcuts to otherwise lengthy commands.
 
 ## Installation
 
-Make sure [Python 3.8 or higher](https://www.python.org/downloads/) is installed and available in your path.
+Make sure [Python 3.10 or higher](https://www.python.org/downloads/) is installed and available in your path.
 
 Clone the [odev repository](https://github.com/odoo-ps/ps-tech-odev) to your computer and navigate to the `ps-tech-odev`
 folder:

@@ -45,7 +45,7 @@ Once you are familiar with
 [how we are working in the Odev repository](./docs/contributing/working-in-odev-repository.md) you can clone the Odev
 repository locally on your machine.
 
-Install or update to **Python 3.8 or above**.
+Install or update to **Python 3.10 or above**.
 
 Install development requirements through `pip` and enable pre-commit hooks in the repository:
 

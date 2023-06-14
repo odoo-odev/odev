@@ -6,7 +6,6 @@ See:
 """
 
 from pathlib import Path
-from typing import Optional
 
 from odev.common.config import Config
 from odev.common.console import console
@@ -26,7 +25,7 @@ comp_path = Path("~/.local/share/bash-completion/completions/complete_odev.sh").
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[Config] = None) -> None:
+def setup(config: Config) -> None:
     """Setup auto completion script for odev commands and databases.
 
     See:

@@ -1,7 +1,6 @@
 """Configure self-update behavior."""
 
 from datetime import datetime
-from typing import Optional
 
 from odev._version import __version__
 from odev.common.config import Config
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[Config] = None) -> None:
+def setup(config: Config) -> None:
     """Configure self-update behavior.
 
     :param config: Configuration manager

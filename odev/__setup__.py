@@ -30,23 +30,21 @@ def main():
         logger.debug("Initializing configuration files")
         odev = init_framework()
 
-        with odev.config as config:
+        # --- Create directories -------------------------------------------
+        logger.info("Setting up working directories")
+        setup.directories.setup(odev.config)
 
-            # --- Create directories -------------------------------------------
-            logger.info("Setting up working directories")
-            setup.directories.setup(config)
+        # --- Create symlinks ----------------------------------------------
+        logger.info("Setting up symlinks for command registration")
+        setup.symlink.setup(odev.config)
 
-            # --- Create symlinks ----------------------------------------------
-            logger.info("Setting up symlinks for command registration")
-            setup.symlink.setup(config)
+        # --- Enable autocompletion ----------------------------------------
+        logger.info("Setting up autocompletion")
+        setup.completion.setup(odev.config)
 
-            # --- Enable autocompletion ----------------------------------------
-            logger.info("Setting up autocompletion")
-            setup.completion.setup(config)
-
-            # --- Configure self-update ----------------------------------------
-            logger.info("Configuring self-update")
-            setup.update.setup(config)
+        # --- Configure self-update ----------------------------------------
+        logger.info("Configuring self-update")
+        setup.update.setup(odev.config)
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)

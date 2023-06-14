@@ -2,7 +2,6 @@
 
 import stat
 from pathlib import Path
-from typing import Optional
 
 from odev.common.config import Config
 from odev.common.console import console
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Optional[Config] = None) -> None:
+def setup(config: Config) -> None:
     """Setup symlinks to odev for using it as a shell command.
     :param config: Odev configuration
     """
