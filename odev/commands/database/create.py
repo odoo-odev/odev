@@ -156,7 +156,9 @@ class CreateCommand(OdoobinCommand):
         if not re.search(r"--st(op-after-init)?", joined_args):
             args.append("--stop-after-init")
 
-        process = (self.odoobin or OdoobinProcess(self.database)).with_version(self.version).run(args=args, stream=True)
+        process = self.odoobin or OdoobinProcess(self.database)
+        process._force_enterprise = bool(self.args.enterprise)
+        process.with_version(self.version).run(args=args, stream=True)
 
         if process is None:
             raise self.error(f"Failed to initialize database {self.database.name!r}")
