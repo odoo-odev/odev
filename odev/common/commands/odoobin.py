@@ -5,7 +5,9 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Optional
 
+from odev.common import string
 from odev.common.commands import LocalDatabaseCommand
+from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoo import OdoobinProcess
@@ -60,13 +62,18 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
                 (?P<pid>\d+)\s
                 (?P<level>[A-Z]+)\s
                 (?P<database>[^\s]+)\s
-                (?P<logger>[^:]+):\s
+                (?P<logger>
+                    ((?:odoo\.addons\.)(?P<module>[^\.]+))?[^:]+
+                ):\s
                 (?P<description>.*)
             )
         """,
         re.VERBOSE | re.IGNORECASE,
     )
     """Regular expression to match the output of odoo-bin."""
+
+    last_level: str = None
+    """Log-level level of the last line printed by the odoo-bin process."""
 
     def __init__(self, args: Namespace, **kwargs):
         super().__init__(args, **kwargs)
@@ -96,6 +103,33 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     def odoobin(self) -> Optional[OdoobinProcess]:
         """The odoo-bin process associated with the database."""
         return self.database.process
+
+    def odoobin_progress(self, line: str):
+        """Beautify odoo logs on the fly."""
+        match = re.match(self._odoo_log_regex, line)
+
+        if match is None:
+            color = (
+                RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
+                if self.last_level in ("warning", "error", "critical")
+                else Colors.BLACK
+            )
+            return self.print(string.stylize(line, color), highlight=False)
+
+        self.last_level = match.group("level").lower()
+        level_color = (
+            f"bold {Colors.GREEN}"
+            if self.last_level == "info"
+            else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
+        )
+
+        self.print(
+            f"{string.stylize(match.group('time'), Colors.BLACK)} "
+            f"{string.stylize(match.group('level'), level_color)} "
+            f"{string.stylize(match.group('database'), Colors.PURPLE)} "
+            f"{string.stylize(match.group('logger'), Colors.BLACK)}: {match.group('description')}",
+            highlight=False,
+        )
 
 
 class OdoobinShellCommand(OdoobinCommand, ABC):

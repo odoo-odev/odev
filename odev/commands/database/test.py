@@ -1,6 +1,7 @@
 """Run unit tests on an empty local Odoo database."""
 
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Mapping, MutableMapping
 
@@ -33,6 +34,7 @@ class TestCommand(OdoobinCommand):
         },
         {
             "name": "modules",
+            "aliases": ["-m", "--modules"],
             "action": "store_comma_split",
             "nargs": "?",
             "default": "all",
@@ -59,8 +61,7 @@ class TestCommand(OdoobinCommand):
         self.test_buffer: List[str] = []
         """Buffer to store the output of odoo-bin running on the test database."""
 
-        self.last_test_level: str = ""
-        """Log-level level of the last line printed by the odoo-bin process."""
+        self.last_level = ""
 
     def generate_test_database_name(self) -> str:
         """Return the name of the test database to use.
@@ -115,6 +116,8 @@ class TestCommand(OdoobinCommand):
         odoobin = self.test_database.process.with_version(self.database.version)
         odoobin._venv_name = self.database.venv.name
         odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
+        odoobin._force_enterprise = self.database.edition == "enterprise"
+        self.test_database.whitelisted = False
 
         try:
             odoobin.run(args=args, progress=self.odoobin_progress)
@@ -128,28 +131,35 @@ class TestCommand(OdoobinCommand):
         if re.match(r"^(i?pu?db)?>+", line):
             raise self.error("Debugger detected in odoo-bin output, remove breakpoints and try again")
 
+        problematic_test_levels = ("warning", "error", "critical")
         match = re.match(self._odoo_log_regex, line)
 
         if match is None:
-            if self.last_test_level in ("warning", "error"):
+            if self.last_level in problematic_test_levels:
                 self.test_buffer.append(line)
-            return self.print(f"[{Colors.RED}]{line}[/{Colors.RED}]")
 
-        self.last_test_level = match.group("level").lower()
+            color = (
+                RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
+                if self.last_level in problematic_test_levels
+                else Colors.BLACK
+            )
+            return self.print(string.stylize(line, color), highlight=False)
+
+        self.last_level = match.group("level").lower()
         level_color = (
             f"bold {Colors.GREEN}"
-            if self.last_test_level == "info"
-            else RICH_THEME_LOGGING[f"logging.level.{self.last_test_level}"]
+            if self.last_level == "info"
+            else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
         )
 
-        if self.last_test_level in ("warning", "error"):
+        if self.last_level in problematic_test_levels:
             self.test_buffer.append(line)
 
         self.print(
-            f"[{Colors.BLACK}]{match.group('time')}[/{Colors.BLACK}] "
-            f"[{level_color}]{match.group('level')}[/{level_color}] "
-            f"[{Colors.PURPLE}]{match.group('database')}[/{Colors.PURPLE}] "
-            f"[{Colors.BLACK}]{match.group('logger')}:[/{Colors.BLACK}] {match.group('description')}",
+            f"{string.stylize(match.group('time'), Colors.BLACK)} "
+            f"{string.stylize(match.group('level'), level_color)} "
+            f"{string.stylize(match.group('database'), Colors.PURPLE)} "
+            f"{string.stylize(match.group('logger'), Colors.BLACK)}: {match.group('description')}",
             highlight=False,
         )
 
@@ -161,7 +171,6 @@ class TestCommand(OdoobinCommand):
     def cleanup(self):
         """Delete the test database."""
         if self.test_database.exists:
-            self.test_database.connector.disconnect()
             self.odev.run_command(
                 "delete",
                 *[
@@ -187,40 +196,38 @@ class TestCommand(OdoobinCommand):
     def __tests_details(self):
         """Loop through the tests buffer and compile a list of tests information."""
         tests: List[MutableMapping[str, str]] = []
-        test: MutableMapping[str, str] = {}
+        test: MutableMapping[str, str] = defaultdict(str)
         trace: List[str] = []
 
         for line in self.test_buffer:
             match = self._odoo_log_regex.match(line)
 
-            if match is None:
+            if match is None and tests:  # This is part of a traceback or a line printed outside of the logger
                 trace.append(line)
                 continue
 
-            if trace and tests:
-                tests[-1]["traceback"] = "\n".join(trace)
-                trace.clear()
-
             description = str(match.group("description"))
 
-            if re.match(r"^(FAIL|ERROR):\s", description):
+            if re.match(r"^(FAIL|ERROR):\s", description):  # This is the result of a test that failed
                 test_status, test_identifier = description.split(": ", 1)
                 test["status"] = test_status.capitalize()
                 test["class"], test["method"] = test_identifier.split(".")
                 test["logger"] = match.group("logger")
+                module = match.group("module")
+
+                if module is not None:
+                    test_path = re.sub(rf"^.*?{module}", module, test["logger"]).replace(".", "/")
+                    globs = [p.glob(f"{test_path}.py") for p in self.test_database.process.addons_paths]
+                    files = (file for glob in globs for file in glob)
+                    test["path"] = next(files, None).as_posix()
+                    test["module"] = module
+
+                if trace:
+                    test["traceback"] = "\n".join(trace)
+                    trace.clear()
+
                 tests.append({**test})
                 test.clear()
-
-            elif description.startswith("Module "):
-                module = description.split(" ")[1][:~0]
-
-                for t in tests:
-                    if "module" not in t:
-                        path = re.sub(rf"^.*?{module}", module, t["logger"]).replace(".", "/")
-                        globs = [p.glob(f"{path}.py") for p in self.test_database.process.addons_paths]
-                        files = (f for g in globs for f in g)
-                        t["path"] = next(files, None).as_posix()
-                        t["module"] = module
 
         return tests
 
@@ -249,4 +256,4 @@ class TestCommand(OdoobinCommand):
             ],
         )
 
-        self.print(string.indent(test["traceback"].rstrip(), 2), style=Colors.RED)
+        self.print(string.indent(test["traceback"].rstrip(), 2), style=Colors.RED, highlight=False)

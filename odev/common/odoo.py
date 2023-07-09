@@ -371,9 +371,13 @@ class OdoobinProcess(OdevFrameworkMixin):
         with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
             self.prepare_odoobin()
 
-        if stream and progress is not None and self.addons_contain_debugger():
-            logger.warning("Addons contain a call to a debugger, streaming of Odoo logs is deactivated")
+        debugger_position = self.addons_contain_debugger()
+
+        if stream and progress is not None and debugger_position is not None:
             progress = None
+            logger.warning(
+                f"Addons contain a call to a debugger, streaming of Odoo logs is deactivated: {debugger_position}"
+            )
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
@@ -472,17 +476,21 @@ class OdoobinProcess(OdevFrameworkMixin):
         globs = (path.glob(f"*/__{manifest}__.py") for manifest in ["manifest", "openerp"])
         return path.is_dir() and any(manifest for glob in globs for manifest in glob)
 
-    def addons_contain_debugger(self):
-        """Check if the source code has a debugger called."""
+    def addons_contain_debugger(self) -> Optional[str]:
+        """Check if the source code has a debugger called.
+        :return: The path to the file and line where the debugger is called, if any.
+        """
         odoo_base_path: Path = self.odoo_path / "odoo"
         addons_paths = {(odoo_base_path if odoo_base_path in path.parents else path) for path in self.addons_paths}
 
         for addon in addons_paths:
             for python_file in addon.glob("**/*.py"):
                 with python_file.open() as file:
-                    for line in file.readlines():
+                    for position, line in enumerate(file.readlines()):
                         if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                            return True
+                            return f"{python_file.relative_to(self.odoo_path)}:{position + 1}"
+
+        return None
 
     def set_database_repository(self):
         """Link the database to the first repository in additional addons-paths."""

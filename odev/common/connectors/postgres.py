@@ -191,6 +191,25 @@ class PostgresConnector(Connector):
         :return: Whether the database was dropped.
         :rtype: bool
         """
+        self.query(
+            f"""
+            REVOKE CONNECT ON DATABASE "{database}"
+            FROM PUBLIC
+            """
+        )
+
+        self.query(
+            f"""
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE
+                -- don't kill my own connection!
+                pid <> pg_backend_pid()
+                -- don't kill the connections to other databases
+                AND datname = '{database}'
+            """
+        )
+
         res = bool(
             self.query(
                 f"""
