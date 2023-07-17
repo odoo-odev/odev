@@ -488,7 +488,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 with python_file.open() as file:
                     for position, line in enumerate(file.readlines()):
                         if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                            return f"{python_file.relative_to(self.odoo_path)}:{position + 1}"
+                            return f"{python_file.relative_to(Path.cwd())}:{position + 1}"
 
         return None
 
