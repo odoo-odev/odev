@@ -382,7 +382,8 @@ class GitConnector(Connector):
         if self.path.exists():
             if branch is not None:
                 self.checkout(branch)
-            return
+
+            return logger.debug(f"Repository {self.name!r} already cloned to {self.path.as_posix()}")
 
         options = ["--recurse-submodules"]
 
