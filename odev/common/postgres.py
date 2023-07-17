@@ -1,6 +1,7 @@
 """PostgreSQL database class."""
 
 from abc import ABC
+from contextlib import nullcontext
 from typing import Mapping, MutableMapping, Optional
 
 from odev.common.connectors import PostgresConnector
@@ -103,9 +104,10 @@ class PostgresDatabase(PostgresConnectorMixin):
         return self.connector.create_column(table, column, definition)
 
     @ensure_connected
-    def query(self, query: str):
+    def query(self, query: str, nocache: bool = False):
         """Execute a query on the database."""
-        return self.connector.query(query)
+        with self.connector.nocache() if nocache else nullcontext():
+            return self.connector.query(query)
 
     @ensure_connected
     def constraint(self, table: str, name: str, definition: str):

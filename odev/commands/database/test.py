@@ -117,7 +117,6 @@ class TestCommand(OdoobinCommand):
         odoobin._venv_name = self.database.venv.name
         odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
         odoobin._force_enterprise = self.database.edition == "enterprise"
-        self.test_database.whitelisted = False
 
         try:
             odoobin.run(args=args, progress=self.odoobin_progress)
@@ -171,6 +170,7 @@ class TestCommand(OdoobinCommand):
     def cleanup(self):
         """Delete the test database."""
         if self.test_database.exists:
+            self.test_database.whitelisted = False
             self.odev.run_command(
                 "delete",
                 *[

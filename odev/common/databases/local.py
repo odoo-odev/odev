@@ -63,12 +63,14 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _platform_display = "Local"
 
     def __init__(self, name: str):
+        """Initialize the database.
+        :param name: The name of the database.
+        """
         super().__init__(name)
 
         if self.is_odoo:
             info = self.store.databases.get(self)
-            self._whitelisted: bool = info is not None and info.whitelisted
-            self.store.databases.set(self)
+            self.whitelisted = info is not None and info.whitelisted
 
     def __enter__(self):
         self.connector = self.psql(self.name).__enter__()
@@ -317,15 +319,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def whitelisted(self) -> bool:
         """Whether the database is whitelisted and should not be removed automatically."""
-        if not self.is_odoo:
-            return True
-
         info = self.store.databases.get(self)
-
-        if not info:
-            return False
-
-        return info.whitelisted
+        return not self.is_odoo if info is None else info.whitelisted
 
     @whitelisted.setter
     def whitelisted(self, value: bool):

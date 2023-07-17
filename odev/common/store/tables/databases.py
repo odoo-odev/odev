@@ -55,7 +55,8 @@ class DatabaseStore(PostgresTable):
             WHERE name = {database.name!r}
                 AND platform = {database.platform.name!r}
             LIMIT 1
-            """
+            """,
+            nocache=True,
         )
 
         if not result:
@@ -69,12 +70,12 @@ class DatabaseStore(PostgresTable):
             "name": f"{database.name!r}",
             "platform": f"{database.platform.name!r}",
             "virtualenv": f"{database.process.venv.path.as_posix()!r}"
-            if isinstance(database, LocalDatabase)
+            if isinstance(database, LocalDatabase) and database.process is not None
             else "NULL",
             "arguments": f"{arguments!r}" if arguments else "NULL",
             "whitelisted": str(database._whitelisted) if isinstance(database, LocalDatabase) else "False",
             "repository": f"{database.repository.full_name!r}" if database.repository else "NULL",
-            "branch": f"{database.branch.name!r}" if database.branch else "NULL",
+            "branch": f"{database.branch.name!r}" if database.branch is not None and database.branch.name else "NULL",
         }
 
         self.database.query(
