@@ -1,3 +1,4 @@
+import inspect
 import re
 from abc import ABC
 from argparse import Namespace
@@ -7,13 +8,12 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
-    Type,
     Union,
 )
 
 from odev.common import progress, string
 from odev.common.commands import Command
-from odev.common.databases import Database, LocalDatabase, PaasDatabase, SaasDatabase
+from odev.common.databases import LocalDatabase, PaasDatabase, SaasDatabase
 from odev.common.errors import CommandError
 from odev.common.logging import logging
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 DatabaseType = Union[LocalDatabase, SaasDatabase, PaasDatabase]
 
 
-DATABASE_PLATFORM_MAPPING: Mapping[str, Type[Database]] = {
+DATABASE_PLATFORM_MAPPING: Mapping[str, type[DatabaseType]] = {
     "local": LocalDatabase,
     "saas": SaasDatabase,
     "paas": PaasDatabase,
@@ -75,7 +75,7 @@ class DatabaseCommand(Command, ABC):
     database: Optional[DatabaseType] = None
     """The database instance associated with the command."""
 
-    def __init__(self, args: Namespace, database: Database = None, **kwargs):
+    def __init__(self, args: Namespace, database: DatabaseType = None, **kwargs):
         super().__init__(args, **kwargs)
         self.database_name: Optional[str] = self.args.database or None
         """The database name specified by the user."""
@@ -116,7 +116,10 @@ class DatabaseCommand(Command, ABC):
             with progress.spinner(
                 f"Searching for existing {DatabaseClass._platform_display} database {self.database_name!r}"
             ):
-                if DatabaseClass == PaasDatabase and self.args.branch:
+                database: DatabaseType
+
+                if "branch" in inspect.getfullargspec(DatabaseClass.__init__).args and self.args.branch:
+                    assert issubclass(DatabaseClass, PaasDatabase)
                     database = DatabaseClass(self.database_name, branch=self.args.branch)
                 else:
                     database = DatabaseClass(self.database_name)

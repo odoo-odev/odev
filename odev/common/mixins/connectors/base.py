@@ -22,7 +22,7 @@ def ensure_connected(func: Callable) -> Callable:
 class ConnectorMixin:
     """Base mixin for commands that need to use a connector."""
 
-    _connector_class: Type[Connector] = Connector
+    _connector_class: Type[Connector]
     """The class of the connector to use."""
 
     _connector_attribute_name: str = "connector"

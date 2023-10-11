@@ -1,5 +1,8 @@
 """Kill the process of a running Odoo database."""
 
+from time import sleep
+
+from odev.common import progress
 from odev.common.commands import OdoobinCommand
 from odev.common.logging import logging
 
@@ -32,5 +35,17 @@ class KillCommand(OdoobinCommand):
 
     def run(self):
         """Kill the process of the current database."""
-        logger.info(f"Killing process for running database {self.database.name!r} (pid: {self.odoobin.pid})")
-        self.odoobin.kill(hard=self.args.hard)
+        with progress.spinner(f"Killing process for running database {self.database.name!r} (pid: {self.odoobin.pid})"):
+            self.odoobin.kill(hard=self.args.hard)
+
+            # Wait for up to 3 seconds total with 5 retries until the process is gone
+            retries: int = 0
+            while self.odoobin.is_running and retries < 5:
+                retries += 1
+                sleep(0.2 * retries)
+
+            if self.odoobin.is_running:
+                logger.warn(
+                    f"Database {self.database.name!r} (pid: {self.odoobin.pid}) is still running, force-killing it"
+                )
+                self.odoobin.kill(hard=True)

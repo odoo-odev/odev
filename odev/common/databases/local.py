@@ -11,6 +11,7 @@ from subprocess import PIPE, Popen
 from types import FrameType
 from typing import (
     IO,
+    ClassVar,
     List,
     Literal,
     Mapping,
@@ -59,8 +60,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _branch: Optional[Branch] = None
     """The branch of the repository containing custom code for the database."""
 
-    _platform = "local"
-    _platform_display = "Local"
+    _platform: ClassVar[Literal["local"]] = "local"
+    _platform_display: ClassVar[str] = "Local"
 
     def __init__(self, name: str):
         """Initialize the database.
@@ -118,7 +119,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result[0][0] and OdooVersion(result[0][0]) or None
+        return result and result is not True and result[0][0] and OdooVersion(result[0][0]) or None
 
     @property
     def edition(self) -> Optional[str]:
@@ -136,7 +137,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result[0][0] and "enterprise" or "community"
+        return result and result is not True and result[0][0] and "enterprise" or "community"
 
     @property
     def filestore(self) -> Filestore:
@@ -183,7 +184,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        if not result:
+        if not result or result is True:
             return None
 
         try:
@@ -206,7 +207,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result[0][0] or None
+        return result and result is not True and result[0][0] or None
 
     @property
     def last_date(self) -> Optional[datetime]:
@@ -252,7 +253,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result[0][0] or None
+        return result and result is not True and result[0][0] or None
 
     @property
     def exists(self) -> bool:
@@ -263,7 +264,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def running(self) -> bool:
         """Check if the database is running."""
-        return self.process and self.process.is_running
+        return self.process is not None and self.process.is_running
 
     @property
     def process(self) -> Optional[OdoobinProcess]:
@@ -423,7 +424,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 shutil.move(temp_file, file)
             else:
                 with progress.spinner(f"Writing dump to archive {file}"):
-                    shutil.make_archive(file.parent / file.stem, "zip", self.filestore.path)
+                    shutil.make_archive((file.parent / file.stem).as_posix(), "zip", self.filestore.path)
 
                     with ZipFile(file, "w") as zip_file:
                         zip_file.write(temp_file.as_posix(), "dump.sql")

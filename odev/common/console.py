@@ -409,7 +409,7 @@ class Console(RichConsole):
             validate=PurportedPathValidator(message="Path must not be a directory", is_file=True),
         )
 
-    def select(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[Any]:
+    def select(self, message: str, choices: List[Tuple[Any, Optional[str]]], default: str = None) -> Optional[Any]:
         """Prompt for a selection.
         :param message: Question to ask the user
         :param choices: List of choices to select from

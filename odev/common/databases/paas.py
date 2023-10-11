@@ -7,6 +7,7 @@ from pathlib import Path
 from time import sleep
 from typing import (
     Any,
+    ClassVar,
     Generator,
     List,
     Literal,
@@ -257,12 +258,12 @@ class PaasBackup:
 
 
 class PaasDatabase(PaasConnectorMixin, Database):
-    """Odoo Online (SaaS) database class."""
+    """Odoo SH (PaaS) database class."""
 
     connector: PaasConnector
 
-    _platform: str = "paas"
-    _platform_display: str = "Odoo SH (PaaS)"
+    _platform: ClassVar[Literal["paas"]] = "paas"
+    _platform_display: ClassVar[str] = "Odoo SH (PaaS)"
 
     _input_name: str = None
     """The input string as entered by the user to search for a project or a database."""
@@ -511,10 +512,12 @@ class PaasDatabase(PaasConnectorMixin, Database):
         """Return the backups information for this database."""
         if self._backups_info is None:
             with progress.spinner(f"Fetching backups information for database {self.name!r}"):
-                self._backups_info: List[Mapping[str, Any]] = [
-                    info
-                    for info in self.paas.rpc(self.backups_url, params={"token": self.token})
-                    if info["branch"] == self.branch.name and info["downloadable"] is True
+                backups_info = self.paas.rpc(self.backups_url, params={"token": self.token})
+                assert isinstance(backups_info, list), "Invalid backups information, expected a list of items"
+                self._backups_info = [
+                    backup
+                    for backup in backups_info
+                    if backup["branch"] == self.branch.name and backup["downloadable"] is True
                 ]
 
         return self._backups_info
@@ -600,7 +603,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
     @property
     def is_last_build(self) -> bool:
         """Return whether the current build is the last build."""
-        return self.build_id == self.last_build_id
+        return self.build.id == self.last_build_id
 
     def switch_branch(self, branch: str):
         """Target the connector to another branch.
@@ -811,7 +814,7 @@ class PaasDatabase(PaasConnectorMixin, Database):
 
         return web_login
 
-    def dump(self, filestore: bool = False, test: bool = True, path: Path = None) -> Optional[Path]:
+    def dump(self, filestore: bool = False, path: Path = None, test: bool = True) -> Optional[Path]:
         """Download a backup of the database.
         :param filestore: Whether to include the filestore in the backup.
         :param test: Whether to download a testing or an exact dump.
@@ -840,9 +843,9 @@ class PaasDatabase(PaasConnectorMixin, Database):
     def _get_dump_filename(
         self,
         filestore: bool = False,
-        test: bool = True,
         suffix: str = None,
         extension: str = "zip",
+        test: bool = True,
     ) -> str:
         """Return the filename of the dump file.
         :param filestore: Whether to include the filestore in the dump.

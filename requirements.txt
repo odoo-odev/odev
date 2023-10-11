@@ -24,7 +24,7 @@ psycopg2-binary>=2,<3
 PyGithub>=1,<2
 python-Levenshtein==0.12.2
 requests>=2,<3
-rich==12.6.*
+rich>=12.6
 scp>=0.14.2,<1
 sqlparse>=0.4.3
 texttable>=1.6.4

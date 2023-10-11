@@ -23,6 +23,7 @@ class TestCommand(OdoobinCommand):
     arguments = [
         {
             "name": "tests",
+            "aliases": ["-F", "--filters"],
             "action": "store_comma_split",
             "nargs": "?",
             "default": [],
@@ -151,7 +152,7 @@ class TestCommand(OdoobinCommand):
             else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
         )
 
-        if self.last_level in problematic_test_levels:
+        if self.last_level in problematic_test_levels and match.group("database") == self.test_database.name:
             self.test_buffer.append(line)
 
         self.print(
@@ -202,16 +203,21 @@ class TestCommand(OdoobinCommand):
         for line in self.test_buffer:
             match = self._odoo_log_regex.match(line)
 
-            if match is None and tests:  # This is part of a traceback or a line printed outside of the logger
+            if match is None:  # This is part of a traceback or a line printed outside of the logger
                 trace.append(line)
                 continue
 
             description = str(match.group("description"))
 
             if re.match(r"^(FAIL|ERROR):\s", description):  # This is the result of a test that failed
+                if trace:
+                    if tests:
+                        tests[-1]["traceback"] = "\n".join(trace)
+                    trace.clear()
+
                 test_status, test_identifier = description.split(": ", 1)
                 test["status"] = test_status.capitalize()
-                test["class"], test["method"] = test_identifier.split(".")
+                test["class"], test["method"] = test_identifier.split(".", 1)
                 test["logger"] = match.group("logger")
                 module = match.group("module")
 
@@ -222,12 +228,12 @@ class TestCommand(OdoobinCommand):
                     test["path"] = next(files, None).as_posix()
                     test["module"] = module
 
-                if trace:
-                    test["traceback"] = "\n".join(trace)
-                    trace.clear()
-
                 tests.append({**test})
                 test.clear()
+
+        if tests and trace:
+            tests[-1]["traceback"] = "\n".join(trace)
+            trace.clear()
 
         return tests
 
@@ -247,13 +253,13 @@ class TestCommand(OdoobinCommand):
             ],
             [
                 [
-                    test["status"],
-                    test["class"],
-                    test["method"],
-                    test["module"],
-                    test["path"],
+                    test.get("status", "N/A"),
+                    test.get("class", "N/A"),
+                    test.get("method", "N/A"),
+                    test.get("module", "N/A"),
+                    test.get("path", "N/A"),
                 ],
             ],
         )
 
-        self.print(string.indent(test["traceback"].rstrip(), 2), style=Colors.RED, highlight=False)
+        self.print(string.indent(test["traceback"].rstrip(), 2), style=Colors.RED, highlight=False, auto_paginate=False)

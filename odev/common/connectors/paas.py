@@ -11,7 +11,6 @@ from typing import (
     Mapping,
     MutableMapping,
     Optional,
-    Tuple,
     Union,
 )
 from urllib.parse import urlparse
@@ -24,6 +23,7 @@ from odev.common.connectors.rest import RestConnector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
+from odev.typings.odoo import Domain
 
 
 logger = logging.getLogger(__name__)
@@ -31,13 +31,6 @@ logger = logging.getLogger(__name__)
 
 ODOOSH_DOMAIN = "www.odoo.sh"
 ODOOSH_URL_BASE = f"https://{ODOOSH_DOMAIN}/"
-
-Domain = List[
-    Union[
-        Literal["&", "|"],
-        Tuple[str, str, Union[str, int, float, bool]],
-    ]
-]
 
 
 class PaasConnector(RestConnector):

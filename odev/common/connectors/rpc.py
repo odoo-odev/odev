@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import odoolib  # type: ignore [import]
 
 from odev.common.connectors.base import Connector
+from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 
 
@@ -59,6 +60,12 @@ class RpcConnector(Connector):
     def connect(self) -> odoolib.Connection:
         """Open a connection to the external service."""
         if not self.connected:
+            if not self.database.running:
+                raise ConnectorError(
+                    f"Cannot establish RPC connection to {self.database.name!r}: is the database running?",
+                    self,
+                )
+
             try:
                 credentials = self.store.secrets.get(
                     self.credentials_key,
@@ -73,6 +80,8 @@ class RpcConnector(Connector):
                     protocol=self.protocol,
                     port=self.port,
                 )
+
+                logger.debug(f"Connected to {self.database.platform.display} database {self.database.name!r}'s RPC API")
             except odoolib.AuthenticationError:
                 logger.error(
                     f"Invalid credentials for {self.database.platform.display} "

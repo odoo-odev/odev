@@ -24,6 +24,7 @@ from packaging import version
 
 from odev._version import __version__
 from odev.common import bash, progress
+from odev.common.commands.database import DatabaseCommand, DatabaseType
 from odev.common.config import Config
 from odev.common.console import console
 from odev.common.errors import OdevError
@@ -35,7 +36,6 @@ from odev.common.store import DataStore
 if TYPE_CHECKING:
     from odev.common.commands.base import CommandType
     from odev.common.console import Console
-    from odev.common.databases import Database
 
 
 __all__ = ["Odev"]
@@ -238,7 +238,7 @@ class Odev:
             raise command_cls.error(None, str(exception))
         return arguments
 
-    def run_command(self, name: str, *cli_args: str, history: bool = False, database: "Database" = None) -> None:
+    def run_command(self, name: str, *cli_args: str, history: bool = False, database: DatabaseType = None) -> None:
         """Run a command with the given arguments.
 
         :param name: Name of the command to run.
@@ -260,9 +260,14 @@ class Odev:
             else:
                 cli_args = (database.name, *cli_args)
                 arguments = self.parse_arguments(command_cls, *cli_args)
-                command = command_cls(arguments, database=database)
 
-            command.argv = " ".join(cli_args)
+                if "database" in inspect.getfullargspec(command_cls.__init__).args:
+                    assert issubclass(command_cls, DatabaseCommand)
+                    command = command_cls(arguments, database=database)
+                else:
+                    command = command_cls(arguments)
+
+            command.argv = cli_args
 
             logger.debug(f"Dispatching {command!r}")
             command.run()

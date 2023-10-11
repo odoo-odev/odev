@@ -20,7 +20,7 @@ from rich.style import StyleType
 
 from odev.common import string
 from odev.common.console import console
-from odev.common.logging import logging
+from odev.common.logging import OdevRichHandler, logging
 
 
 __all__ = ["Progress", "StackedStatus", "spinner"]
@@ -36,7 +36,12 @@ class Progress(RichProgress):
     """
 
     def __init__(self, download: bool = False):
-        log_info_symbol: str = escape(logger.root.handlers[0].get_level_symbol_text(logging.INFO))
+        handler = next(
+            filter(lambda handler: isinstance(handler, OdevRichHandler), logger.root.handlers),
+            OdevRichHandler(console=console),
+        )
+        assert isinstance(handler, OdevRichHandler)
+        log_info_symbol: str = escape(handler.get_level_symbol_text(logging.INFO))
 
         columns = [
             TextColumn(

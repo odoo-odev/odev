@@ -2,7 +2,6 @@
 
 import re
 from contextlib import nullcontext
-from functools import lru_cache
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
@@ -245,7 +244,6 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._venv = None
         return self
 
-    @lru_cache
     def _get_ps_process(self) -> Optional[str]:
         """Return the process currently running odoo, if any.
         Grep-ed `ps aux` output.
@@ -307,6 +305,9 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def prepare_odoobin(self):
         """Prepare the odoo-bin executable and ensure all dependencies are installed."""
+        if self.version is None:
+            return logger.warn("No version specified, skipping environment setup")
+
         self.prepare_npm()
         self.update_worktrees()
         self.prepare_venv()
@@ -343,7 +344,8 @@ class OdoobinProcess(OdevFrameworkMixin):
                     process = self.venv.run_script(self.odoobin_path, odoo_args, stream=False)
             except CalledProcessError as error:
                 error_message: str = error.stderr.strip().decode().rstrip(".").replace("ERROR: ", "")
-                return logger.error(f"Odoo exited with an error: {error_message}")
+                logger.error(f"Odoo exited with an error: {error_message}")
+                return None
             else:
                 return process
 
@@ -396,7 +398,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             )
 
             try:
-                with spinner(info_message) if not stream else nullcontext():
+                with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
                     process = self.venv.run_script(
                         self.odoobin_path,
                         odoobin_args,
@@ -408,7 +410,8 @@ class OdoobinProcess(OdevFrameworkMixin):
                 if not stream:
                     self.console.print(error.stderr.decode())
 
-                return logger.error("Odoo exited with an error, check the output above for more information")
+                logger.error("Odoo exited with an error, check the output above for more information")
+                return None
             else:
                 return process
 
@@ -488,7 +491,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 with python_file.open() as file:
                     for position, line in enumerate(file.readlines()):
                         if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                            return f"{python_file.relative_to(Path.cwd())}:{position + 1}"
+                            return f"{python_file.resolve().as_posix()}:{position + 1}"
 
         return None
 
@@ -541,6 +544,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 )
             except CalledProcessError as error:
                 self.console.print(error.stderr.decode())
-                return logger.error("Odoo exited with an error, check the output above for more information")
+                logger.error("Odoo exited with an error, check the output above for more information")
+                return None
             else:
                 return process

@@ -4,9 +4,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar, Literal, Mapping, Optional
-
-from odoolib import Model  # type: ignore [import]
+from typing import ClassVar, Literal, Optional
 
 from odev.common.connectors.rpc import RpcConnector
 from odev.common.mixins.framework import OdevFrameworkMixin
@@ -186,7 +184,7 @@ class Database(OdevFrameworkMixin, ABC):
         """
 
     @property
-    def models(self) -> Mapping[str, Model]:
+    def models(self) -> RpcConnector:
         """Accessor for the models in the database, interfaced through the odoolib proxy.
         >>> self.models["res.partner"].search_count([])
         """

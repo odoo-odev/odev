@@ -3,7 +3,13 @@
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import (
+    ClassVar,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+)
 from urllib.parse import urlparse
 
 from odev.common import progress, string
@@ -42,8 +48,8 @@ class SaasDatabase(SaasConnectorMixin, Database):
     _branch: Optional[Branch] = None
     """The branch of the repository containing custom code for the database."""
 
-    _platform: str = "saas"
-    _platform_display: str = "Odoo Online (SaaS)"
+    _platform: ClassVar[Literal["saas"]] = "saas"
+    _platform_display: ClassVar[str] = "Odoo Online (SaaS)"
 
     def __init__(self, name: str):
         """Initialize the Odoo SaaS database and infer its name or URL."""
@@ -204,7 +210,7 @@ class SaasDatabase(SaasConnectorMixin, Database):
         """
         repositories = self.console.checkbox(
             "In what repositories could the custom code for this database be found?",
-            choices=[(repository,) for repository in SAAS_REPOSITORIES],
+            choices=[(repository, None) for repository in SAAS_REPOSITORIES],
         )
 
         if not repositories:

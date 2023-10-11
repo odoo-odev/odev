@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 class Command(OdevFrameworkMixin, ABC):
     """Base class for handling commands."""
 
-    argv: List[str] = []
+    argv: Sequence[str] = []
     """Arguments passed to the command before parsing."""
 
     name: ClassVar[str]
@@ -198,7 +198,7 @@ class Command(OdevFrameworkMixin, ABC):
         return parser
 
     @classmethod
-    def parse_arguments(cls, argv: List[str]) -> Namespace:
+    def parse_arguments(cls, argv: Sequence[str]) -> Namespace:
         """Parse arguments for the command subclass.
 
         :param argv: the arguments to parse.
@@ -259,7 +259,7 @@ class Command(OdevFrameworkMixin, ABC):
     def cleanup(self) -> None:
         """Cleanup after the command execution."""
 
-    def print(self, renderable: RenderableType = None, *args: Any, **kwargs: Any) -> None:
+    def print(self, renderable: RenderableType = None, auto_paginate: bool = True, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
         if renderable is None:
             renderable = ""
@@ -268,6 +268,7 @@ class Command(OdevFrameworkMixin, ABC):
             self.console.is_terminal
             and isinstance(renderable, str)
             and self.console.height < len(renderable.splitlines())
+            and auto_paginate
         ):
             with self.console.pager(styles=not self.console.is_dumb_terminal):
                 self.console.print(renderable, *args, **kwargs)
