@@ -35,7 +35,7 @@ class Mapped:
     title: Optional[str]
     """The title of the column in the table."""
 
-    justify: str
+    justify: Optional[str]
     """The justification of the column in the table, one of "center", "left"
     or "right".
     """
@@ -46,7 +46,7 @@ class Mapped:
     returns a boolean.
     """
 
-    format: Callable[[Any], str]
+    format: Optional[Callable[[Any], str]]
     """A callable that takes the value and returns and formats it to display
     it in the table.
     """
@@ -59,7 +59,7 @@ class Mapped:
 
 TABLE_MAPPING: List[Mapped] = [
     Mapped(
-        value=lambda database: database.process.is_running if database.is_odoo else None,
+        value=lambda database: database.process.is_running if database.process is not None else "",
         title=None,
         justify=None,
         display=True,
@@ -113,7 +113,7 @@ TABLE_MAPPING: List[Mapped] = [
         title="Last Use",
         justify=None,
         display=lambda args: args.details,
-        format=lambda value: value and value.strftime("%Y-%m-%d %X") or "",
+        format=lambda value: value.strftime("%Y-%m-%d %X") if value else "",
         total=False,
     ),
     Mapped(
@@ -127,7 +127,7 @@ TABLE_MAPPING: List[Mapped] = [
         total=False,
     ),
     Mapped(
-        value=lambda database: database.process.pid,
+        value=lambda database: database.process.pid if database.process is not None else "",
         title="PID",
         justify="right",
         display=lambda args: args.details,
@@ -193,7 +193,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
                 raise self.error(message)
 
             if self.args.names_only and databases:
-                return self.print(*databases, sep="\n")
+                return self.print("\n".join(databases), highlight=False)
 
             data = self.get_table_data(databases)
 

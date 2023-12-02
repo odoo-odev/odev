@@ -43,11 +43,16 @@ class OdooVersion(_BaseVersion):
         if not match:
             raise InvalidVersion(f"Invalid version: '{version}'")
 
+        module_version = tuple(int(i) for i in match.group("module").split(".")) if match.group("module") else ()
+
+        while len(module_version) < 3:
+            module_version += (0,)
+
         # Store the parsed out pieces of the version
         self._version = _Version(
             major=int(match.group("major")) if match.group("major") else 0,
             minor=int(match.group("minor")) if match.group("minor") else 0,
-            module=tuple(int(i) for i in match.group("module").split(".")) if match.group("module") else (),
+            module=module_version,
             saas=match.group("saas") is not None,
             master=match.group("master") is not None,
         )

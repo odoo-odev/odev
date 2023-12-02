@@ -6,6 +6,7 @@ import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
 from io import StringIO
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -15,7 +16,6 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
-    Type,
 )
 
 from rich import box
@@ -31,8 +31,6 @@ from odev.common.mixins.framework import OdevFrameworkMixin
 
 if TYPE_CHECKING:
     from odev.common.odev import Odev
-
-CommandType = Type["Command"]
 
 
 logger = logging.getLogger(__name__)
@@ -89,7 +87,6 @@ class Command(OdevFrameworkMixin, ABC):
     def __init__(self, args: Namespace):
         """
         Initialize the command runner.
-
         :param args: the parsed arguments as an instance of :class:`Namespace`
         """
         self.args: Namespace = args
@@ -280,6 +277,7 @@ class Command(OdevFrameworkMixin, ABC):
         columns: Sequence[MutableMapping[str, Any]],
         rows: Sequence[List[Any]],
         total: List[Any] = None,
+        file: Optional[Path] = None,
         **kwargs,
     ) -> None:
         """Print a table to stdout with highlighting and theming.
@@ -290,7 +288,7 @@ class Command(OdevFrameworkMixin, ABC):
         :param kwargs: Additional keyword arguments to pass to the Rich Table.
         """
         kwargs.setdefault("show_header", True)
-        kwargs.setdefault("header_style", "bold")
+        kwargs.setdefault("header_style", "bold" if file is None else None)
         kwargs.setdefault("box", box.HORIZONTALS)
         table = Table(**kwargs)
 
@@ -308,9 +306,9 @@ class Command(OdevFrameworkMixin, ABC):
                 table.add_row(*row)
 
         if total:
-            table.add_row(*total, style="bold")
+            table.add_row(*total, style="bold" if file is None else None)
 
-        self.console.print(table)
+        self.console.print(table, file=file, crop=not file, overflow="ignore", no_wrap=True)
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""

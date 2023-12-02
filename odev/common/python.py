@@ -274,14 +274,16 @@ class PythonEnv:
         script: Union[Path, str],
         args: Optional[List[str]] = None,
         stream: bool = False,
-        progress: Callable[[str], None] = None,
+        progress: Optional[Callable[[str], None]] = None,
         script_input: Optional[str] = None,
     ) -> Optional[CompletedProcess]:
         """Run a python script.
 
         :param path: Path to the python script to run.
         :param args: A list of arguments to pass to the script.
-        :progress: A callback function to call when a line is printed to stdout. Unused if stream is False.
+        :param stream: Whether to stream the output of the script to stdout.
+        :param progress: A callback function to call when a line is printed to stdout. Unused if stream is False.
+        :param script_input: A string to pass to the script as stdin.
         :return: The result of the script execution.
         :rtype: CompletedProcess
         """
@@ -301,9 +303,7 @@ class PythonEnv:
             return bash.execute(command)
 
         if progress is None:
-            return bash.run(command)
-
-        progress = progress if progress is not None else console.print
+            progress = console.print
 
         for line in bash.stream(command):
             progress(line)

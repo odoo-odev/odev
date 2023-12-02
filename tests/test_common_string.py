@@ -1,7 +1,8 @@
 from odev.common import string
+from tests.fixtures import OdevTestCase
 
 
-class TestCommonString:
+class TestCommonString(OdevTestCase):
     def test_normalize_indent(self):
         """String should be normalized."""
         expected = "test line 1\n    line 2\nline 3"

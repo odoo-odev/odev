@@ -6,6 +6,7 @@ import re
 import shutil
 import tempfile
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 from subprocess import PIPE, Popen
 from types import FrameType
@@ -46,7 +47,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _process: Optional[OdoobinProcess] = None
     """The Odoo process running the database."""
 
-    connector: PostgresConnector
+    connector: Optional[PostgresConnector] = None
+    """The PostgreSQL connector of the database."""
 
     _whitelisted: bool = False
     """Whether the database is whitelisted and should not be removed automatically."""
@@ -61,7 +63,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     """The branch of the repository containing custom code for the database."""
 
     _platform: ClassVar[Literal["local"]] = "local"
+    """The platform on which the database is running."""
+
     _platform_display: ClassVar[str] = "Local"
+    """The display name of the platform on which the database is running."""
 
     def __init__(self, name: str):
         """Initialize the database.
@@ -104,7 +109,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         return Path(info.virtualenv)
 
-    @property
+    @cached_property
     def version(self) -> Optional[OdooVersion]:
         if not self.is_odoo:
             return None
@@ -121,7 +126,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         return result and result is not True and result[0][0] and OdooVersion(result[0][0]) or None
 
-    @property
+    @cached_property
     def edition(self) -> Optional[str]:
         if not self.is_odoo:
             return None
@@ -364,7 +369,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return psql.create_database(self.name, template=template)
 
     def drop(self) -> bool:
-        self.connector.disconnect()
+        if self.connector is not None:
+            self.connector.disconnect()
         with self.psql() as psql:
             return psql.drop_database(self.name)
 

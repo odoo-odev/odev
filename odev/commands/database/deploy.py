@@ -5,7 +5,7 @@ import re
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
-from odev.common.odoo import OdoobinProcess
+from odev.common.odoobin import OdoobinProcess
 
 
 logger = logging.getLogger(__name__)

@@ -184,6 +184,16 @@ def join_or(parts: Sequence[str]) -> str:
     return join(parts, "or")
 
 
+def join_bullet(parts: Sequence[str]) -> str:
+    """Join parts as a bullet list.
+    :param parts: Parts to join.
+    :return: The joined parts.
+    :rtype: str
+    """
+    bullet = "\n•"
+    return "".join([f"{bullet} {part}" for part in parts]).strip()
+
+
 def seconds_to_time(seconds: int) -> str:
     """Convert seconds to a human readable time.
     :param seconds: The number of seconds.
@@ -200,3 +210,19 @@ def ago(date: datetime.datetime) -> str:
     :rtype: str
     """
     return timeago.format(date, datetime.datetime.utcnow())
+
+
+def quote(string: str, dirty_only: bool = False) -> str:
+    """Quote a string.
+    :param string: The string to quote.
+    :param dirty_only: Do not quote strings that have no quotes to begin with.
+    :return: The quoted string.
+    :rtype: str
+    """
+    index = max(string.find(char) for char in {"'", '"'})
+
+    if dirty_only and index == -1:
+        return string
+
+    double = index == -1 or string[index] == "'"
+    return f'"{string}"' if double else f"'{string}'"

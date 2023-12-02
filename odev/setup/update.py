@@ -1,8 +1,5 @@
 """Configure self-update behavior."""
 
-from datetime import datetime
-
-from odev._version import __version__
 from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
@@ -29,13 +26,14 @@ def setup(config: Config) -> None:
         ],
     )
 
+    if update_mode is not None:
+        config.update.mode = update_mode
+
     update_interval = console.integer(
         "How often should odev check for updates (in days)?",
         default=config.update.interval,
         min_value=1,
     )
 
-    config.update.mode = update_mode
-    config.update.interval = update_interval
-    config.update.date = datetime.utcnow()
-    config.update.version = __version__
+    if update_interval is not None:
+        config.update.interval = update_interval

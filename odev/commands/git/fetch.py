@@ -12,7 +12,7 @@ from odev.common import progress, string
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector
 from odev.common.console import Colors
-from odev.common.odoo import ODOO_COMMUNITY_REPOSITORIES, ODOO_ENTERPRISE_REPOSITORIES
+from odev.common.odoobin import ODOO_COMMUNITY_REPOSITORIES, ODOO_ENTERPRISE_REPOSITORIES
 from odev.common.version import OdooVersion
 
 

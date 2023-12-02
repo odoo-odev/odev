@@ -85,8 +85,11 @@ class DatabaseCommand(Command, ABC):
         elif self._database_arg_required or self.database_name is not None:
             self.database = self.infer_database_instance()
 
-        if self._database_exists_required and not self.database.exists:
-            raise self.error(f"Database {self.database.name!r} does not exist")
+        if self._database_exists_required:
+            if self.database is None:
+                raise self.error("No database specified")
+            if not self.database.exists:
+                raise self.error(f"Database {self.database.name!r} does not exist")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:

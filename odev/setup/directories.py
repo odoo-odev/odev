@@ -35,28 +35,31 @@ def __move(old: Path, new: Path) -> None:
         return
 
     if not old.exists():
-        logger.debug(f"Directory {old} does not exist, creating {new}")
+        logger.debug(f"Directory {old} does not exist, creating {new} as en empty directory")
         new.mkdir(parents=True, exist_ok=True)
         return
 
     if __is_empty(new) and new.exists():
-        logger.debug(f"Directory {new} is empty, removing it")
+        logger.debug(f"Directory {new} exists but is empty, removing it")
         new.rmdir()
 
     logger.debug(f"Moving {old} to {new}")
     shutil.move(old.as_posix(), new.as_posix())
 
 
-def __ask_dir(message: str, default: str = None, path: Optional[Path] = None) -> Optional[Path]:
+def __ask_dir(message: str, default: Optional[str] = None, path: Optional[Path] = None) -> Optional[Path]:
     """Prompt for a directory path."""
     if path is None:
-        path = __resolve(console.directory(message, default))
+        asked_path = console.directory(message, default)
 
-        if not __is_empty(path):
-            logger.warning(f"Directory {path} is not empty")
+        if asked_path is not None:
+            path = __resolve(asked_path)
 
-            if not console.confirm("Use this directory without moving files?"):
-                path = None
+            if not __is_empty(path):
+                logger.warning(f"Directory {path} is not empty")
+
+                if not console.confirm("Use this directory without moving files?"):
+                    path = None
 
     return path
 
@@ -75,6 +78,5 @@ def setup(config: Config) -> None:
         new_path = __ask_dir("Where do you want to keep odoo repositories?", old_path.as_posix(), new_path)
 
     __move(old_path, new_path)
-
     logger.debug("Saving directories to configuration file")
     config.paths.repositories = new_path

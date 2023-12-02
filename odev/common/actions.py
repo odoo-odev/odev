@@ -3,6 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 from argparse import Action as BaseAction, ArgumentParser, Namespace
+from ast import literal_eval
 from pathlib import Path
 from typing import (
     Any,
@@ -17,7 +18,24 @@ __all__ = ["ACTIONS_MAPPING"]
 
 
 class Action(BaseAction, ABC):
-    """Base class for custom actions."""
+    """Base class for custom actions.
+    Actions will be available as "store_<action_name>" in the `arguments` mapping
+    of a command. The action name is derived from the class name by removing the
+    "Action" suffix and converting the camel case to snake case.
+
+    Example:
+    >>> class TestAction(Action):
+    >>>     ...
+    >>>
+    >>>
+    >>> class MyCommand(Command):
+    >>>     arguments = [
+    >>>         {
+    >>>             "name": "test",
+    >>>             "action": "store_test",
+    >>>         },
+    >>>     ]
+    """
 
     def __call__(
         self,
@@ -74,6 +92,13 @@ class PathAction(Action):
 
     def _transform_one(self, value: str) -> Path:
         return Path(value)
+
+
+class EvalAction(Action):
+    """Converter for command line arguments passed as a string that should be evaluated to literals."""
+
+    def _transform_one(self, value: str) -> Any:
+        return literal_eval(value)
 
 
 ACTIONS_MAPPING = {a._action_name(): a for a in Action.__subclasses__()}

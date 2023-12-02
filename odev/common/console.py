@@ -228,12 +228,30 @@ class Console(RichConsole):
         for _ in range(count):
             self.control(CONTROL_LINE_UP, CONTROL_LINE_ERASE, CONTROL_CURSOR_RESET)
 
-    def code(self, text: str, language: str = "python", **kwargs):
+    def print(self, *args, file: Optional[Path] = None, **kwargs):
+        """Print to the console, allowing passthrough to a file if provided."""
+        console_file = self.file  # type: ignore [has-type]
+
+        if file is not None:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            self.file = file.open("wt", encoding="utf-8")
+
+        super().print(*args, **kwargs)
+
+        if file is not None:
+            self.file = console_file
+
+    def code(self, text: str, language: str = "python", file: Path = None, **kwargs):
         """Display a code block.
         :param text: Code to display.
         :param language: Language of the code.
         :param kwargs: Keyword arguments to pass to `rich.syntax.Syntax`.
         """
+        if file is not None:
+            return self.print(
+                text, file=file, highlight=False, crop=False, no_wrap=True, overflow="ignore", end="", **kwargs
+            )
+
         kwargs.setdefault("background_color", "default")
         kwargs.setdefault("theme", "github-dark")
         self.print(Syntax(text, language, **kwargs))
@@ -379,7 +397,7 @@ class Console(RichConsole):
             default=default,
         )
 
-    def directory(self, message: str, default: str = None) -> Optional[str]:
+    def directory(self, message: str, default: Optional[str] = None) -> Optional[str]:
         """Prompt for a directory path.
         :param message: Question to ask the user
         :param default: Set the default text value of the prompt
@@ -394,7 +412,7 @@ class Console(RichConsole):
             validate=PurportedPathValidator(message="Path must not be a file", is_dir=True),
         )
 
-    def filepath(self, message: str, default: str = None) -> Optional[str]:
+    def filepath(self, message: str, default: Optional[str] = None) -> Optional[str]:
         """Prompt for a file path.
         :param message: Question to ask the user
         :param default: Set the default text value of the prompt
@@ -409,7 +427,9 @@ class Console(RichConsole):
             validate=PurportedPathValidator(message="Path must not be a directory", is_file=True),
         )
 
-    def select(self, message: str, choices: List[Tuple[Any, Optional[str]]], default: str = None) -> Optional[Any]:
+    def select(
+        self, message: str, choices: List[Tuple[Any, Optional[str]]], default: Optional[str] = None
+    ) -> Optional[Any]:
         """Prompt for a selection.
         :param message: Question to ask the user
         :param choices: List of choices to select from
@@ -445,7 +465,9 @@ class Console(RichConsole):
             transformer=lambda selected: string.join_and(selected) if selected else "None",
         )
 
-    def fuzzy(self, message: str, choices: List[Tuple[str, Optional[str]]], default: str = None) -> Optional[Any]:
+    def fuzzy(
+        self, message: str, choices: List[Tuple[str, Optional[str]]], default: Optional[str] = None
+    ) -> Optional[Any]:
         """Prompt for a fuzzy selection.
         :param message: Question to ask the user
         :param choices: List of choices to select from

@@ -49,7 +49,10 @@ class SaasDatabase(SaasConnectorMixin, Database):
     """The branch of the repository containing custom code for the database."""
 
     _platform: ClassVar[Literal["saas"]] = "saas"
+    """The platform on which the database is hosted."""
+
     _platform_display: ClassVar[str] = "Odoo Online (SaaS)"
+    """The display name of the platform on which the database is hosted."""
 
     def __init__(self, name: str):
         """Initialize the Odoo SaaS database and infer its name or URL."""

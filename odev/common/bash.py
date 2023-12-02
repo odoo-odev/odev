@@ -20,7 +20,7 @@ from odev.common.console import console
 from odev.common.logging import logging
 
 
-__all__ = ["execute", "detached", "run", "stream"]
+__all__ = ["execute", "detached", "stream"]
 
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def __run_command(command: str, capture: bool = True, sudo_password: str = None)
         shell=True,
         check=True,
         capture_output=capture,
-        input=sudo_password,
+        input=sudo_password.encode() if sudo_password is not None else None,
     )
 
 
@@ -127,15 +127,6 @@ def detached(command: str) -> Popen[bytes]:
     return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)
 
 
-def run(command: str) -> CompletedProcess:
-    """Execute a command in the operating system and wait for it to complete.
-
-    :param str command: The command to execute.
-    """
-    logger.debug(f"Running process: {quote(command)}")
-    return __run_command(command, capture=False)
-
-
 def stream(command: str) -> Generator[str, None, None]:
     """Execute a command in the operating system and stream its output .
 
@@ -145,7 +136,4 @@ def stream(command: str) -> Generator[str, None, None]:
     process = Popen(command, shell=True, stdout=PIPE, stderr=STDOUT)
 
     for line in iter(process.stdout.readline, b""):
-        if process.poll() is not None:
-            break
-
         yield line.rstrip().decode()

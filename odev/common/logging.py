@@ -37,12 +37,16 @@ __log_level = re.search(
 
 if __log_level:
     LOG_LEVEL = str(__log_level.group(1)).upper()
-    sys.argv = " ".join(sys.argv).replace(__log_level.group(0), "").split()
+    remove = __log_level.group(0).strip().split()
+    remove_index = sys.argv.index(remove[0])
+    del sys.argv[remove_index : remove_index + len(remove)]
 
 SILENCED_LOGGERS = [
     "asyncio",
+    "blib2to3",
     "git.cmd",
     "github.Requester",
+    "odoolib",
     "pip._internal",
     "rich",
     "urllib3",

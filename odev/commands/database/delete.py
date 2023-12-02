@@ -94,7 +94,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         tracker.stop()
         logger.info(f"Deleted {len(databases)} databases")
 
-    def confirm_delete(self):
+    def confirm_delete(self) -> None:
         """Confirm the deletion of the database."""
         confirm: bool = self.console.confirm(
             f"Are you sure you want to delete the database {self.database.name!r}?",
@@ -109,7 +109,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
 
     def delete_one(self, database: LocalDatabase):
         """Delete a single database and its resources.
-        :param delete_whitelisted: if True, delete the database even if it is whitelisted.
+        :param database: the database to delete.
         """
         if "template" not in self.args.keep:
             self.remove_template_databases(database)
@@ -124,6 +124,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
             self.remove_configuration(database)
 
         self.drop_database(database)
+        self.store.databases.delete(database)
         logger.info(f"Dropped database {database.name!r}")
 
     def drop_database(self, database: LocalDatabase):

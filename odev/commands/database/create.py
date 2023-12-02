@@ -7,12 +7,9 @@ from typing import List, Optional
 from odev.common import progress
 from odev.common.commands import OdoobinCommand
 from odev.common.databases import LocalDatabase
-from odev.common.logging import logging
-from odev.common.odoo import OdoobinProcess
+from odev.common.odev import logger
+from odev.common.odoobin import OdoobinProcess
 from odev.common.version import OdooVersion
-
-
-logger = logging.getLogger(__name__)
 
 
 class CreateCommand(OdoobinCommand):
@@ -50,7 +47,7 @@ class CreateCommand(OdoobinCommand):
 
     _database_exists_required = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.template: Optional[LocalDatabase] = LocalDatabase(self.args.template) if self.args.template else None
         """Template database to copy."""
@@ -142,7 +139,7 @@ class CreateCommand(OdoobinCommand):
 
         logger.info(f"Created {message}")
 
-    def initialize_database(self):
+    def initialize_database(self) -> None:
         """Initialize the database."""
         if self.template:
             logger.debug(f"Initializing database {self.database.name!r} from template {self.template.name!r}")
@@ -158,7 +155,7 @@ class CreateCommand(OdoobinCommand):
 
         process = self.odoobin or OdoobinProcess(self.database)
         process._force_enterprise = bool(self.args.enterprise)
-        process.with_version(self.version).run(args=args, stream=True)
+        process.with_version(self.version).run(args=args, progress=self.odoobin_progress)
 
         if process is None:
             raise self.error(f"Failed to initialize database {self.database.name!r}")

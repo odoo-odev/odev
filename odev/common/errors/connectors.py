@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 class ConnectorError(OdevError):
-    """Custom exception for errors raised during commands execution."""
+    """Custom exception for errors raised while using a connector."""
 
     def __init__(self, message: str, connector: "Connector", *args, **kwargs):
         """

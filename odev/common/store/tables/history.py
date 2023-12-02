@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List
 
+from odev.common import string
 from odev.common.commands import Command, DatabaseCommand
 from odev.common.databases import Database
 from odev.common.postgres import PostgresTable
@@ -72,11 +73,11 @@ class HistoryStore(PostgresTable):
     def set(self, command: Command):
         """Set the history of a command."""
         database = f"{command.database.name!r}" if isinstance(command, DatabaseCommand) and command.database else "NULL"
-
+        argv = " ".join([string.quote(arg, dirty_only=True) for arg in command.argv])
         self.database.query(
             f"""
             INSERT INTO {self.name} (command, database, arguments)
-            VALUES ({command.name!r}, {database}, {command.argv!r})
+            VALUES ({command.name!r}, {database}, E{argv!r})
             ON CONFLICT (command, arguments) DO
                 UPDATE SET date = CURRENT_TIMESTAMP
             """

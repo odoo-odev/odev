@@ -1,17 +1,18 @@
 from datetime import date, datetime
 from typing import (
+    Dict,
     List,
     Literal,
-    Mapping,
+    Sequence,
     Tuple,
     Union,
 )
 
 
-RecordData = Mapping[str, Union[str, int, bool]]
+RecordData = Dict[str, Union[str, int, float, bool, Tuple[int, str], List[int]]]
 """Type alias for a record data dictionary as returned from the Odoo RPC API."""
 
-RecordDataList = Mapping[int, RecordData]
+RecordDataList = List[RecordData]
 """Type alias for a list of record data dictionaries as returned from the Odoo RPC API,
 notably the raw result of calls to `search_read`.
 """
@@ -44,6 +45,8 @@ Domain = List[
                 bool,
                 date,
                 datetime,
+                Sequence[str],
+                Sequence[int],
             ],
         ],
     ]

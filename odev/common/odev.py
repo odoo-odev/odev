@@ -11,12 +11,14 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
 from typing import (
-    TYPE_CHECKING,
     Any,
     ClassVar,
+    Generic,
     List,
     Literal,
     MutableMapping,
+    Type,
+    cast,
 )
 
 from git import Repo
@@ -24,18 +26,14 @@ from packaging import version
 
 from odev._version import __version__
 from odev.common import bash, progress
+from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseCommand, DatabaseType
 from odev.common.config import Config
-from odev.common.console import console
+from odev.common.console import Console, console
 from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
-
-
-if TYPE_CHECKING:
-    from odev.common.commands.base import CommandType
-    from odev.common.console import Console
 
 
 __all__ = ["Odev"]
@@ -44,7 +42,7 @@ __all__ = ["Odev"]
 logger = logging.getLogger(__name__)
 
 
-class Odev:
+class Odev(Generic[CommandType]):
     """Main framework class."""
 
     version: ClassVar[str] = __version__
@@ -56,17 +54,24 @@ class Odev:
     config: ClassVar[Config] = None
     """Odev configuration."""
 
-    store: ClassVar["DataStore"] = None
+    store: ClassVar[DataStore] = None
     """Odev data storage."""
 
-    commands: ClassVar[MutableMapping[str, "CommandType"]] = {}
+    commands: MutableMapping[str, Type[CommandType]] = {}
     """Collection of existing and loaded commands."""
 
     executable: ClassVar[Path] = Path(sys.argv[0])
     """Path to the current executable."""
 
-    def __init__(self):
-        logger.debug(f"Starting odev version {self.version}")
+    def __init__(self, test: bool = False):
+        """Initialize the framework.
+        :param test: Whether the framework is being initialized for testing purposes
+        """
+        logger.debug(f"Starting odev version {self.version} {'in test mode' if test else ''}".strip())
+
+        self.in_test_mode = test
+        """Whether the framework is in testing mode."""
+
         if self.__class__.config is None:
             self.__class__.config = Config(self.name)
 
@@ -87,39 +92,49 @@ class Odev:
         return f"Odev(version={self.version})"
 
     @property
-    def name(self) -> Literal["odev"]:
+    def name(self) -> Literal["odev", "odev-test"]:
         """Name of the framework."""
-        return "odev"
+        return "odev" if not self.in_test_mode else "odev-test"
 
     @property
-    def console(self) -> "Console":
+    def console(self) -> Console:
         """Rich console instance to display information to users."""
         return console
 
     @property
+    def base_path(self) -> Path:
+        """Local path to the odev module."""
+        return self.path / "odev"
+
+    @property
+    def tests_path(self) -> Path:
+        """Local path to the tests directory."""
+        return self.path / "tests/resources"
+
+    @property
     def commands_path(self) -> Path:
         """Local path to the commands directory."""
-        return self.path / self.name / "commands"
+        return self.base_path / "commands"
 
     @property
     def upgrades_path(self) -> Path:
         """Local path to the upgrades directory."""
-        return self.path / self.name / "upgrades"
+        return (self.tests_path if self.in_test_mode else self.base_path) / "upgrades"
 
     @property
     def setup_path(self) -> Path:
         """Local path to the setup directory."""
-        return self.path / self.name / "setup"
+        return (self.tests_path if self.in_test_mode else self.base_path) / "setup"
 
     @property
     def scripts_path(self) -> Path:
         """Local path to the directory where odoo-bin shell scripts are stored."""
-        return self.path / self.name / "scripts"
+        return (self.tests_path if self.in_test_mode else self.base_path) / "scripts"
 
     @property
     def static_path(self) -> Path:
         """Local path to the static directory where common immutable files are stored."""
-        return self.path / self.name / "static"
+        return self.base_path / "static"
 
     @property
     def dumps_path(self) -> Path:
@@ -134,9 +149,6 @@ class Odev:
         :return: Whether updates were pulled and installed
         :rtype: bool
         """
-        if not sys.stdout.isatty() or not sys.stdin.isatty():
-            return False
-
         if not self.__date_check_interval() or not self.__git_branch_behind():
             bash.detached(f"cd {self.path} && git fetch")
             return False
@@ -189,7 +201,7 @@ class Odev:
 
         self.config.update.version = self.version
 
-    def import_commands(self) -> List["CommandType"]:
+    def import_commands(self) -> List[Type[CommandType]]:
         """Import all commands from the commands directory.
 
         :return: List of imported command classes
@@ -199,7 +211,7 @@ class Odev:
             path for path in self.commands_path.iterdir() if path.is_dir() and not path.name.startswith("_")
         ]
         command_modules = pkgutil.iter_modules([d.as_posix() for d in command_dirs])
-        command_classes: List["CommandType"] = []
+        command_classes: List[Type[CommandType]] = []
 
         for module_info in command_modules:
             assert isinstance(module_info.module_finder, FileFinder)
@@ -224,7 +236,7 @@ class Odev:
             command_class.prepare_command(self)
             self.commands.update({name: command_class for name in command_names})
 
-    def parse_arguments(self, command_cls: "CommandType", *args):
+    def parse_arguments(self, command_cls: Type[CommandType], *args):
         """Parse arguments for a command.
 
         :param command_cls: Command class to parse arguments for
@@ -251,7 +263,7 @@ class Odev:
         if command_cls is None:
             return logger.error(f"Command {name!r} not found")
 
-        command = None  # Avoid UnboundLocalError during cleanup
+        command: CommandType
 
         try:
             if database is None:
@@ -262,8 +274,7 @@ class Odev:
                 arguments = self.parse_arguments(command_cls, *cli_args)
 
                 if "database" in inspect.getfullargspec(command_cls.__init__).args:
-                    assert issubclass(command_cls, DatabaseCommand)
-                    command = command_cls(arguments, database=database)
+                    command = cast(Type[DatabaseCommand], command_cls)(arguments, database=database)
                 else:
                     command = command_cls(arguments)
 
@@ -277,8 +288,10 @@ class Odev:
             if history:
                 self.store.history.set(command)
         finally:
-            if command is not None:
+            try:
                 command.cleanup()
+            except UnboundLocalError:
+                pass
 
     def dispatch(self) -> None:
         """Handle commands and arguments as received from the terminal."""
@@ -293,7 +306,7 @@ class Odev:
             or argv[0].startswith("-")
         ):
             logger.debug("Help argument or no command provided, falling back to help command")
-            argv = ["help", *argv]
+            argv.insert(0, "help")
 
         self.run_command(argv[0], *argv[1:], history=True)
 
@@ -420,4 +433,10 @@ class Odev:
         assert spec is not None and spec.loader is not None
         script_module: ModuleType = module_from_spec(spec)
         spec.loader.exec_module(script_module)
-        script_module.run(self.config)
+
+        try:
+            script_module.run(self.config)
+        except Exception as e:
+            raise RuntimeError(f"Error while running upgrade script {script.parent.name}: {e.args[0]}") from e
+        else:
+            self.config.update.version = script.parent.name

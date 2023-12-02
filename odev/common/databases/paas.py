@@ -263,7 +263,10 @@ class PaasDatabase(PaasConnectorMixin, Database):
     connector: PaasConnector
 
     _platform: ClassVar[Literal["paas"]] = "paas"
+    """The platform on which the database is hosted."""
+
     _platform_display: ClassVar[str] = "Odoo SH (PaaS)"
+    """The display name of the platform."""
 
     _input_name: str = None
     """The input string as entered by the user to search for a project or a database."""

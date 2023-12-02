@@ -3,13 +3,14 @@
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Mapping, MutableMapping
+from typing import List, Mapping, MutableMapping, cast
 
 from odev.common import string
 from odev.common.commands import OdoobinCommand
 from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
+from odev.common.odoobin import OdoobinProcess
 
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class TestCommand(OdoobinCommand):
         {"name": "odoo_args"},
     ]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.test_files: List[str] = []
         """List of test files to run."""
@@ -94,7 +95,6 @@ class TestCommand(OdoobinCommand):
             args.extend(["--version", str(self.database.version)])
 
         args.append(self.test_database.name)
-
         self.odev.run_command("create", *args)
 
     def run_test_database(self):
@@ -109,22 +109,26 @@ class TestCommand(OdoobinCommand):
 
         if self.args.modules:
             args.extend(["--init", ",".join(self.args.modules)])
+        else:
+            args.extend(["--init", "base"])
 
         if self.args.odoo_args:
             args.extend(self.args.odoo_args)
 
-        assert self.test_database.process
-        odoobin = self.test_database.process.with_version(self.database.version)
+        if not self.test_database.exists:
+            self.create_test_database()
+
+        odoobin = cast(OdoobinProcess, self.test_database.process).with_version(self.database.version)
         odoobin._venv_name = self.database.venv.name
-        odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
         odoobin._force_enterprise = self.database.edition == "enterprise"
+        odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
 
         try:
             odoobin.run(args=args, progress=self.odoobin_progress)
             self.print_tests_results()
         except RuntimeError as error:
             self.test_database.process.kill(hard=True)
-            raise self.error(str(error))
+            raise self.error(str(error)) from error
 
     def odoobin_progress(self, line: str):
         """Handle odoo-bin output and fetch information real-time."""
@@ -165,7 +169,6 @@ class TestCommand(OdoobinCommand):
 
     def run(self):
         """Run the command."""
-        self.create_test_database()
         self.run_test_database()
 
     def cleanup(self):
@@ -194,7 +197,7 @@ class TestCommand(OdoobinCommand):
 
         self.print()
 
-    def __tests_details(self):
+    def __tests_details(self) -> List[MutableMapping[str, str]]:
         """Loop through the tests buffer and compile a list of tests information."""
         tests: List[MutableMapping[str, str]] = []
         test: MutableMapping[str, str] = defaultdict(str)
@@ -223,9 +226,10 @@ class TestCommand(OdoobinCommand):
 
                 if module is not None:
                     test_path = re.sub(rf"^.*?{module}", module, test["logger"]).replace(".", "/")
+                    assert self.test_database.process is not None
                     globs = [p.glob(f"{test_path}.py") for p in self.test_database.process.addons_paths]
                     files = (file for glob in globs for file in glob)
-                    test["path"] = next(files, None).as_posix()
+                    test["path"] = cast(Path, next(files, None)).as_posix()
                     test["module"] = module
 
                 tests.append({**test})

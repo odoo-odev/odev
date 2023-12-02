@@ -29,6 +29,7 @@ class HistoryCommand(DatabaseCommand):
     ]
 
     _database_arg_required = False
+    _database_exists_required = False
 
     def run(self) -> None:
         if self.args.clear:
