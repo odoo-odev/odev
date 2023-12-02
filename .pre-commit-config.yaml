@@ -3,7 +3,7 @@ default_language_version:
     python: python3.10
 default_stages: [commit]
 fail_fast: false
-exclude: ^(\.vscode|\.github)
+exclude: ^(\.vscode|\.github|tests)
 
 repos:
     - repo: https://github.com/pre-commit/mirrors-prettier
