@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="{{data.__xml_id | replace(data.module_name ~ '.', '')}}" model="ir.actions.act_url">
+        <field name="name">{{data.name | e}}</field>
+        <field name="url">{{data.url}}</field>
+        <field name="target">{{data.target}}</field>
+    </record>
+</odoo>

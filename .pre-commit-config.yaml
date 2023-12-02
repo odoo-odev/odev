@@ -144,7 +144,6 @@ repos:
           - id: pretty-format-json
             args:
                 - --autofix
-                - --indent 4
 
     - repo: https://github.com/codespell-project/codespell
       rev: v2.1.0
