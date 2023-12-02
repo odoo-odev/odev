@@ -42,14 +42,14 @@ class TestCommonBash(OdevTestCase):
         """A command that fails should be re-executed with sudo and fail again if the password is wrong"""
         bash.sudo_password = "wrongpassword"
         with self.assertRaises(CalledProcessError):
-            bash.execute("cat /etc/shadow", sudo=True)
+            bash.execute("cat >> /etc/shadow", sudo=True)
 
     def test_execute_sudo_wrong_password_no_raise(self):
-        """A command that fails should be re-executed with sudo and return None if the password is not wrong
+        """A command that fails should be re-executed with sudo and return None if the password is wrong
         and raise_on_error is False
         """
         bash.sudo_password = "wrongpassword"
-        exec_result = bash.execute("cat /etc/shadow", sudo=True, raise_on_error=False)
+        exec_result = bash.execute("cat >> /etc/shadow", sudo=True, raise_on_error=False)
         self.assertIsNone(exec_result, "should return None")
 
     def test_detached(self):

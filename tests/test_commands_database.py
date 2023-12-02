@@ -1,5 +1,6 @@
 import shutil
 from typing import cast
+from pathlib import Path
 
 from testfixtures import Replacer
 from testfixtures.popen import MockPopen
@@ -19,6 +20,7 @@ class TestDatabaseCommands(OdevTestCase):
     db_name = f"odev-unit-test-{suid()}"
     database = LocalDatabase(db_name)
     venv = PythonEnv()
+    odoobin_path = Path("/tmp/odev-test/odoo-bin")
 
     @classmethod
     def setUpClass(cls):
@@ -28,6 +30,9 @@ class TestDatabaseCommands(OdevTestCase):
         cls.replacer.replace("subprocess.Popen", cls.Popen)
         cls.replacer.replace("odev.common.bash.Popen", cls.Popen)
         cls.addClassCleanup(cls.replacer.restore)
+        if not cls.odoobin_path.exists():
+            cls.odoobin_path.parent.mkdir(parents=True, exist_ok=True)
+            cls.odoobin_path.touch()
         return super().setUpClass()
 
     @classmethod
@@ -36,19 +41,28 @@ class TestDatabaseCommands(OdevTestCase):
             shutil.rmtree(cls.database.venv)
         if cls.database.exists:
             cls.database.drop()
+        if cls.odoobin_path.exists():
+            cls.odoobin_path.unlink()
+            cls.odoobin_path.parent.rmdir()
         return super().tearDownClass()
 
     def test_command_create(self):
         """Test creating a database using the create command."""
-        command = self.setup_command("create", f"{self.db_name} --version 16.0 -f")
         self.odev.config.reset("paths", "repositories")
 
-        with (
-            CaptureOutput(),
-            self.patch(logger, "warning"),
-            self.patch(self.odev.console, "confirm", return_value=True),
-        ):
-            command.run()
+        with self.patch(OdoobinProcess, "clone_repositories", return_value=None):
+            command = self.setup_command("create", f"{self.db_name} --version master -f")
+
+            with (
+                CaptureOutput(),
+                self.patch(logger, "warning"),
+                self.patch(self.odev.console, "confirm", return_value=True),
+                self.patch(OdoobinProcess, "prepare_odoobin", return_value=None),
+                self.patch(OdoobinProcess, "addons_contain_debugger", return_value=None),
+                self.patch_property(OdoobinProcess, "odoo_addons_paths", return_value=[]),
+                self.patch_property(OdoobinProcess, "odoobin_path", return_value=self.odoobin_path),
+            ):
+                command.run()
 
         self.assertRegex(
             self.Popen.all_calls[-1].args[0],
@@ -69,18 +83,23 @@ class TestDatabaseCommands(OdevTestCase):
 
     def test_command_test(self):
         """Test running tests on a database using the test command."""
-        command = self.setup_command("test", f"{self.db_name} --modules base")
+        with self.patch(OdoobinProcess, "clone_repositories", return_value=None):
+            command = self.setup_command("test", f"{self.db_name} --modules base")
 
-        with (
-            CaptureOutput(),
-            self.patch(logger, "warning"),
-            self.patch(self.odev.console, "confirm", return_value=True),
-            self.patch_property(OdoobinProcess, "pid", return_value=None),
-            self.patch_property(LocalDatabase, "version", return_value=OdooVersion("16.0")),
-            self.patch_property(LocalDatabase, "venv", return_value=self.venv.path),
-        ):
-            command.run()
-            command.cleanup()
+            with (
+                CaptureOutput(),
+                self.patch(logger, "warning"),
+                self.patch(self.odev.console, "confirm", return_value=True),
+                self.patch(OdoobinProcess, "prepare_odoobin", return_value=None),
+                self.patch(OdoobinProcess, "addons_contain_debugger", return_value=None),
+                self.patch_property(OdoobinProcess, "pid", return_value=None),
+                self.patch_property(OdoobinProcess, "odoo_addons_paths", return_value=[]),
+                self.patch_property(OdoobinProcess, "odoobin_path", return_value=self.odoobin_path),
+                self.patch_property(LocalDatabase, "version", return_value=OdooVersion("master")),
+                self.patch_property(LocalDatabase, "venv", return_value=self.venv.path),
+            ):
+                command.run()
+                command.cleanup()
 
         self.assertRegex(
             self.Popen.all_calls[-1].args[0],

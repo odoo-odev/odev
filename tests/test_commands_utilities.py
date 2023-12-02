@@ -135,12 +135,12 @@ class TestUtilCommands(OdevTestCase):
         with CaptureOutput() as output:
             command.run()
 
-        self.assertIn("\x1b[1mmode ", output.stdout)
-        self.assertIn("\x1b[1mdate ", output.stdout)
-        self.assertIn("\x1b[1mversion ", output.stdout)
-        self.assertIn("\x1b[1minterval ", output.stdout)
-        self.assertIn("\x1b[1mdumps ", output.stdout)
-        self.assertIn("\x1b[1mrepositories ", output.stdout)
+        self.assertIn(" mode ", output.stdout)
+        self.assertIn(" date ", output.stdout)
+        self.assertIn(" version ", output.stdout)
+        self.assertIn(" interval ", output.stdout)
+        self.assertIn(" dumps ", output.stdout)
+        self.assertIn(" repositories ", output.stdout)
 
     def test_command_config_section_only(self):
         """Test running the command with a section.
@@ -151,12 +151,12 @@ class TestUtilCommands(OdevTestCase):
         with CaptureOutput() as output:
             command.run()
 
-        self.assertNotIn("\x1b[1mmode ", output.stdout)
-        self.assertNotIn("\x1b[1mdate ", output.stdout)
-        self.assertNotIn("\x1b[1mversion ", output.stdout)
-        self.assertNotIn("\x1b[1minterval ", output.stdout)
-        self.assertIn("\x1b[1mdumps ", output.stdout)
-        self.assertIn("\x1b[1mrepositories ", output.stdout)
+        self.assertNotIn(" mode ", output.stdout)
+        self.assertNotIn(" date ", output.stdout)
+        self.assertNotIn(" version ", output.stdout)
+        self.assertNotIn(" interval ", output.stdout)
+        self.assertIn(" dumps ", output.stdout)
+        self.assertIn(" repositories ", output.stdout)
 
     def test_command_config_section_key(self):
         """Test running the command with a section and a key.
@@ -167,12 +167,12 @@ class TestUtilCommands(OdevTestCase):
         with CaptureOutput() as output:
             command.run()
 
-        self.assertIn("\x1b[1mmode ", output.stdout)
-        self.assertNotIn("\x1b[1mdate ", output.stdout)
-        self.assertNotIn("\x1b[1mversion ", output.stdout)
-        self.assertNotIn("\x1b[1minterval ", output.stdout)
-        self.assertNotIn("\x1b[1mdumps ", output.stdout)
-        self.assertNotIn("\x1b[1mrepositories ", output.stdout)
+        self.assertIn(" mode ", output.stdout)
+        self.assertNotIn(" date ", output.stdout)
+        self.assertNotIn(" version ", output.stdout)
+        self.assertNotIn(" interval ", output.stdout)
+        self.assertNotIn(" dumps ", output.stdout)
+        self.assertNotIn(" repositories ", output.stdout)
 
     def test_command_config_section_invalid(self):
         """Test running the command with a section and a key, but invalid.
@@ -193,7 +193,7 @@ class TestUtilCommands(OdevTestCase):
         with CaptureOutput() as output:
             command.run()
 
-        self.assertIn("\x1b[1mmode ", output.stdout)
+        self.assertIn(" mode ", output.stdout)
         self.assertEqual(self.odev.config.update.mode, "always")
 
     def test_command_config_set_section_no_key(self):

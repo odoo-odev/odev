@@ -1,4 +1,4 @@
-agentcrypt<1
+agentcrypt>=0.5,<0.6
 autoflake==1.4
 BeautifulSoup4>=4,<5
 black>=20.8b1

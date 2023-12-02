@@ -8,6 +8,12 @@ from tests.fixtures import OdevTestCase
 
 
 class TestSetup(OdevTestCase):
+    @classmethod
+    def tearDownClass(cls):
+        if Path("/tmp/odev-tests").exists():
+            shutil.rmtree("/tmp/odev-tests", ignore_errors=True)
+        return super().tearDownClass()
+
     def test_setup_completion(self):
         """Test the setup script responsible of creating a symlink to the bash completion script of odev.
         A symlink should be created on the file system.
@@ -57,7 +63,12 @@ class TestSetup(OdevTestCase):
         to the configuration file creating the necessary paths on the file system.
         If the directory did change, move the old files to the new path and update the configuration file accordingly.
         """
+        self.odev.config.paths.repositories = f"/tmp/odev-tests/{uuid4()}"
         old_path = self.odev.config.get("paths", "repositories")
+
+        if not Path(old_path).exists():
+            Path(old_path).mkdir(parents=True, exist_ok=True)
+
         with (
             self.patch(directories.logger, "warning"),
             self.patch(directories.logger, "debug") as logger_debug,

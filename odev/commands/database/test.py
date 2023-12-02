@@ -30,7 +30,7 @@ class TestCommand(OdoobinCommand):
             "default": [],
             "help": """
             Comma-separated list of files or tags to run specific tests.
-            Check https://www.odoo.com/documentation/16.0/fr/developer/cli.html#testing-configuration
+            Check https://www.odoo.com/documentation/17.0/fr/developer/cli.html#testing-configuration
             for more information on how to use tests.
             """,
         },

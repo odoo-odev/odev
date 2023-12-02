@@ -1,5 +1,6 @@
 import sys
 from io import StringIO
+import re
 
 
 class CaptureOutput:
@@ -37,6 +38,7 @@ class CaptureOutput:
         if not self._stdout.closed:
             self._stdout_value = self._stdout.getvalue()
 
+        self._stdout_value = re.sub(r"\x1b[^m]*m", "", self._stdout_value)
         return self._stdout_value
 
     @property
@@ -44,4 +46,5 @@ class CaptureOutput:
         if not self._stderr.closed:
             self._stderr_value = self._stderr.getvalue()
 
+        self._stderr_value = re.sub(r"\x1b[^m]*m", "", self._stdout_value)
         return self._stderr_value
