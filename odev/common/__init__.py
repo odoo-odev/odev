@@ -8,7 +8,7 @@ from . import config
 from . import console
 from . import logging
 from . import odev
-from . import odoo
+from . import odoobin
 from . import postgres
 from . import progress
 from . import python

@@ -27,7 +27,7 @@ from odev.common.console import Colors
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
-from odev.common.odoo import OdoobinProcess
+from odev.common.odoobin import OdoobinProcess
 from odev.common.signal_handling import capture_signals
 from odev.common.thread import Thread
 from odev.common.version import OdooVersion

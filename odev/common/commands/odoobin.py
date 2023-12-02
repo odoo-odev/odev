@@ -10,7 +10,7 @@ from odev.common.commands import LocalDatabaseCommand
 from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
-from odev.common.odoo import OdoobinProcess
+from odev.common.odoobin import OdoobinProcess
 from odev.common.version import OdooVersion
 
 

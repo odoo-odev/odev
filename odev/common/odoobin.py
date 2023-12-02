@@ -45,11 +45,9 @@ ODOO_ENTERPRISE_REPOSITORIES: List[str] = ["odoo/enterprise"]
 
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
     16: "3.10",
-    15: "3.8",
     14: "3.8",
-    13: "3.7",
-    12: "3.7",
     11: "3.7",
+    0: "2.7",
 }
 
 
@@ -265,7 +263,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.version == OdooVersion("master"):
             return ODOO_PYTHON_VERSIONS.get(max(ODOO_PYTHON_VERSIONS.keys()), None)
 
-        return ODOO_PYTHON_VERSIONS.get(self.version.major, "2.7" if self.version.major < 11 else None)
+        return ODOO_PYTHON_VERSIONS.get(min(ODOO_PYTHON_VERSIONS, key=lambda v: abs(v - self.version.major)), None)
 
     def _get_odoo_branch(self) -> str:
         """Return the branch of the current Odoo installation."""
@@ -306,7 +304,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def prepare_odoobin(self):
         """Prepare the odoo-bin executable and ensure all dependencies are installed."""
         if self.version is None:
-            return logger.warn("No version specified, skipping environment setup")
+            return logger.warning("No version specified, skipping environment setup")
 
         self.prepare_npm()
         self.update_worktrees()
@@ -361,8 +359,8 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         :param args: Additional arguments to pass to odoo-bin.
         :param subcommand: Subcommand to pass to odoo-bin.
+        :param subcommand_input: Input to pipe to the subcommand.
         :param stream: Whether to stream the output of the process.
-        :param dry: Whether to only print the command that would be executed without running it.
         :param progress: Callback to call on each line outputted by the process. Ignored if `stream` is False.
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
@@ -417,10 +415,10 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def prepare_npm(self):
         """Prepare the packages of the Odoo installation."""
-        try:
-            logger.debug("Verifying NPM installation")
-            bash.execute("npm --version")
-        except Exception:
+        logger.debug("Verifying NPM installation")
+        npm_process = bash.execute("which npm")
+
+        if npm_process is None or npm_process.returncode:
             raise RuntimeError("NPM is not installed, please install it first")
 
         packages = ["rtlcss"]
