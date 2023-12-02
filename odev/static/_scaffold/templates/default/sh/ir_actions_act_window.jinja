@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    {%- for action in data %}
+    {%-if action.__xml_noupdate -%}<data noupdate="1">{%-endif-%}
+    <record id="{{action.__xml_id | replace(action.__xml_module ~ '.', '')}}" model="ir.actions.act_window">
+        <field name="name">{{action.name | e }}</field>
+        {% if action.type -%}
+        <field name="type">{{action.type | e}}</field>
+        {% endif -%}
+        <field name="res_model">{{action.__xml_model | odoo_model}}</field>
+        {% if action.view_mode -%}
+        <field name="view_mode">{{action.view_mode}}</field>
+        {% endif -%}
+        {% if action.view_id -%}
+        <field name="view_id" eval="{{action.view_id}}" />
+        {% endif -%}
+        {% if action.binding_model_id -%}
+        <field name="binding_model_id" eval="{{action.binding_model_id}}"/>
+        {% endif -%}
+        {% if action.binding_type -%}
+        <field name="binding_type">{{action.binding_type}}</field>
+        {% endif -%}
+        {% if action.binding_view_type -%}
+        <field name="binding_view_types">{{action.binding_view_type}}</field>
+        {% endif -%}
+        {% if action.groups_id -%}
+        <field name="groups_id" eval="[(6, 0, {{action.groups_id}})]"/>
+        {% endif -%}
+        {% if action.view_ids -%}
+        {# <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_account_asset_model_purchase_tree')}),
+            (0, 0, {'view_mode': 'kanban'}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_account_asset_form')})]"/> #}
+        {% endif -%}
+        {% if action.search_view_id -%}
+        <field name="search_view_id" ref="{{action.search_view_id}}"/>
+        {% endif -%}
+        {% if action.domain -%}
+        <field name="domain">{{action.domain | odoo_domain | odoo_field}}</field>
+        {% endif -%}
+        {% if action.context -%}
+        <field name="context">{{action.context | odoo_field}}</field>
+        {% endif -%}
+        {% if action.filter -%}
+        <field name="filter" eval="{{action.filter}}" />
+        {% endif -%}
+        {% if action.help -%}
+        <field name="help" type="html">
+            {{action.help | odoo_field | indent(4, False)}}
+        </field>
+        {% endif -%}
+    </record>
+    {%-if action.__xml_noupdate -%}</data>{%-endif-%}
+    {%-endfor-%}
+</odoo>

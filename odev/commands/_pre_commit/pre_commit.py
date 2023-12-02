@@ -6,12 +6,12 @@ from argparse import Namespace
 from git import Repo
 
 from odev import exceptions
+from odev._utils import logging
+from odev._utils.github import is_git_repo
+from odev._utils.odoo import get_odoo_version
+from odev._utils.pre_commit import fetch_pre_commit_config
 from odev.exceptions import GitEmptyStagingException, InvalidArgument
 from odev.structures import commands
-from odev.utils import logging
-from odev.utils.github import is_git_repo
-from odev.utils.odoo import get_odoo_version
-from odev.utils.pre_commit import fetch_pre_commit_config
 
 
 _logger = logging.getLogger(__name__)

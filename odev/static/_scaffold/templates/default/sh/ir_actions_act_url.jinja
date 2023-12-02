@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    {% for action in data %}
+    <record id="{{action.__xml_id | replace(action.__xml_module ~ '.', '')}}" model="ir.actions.act_url">
+        <field name="name">{{action.name | e}}</field>
+        <field name="url">{{action.url}}</field>
+        <field name="target">{{action.target}}</field>
+    </record>
+    {% endfor %}
+</odoo>

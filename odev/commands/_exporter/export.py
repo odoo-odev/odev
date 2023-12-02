@@ -10,12 +10,12 @@ import tldextract
 from odoolib.main import JsonRPCException
 from packaging.version import Version
 
+from odev._constants import LAST_ODOO_VERSION
+from odev._utils import logging, odoo
+from odev._utils.exporter import Config, odoo_field
 from odev.common import actions
-from odev.constants import LAST_ODOO_VERSION
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
-from odev.utils import logging, odoo
-from odev.utils.exporter import Config, odoo_field
 
 
 _logger = logging.getLogger(__name__)

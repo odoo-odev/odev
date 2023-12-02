@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+{%- for menu in data %}
+    <record id="{{menu.__xml_id}}" model="ir.ui.menu">
+        <field name="name">{{menu.name | e}}</field>
+        {% if menu.groups_id %}
+        <field name="groups_id" eval="[
+            {% for group in menu.groups_id %}
+            {{ group | odoo_link }},
+            {% endfor %}
+        ]"/>
+        {% endif %}
+        {% if menu.parent_id %}
+        <field name="parent_id" ref="{{menu.parent_id}}"/>
+        {% endif %}
+        {% if menu.action %}
+        <field name="action" ref="{{menu.action}}"/>
+        {% endif %}
+        {% if menu.sequence %}
+        <field name="sequence" eval="{{menu.sequence}}"/>
+        {% endif %}
+    </record>
+{%- endfor %}
+</odoo>

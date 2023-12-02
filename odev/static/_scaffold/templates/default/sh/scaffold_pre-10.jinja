@@ -1,0 +1,62 @@
+{% import "utils_makro.jinja" as makro -%}
+import logging
+import os
+
+from odoo import SUPERUSER_ID, api
+from odoo.addons.{{data.module_name}}.migrations import util
+
+_logger = logging.getLogger(__name__)
+
+
+def migrate(cr, version):
+    env = api.Environment(cr, SUPERUSER_ID, {})
+
+    {%- if export_type == 'scaffold' -%}
+    {{makro.todo(data.export_type, "py", 'Because this is a new module, the upgrade script will not run unless you use a -u. As a workaround, you can create a entry in ir.module.module to update this module and run the migration script directly.') | indent(4, False)}}
+    query = "INSERT INTO ir_module_module (name, state, latest_version) VALUES ('{{data.module_name}}', 'installed', '{{data.module_version}}.0.0.1');"
+    raise Exception("You need first to execute this query in staging and production : \n%s" % query)
+    {%- endif %}
+
+    if "ODOO_STAGE" in os.environ and os.environ['ODOO_STAGE'] == "dev":
+        _logger.info('Exit migration script : dev env database !')
+        return
+
+{%- for line in data.lines %}
+    # {% if line.model %}{{line.model}}{%endif%} {%if line.field%}{{line.field}}{%endif%} - {{line.description | replace('\n', '\n# ') | indent(8,False)}}
+{%- endfor %}
+
+    _logger.info('######################### Begin pre_10 #########################')
+
+    _logger.info('----------RENAME MODELS----------')
+
+    to_rename_models = (
+                    {%- for line in data.models %}
+                    ('{{line.old_model}}', '{{line.new_model | lower}}', True),
+                    {%- endfor -%}
+    )
+
+    for model in to_rename_models:
+        _logger.info('rename model : %s -> %s' % (model[0], model[1]))
+
+        cr.execute("UPDATE ir_model SET state='base' WHERE model LIKE %s", [model[0]])
+        util.rename_model(cr, model[0], model[1], rename_table=model[2])
+
+    _logger.info('----------RENAME FIELDS----------')
+
+    to_rename_fields = (
+                    {%- for line in data.fields %}
+                    ('{{line.model | odoo_model}}', '{{line.old_field}}', '{{line.new_field | lower}}'),
+                    {%- endfor %}
+    )
+
+    for field in to_rename_fields:
+        _logger.info('rename field : %s -> %s on model %s' % (field[1], field[2], field[0]))
+
+        cr.execute("UPDATE ir_model_fields SET state='base' WHERE name LIKE %s AND model LIKE %s", [field[1], field[0]])
+        util.rename_field(cr, field[0], field[1], field[2])
+
+    _logger.info('----------REMOVE VIEW----------')
+
+    {%- for view in data.remove_view %}
+    util.remove_view(cr, '{{view}}')
+    {%- endfor %}

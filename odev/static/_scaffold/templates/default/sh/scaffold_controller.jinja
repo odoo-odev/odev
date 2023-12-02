@@ -1,0 +1,14 @@
+{% import "utils_makro.jinja" as makro -%}
+# from odoo import http
+
+
+# class {{data.module_name}}(http.Controller):
+{% for controller in data.controllers %}
+{{makro.todo(data.export_type, "py", "To implement") | indent(4,False)}}
+#    {{controller.description | replace('\n', '\n#    ')}}
+    {%- if controller.action == "add" %}
+#    @http.route('{{controller.action_name | replace("_","/")}}', type="http", methods=["GET", "POST"], auth='public', website=True, csrf=False)
+    {%- endif %}
+#    def {{controller.action_name | replace("/","_")}}(self, **kw):
+#        return "Hello, world"
+{% endfor %}

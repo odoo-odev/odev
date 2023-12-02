@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='utf-8'?>
+<odoo>
+    {%-for action in data -%}
+    <record id="{{action.__xml_id | replace(action.__xml_module ~ '.', '')}}" model="ir.actions.server" >
+            <field name="name">{{action.name | odoo_field | e}}</field>
+            <field name="model_id" ref="{{action.model_id | odoo_field}}"/>
+            {% if action.binding_model_id -%}
+            <field name="binding_model_id" ref="{{action.binding_model_id | odoo_field}}" />
+            {%-endif-%}
+            {% if action.biding_view_types -%}
+            <field name="binding_view_types">{{action.biding_view_types}}</field>
+            {%-endif-%}
+            <field name="state">{{action.state}}</field>
+            {%if action.groups_id | length %}
+            <field name="groups_id" eval="[
+                {%-for group in action.groups_id -%}
+                {{g | odoo_link}}
+                {%-endfor-%}
+            ]"/>
+            {%-endif-%}
+            <field name="code">
+{%- if action.export_type == "scaffold" %}
+{{action.code}}
+{%- else -%}
+{%- if "return " in action.code -%}
+action = records.{{action.__xml_name  | replace(".","_")}}()
+{%- else -%}
+records.{{action.__xml_name  | replace(".","_")}}()
+{%- endif -%}
+{%- endif -%}
+            </field>
+    </record>
+    {%-endfor-%}
+</odoo>

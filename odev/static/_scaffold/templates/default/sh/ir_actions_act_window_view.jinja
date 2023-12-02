@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    {%- for action in data %}
+    {%-if action.__xml_noupdate -%}<data noupdate="1">{%-endif-%}
+    <record id="{{action.__xml_id | replace(action.module_name ~ '.', '')}}" model="ir.actions.act_window.view">
+        {%- if action.sequence > 0 %}
+        <field name="sequence" eval="{{action.sequence}}"/>
+        {%- endif %}
+        <field name="view_mode">{{action.view_mode}}</field>
+        {%- if action.view_id %}
+        <field name="view_id" ref="{{action.view_id}}"/>
+        {%- endif %}
+        {%- if action.act_window_id %}
+        <field name="act_window_id" ref="{{action.act_window_id}}"/>
+        {%- endif %}
+    </record>
+    {%-if action.__xml_noupdate -%}</data>{%-endif-%}
+    {%-endfor-%}
+</odoo>

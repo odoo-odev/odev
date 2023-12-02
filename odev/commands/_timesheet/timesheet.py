@@ -9,11 +9,11 @@ import lxml.etree as et
 import odoolib
 from git import Repo
 
+from odev._utils import logging
+from odev._utils.credentials import CredentialsHelper
+from odev._utils.os import mkdir
 from odev.exceptions.commands import CommandAborted, InvalidArgument
 from odev.structures import commands
-from odev.utils import logging
-from odev.utils.credentials import CredentialsHelper
-from odev.utils.os import mkdir
 
 
 logger = logging.getLogger(__name__)

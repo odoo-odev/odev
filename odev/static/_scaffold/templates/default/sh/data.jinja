@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+{% for record in data %}
+
+    <record id="{{record.__xml_id | replace(record.__xml_module ~ '.', '')}}" model="{%-if record.type == 'new'-%}{{record.__xml_module}}.{%-endif-%}{{record.__xml_model | odoo_model | replace('.data', '')}}">
+        {%-for key, value in record.items() -%}
+        {%-if key not in ["write_uid", "write_date", "create_uid", "create_date", "__last_update", "__xml_id", "__xml_name",
+                            "id", "__xml_noupdate", "__xml_model", "__xml_module", "export_type", "report_ids", "module_version", "comment"]%}
+        {%-if value is sameas true or value is sameas false -%}
+        <field name="{{key | odoo_field }}" eval="{{value}}" />
+        {%-else-%}
+            {%- if key == "model_id" -%}
+                {% set value = value[0].xml_id %}
+            {%-endif-%}
+        <field name="{{key | odoo_field }}">{{value | default(' ',True) | e }}</field>
+        {%-endif-%}
+        {%-endif-%}
+        {%-endfor%}
+    </record>
+
+{% endfor %}
+</odoo>

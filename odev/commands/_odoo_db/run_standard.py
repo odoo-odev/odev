@@ -5,15 +5,15 @@ from abc import ABC
 from datetime import datetime
 from pathlib import Path
 
-from odev.constants import DEFAULT_DATETIME_FORMAT, DEFAULT_VENV_NAME
+from odev._constants import DEFAULT_DATETIME_FORMAT, DEFAULT_VENV_NAME
+from odev._utils import logging
+from odev._utils.config import ConfigManager
+from odev._utils.github import git_clone_or_pull
+from odev._utils.odoo import _need_pull, prepare_venv
+from odev._utils.os import mkdir
+from odev._utils.python import install_packages
+from odev._utils.signal import capture_signals
 from odev.structures import commands
-from odev.utils import logging
-from odev.utils.config import ConfigManager
-from odev.utils.github import git_clone_or_pull
-from odev.utils.odoo import _need_pull, prepare_venv
-from odev.utils.os import mkdir
-from odev.utils.python import install_packages
-from odev.utils.signal import capture_signals
 
 
 _logger = logging.getLogger(__name__)

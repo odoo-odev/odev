@@ -10,15 +10,15 @@ import tldextract
 from packaging.version import Version
 from pre_commit.commands.install_uninstall import install
 
-from odev.constants import LAST_ODOO_VERSION, PSTOOLS_DB, PSTOOLS_PASSWORD, PSTOOLS_USER
+from odev._constants import LAST_ODOO_VERSION, PSTOOLS_DB, PSTOOLS_PASSWORD, PSTOOLS_USER
+from odev._utils import logging
+from odev._utils.config import ConfigManager
+from odev._utils.credentials import CredentialsHelper
+from odev._utils.exporter import Config, odoo_field, odoo_field_name, odoo_model
+from odev._utils.github import is_git_repo
+from odev._utils.odoo import parse_odoo_version
 from odev.exceptions import InvalidArgument, InvalidVersion
 from odev.structures import commands
-from odev.utils import logging
-from odev.utils.config import ConfigManager
-from odev.utils.credentials import CredentialsHelper
-from odev.utils.exporter import Config, odoo_field, odoo_field_name, odoo_model
-from odev.utils.github import is_git_repo
-from odev.utils.odoo import parse_odoo_version
 
 
 _logger = logging.getLogger(__name__)

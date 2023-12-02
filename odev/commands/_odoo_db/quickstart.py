@@ -5,13 +5,13 @@ import re
 from argparse import Namespace
 from datetime import datetime
 
+from odev._utils import logging
+from odev._utils.odoo import get_database_name_from_url, get_odoo_version
 from odev.commands.exporter import scaffold
 from odev.commands.github import clone
 from odev.commands.odoo_db import dump, init, remove, restore
 from odev.exceptions import InvalidVersion
 from odev.structures import commands, database
-from odev.utils import logging
-from odev.utils.odoo import get_database_name_from_url, get_odoo_version
 
 
 _logger = logging.getLogger(__name__)

@@ -4,8 +4,8 @@ from typing import Dict
 
 import jinja2
 
+from odev._utils import logging, odoo
 from odev.structures import commands
-from odev.utils import logging, odoo
 
 
 _logger = logging.getLogger(__name__)
