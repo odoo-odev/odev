@@ -75,7 +75,8 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
 
 
 def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Optional[CompletedProcess]:
-    """Execute a command in the operating system.
+    """Execute a command in the operating system and wait for it to complete.
+    Output of the command will be captured and returned after the execution completes.
 
     If sudo is set and the command fails, the user will be prompted to enter his password
     and the command will be re-executed with elevated privileges.
@@ -116,6 +117,17 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
             return None
 
     return process_result
+
+
+def run(command: str) -> CompletedProcess:
+    """Execute a command in the operating system and wait for it to complete.
+    Output of the command will not be captured and will be printed to the console
+    in real-time.
+
+    :param str command: The command to execute.
+    """
+    logger.debug(f"Running process: {quote(command)}")
+    return __run_command(command, capture=False)
 
 
 def detached(command: str) -> Popen[bytes]:

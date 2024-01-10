@@ -311,7 +311,7 @@ class PythonEnv:
             return bash.execute(command)
 
         if progress is None:
-            progress = console.print
+            return bash.run(command)
 
         for line in bash.stream(command):
             progress(line)
