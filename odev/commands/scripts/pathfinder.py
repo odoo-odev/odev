@@ -1,7 +1,7 @@
 """Find the shortest path between two models in a database using the BFS algorithm."""
 
 import ast
-from typing import Any, List, MutableMapping, Tuple
+from typing import Any, List, MutableMapping, Optional, Tuple
 
 from odev.common import string
 from odev.common.commands import OdoobinShellScriptCommand
@@ -43,6 +43,7 @@ class PathfinderCommand(OdoobinShellScriptCommand):
     def run_script_handle_result(self, result: str):
         """Handle the result of the script execution."""
         paths: List[List[Tuple[str, str, str]]] = ast.literal_eval(result)
+        self.console.clear_line()
 
         for path in paths:
             chain: List[str] = []
@@ -66,14 +67,12 @@ class PathfinderCommand(OdoobinShellScriptCommand):
 
             cardinality: str = f"{cardinality_from}2{cardinality_to}".capitalize()
             details: str = string.stylize(f"─ {len(path) - 1} steps ─ {cardinality}", "default")
-            self.console.clear_line()
             self.print_table(rows, name=f"{'.'.join(chain)} {details}")
 
-    def print_table(self, rows: List[List[str]], name: str = None, style: str = None):
+    def print_table(self, rows: List[List[str]], name: Optional[str] = None, style: Optional[str] = None):
         """Print a table.
         :param rows: The table rows.
         :param name: The table name.
-        :type rows: List[List[str]]
         """
         self.print()
 

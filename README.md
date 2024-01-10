@@ -77,10 +77,9 @@ To get help on a specific command and its usage, use `odev help <command>`.
 
 To avoid inputting the credentials every time `odev` is run, symmetric encryption is used to store them. This is done
 "automagically" with the help of an `ssh-agent`-loaded key. This means that `ssh-agent` needs to be available in the
-shell environment the command is being run from (it's also required to use `odev sh` commands for SSH connectivity to
-odoo.sh builds through a github key pair), otherwise a warning will be logged and credentials will need to be inputted
-every time. If you don't already have a custom script to launch `ssh-agent`, we recommend using `keychain`, that's an
-easy option to do that and manage the different keys available through
+shell environment the command is being run from, otherwise a warning will be logged and credentials will need to
+be inputted every time. If you don't already have a custom script to launch `ssh-agent`, we recommend using `keychain`,
+that's an easy option to do that and manage the different keys available through
 [`ssh-agent`](https://esc.sh/blog/ssh-agent-windows10-wsl2/).
 
 After installing `keychain`, and depending on the shell of your choice, the following lines need to be added to the
