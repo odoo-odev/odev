@@ -44,6 +44,7 @@ class Section:
     def set(self, key: str, value: str):
         """Set an option in this section."""
         self.parser.set(self.name, key, str(value))
+        self.config.save()
 
     def reset(self, key: str):
         """Reset an option in this section to its default value."""
