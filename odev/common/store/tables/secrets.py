@@ -173,7 +173,8 @@ class SecretStore(PostgresTable):
             FROM {self.name}
             WHERE name = '{name.lower()}'
             LIMIT 1
-            """
+            """,
+            nocache=True,
         )
 
         if not result:
