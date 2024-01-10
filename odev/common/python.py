@@ -63,11 +63,19 @@ class PythonEnv:
         if self._global:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
-        logger.info(f"Creating virtual environment {self.path.name!r} with python version {self.version}")
+        logger.info(f"Creating virtual environment {self.path.parent.name!r} with python version {self.version}")
         logger.debug(f"Creating virtual environment at {self.path} with python version {self.version}")
 
-        with silence_loggers("root", "distlib.util", "filelock"):
-            virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
+        try:
+            with silence_loggers("root", "distlib.util", "filelock"):
+                virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
+        except RuntimeError as error:
+            if str(error).startswith("failed to find interpreter"):
+                logger.critical(
+                    f"Missing interpreter for python {self.version}, please install it using your distribution's "
+                    "package manager and try again"
+                )
+            raise error
 
     def install_packages(self, packages: List[str]) -> None:
         """Install python packages.

@@ -227,7 +227,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def addons_requirements(self) -> Generator[Path, None, None]:
         """Return the list of addons requirements files."""
         globs = (
-            path.glob("requirements.txt")
+            path.glob("**/requirements.txt")
             for path in (
                 self.addons_paths
                 + [Path(__file__).parents[1] / "static"]
@@ -462,7 +462,8 @@ class OdoobinProcess(OdevFrameworkMixin):
     def clone_repositories(self):
         """Clone the missing Odoo repositories."""
         for repo in self.odoo_repositories:
-            repo.clone(branch="master")
+            repo.clone()
+            repo.checkout(branch="master", quiet=True)
 
     def check_addons_path(self, path: Path) -> bool:
         """Return whether the given path is a valid Odoo addons path.

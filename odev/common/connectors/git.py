@@ -427,8 +427,11 @@ class GitConnector(Connector):
 
                 raise ConnectorError(message, self) from error
 
-    def checkout(self, branch: str = None):
-        """Checkout a branch in the repository."""
+    def checkout(self, branch: str = None, quiet: bool = False):
+        """Checkout a branch in the repository.
+        :param branch: The branch to checkout. Defaults to the main branch of the repository.
+        :param quiet: Do not log checkout status.
+        """
         if branch is None:
             branch = self.default_branch
 
@@ -447,7 +450,8 @@ class GitConnector(Connector):
 
             raise ConnectorError(message, self) from error
         else:
-            logger.info(f"Checked out branch {branch!r} in repository {self.name!r}")
+            if not quiet:
+                logger.info(f"Checked out branch {branch!r} in repository {self.name!r}")
 
     def pending_changes(self) -> Tuple[int, int]:
         """Get the number of pending commits to be pulled and pushed.
