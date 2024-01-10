@@ -96,6 +96,10 @@ IF EXISTS (
 END IF;
 END $$;
 
+-- remove existing password policies
+DELETE FROM ir_config_parameter
+WHERE key LIKE 'auth_password_policy.%';
+
 -- DATABASE CONFIGURATION ------------------------------------------------------
 
 -- remove enterprise code
