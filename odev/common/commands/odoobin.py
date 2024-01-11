@@ -52,6 +52,13 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             If not specified, defaults to the latest version of the base module installed in the database.
             """,
         },
+        {
+            "name": "venv",
+            "aliases": ["--venv"],
+            "help": """Name of the Python virtual environment to use when running this database.
+            If not specified, defaults to the common virtual environment for the current Odoo version.
+            """,
+        },
     ]
 
     _odoo_log_regex: re.Pattern = re.compile(
@@ -98,6 +105,10 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
             if self.args.version is not None:
                 self.odoobin._version = OdooVersion(self.args.version)
+
+            if self.args.venv is not None:
+                self.odoobin._venv_name = self.args.venv
+                self.odoobin._venv = None
 
     @property
     def odoobin(self) -> Optional[OdoobinProcess]:

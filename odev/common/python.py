@@ -63,7 +63,7 @@ class PythonEnv:
         if self._global:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
-        logger.info(f"Creating virtual environment {self.path.parent.name!r} with python version {self.version}")
+        logger.info(f"Creating virtual environment {self.path.name!r} with python version {self.version}")
         logger.debug(f"Creating virtual environment at {self.path} with python version {self.version}")
 
         try:

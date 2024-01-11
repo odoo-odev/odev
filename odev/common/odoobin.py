@@ -73,7 +73,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._version: Optional[OdooVersion] = version
         """Force the version of Odoo when running the process."""
 
-        self._venv_name: str = venv or "venv"
+        self._venv_name: str = venv or str(self.version)
         """Name of the virtual environment to use."""
 
         self.clone_repositories()
@@ -87,7 +87,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def venv(self) -> PythonEnv:
         """Python virtual environment used by the Odoo installation."""
         if self._venv is None:
-            self._venv = PythonEnv(self.venv_path / self._venv_name, self._get_python_version())
+            self._venv = PythonEnv(self.venv_path, self._get_python_version())
 
         return self._venv
 
@@ -128,7 +128,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def venv_path(self):
         """Path to the virtual environment of the Odoo installation."""
-        return self.odev.home_path / "virtualenvs" / str(self.version)
+        return self.odev.home_path / "virtualenvs" / str(self._venv_name)
 
     @property
     def pid(self) -> Optional[int]:
