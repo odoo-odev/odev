@@ -40,7 +40,7 @@ def setup(config: Config) -> None:
         comp_path.parent.mkdir(parents=True)
 
     if comp_path.exists():
-        logger.warning(f"Symlink path {comp_path} already exists")
+        logger.warning(f"Symlink path {comp_path} already exists, this is used to enable bash auto-completion")
 
         if console.confirm("Would you like to overwrite it?"):
             logger.debug(f"Removing symlink path {comp_path}")

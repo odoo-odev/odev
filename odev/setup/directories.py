@@ -58,10 +58,21 @@ def __ask_dir(message: str, default: Optional[str] = None, path: Optional[Path] 
             if not __is_empty(path):
                 logger.warning(f"Directory {path} is not empty")
 
-                if not console.confirm("Use this directory without moving files?"):
+                if not console.confirm("Use this directory without moving existing files?"):
                     path = None
 
     return path
+
+
+def __get_dir(message: str, default: Optional[Path]) -> Optional[Path]:
+    """Prompt for a directory path."""
+    new_path: Optional[Path] = None
+
+    while new_path is None:
+        new_path = __ask_dir(message, default.as_posix(), new_path)
+
+    __move(default, new_path)
+    return new_path
 
 
 # --- Setup --------------------------------------------------------------------
@@ -71,12 +82,14 @@ def setup(config: Config) -> None:
     """Setup working directories for odev.
     :param config: Odev configuration
     """
-    new_path: Optional[Path] = None
-    old_path: Path = config.paths.repositories
+    logger.info(
+        """
+        Odev manages a few directories on your system. You can change their location to your liking.
+        These directories include:
+        - Odoo and project repositories, stored under /chosen/path/organization/repository
+        - Dump files, which are downloaded when using the dump command to restore a database
+        """
+    )
 
-    while new_path is None:
-        new_path = __ask_dir("Where do you want to keep odoo repositories?", old_path.as_posix(), new_path)
-
-    __move(old_path, new_path)
-    logger.debug("Saving directories to configuration file")
-    config.paths.repositories = new_path
+    config.paths.repositories = __get_dir("Where do you want to store repositories?", config.paths.repositories)
+    config.paths.dumps = __get_dir("Where do you want to store dump files?", config.paths.dumps)
