@@ -102,6 +102,13 @@ class Odev(Generic[CommandType]):
         return console
 
     @property
+    def home_path(self) -> Path:
+        """Local path to the odev home directory containing application data
+        for the current user.
+        """
+        return Path("~").expanduser() / "odev"
+
+    @property
     def base_path(self) -> Path:
         """Local path to the odev module."""
         return self.path / "odev"

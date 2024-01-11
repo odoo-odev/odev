@@ -328,7 +328,7 @@ class GitConnector(Connector):
     @property
     def worktrees_path(self) -> Path:
         """Path to the worktrees directory."""
-        return self.config.paths.repositories.parent / ".worktrees"
+        return self.odev.home_path / "worktrees"
 
     def update(self):
         """Update the repository."""
