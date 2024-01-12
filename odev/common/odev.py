@@ -29,6 +29,7 @@ from odev.common import bash, progress
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseCommand, DatabaseType
 from odev.common.config import Config
+from odev.common.connectors.git import GitConnector
 from odev.common.console import Console, console
 from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
@@ -119,6 +120,11 @@ class Odev(Generic[CommandType]):
         return self.path / "tests/resources"
 
     @property
+    def plugins_path(self) -> Path:
+        """Local path to the plugins directory."""
+        return self.base_path / "plugins"
+
+    @property
     def commands_path(self) -> Path:
         """Local path to the commands directory."""
         return self.base_path / "commands"
@@ -147,6 +153,29 @@ class Odev(Generic[CommandType]):
     def dumps_path(self) -> Path:
         """Local path to the directory where database dumps are stored."""
         return self.config.paths.dumps
+
+    @property
+    def plugins(self) -> List[str]:
+        """List of enabled plugins."""
+        return [plugin for plugin in self.config.plugins.enabled if plugin]
+
+    def load_plugins(self) -> None:
+        """Load plugins from the configuration file and register them in the plugin directory."""
+        self.plugins_path.mkdir(parents=True, exist_ok=True)
+
+        for plugin in self.plugins:
+            logger.debug(f"Loading plugin {plugin!r}")
+            repository = GitConnector(plugin)
+
+            if not repository.exists:
+                repository.clone()
+
+            repository.update()
+            plugin_path = self.plugins_path.joinpath(repository._repository)
+
+            if not plugin_path.exists():
+                logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
+                plugin_path.symlink_to(repository.path, target_is_directory=True)
 
     def update(self) -> bool:
         """
@@ -216,6 +245,8 @@ class Odev(Generic[CommandType]):
         """
         command_dirs = [
             path for path in self.commands_path.iterdir() if path.is_dir() and not path.name.startswith("_")
+        ] + [
+            path for path in self.plugins_path.glob("*/**/commands") if path.is_dir() and not path.name.startswith("_")
         ]
         command_modules = pkgutil.iter_modules([d.as_posix() for d in command_dirs])
         command_classes: List[Type[CommandType]] = []

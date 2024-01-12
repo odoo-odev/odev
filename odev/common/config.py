@@ -150,6 +150,21 @@ class UpdateSection(Section):
         self.set("interval", str(value))
 
 
+class PluginsSection(Section):
+    """Odev plugins configuration."""
+
+    @property
+    def enabled(self) -> List[str]:
+        """List of enabled plugins repositories.
+        Defaults to an empty list.
+        """
+        return self.get("enabled", "odoo-ps/ps-tech-odev-plugin").split(",")
+
+    @enabled.setter
+    def enabled(self, value: Union[str, List[str]]):
+        self.set("enabled", ",".join(value) if isinstance(value, list) else value)
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -169,6 +184,9 @@ class Config:
 
         self.update: UpdateSection = UpdateSection("update", self)
         """Configuration for odev auto-updates."""
+
+        self.plugins: PluginsSection = PluginsSection("plugins", self)
+        """Configuration for odev plugins."""
 
         self.load()
         self.fill_defaults()
@@ -203,7 +221,7 @@ class Config:
                 inspect.getmembers(section.__class__, lambda member: isinstance(member, property)),
             ):
                 if not self.parser.has_option(section_name, option_name):
-                    section.set(option_name, option.fget(section))
+                    option.fset(section, option.fget(section))
 
         self.save()
 

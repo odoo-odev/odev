@@ -1,9 +1,20 @@
+# --- Python cache and build files
 __pycache__
 .py[cod]
-.vscode
-.history
 .mypy_cache
 .pytest_cache
+
+# --- Editor config
+.vscode
+
+# --- Misc. operating files
+.history
+
+# --- Coverage
 .coverage
 .hypothesis
 htmlcov
+
+# --- Odev plugins, loaded as submodules
+odev/plugins/*
+tests/plugins/*
