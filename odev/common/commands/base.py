@@ -1,6 +1,7 @@
 """Odev base command class for CLI and programmatic use."""
 
 import inspect
+import os
 import re
 import sys
 from abc import ABC, abstractmethod
@@ -267,8 +268,20 @@ class Command(OdevFrameworkMixin, ABC):
             and self.console.height < len(renderable.splitlines())
             and auto_paginate
         ):
+            pager = os.environ.get("PAGER", "less")
+            less = os.environ.get("LESS", "-R")
+
+            if pager != "less":
+                os.environ["PAGER"] = "less"
+
+            if not re.match(r"-\w*R", less):
+                os.environ["LESS"] = f"{less} -R"
+
             with self.console.pager(styles=not self.console.is_dumb_terminal):
                 self.console.print(renderable, *args, **kwargs)
+
+            os.environ["PAGER"] = pager
+            os.environ["LESS"] = less
         else:
             self.console.print(renderable, *args, **kwargs)
 
