@@ -158,7 +158,7 @@ class PluginsSection(Section):
         """List of enabled plugins repositories.
         Defaults to an empty list.
         """
-        return self.get("enabled", "odoo-ps/ps-tech-odev-plugin").split(",")
+        return self.get("enabled", "").split(",")
 
     @enabled.setter
     def enabled(self, value: Union[str, List[str]]):
