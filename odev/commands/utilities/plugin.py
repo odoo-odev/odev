@@ -3,6 +3,7 @@
 import re
 
 from odev.common.commands import Command
+from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 
 
@@ -52,20 +53,42 @@ class PluginCommand(Command):
         """Enable or disable a plugin."""
         repository = self.__parse_repository()
 
-        if self.args.enable and repository not in self.config.plugins.enabled:
-            with self.console.status(f"Enabling plugin {repository!r}"):
-                self.config.plugins.enabled = [
-                    plugin for plugin in self.config.plugins.enabled + [repository] if plugin
-                ]
+        if self.args.enable:
+            self.__add_plugin_to_config(repository)
+
+            try:
+                self.odev.load_plugins()
+            except ConnectorError as error:
+                self.__remove_plugin_from_config(repository)
+                raise error
+            else:
                 logger.info(f"Enabled plugin {repository!r}")
 
-        if self.args.disable and repository in self.config.plugins.enabled:
-            with self.console.status(f"Disabling plugin {repository!r}"):
-                self.config.plugins.enabled = [plugin for plugin in self.config.plugins.enabled if plugin != repository]
-                self.odev.plugins_path.joinpath(repository.split("/", 1)[-1]).unlink()
+        if self.args.disable:
+            self.__remove_plugin_from_config(repository)
+
+            try:
+                self.odev.plugins_path.joinpath(repository.split("/", 1)[-1].replace("-", "_")).unlink(missing_ok=True)
+                self.odev.load_plugins()
+            except ConnectorError as error:
+                self.__add_plugin_to_config(repository)
+                raise error
+            else:
                 logger.info(f"Disabled plugin {repository!r}")
 
-        self.odev.load_plugins()
+    def __add_plugin_to_config(self, repository: str):
+        """Add the given plugin to the config."""
+        if repository in self.config.plugins.enabled:
+            raise self.error(f"Plugin {repository!r} is already enabled")
+
+        self.config.plugins.enabled = [plugin for plugin in self.config.plugins.enabled + [repository] if plugin]
+
+    def __remove_plugin_from_config(self, repository: str):
+        """Remove the given plugin from the config."""
+        if repository not in self.config.plugins.enabled:
+            raise self.error(f"Plugin {repository!r} is not enabled")
+
+        self.config.plugins.enabled = [plugin for plugin in self.config.plugins.enabled if plugin != repository]
 
     def __parse_repository(self) -> str:
         """Parse the repository name from the given plugin."""

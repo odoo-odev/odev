@@ -6,7 +6,7 @@ from typing import Any, List, MutableMapping
 from odev.common import string
 from odev.common.commands import DatabaseCommand
 from odev.common.console import Colors
-from odev.common.databases import LocalDatabase, PaasDatabase, SaasDatabase
+from odev.common.databases import LocalDatabase, SaasDatabase
 from odev.common.logging import logging
 
 
@@ -25,9 +25,7 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 
 
 class InfoCommand(DatabaseCommand):
-    """Fetch and display information about a database, whether local or remote
-    hosted on SaaS or PaaS platforms.
-    """
+    """Fetch and display information about a database."""
 
     name = "info"
     aliases = ["i"]
@@ -60,13 +58,6 @@ class InfoCommand(DatabaseCommand):
                 self.info_table_rows_saas(),
                 self.database.platform.display,
             )
-
-        elif isinstance(self.database, PaasDatabase):
-            self.print_table(
-                self.info_table_rows_paas(),
-                self.database.platform.display,
-            )
-            self.print_table(self.info_table_rows_paas_build(), "Build")
 
     def print_table(self, rows: List[List[str]], name: str = None, style: str = None):
         """Print a table.
@@ -182,42 +173,4 @@ class InfoCommand(DatabaseCommand):
             ["Branch", self.database.branch.name if self.database.branch else DISPLAY_NA],
             ["Branch URL", self.database.branch.url if self.database.branch else DISPLAY_NA],
             ["Domain Names", "\n".join(self.database.domains or [DISPLAY_NA])],
-        ]
-
-    def info_table_rows_paas(self) -> List[List[str]]:
-        """Return the PaaS-specific rows to be displayed in a table.
-        :param info: The database info.
-        :return: The rows.
-        :rtype: List[List[str]]
-        """
-        assert isinstance(self.database, PaasDatabase)
-        return [
-            ["Project", self.database.project.name],
-            ["Project Page", self.database.project.url],
-            ["Repository", self.database.repository.full_name],
-            ["Repository URL", self.database.repository.url],
-            ["Support URL", f"{self.database.url}/_odoo/support"],
-            ["Webshell", self.database.webshell_url],
-            ["Monitoring", self.database.monitoring_url],
-            ["Status", self.database.status_url],
-            ["Worker", self.database.worker_url],
-            ["Subscription", self.database.subscription_url],
-        ]
-
-    def info_table_rows_paas_build(self) -> List[List[str]]:
-        """Return the build-specific rows to be displayed in a table.
-        :param info: The database info.
-        :return: The rows.
-        :rtype: List[List[str]]
-        """
-        assert isinstance(self.database, PaasDatabase)
-        return [
-            ["Environment", self.database.environment.capitalize()],
-            ["Branch", self.database.branch.name],
-            ["Branch URL", self.database.branch.url],
-            ["Commit", f"({self.database.commit.hash[:8]}) {self.database.commit.message}"],
-            ["Commit URL", self.database.commit.url],
-            ["Build", self.database.build.name],
-            ["Status", f"{self.database.build.status.capitalize()} ({self.database.build.result.capitalize()})"],
-            ["Latest Build", DISPLAY_TRUE if self.database.build.latest else DISPLAY_FALSE],
         ]

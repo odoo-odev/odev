@@ -4,7 +4,6 @@ from abc import ABC
 from argparse import Namespace
 from typing import (
     ClassVar,
-    List,
     Mapping,
     Optional,
     Sequence,
@@ -13,7 +12,7 @@ from typing import (
 
 from odev.common import progress, string
 from odev.common.commands import Command
-from odev.common.databases import LocalDatabase, PaasDatabase, SaasDatabase
+from odev.common.databases import LocalDatabase, SaasDatabase
 from odev.common.errors import CommandError
 from odev.common.logging import logging
 
@@ -21,16 +20,7 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-DatabaseType = Union[LocalDatabase, SaasDatabase, PaasDatabase]
-
-
-DATABASE_PLATFORM_MAPPING: Mapping[str, type[DatabaseType]] = {
-    "local": LocalDatabase,
-    "saas": SaasDatabase,
-    "paas": PaasDatabase,
-}
-
-DATABASE_PLATFORM_KEYS: List[str] = list(DATABASE_PLATFORM_MAPPING.keys())
+DatabaseType = Union[LocalDatabase, SaasDatabase]
 
 
 class DatabaseCommand(Command, ABC):
@@ -41,6 +31,10 @@ class DatabaseCommand(Command, ABC):
 
     _database_exists_required: ClassVar[bool] = True
     """Whether the database must exist before running the command."""
+
+    _database_platforms: ClassVar[Mapping[str, type[DatabaseType]]] = {
+        "local": LocalDatabase,
+    }
 
     _database_allowed_platforms: ClassVar[Sequence[str]] = []
     """The list of allowed database platforms for this command.
@@ -58,9 +52,9 @@ class DatabaseCommand(Command, ABC):
             "help": f"""
             Force searching for the database on the specified platform, useful when
             different databases have the same name on different hosting (usually one
-            local database being a copy of a remote one). One of {string.join_or(DATABASE_PLATFORM_KEYS)}.
+            local database being a copy of a remote one). One of {string.join_or(list(_database_platforms.keys()))}.
             """,
-            "choices": DATABASE_PLATFORM_KEYS,
+            "choices": list(_database_platforms.keys()),
         },
         {
             "name": "branch",
@@ -96,7 +90,7 @@ class DatabaseCommand(Command, ABC):
         super().prepare_command(*args, **kwargs)
 
         if not cls._database_allowed_platforms:
-            cls._database_allowed_platforms = list(DATABASE_PLATFORM_MAPPING.keys())
+            cls._database_allowed_platforms = list(cls._database_platforms.keys())
 
         if not cls._database_arg_required:
             cls.update_argument("database", {"nargs": "?"})
@@ -107,11 +101,11 @@ class DatabaseCommand(Command, ABC):
             return None
 
         if hasattr(self.args, "platform") and self.args.platform:
-            allowed_database_classes = [DATABASE_PLATFORM_MAPPING[self.args.platform]]
+            allowed_database_classes = [self._database_platforms[self.args.platform]]
         else:
             allowed_database_classes = [
                 DatabaseClass
-                for key, DatabaseClass in DATABASE_PLATFORM_MAPPING.items()
+                for key, DatabaseClass in self._database_platforms.items()
                 if key in self._database_allowed_platforms
             ]
 
@@ -122,8 +116,7 @@ class DatabaseCommand(Command, ABC):
                 database: DatabaseType
 
                 if "branch" in inspect.getfullargspec(DatabaseClass.__init__).args and self.args.branch:
-                    assert issubclass(DatabaseClass, PaasDatabase)
-                    database = DatabaseClass(self.database_name, branch=self.args.branch)
+                    database = DatabaseClass(self.database_name, branch=self.args.branch)  # type: ignore [call-arg]
                 else:
                     database = DatabaseClass(self.database_name)
 
@@ -180,19 +173,3 @@ class SaasDatabaseCommand(DatabaseCommand):
         # for this command (`branch` is only used for PaaS databases)
         cls.remove_argument("platform")
         cls.remove_argument("branch")
-
-
-class PaasDatabaseCommand(DatabaseCommand):
-    """Base class for commands that require a PaaS database to work."""
-
-    database: PaasDatabase
-
-    _database_allowed_platforms = ["paas"]
-
-    @classmethod
-    def prepare_command(cls, *args, **kwargs) -> None:
-        super().prepare_command(*args, **kwargs)
-
-        # Remove arguments from the `DatabaseCommand` class that are not relevant
-        # for this command
-        cls.remove_argument("platform")

@@ -14,6 +14,8 @@ from typing import (
     Any,
     ClassVar,
     Generic,
+    Iterable,
+    Iterator,
     List,
     Literal,
     MutableMapping,
@@ -88,6 +90,7 @@ class Odev(Generic[CommandType]):
 
         with progress.spinner("Loading commands"):
             self.register_commands()
+            self.register_plugin_commands()
 
     def __repr__(self) -> str:
         return f"Odev(version={self.version})"
@@ -171,11 +174,16 @@ class Odev(Generic[CommandType]):
                 repository.clone()
 
             repository.update()
-            plugin_path = self.plugins_path.joinpath(repository._repository)
+            plugin_path = self.plugins_path.joinpath(repository._repository.replace("-", "_"))
 
             if not plugin_path.exists():
                 logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
                 plugin_path.symlink_to(repository.path, target_is_directory=True)
+
+            python = PythonEnv()
+
+            if list(python.missing_requirements(plugin_path)):
+                python.install_requirements(plugin_path)
 
     def update(self) -> bool:
         """
@@ -237,18 +245,21 @@ class Odev(Generic[CommandType]):
 
         self.config.update.version = self.version
 
-    def import_commands(self) -> List[Type[CommandType]]:
-        """Import all commands from the commands directory.
+    def list_commands(self, sources: Iterable[Path]) -> Iterator[pkgutil.ModuleInfo]:
+        """Find command modules in the source directories.
+        :param sources: Source directories to search for commands.
+        :return: Iterator over command modules.
+        """
+        command_dirs = [path for path in sources if path.is_dir() and not path.name.startswith("_")]
+        return pkgutil.iter_modules([d.as_posix() for d in command_dirs])
 
+    def import_commands(self, sources: Iterable[Path]) -> List[Type[CommandType]]:
+        """Import all commands from the source directories.
+        :param sources: Source directories to search for commands.
         :return: List of imported command classes
         :rtype: List[CommandType]
         """
-        command_dirs = [
-            path for path in self.commands_path.iterdir() if path.is_dir() and not path.name.startswith("_")
-        ] + [
-            path for path in self.plugins_path.glob("*/**/commands") if path.is_dir() and not path.name.startswith("_")
-        ]
-        command_modules = pkgutil.iter_modules([d.as_posix() for d in command_dirs])
+        command_modules = self.list_commands(sources)
         command_classes: List[Type[CommandType]] = []
 
         for module_info in command_modules:
@@ -264,12 +275,36 @@ class Odev(Generic[CommandType]):
 
     def register_commands(self) -> None:
         """Register all commands from the commands directory."""
-        for command_class in self.import_commands():
+        for command_class in self.import_commands(self.commands_path.iterdir()):
             logger.debug(f"Registering command {command_class.name!r}")
             command_names = [command_class.name] + (list(command_class.aliases) or [])
 
             if any(name in command_names for name in self.commands.keys()):
                 raise ValueError(f"Another command {command_class.name!r} is already registered")
+
+            command_class.prepare_command(self)
+            self.commands.update({name: command_class for name in command_names})
+
+    def register_plugin_commands(self) -> None:
+        """Register all commands from the plugins directories."""
+        for command_class in self.import_commands(self.plugins_path.glob("*/commands/**")):
+            command_names = [command_class.name] + (list(command_class.aliases) or [])
+            base_command_class = self.commands.get(command_class.name)
+
+            if any(name in command_names for name in self.commands.keys()):
+                if command_class.__bases__ == base_command_class.__bases__:
+                    continue
+
+            logger.debug(f"Registering plugin command {command_class.name!r}")
+
+            if command_class.name in self.commands.keys():
+                if command_class.__bases__ != base_command_class.__bases__:
+
+                    class PatchedCommand(command_class, base_command_class):  # type: ignore [valid-type,misc]
+                        pass
+
+                    PatchedCommand.__name__ = command_class.__name__
+                    command_class = PatchedCommand
 
             command_class.prepare_command(self)
             self.commands.update({name: command_class for name in command_names})
