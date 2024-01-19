@@ -24,14 +24,6 @@ class CreateCommand(OdoobinCommand):
             "help": "Name of an existing PostgreSQL database to copy.",
         },
         {
-            "name": "version",
-            "aliases": ["-V", "--version"],
-            "help": """The Odoo version to use for the new database.
-            If not specified and a template is provided, the version of
-            the template database will be used. Otherwise, the version will default to "master".
-            """,
-        },
-        {
             "name": "copy_filestore",
             "aliases": ["--no-filestore"],
             "action": "store_false",
@@ -46,6 +38,19 @@ class CreateCommand(OdoobinCommand):
     ]
 
     _database_exists_required = False
+
+    @classmethod
+    def prepare_command(cls, *args, **kwargs) -> None:
+        super().prepare_command(*args, **kwargs)
+        cls.update_argument(
+            "version",
+            {
+                "help": """The Odoo version to use for the new database.
+                If not specified and a template is provided, the version of
+                the template database will be used. Otherwise, the version will default to "master".
+                """
+            },
+        )
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

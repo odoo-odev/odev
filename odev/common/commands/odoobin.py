@@ -106,9 +106,8 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             if self.args.version is not None:
                 self.odoobin._version = OdooVersion(self.args.version)
 
-            if self.args.venv is not None:
-                self.odoobin._venv_name = self.args.venv
-                self.odoobin._venv = None
+            self.odoobin._venv_name = self.args.venv or str(self.odoobin.version)
+            self.odoobin._venv = None
 
     @property
     def odoobin(self) -> Optional[OdoobinProcess]:
