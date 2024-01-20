@@ -136,7 +136,22 @@ class HelpCommand(Command):
         commands = [command for name, command in self.odev.commands.items() if name == command.name]
         message_indent = string.min_indent(message)
         commands_list = string.indent(
-            string.format_options_list([(command.name, command.help) for command in commands], blanks=1),
+            string.format_options_list(
+                [
+                    (
+                        command.name,
+                        command.help
+                        + (
+                            f"\nAliases: "
+                            f"{string.join_and([f'[italic]{alias}[/italic]' for alias in sorted(command.aliases)])}"
+                            if command.aliases
+                            else ""
+                        ),
+                    )
+                    for command in commands
+                ],
+                blanks=1,
+            ),
             message_indent,
         )[message_indent:]
 
