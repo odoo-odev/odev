@@ -13,7 +13,6 @@ from .postgres import PostgresConnector
 from .rest import RestConnector
 from .git import GitConnector, GitWorktree, Stash
 from .rpc import RpcConnector
-from .saas import SaasConnector
 
 
 # --- Plugins ------------------------------------------------------------------

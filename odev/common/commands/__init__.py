@@ -11,11 +11,7 @@ from typing import cast
 from typing import TypeVar
 
 from .base import Command, CommandError
-from .database import (
-    DatabaseCommand,
-    LocalDatabaseCommand,
-    SaasDatabaseCommand,
-)
+from .database import DatabaseCommand, LocalDatabaseCommand
 from .odoobin import (
     OdoobinCommand,
     OdoobinShellCommand,
@@ -26,7 +22,7 @@ from .odoobin import (
 # --- Plugins ------------------------------------------------------------------
 
 plugins = [
-    path for path in (Path(__file__).parent.parent.parent / "plugins").glob("*/common/mixins/*") if path.is_dir()
+    path for path in (Path(__file__).parent.parent.parent / "plugins").glob("*/common/commands") if path.is_dir()
 ]
 modules = pkgutil.iter_modules([directory.as_posix() for directory in plugins])
 

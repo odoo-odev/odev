@@ -196,6 +196,7 @@ class RestConnector(Connector, ABC):
 
             url = self.url + path
 
+        kwargs.setdefault("allow_redirects", True)
         params = kwargs.pop("params", {})
         obfuscate_params = obfuscate_params or []
         obfuscated = {k: "xxxxx" for k in obfuscate_params if k in params}
@@ -222,8 +223,7 @@ class RestConnector(Connector, ABC):
             self._connection.headers.update({"User-Agent": self.user_agent})
 
         try:
-            response = self._connection.request(method, url, **params, **kwargs, allow_redirects=True)
-
+            response = self._connection.request(method, url, **params, **kwargs)
         except RequestsConnectionError as error:
             if retry_on_error:
                 logger.debug(error)

@@ -11,7 +11,6 @@ from typing import cast
 from .base import ConnectorMixin, ensure_connected
 from .github import GitConnectorMixin
 from .postgres import PostgresConnectorMixin
-from .saas import SaasConnectorMixin
 
 
 # --- Plugins ------------------------------------------------------------------

@@ -6,7 +6,7 @@ from typing import Any, List, MutableMapping
 from odev.common import string
 from odev.common.commands import DatabaseCommand
 from odev.common.console import Colors
-from odev.common.databases import LocalDatabase, SaasDatabase
+from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 
 
@@ -50,12 +50,6 @@ class InfoCommand(DatabaseCommand):
         if isinstance(self.database, LocalDatabase):
             self.print_table(
                 self.info_table_rows_local(),
-                self.database.platform.display,
-            )
-
-        elif isinstance(self.database, SaasDatabase):
-            self.print_table(
-                self.info_table_rows_saas(),
                 self.database.platform.display,
             )
 
@@ -155,22 +149,4 @@ class InfoCommand(DatabaseCommand):
             ["Repository URL", self.database.repository.url if self.database.repository else DISPLAY_NA],
             ["Branch", self.database.branch.name if self.database.branch else DISPLAY_NA],
             ["Branch URL", self.database.branch.url if self.database.branch else DISPLAY_NA],
-        ]
-
-    def info_table_rows_saas(self) -> List[List[str]]:
-        """Return the SaaS-specific rows to be displayed in a table.
-        :param info: The database info.
-        :return: The rows.
-        :rtype: List[List[str]]
-        """
-        assert isinstance(self.database, SaasDatabase)
-        return [
-            ["Support URL", f"{self.database.url}/_odoo/support"],
-            ["Mode", self.database.mode.capitalize()],
-            ["Status", "Active" if self.database.active else "Inactive"],
-            ["Repository", self.database.repository.full_name if self.database.repository else DISPLAY_NA],
-            ["Repository URL", self.database.repository.url if self.database.repository else DISPLAY_NA],
-            ["Branch", self.database.branch.name if self.database.branch else DISPLAY_NA],
-            ["Branch URL", self.database.branch.url if self.database.branch else DISPLAY_NA],
-            ["Domain Names", "\n".join(self.database.domains or [DISPLAY_NA])],
         ]

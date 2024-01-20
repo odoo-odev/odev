@@ -2,7 +2,6 @@
 
 from odev.common.commands import DatabaseCommand
 from odev.common.connectors import GitConnector
-from odev.common.databases import SaasDatabase
 from odev.common.logging import logging
 
 
@@ -22,10 +21,6 @@ class CloneCommand(DatabaseCommand):
     ]
 
     def run(self):
-        if not self.database.repository:
-            if isinstance(self.database, SaasDatabase):
-                self.database._select_repository_branch()
-
         if not self.database.repository:
             raise self.error(f"No repository found for database {self.database.name!r}")
 

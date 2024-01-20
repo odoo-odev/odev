@@ -2,17 +2,11 @@ import inspect
 import re
 from abc import ABC
 from argparse import Namespace
-from typing import (
-    ClassVar,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import ClassVar, Mapping, Optional, Sequence
 
 from odev.common import progress, string
 from odev.common.commands import Command
-from odev.common.databases import LocalDatabase, SaasDatabase
+from odev.common.databases import LocalDatabase
 from odev.common.errors import CommandError
 from odev.common.logging import logging
 
@@ -20,7 +14,7 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-DatabaseType = Union[LocalDatabase, SaasDatabase]
+DatabaseType = LocalDatabase
 
 
 class DatabaseCommand(Command, ABC):
@@ -32,9 +26,10 @@ class DatabaseCommand(Command, ABC):
     _database_exists_required: ClassVar[bool] = True
     """Whether the database must exist before running the command."""
 
-    _database_platforms: ClassVar[Mapping[str, type[DatabaseType]]] = {
-        "local": LocalDatabase,
-    }
+    _database_platforms: ClassVar[Mapping[str, type[DatabaseType]]] = {"local": LocalDatabase}
+    """The database hosting platforms supported by this command, in order of priority for hosting lookup
+    (the first key in this ordered dictionary will be checked first).
+    """
 
     _database_allowed_platforms: ClassVar[Sequence[str]] = []
     """The list of allowed database platforms for this command.
@@ -49,12 +44,7 @@ class DatabaseCommand(Command, ABC):
         {
             "name": "platform",
             "aliases": ["-p", "--platform"],
-            "help": f"""
-            Force searching for the database on the specified platform, useful when
-            different databases have the same name on different hosting (usually one
-            local database being a copy of a remote one). One of {string.join_or(list(_database_platforms.keys()))}.
-            """,
-            "choices": list(_database_platforms.keys()),
+            "choices": [],
         },
         {
             "name": "branch",
@@ -94,6 +84,19 @@ class DatabaseCommand(Command, ABC):
 
         if not cls._database_arg_required:
             cls.update_argument("database", {"nargs": "?"})
+
+        cls.update_argument(
+            "platform",
+            {
+                "choices": list(cls._database_allowed_platforms),
+                "help": f"""
+                Force searching for the database on the specified platform, useful when
+                different databases have the same name on different hosting (usually one
+                local database being a copy of a remote one).
+                One of {string.join_or(list(cls._database_allowed_platforms))}.
+                """,
+            },
+        )
 
     def infer_database_instance(self) -> Optional[DatabaseType]:
         """Return the database instance to use with this command, inferred from the database's name."""
@@ -147,23 +150,6 @@ class LocalDatabaseCommand(DatabaseCommand):
     database: LocalDatabase
 
     _database_allowed_platforms = ["local"]
-
-    @classmethod
-    def prepare_command(cls, *args, **kwargs) -> None:
-        super().prepare_command(*args, **kwargs)
-
-        # Remove arguments from the `DatabaseCommand` class that are not relevant
-        # for this command (`branch` is only used for PaaS databases)
-        cls.remove_argument("platform")
-        cls.remove_argument("branch")
-
-
-class SaasDatabaseCommand(DatabaseCommand):
-    """Base class for commands that require a SaaS database to work."""
-
-    database: SaasDatabase
-
-    _database_allowed_platforms = ["saas"]
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:

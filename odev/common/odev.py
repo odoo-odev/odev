@@ -310,7 +310,7 @@ class Odev(Generic[CommandType]):
                 if command_class.name in self.commands.keys():
                     if command_class.__bases__ != base_command_class.__bases__:
 
-                        class PatchedCommand(base_command_class, command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
+                        class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
                             pass
 
                         command_class = PatchedCommand

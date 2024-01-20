@@ -17,7 +17,7 @@ from typing import (
 )
 
 from git import GitCommandError, Remote, RemoteReference, Repo
-from github import Github, GithubException
+from github import Auth as GithubAuth, Github, GithubException
 
 from odev.common import bash
 from odev.common.connectors.base import Connector
@@ -348,7 +348,7 @@ class GitConnector(Connector):
             ).password
 
         if self._connection is None:
-            self._connection = Github(self._token)
+            self._connection = Github(auth=GithubAuth.Token(self._token))
 
         if not self.authenticated:
             logger.warning("Failed to connect to Github API, please check your token is valid")
