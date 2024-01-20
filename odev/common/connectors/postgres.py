@@ -20,7 +20,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, QueryCanceledError, 
 from odev.common import string
 from odev.common.connectors import Connector
 from odev.common.console import console
-from odev.common.logging import LOG_LEVEL, logging
+from odev.common.logging import DEBUG_SQL, LOG_LEVEL, logging
 from odev.common.signal_handling import capture_signals
 from odev.common.thread import Thread
 
@@ -144,7 +144,7 @@ class PostgresConnector(Connector):
             self.cr.transaction() if transaction else nullcontext(),
             capture_signals(handler=signal_handler_cancel_statement),
         ):
-            if LOG_LEVEL == "DEBUG":
+            if LOG_LEVEL == "DEBUG" and DEBUG_SQL:
                 logger.debug(f"Executing PostgreSQL query against database {self.database!r}:")
                 console.code(string.indent(query, 4), "postgresql")
 

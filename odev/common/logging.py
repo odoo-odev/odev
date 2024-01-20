@@ -29,17 +29,25 @@ __all__ = ["logging", "LOG_LEVEL", "silence_loggers"]
 # Infer log level from command line arguments or default to INFO
 
 LOG_LEVEL = "INFO"
+DEBUG_SQL = False
 
 __log_level = re.search(
-    r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-zA-Z]+)",
+    r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-zA-Z-_]+)",
     " ".join(sys.argv),
 )
 
 if __log_level:
-    LOG_LEVEL = str(__log_level.group(1)).upper()
+    LOG_LEVEL = str(__log_level.group(1)).upper().replace("-", "_")
     remove = __log_level.group(0).strip().split()
     remove_index = sys.argv.index(remove[0])
     del sys.argv[remove_index : remove_index + len(remove)]
+
+    if LOG_LEVEL not in ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "DEBUG_SQL"):
+        raise ValueError(f"Invalid log level {LOG_LEVEL!r}")
+
+    if LOG_LEVEL == "DEBUG_SQL":
+        LOG_LEVEL = "DEBUG"
+        DEBUG_SQL = True
 
 SILENCED_LOGGERS = [
     "asyncio",
