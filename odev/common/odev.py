@@ -5,7 +5,7 @@ import os
 import pkgutil
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -84,9 +84,14 @@ class Odev(Generic[CommandType]):
         self.repo: Repo = Repo(self.path)
         """Local git repository."""
 
-        with progress.spinner(f"Checking for updates to odev {self.version}"):
-            if self.update():
-                self.restart()
+        if self.update(self.path, self.name) or any(
+            self.update(path, f"plugin {name}")
+            for path, name in [
+                (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
+            ]
+        ):
+            self.upgrade()
+            self.restart()
 
         with progress.spinner("Loading commands"):
             self.register_commands()
@@ -185,35 +190,36 @@ class Odev(Generic[CommandType]):
             if list(python.missing_requirements(plugin_path)):
                 python.install_requirements(plugin_path)
 
-    def update(self) -> bool:
-        """
-        Check for updates in the odev repository and download them if necessary.
-
-        :param config: Odev configuration
+    def update(self, path: Path, prompt_name: str) -> bool:
+        """Check for updates in the odev repository and download them if necessary.
+        :param path: Path to a repository to update
         :return: Whether updates were pulled and installed
         :rtype: bool
         """
-        if not self.__date_check_interval() or not self.__git_branch_behind():
-            bash.detached(f"cd {self.path} && git fetch")
+        repository = Repo(path.as_posix())
+        repository_name = "/".join(repository.remotes.origin.url.split("/")[-2:]).split(":")[-1].removesuffix(".git")
+        logger.debug(f"Checking for updates in {repository_name!r}")
+
+        if not self.__date_check_interval() or not self.__git_branch_behind(repository):
+            bash.detached(f"cd {path} && git fetch")
             return False
 
-        if not self.__update_prompt():
+        if not self.__update_prompt(prompt_name):
             return False
 
-        logger.debug(
-            f"Pulling latest changes from odev repository on branch {self.repo.active_branch.tracking_branch()}"
-        )
-        self.config.update.date = datetime.utcnow()
-        install_requirements = self.__requirements_changed()
-        self.repo.remotes.origin.pull()
+        with progress.spinner(f"Updating {repository_name!r}"):
+            logger.debug(
+                f"Pulling latest changes from {repository_name!r} on branch {repository.active_branch.tracking_branch()}"
+            )
+            self.config.update.date = datetime.utcnow()
+            install_requirements = self.__requirements_changed(repository)
+            repository.remotes.origin.pull()
 
-        if install_requirements:
-            logger.debug("Installing new odev package requirements")
-            PythonEnv().install_requirements(self.path)
+            if install_requirements:
+                logger.debug(f"Installing new package requirements for {repository_name!r}")
+                PythonEnv().install_requirements(path)
 
-        self.upgrade()
-
-        return True
+            return True
 
     def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
@@ -226,7 +232,7 @@ class Odev(Generic[CommandType]):
         :return: Whether the current version is the latest available version
         :rtype: bool
         """
-        logger.debug("Checking for existing odev upgrades")
+        logger.debug("Checking for existing upgrades")
         return version.parse(self.version) > version.parse(self.config.update.version)
 
     def upgrade(self) -> None:
@@ -287,27 +293,31 @@ class Odev(Generic[CommandType]):
 
     def register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
-        for command_class in self.import_commands(self.plugins_path.glob("*/commands/**")):
-            command_names = [command_class.name] + (list(command_class.aliases) or [])
-            base_command_class = self.commands.get(command_class.name)
+        for plugin_path in self.plugins_path.iterdir():
+            for command_class in self.import_commands(plugin_path.glob("commands/**")):
+                command_names = [command_class.name] + (list(command_class.aliases) or [])
+                base_command_class = self.commands.get(command_class.name)
 
-            if any(name in command_names for name in self.commands.keys()):
-                if command_class.__bases__ == base_command_class.__bases__:
+                if base_command_class is not None and issubclass(base_command_class, command_class):
                     continue
 
-            logger.debug(f"Registering plugin command {command_class.name!r}")
+                if any(name in command_names for name in self.commands.keys()):
+                    if command_class.__bases__ == base_command_class.__bases__:
+                        continue
 
-            if command_class.name in self.commands.keys():
-                if command_class.__bases__ != base_command_class.__bases__:
+                logger.debug(f"Registering command {command_class.name!r} from plugin {plugin_path.name!r}")
 
-                    class PatchedCommand(command_class, base_command_class):  # type: ignore [valid-type,misc]
-                        pass
+                if command_class.name in self.commands.keys():
+                    if command_class.__bases__ != base_command_class.__bases__:
 
-                    PatchedCommand.__name__ = command_class.__name__
-                    command_class = PatchedCommand
+                        class PatchedCommand(base_command_class, command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
+                            pass
 
-            command_class.prepare_command(self)
-            self.commands.update({name: command_class for name in command_names})
+                        command_class = PatchedCommand
+                        PatchedCommand.__name__ = base_command_class.__name__
+
+                command_class.prepare_command(self)
+                self.commands.update({name: command_class for name in command_names})
 
     def parse_arguments(self, command_cls: Type[CommandType], *args):
         """Parse arguments for a command.
@@ -387,7 +397,6 @@ class Odev(Generic[CommandType]):
 
     def __filter_commands(self, attribute: Any) -> bool:
         """Filter module attributes to extract commands.
-
         :param attribute: Module attribute
         :return: Whether the module attribute is a command
         :rtype: bool
@@ -396,32 +405,30 @@ class Odev(Generic[CommandType]):
 
         return inspect.isclass(attribute) and issubclass(attribute, Command) and not attribute.is_abstract()
 
-    def __git_branch_behind(self) -> bool:
+    def __git_branch_behind(self, repository: Repo) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.
-
-        :param repo: Git repository
-        :param branch: Branch to check
+        :param repository: Git repository to check for pending incoming changes
         :return: Whether the branch is behind the remote tracking branch
         :rtype: bool
         """
-        remote_branch = self.repo.active_branch.tracking_branch()
+        remote_branch = repository.active_branch.tracking_branch()
 
         if remote_branch is None:
             return False
 
-        rev_list: str = self.repo.git.rev_list("--left-right", "--count", f"{remote_branch.name}...HEAD")
+        rev_list: str = repository.git.rev_list("--left-right", "--count", f"{remote_branch.name}...HEAD")
         commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
         message_behind = f"{commits_behind} commit{'s' if commits_behind > 1 else ''} behind"
         message_ahead = f"{commits_ahead} commit{'s' if commits_ahead > 1 else ''} ahead of"
 
         if commits_behind and commits_ahead:
-            logger.debug(f"Odev is {message_behind} and {message_ahead} {remote_branch.name!r}")
+            logger.debug(f"Repository is {message_behind} and {message_ahead} {remote_branch.name!r}")
         elif commits_behind:
-            logger.debug(f"Odev is {message_behind} {remote_branch.name!r}")
+            logger.debug(f"Repository is {message_behind} {remote_branch.name!r}")
         elif commits_ahead:
-            logger.debug(f"Odev is {message_ahead} {remote_branch.name!r}")
+            logger.debug(f"Repository is {message_ahead} {remote_branch.name!r}")
         else:
-            logger.debug(f"Odev is up-to-date with {remote_branch.name!r}")
+            logger.debug(f"Repository is up-to-date with {remote_branch.name!r}")
 
         if commits_ahead:
             logger.debug("Running in development mode (no self-update)")
@@ -429,48 +436,40 @@ class Odev(Generic[CommandType]):
 
         return bool(commits_behind)
 
-    def __requirements_changed(self) -> bool:
+    def __requirements_changed(self, repository: Repo) -> bool:
         """Assess whether the requirements.txt file was modified.
-
-        :param repo: Git repository
+        :param repository: Git repository to check for changes in requirements.txt file
         :return: Whether the requirements.txt file has changed
         :rtype: bool
         """
-        requirements_file = self.path / "requirements.txt"
-        diff = self.repo.git.diff("--name-only", "HEAD", requirements_file).strip()
+        requirements_file = Path(repository.working_dir) / "requirements.txt"
+        diff = repository.git.diff("--name-only", "HEAD", requirements_file).strip()
 
         if diff == requirements_file.as_posix():
-            logger.debug("Odev requirements have changed since last version")
+            logger.debug("Repository requirements have changed since last version")
 
         return bool(diff)
 
     def __date_check_interval(self) -> bool:
         """Check whether the last check date is older than today minus the check interval.
-
-        :param config: Odev configuration
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
-        check_date = self.config.update.date or datetime.today() - timedelta(days=1)
-        check_interval = self.config.update.interval or 1
-        check_diff = (datetime.today() - check_date).days
-        return check_diff >= check_interval
+        return (datetime.today() - self.config.update.date).days >= self.config.update.interval
 
-    def __update_prompt(self) -> bool:
+    def __update_prompt(self, name: str) -> bool:
         """Prompt the user to update odev if a new version is available.
-
-        :param config: Odev configuration
+        :param name: Name of the repository to update
         :return: Whether the user wants to update odev
         :rtype: bool
         """
         if self.config.update.mode == "ask":
-            return self.console.confirm("An update is available for odev, do you want to download it now?")
+            return self.console.confirm(f"An update is available for {name}, do you want to download it now?")
 
         return self.config.update.mode == "always"
 
     def __validate_upgrade_script(self, script: Path) -> bool:
         """Validate the upgrade script's version to check whether it should be run.
-
         :param script: Upgrade script's path
         :return: Whether the upgrade script should be run
         :rtype: bool
