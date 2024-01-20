@@ -10,6 +10,7 @@ from types import FrameType
 from typing import (
     Any,
     ClassVar,
+    List,
     Literal,
     MutableMapping,
     Optional,
@@ -28,6 +29,13 @@ from odev.common.errors import ConnectorError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.progress import Progress
 from odev.common.signal_handling import capture_signals
+
+
+ODOO_DOMAINS: List[str] = ["accounts.odoo.com", "www.odoo.sh", "odoo.com"]
+"""The domains to use for storing Odoo session cookies in the secrets vault."""
+
+ODOO_SESSION_COOKIES: List[str] = ["session_id", "td_id"]
+"""The names of the Odoo session cookies."""
 
 
 logger = logging.getLogger(__name__)
@@ -112,14 +120,17 @@ class RestConnector(Connector, ABC):
 
         self._connection = Session()
 
-        session_cookie = self.store.secrets.get(
-            f"{self.parsed_url.netloc}:cookie",
-            fields=("password",),
-            ask_missing=False,
-        ).password
+        for domain in {*ODOO_DOMAINS, self.parsed_url.netloc}:
+            for key in ODOO_SESSION_COOKIES:
+                cookie = self.store.secrets.get(
+                    f"{domain}:{key}",
+                    fields=("password",),
+                    ask_missing=False,
+                ).password
 
-        if session_cookie:
-            self._connection.cookies.set("session_id", session_cookie, domain=self.parsed_url.netloc)
+                if cookie:
+                    logger.debug(f"Setting cookie {key!r} for domain {domain!r}")
+                    self._connection.cookies.set(key, cookie, domain=domain)
 
     def disconnect(self):
         """Disconnect from the endpoint and invalidate the current session."""
@@ -207,10 +218,12 @@ class RestConnector(Connector, ABC):
 
         logger.debug(logger_message)
 
-        self._connection.headers.update({"User-Agent": self.user_agent})
+        if not self._connection.headers["User-Agent"]:
+            self._connection.headers.update({"User-Agent": self.user_agent})
 
         try:
-            response = self._connection.request(method, url, **params, **kwargs)
+            response = self._connection.request(method, url, **params, **kwargs, allow_redirects=True)
+
         except RequestsConnectionError as error:
             if retry_on_error:
                 logger.debug(error)
@@ -235,11 +248,16 @@ class RestConnector(Connector, ABC):
         )
 
         self.cache(cache_key, response)
-        self.store.secrets.set(
-            f"{self.parsed_url.netloc}:cookie",
-            "",
-            self._connection.cookies.get("session_id", domain=self.parsed_url.netloc) or "",
-        )
+
+        for cookie in self._connection.cookies:
+            if cookie.name in ODOO_SESSION_COOKIES:
+                logger.debug(f"Storing cookie {cookie.name!r} for domain {cookie.domain!r}")
+                self.store.secrets.set(
+                    f"{cookie.domain}:{cookie.name}",
+                    "",
+                    cookie.value,
+                )
+
         return response
 
     @abstractmethod
