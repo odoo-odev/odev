@@ -11,6 +11,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Generic,
@@ -37,9 +38,20 @@ from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
+from odev.common.string import join_bullet
+
+
+if TYPE_CHECKING:
+    from odev.commands.database.delete import DeleteCommand
 
 
 __all__ = ["Odev"]
+
+
+PRUNING_INTERVAL = 14
+"""Number of days between each database pruning and time limit after which a database
+must be dropped if not used.
+"""
 
 
 logger = logging.getLogger(__name__)
@@ -84,32 +96,6 @@ class Odev(Generic[CommandType]):
 
     def __repr__(self) -> str:
         return f"Odev(version={self.version})"
-
-    def start(self) -> None:
-        """Start the framework, check for updates and load plugins and commands."""
-        if self._started:
-            return logger.debug("Framework already started")
-
-        logger.debug(
-            f"Starting {self.name} version {self.version} {'in test mode' if self.in_test_mode else ''}".strip()
-        )
-
-        self.plugins_path.mkdir(parents=True, exist_ok=True)
-
-        if self.update(self.path, self.name) or any(
-            self.update(path, f"plugin {name}")
-            for path, name in [
-                (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
-            ]
-        ):
-            self.upgrade()
-            self.restart()
-
-        with progress.spinner("Loading commands"):
-            self.register_commands()
-            self.register_plugin_commands()
-
-        self._started = True
 
     @property
     def git(self) -> GitConnector:
@@ -182,6 +168,33 @@ class Odev(Generic[CommandType]):
     def plugins(self) -> List[str]:
         """List of enabled plugins."""
         return [plugin for plugin in self.config.plugins.enabled if plugin]
+
+    def start(self) -> None:
+        """Start the framework, check for updates and load plugins and commands."""
+        if self._started:
+            return logger.debug("Framework already started")
+
+        logger.debug(
+            f"Starting {self.name} version {self.version} {'in test mode' if self.in_test_mode else ''}".strip()
+        )
+
+        self.plugins_path.mkdir(parents=True, exist_ok=True)
+
+        if self.update(self.path, self.name) or any(
+            self.update(path, f"plugin {name}")
+            for path, name in [
+                (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
+            ]
+        ):
+            self.upgrade()
+            self.restart()
+
+        with progress.spinner("Loading commands"):
+            self.register_commands()
+            self.register_plugin_commands()
+
+        self.prune_databases()
+        self._started = True
 
     def load_plugins(self) -> None:
         """Load plugins from the configuration file and register them in the plugin directory."""
@@ -265,6 +278,62 @@ class Odev(Generic[CommandType]):
             self.__run_upgrade_script(script)
 
         self.config.update.version = self.version
+
+    def prune_databases(self) -> None:
+        """Prune existing local databases to free up resources and stay compliant with
+        the General Data Protection Regulation (GDPR) as restored dumps may contain customer data.
+        """
+        last_pruning = (datetime.today() - self.config.pruning.date).days
+        logger.debug(f"Last pruning of databases was {last_pruning} days ago")
+
+        if last_pruning >= PRUNING_INTERVAL:
+            from odev.common.databases.local import LocalDatabase
+
+            delete_command_cls = self.commands.get("delete")
+            delete_command = cast(DeleteCommand, delete_command_cls(delete_command_cls.parse_arguments([])))
+
+            def filter_databases(name: str) -> bool:
+                database = LocalDatabase(name)
+                today = datetime.today()
+                return not database.whitelisted and (today - (database.last_date or today)).days >= PRUNING_INTERVAL
+
+            databases = delete_command.list_databases(predicate=filter_databases)
+
+            if databases:
+                logger.warning(
+                    f"Some databases have not been used for {PRUNING_INTERVAL} days and will be pruned:"
+                    f"\n{join_bullet(databases)}"
+                )
+                action = self.console.select(
+                    "What do you want to do?",
+                    choices=[
+                        ("delete", "Delete all databases"),
+                        ("review", "Review databases and whitelist some of them"),
+                        ("skip", "Do nothing and keep all databases for now"),
+                    ],
+                    default="Skip",
+                )
+
+                if action == "skip":
+                    return logger.debug("Skipping database pruning")
+
+                if action == "review":
+                    whitelisted = self.console.checkbox(
+                        "Select databases to whitelist",
+                        choices=[(database, database) for database in databases],
+                    )
+
+                    for database in whitelisted:
+                        LocalDatabase(database).whitelisted = True
+                        databases.remove(database)
+
+            if databases:
+                for database in databases:
+                    delete_command.delete_one(LocalDatabase(database))
+
+                logger.info(f"Deleted {len(databases)} databases:\n{join_bullet(databases)}")
+
+            self.config.pruning.date = datetime.today()
 
     def list_commands(self, sources: Iterable[Path]) -> Iterator[pkgutil.ModuleInfo]:
         """Find command modules in the source directories.

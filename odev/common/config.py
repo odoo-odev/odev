@@ -165,6 +165,21 @@ class PluginsSection(Section):
         self.set("enabled", ",".join(value) if isinstance(value, list) else value)
 
 
+class PruningSection(Section):
+    """Odev privacy configuration."""
+
+    @property
+    def date(self) -> datetime:
+        """Last time local databases were pruned.
+        You should not have to modify this value as it is updated automatically.
+        """
+        return datetime.strptime(self.get("date", datetime.now().strftime(DATETIME_FORMAT)), DATETIME_FORMAT)
+
+    @date.setter
+    def date(self, value: Union[str, datetime]):
+        self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -187,6 +202,9 @@ class Config:
 
         self.plugins: PluginsSection = PluginsSection("plugins", self)
         """Configuration for odev plugins."""
+
+        self.pruning: PruningSection = PruningSection("pruning", self)
+        """Configuration for odev pruning of databases."""
 
         self.load()
         self.fill_defaults()

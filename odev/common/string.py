@@ -212,10 +212,11 @@ def ago(date: datetime.datetime) -> str:
     return timeago.format(date, datetime.datetime.utcnow())
 
 
-def quote(string: str, dirty_only: bool = False) -> str:
+def quote(string: str, dirty_only: bool = False, force_single: bool = False) -> str:
     """Quote a string.
     :param string: The string to quote.
     :param dirty_only: Do not quote strings that have no quotes to begin with.
+    :param force_single: Force single quotes.
     :return: The quoted string.
     :rtype: str
     """
@@ -224,5 +225,5 @@ def quote(string: str, dirty_only: bool = False) -> str:
     if dirty_only and index == -1:
         return string
 
-    double = index == -1 or string[index] == "'"
+    double = not force_single and (index == -1 or string[index] == "'")
     return f'"{string}"' if double else f"'{string}'"

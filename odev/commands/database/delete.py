@@ -1,6 +1,5 @@
 """Create a new database."""
 
-import os
 import shutil
 
 from odev.common import progress, string
@@ -19,7 +18,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     """
 
     name = "delete"
-    aliases = ["remove", "rm", "prune"]
+    aliases = ["remove", "rm", "prune", "drop"]
     arguments = [
         {
             "name": "keep",
@@ -62,8 +61,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
 
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
-                predicate=lambda database: database not in (self.odev.name, "postgres", os.getlogin())
-                and (self.args.include_whitelisted or not LocalDatabase(database).whitelisted)
+                predicate=lambda database: (self.args.include_whitelisted or not LocalDatabase(database).whitelisted)
                 and (not self.args.expression or self.args.expression.search(database))
             )
 
@@ -124,7 +122,6 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
             self.remove_configuration(database)
 
         self.drop_database(database)
-        self.store.databases.delete(database)
         logger.info(f"Dropped database {database.name!r}")
 
     def drop_database(self, database: LocalDatabase):
