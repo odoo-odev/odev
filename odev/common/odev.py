@@ -27,7 +27,7 @@ from git import Repo
 from packaging import version
 
 from odev._version import __version__
-from odev.common import bash, progress
+from odev.common import progress
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseCommand, DatabaseType
 from odev.common.config import Config
@@ -66,12 +66,13 @@ class Odev(Generic[CommandType]):
     executable: ClassVar[Path] = Path(sys.argv[0])
     """Path to the current executable."""
 
+    _started: bool = False
+    """Whether the framework has been started."""
+
     def __init__(self, test: bool = False):
         """Initialize the framework.
         :param test: Whether the framework is being initialized for testing purposes
         """
-        logger.debug(f"Starting odev version {self.version} {'in test mode' if test else ''}".strip())
-
         self.in_test_mode = test
         """Whether the framework is in testing mode."""
 
@@ -81,8 +82,19 @@ class Odev(Generic[CommandType]):
         if self.__class__.store is None:
             self.__class__.store = DataStore(self.name)
 
-        self.repo: Repo = Repo(self.path)
-        """Local git repository."""
+    def __repr__(self) -> str:
+        return f"Odev(version={self.version})"
+
+    def start(self) -> None:
+        """Start the framework, check for updates and load plugins and commands."""
+        if self._started:
+            return logger.debug("Framework already started")
+
+        logger.debug(
+            f"Starting {self.name} version {self.version} {'in test mode' if self.in_test_mode else ''}".strip()
+        )
+
+        self.plugins_path.mkdir(parents=True, exist_ok=True)
 
         if self.update(self.path, self.name) or any(
             self.update(path, f"plugin {name}")
@@ -97,8 +109,12 @@ class Odev(Generic[CommandType]):
             self.register_commands()
             self.register_plugin_commands()
 
-    def __repr__(self) -> str:
-        return f"Odev(version={self.version})"
+        self._started = True
+
+    @property
+    def git(self) -> GitConnector:
+        """Git repository of the local odev folder."""
+        return GitConnector(f"{self.path.parent.name}/{self.path.name}")
 
     @property
     def name(self) -> Literal["odev", "odev-test"]:
@@ -196,27 +212,26 @@ class Odev(Generic[CommandType]):
         :return: Whether updates were pulled and installed
         :rtype: bool
         """
-        repository = Repo(path.as_posix())
-        repository_name = "/".join(repository.remotes.origin.url.split("/")[-2:]).split(":")[-1].removesuffix(".git")
-        logger.debug(f"Checking for updates in {repository_name!r}")
+        logger.debug(f"Checking for updates in {self.git.name!r}")
 
-        if not self.__date_check_interval() or not self.__git_branch_behind(repository):
-            bash.detached(f"cd {path} && git fetch")
+        if not self.__date_check_interval() or not self.__git_branch_behind(self.git.repository):
+            self.git.fetch()
             return False
 
         if not self.__update_prompt(prompt_name):
             return False
 
-        with progress.spinner(f"Updating {repository_name!r}"):
+        with progress.spinner(f"Updating {self.git.name!r}"):
             logger.debug(
-                f"Pulling latest changes from {repository_name!r} on branch {repository.active_branch.tracking_branch()}"
+                f"Pulling latest changes from {self.git.name!r} "
+                "on branch {self.git.repository.active_branch.tracking_branch()}"
             )
             self.config.update.date = datetime.utcnow()
-            install_requirements = self.__requirements_changed(repository)
-            repository.remotes.origin.pull()
+            install_requirements = self.__requirements_changed(self.git.repository)
+            self.git.repository.remotes.origin.pull()
 
             if install_requirements:
-                logger.debug(f"Installing new package requirements for {repository_name!r}")
+                logger.debug(f"Installing new package requirements for {self.git.name!r}")
                 PythonEnv().install_requirements(path)
 
             return True

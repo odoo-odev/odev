@@ -32,6 +32,7 @@ class OdevTestCase(TestCase):
             cls.__patches.append(patched)
             patched.start()
         cls.addClassCleanup(cls.tearDownClass)
+        cls.odev.start()
 
     @classmethod
     def tearDownClass(cls):

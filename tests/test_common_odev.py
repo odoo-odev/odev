@@ -43,7 +43,8 @@ class TestCommonOdev(OdevTestCase):
         """Odev should restart itself when updated."""
         with self.patch(self.odev, "update", return_value=True), self.patch(self.odev, "restart") as mock_restart:
             self.odev.__class__.commands = {}
-            self.odev.__class__.__init__(self.odev, test=self.odev.in_test_mode)
+            self.odev._started = False
+            self.odev.start()
         mock_restart.assert_called_once_with()
 
     def test_upgrade_same_version(self):

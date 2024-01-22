@@ -31,6 +31,7 @@ def main():
             raise Exception("Odev should not be run as root")
 
         odev = init_framework()
+        odev.start()
         odev.dispatch()
 
     except KeyboardInterrupt:
