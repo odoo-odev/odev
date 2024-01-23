@@ -76,7 +76,7 @@ class TestUtilCommands(OdevTestCase):
         """Test running the command with the --names-only argument.
         Should display a list of databases.
         """
-        command = self.setup_command("list", "--names-only --include-other")
+        command = self.setup_command("list", "--names-only --all")
 
         with (
             CaptureOutput() as output,
@@ -102,7 +102,7 @@ class TestUtilCommands(OdevTestCase):
         """Test running the command with a --expression pattern.
         Should display a list of databases matching the pattern.
         """
-        command = self.setup_command("list", "--expression test1 --names-only --include-other")
+        command = self.setup_command("list", "--expression test1 --names-only --all")
 
         with (
             CaptureOutput() as output,
@@ -118,7 +118,7 @@ class TestUtilCommands(OdevTestCase):
         """Test running the command with no database matching the --expression pattern.
         Should raise an error message.
         """
-        command = self.setup_command("list", "--expression no-match --names-only --include-other")
+        command = self.setup_command("list", "--expression no-match --names-only --all")
 
         with (
             self.assertRaises(CommandError, msg="No database found matching pattern 'no-match'"),
