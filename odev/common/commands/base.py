@@ -268,8 +268,8 @@ class Command(OdevFrameworkMixin, ABC):
             and self.console.height < len(renderable.splitlines())
             and auto_paginate
         ):
-            pager = os.environ.get("PAGER", "less")
-            less = os.environ.get("LESS", "-R")
+            pager = os.environ.get("PAGER", "")
+            less = os.environ.get("LESS", "")
 
             if pager != "less":
                 os.environ["PAGER"] = "less"
