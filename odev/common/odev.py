@@ -100,7 +100,7 @@ class Odev(Generic[CommandType]):
     @property
     def git(self) -> GitConnector:
         """Git repository of the local odev folder."""
-        return GitConnector(f"{self.path.parent.name}/{self.path.name}")
+        return GitConnector(f"{self.path.parent.name}/{self.path.name}", self.path)
 
     @property
     def name(self) -> Literal["odev", "odev-test"]:

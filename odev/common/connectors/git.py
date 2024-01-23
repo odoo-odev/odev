@@ -218,12 +218,18 @@ class GitConnector(Connector):
     _requirements_changed: bool = False
     """Whether the requirements.txt file has been modified since the last pull."""
 
-    def __init__(self, repo: str):
+    _path: Path = None
+    """The path to the repository."""
+
+    def __init__(self, repo: str, path: Optional[Path] = None):
         """Initialize the Github connector.
 
         :param repo: The repository to connect to in the format `organization/repository`.
         """
         super().__init__()
+
+        if path:
+            self._path = path
 
         repo_values = repo.split("/")
 
@@ -246,7 +252,7 @@ class GitConnector(Connector):
     @property
     def path(self) -> Path:
         """The path to the repository."""
-        return self.config.paths.repositories / self.name
+        return self._path or self.config.paths.repositories / self.name
 
     @property
     def exists(self) -> bool:
