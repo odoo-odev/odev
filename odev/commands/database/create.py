@@ -12,6 +12,9 @@ from odev.common.odoobin import OdoobinProcess
 from odev.common.version import OdooVersion
 
 
+TEMPLATE_SUFFIX = ":template"
+
+
 class CreateCommand(OdoobinCommand):
     """Create a new Odoo database locally, or copy an existing database template."""
 
@@ -22,6 +25,12 @@ class CreateCommand(OdoobinCommand):
             "name": "template",
             "aliases": ["-t", "--template"],
             "help": "Name of an existing PostgreSQL database to copy.",
+        },
+        {
+            "name": "new_template",
+            "aliases": ["-T", "--create-template"],
+            "action": "store_true",
+            "help": "Create the database as a template to reuse later (append '-template' to its name).",
         },
         {
             "name": "copy_filestore",
@@ -54,8 +63,22 @@ class CreateCommand(OdoobinCommand):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.template: Optional[LocalDatabase] = LocalDatabase(self.args.template) if self.args.template else None
-        """Template database to copy."""
+
+        if self.args.template and self.args.new_template:
+            raise self.error("The arguments `template` and `new_template` are mutually exclusive")
+
+        if self.args.new_template:
+            self.args.database += TEMPLATE_SUFFIX
+            self.database = LocalDatabase(self.args.database)
+
+        if self.args.template:
+            self.template: Optional[LocalDatabase] = LocalDatabase(self.args.template + TEMPLATE_SUFFIX)
+            """Template database to copy."""
+
+            if not self.template.exists:
+                self.template = LocalDatabase(self.args.template)
+        else:
+            self.template = None
 
         version = self.args.version and OdooVersion(self.args.version) or None
         """Odoo version to use for the new database."""
@@ -88,7 +111,7 @@ class CreateCommand(OdoobinCommand):
             logger.warning(f"Database {self.database.name!r} already exists")
 
             if not self.console.confirm("Overwrite it?"):
-                raise self.error(f"Cannot create database with already existing name {self.database.name!r}")
+                raise self.error(f"Cannot create database with an already existing name {self.database.name!r}")
 
             with progress.spinner(f"Dropping database {self.database.name!r}"):
                 self.database.drop()
