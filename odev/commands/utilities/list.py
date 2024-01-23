@@ -63,7 +63,7 @@ TABLE_MAPPING: List[Mapped] = [
         title=None,
         justify=None,
         display=True,
-        format=lambda value: "[{style}]⚪[/{style}]".format(style=Colors.GREEN if value else Colors.RED)
+        format=lambda value: "[{color}]:{color}_circle:[/{color}]".format(color="green" if value else "red")
         if value is not None
         else "",
         total=False,
