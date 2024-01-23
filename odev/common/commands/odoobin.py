@@ -41,9 +41,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         },
         {
             "name": "enterprise",
-            "aliases": ["-e", "--enterprise"],
-            "action": "store_true",
-            "help": "Force running the database with enterprise addons.",
+            "aliases": ["-c", "--community"],
+            "action": "store_false",
+            "help": "Force running the database without enterprise addons.",
         },
         {
             "name": "version",
