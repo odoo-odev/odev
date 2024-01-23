@@ -170,10 +170,10 @@ class ListCommand(ListLocalDatabasesMixin, Command):
             "help": "Display more details for each database.",
         },
         {
-            "name": "include_other",
-            "aliases": ["-o", "--include-other"],
+            "name": "show_all",
+            "aliases": ["-a", "--all"],
             "action": "store_true",
-            "help": "Display non-Odoo databases as well.",
+            "help": "Show all the databases non-Odoo databases included",
         },
     ]
 
@@ -181,7 +181,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
                 predicate=lambda database: (not self.args.expression or self.args.expression.search(database))
-                and (self.args.include_other or LocalDatabase(database).is_odoo)
+                and (self.args.show_all or LocalDatabase(database).is_odoo)
             )
 
             if not databases:
