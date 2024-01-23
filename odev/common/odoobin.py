@@ -76,7 +76,6 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._venv_name: str = venv or str(self.version)
         """Name of the virtual environment to use."""
 
-        self.clone_repositories()
         self.repository: GitConnector = GitConnector("odoo/odoo")
         """Github repository of Odoo."""
 
@@ -306,6 +305,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.version is None:
             return logger.warning("No version specified, skipping environment setup")
 
+        self.clone_repositories()
         self.prepare_npm()
         self.update_worktrees()
         self.prepare_venv()
