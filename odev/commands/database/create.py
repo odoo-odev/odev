@@ -13,7 +13,7 @@ from odev.common.version import OdooVersion
 
 
 class CreateCommand(OdoobinCommand):
-    """Create a new Odoo database locally, restoring templates and dumps on the fly."""
+    """Create a new Odoo database locally, or copy an existing database template."""
 
     name = "create"
     aliases = ["init"]
