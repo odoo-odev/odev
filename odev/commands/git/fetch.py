@@ -12,9 +12,12 @@ from odev.common import progress, string
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector
 from odev.common.console import Colors
+from odev.common.logging import logging
 from odev.common.odoobin import ODOO_COMMUNITY_REPOSITORIES, ODOO_ENTERPRISE_REPOSITORIES
 from odev.common.version import OdooVersion
 
+
+logger = logging.getLogger(__name__)
 
 TABLE_HEADERS: List[MutableMapping[str, Any]] = [
     {
@@ -82,6 +85,8 @@ class FetchCommand(Command):
                     worktree.repository.remotes.origin.fetch()
                     behind, ahead = worktree.pending_changes()
                     yield repository, worktree.branch, behind, ahead
+
+                logger.info(f"Repository {repository!r} correctly updated for version {worktree.branch!r}")
 
     def pending_changes_by_version(self) -> MutableMapping[str, List[Tuple[str, int, int]]]:
         """List pending changes by version."""
