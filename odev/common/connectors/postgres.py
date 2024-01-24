@@ -183,6 +183,7 @@ class PostgresConnector(Connector):
         :return: Whether the database was created.
         :rtype: bool
         """
+        self.invalidate_cache(database="postgres")
         return bool(
             self.query(
                 f"""
@@ -202,6 +203,7 @@ class PostgresConnector(Connector):
         :return: Whether the database was dropped.
         :rtype: bool
         """
+        self.invalidate_cache(database="postgres")
         self.query(
             f"""
             REVOKE CONNECT ON DATABASE "{database}"
