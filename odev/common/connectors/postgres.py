@@ -65,6 +65,9 @@ class PostgresConnector(Connector):
     cr: Optional[Cursor] = None
     """The cursor to the database engine."""
 
+    _nocache: bool = False
+    """Whether to disable caching of SQL queries."""
+
     def __init__(self, database: Optional[str] = None):
         """Initialize the connector."""
         super().__init__()
@@ -108,10 +111,9 @@ class PostgresConnector(Connector):
     @contextmanager
     def nocache(self):
         """Context manager to disable caching of SQL queries."""
-        cache = self.__class__._query_cache
-        self.__class__._query_cache = {}
+        self.__class__._nocache = True
         yield
-        self.__class__._query_cache = cache
+        self.__class__._nocache = False
 
     def query(
         self,
@@ -131,8 +133,15 @@ class PostgresConnector(Connector):
         is_select = query_lower.startswith("select")
         expect_result = is_select or " returning " in query_lower
 
-        if is_select and (self.database, query) in self.__class__._query_cache:
-            return self.__class__._query_cache[(self.database, query)]
+        if is_select and not self.__class__._nocache and (self.database, query) in self.__class__._query_cache:
+            result = self.__class__._query_cache[(self.database, query)]
+            if DEBUG_SQL:
+                logger.debug(
+                    f"""Returning cached result for SQL query
+                    {query} : {result} on {self.database} [{len(self.__class__._query_cache)}]
+                    """
+                )
+            return result
 
         def signal_handler_cancel_statement(*args, **kwargs):
             """Cancel the SQL query currently running."""
@@ -160,7 +169,9 @@ class PostgresConnector(Connector):
 
             result = expect_result and self.cr.fetchall()
 
-        if is_select:
+        if is_select and not self.__class__._nocache:
+            if DEBUG_SQL:
+                logger.debug(f"Caching result {result} for query {query} on {self.database}")
             self.__class__._query_cache[(self.database, query)] = result
 
         return result if expect_result else True
@@ -235,7 +246,7 @@ class PostgresConnector(Connector):
                 FROM pg_database
                 WHERE datname = '{database}'
                 """
-            )
+            ),
         )
 
     def table_exists(self, table: str) -> bool:
@@ -268,22 +279,28 @@ class PostgresConnector(Connector):
         sql_columns: str = ", ".join(f"{name} {attributes}" for name, attributes in columns.items())
         return bool(self.query(f"CREATE TABLE IF NOT EXISTS {table} ({sql_columns})"))
 
-    def column_exists(self, table: str, column: str) -> bool:
+    def columns_exists(self, table: str, columns: list[str]) -> list[str]:
         """Check whether a column exists in a table.
         :param table: The name of the table to check.
-        :param column: The name of the column to check.
+        :param columns: The name of the column to check.
         :return: Whether the column exists.
-        :rtype: bool
+        :rtype: list[str]
         """
-        return bool(
-            self.query(
-                f"""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name = '{table}' AND column_name = '{column}'
-                """,
-            )
+        if not isinstance(columns, list):
+            raise TypeError("Columns should be a list of strings")
+
+        results = self.query(
+            f"""
+                        SELECT column_name
+                        FROM information_schema.columns
+                        WHERE table_name = '{table}' AND column_name IN ({','.join([f"'{c}'" for c in columns])})
+                        """,
         )
+
+        if results and isinstance(results, list) and columns:
+            return [c for c in columns if c not in [r[0] for r in results]]
+        else:
+            return []
 
     def create_column(self, table: str, column: str, attributes: str) -> bool:
         """Create a column in a table.

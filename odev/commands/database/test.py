@@ -71,7 +71,7 @@ class TestCommand(OdoobinCommand):
         :return: Name of the test database to use.
         :rtype: str
         """
-        with self.database.psql() as psql:
+        with self.database.psql() as psql, psql.nocache():
             name = self.__generate_database_name()
 
             while psql.database_exists(name):

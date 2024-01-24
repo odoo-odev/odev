@@ -107,14 +107,15 @@ class CreateCommand(OdoobinCommand):
 
     def ensure_database_not_exists(self):
         """Drop the database if it exists."""
-        if self.database.exists:
-            logger.warning(f"Database {self.database.name!r} already exists")
+        with self.database.psql("postgres").nocache():
+            if self.database.exists:
+                logger.warning(f"Database {self.database.name!r} already exists")
 
-            if not self.console.confirm("Overwrite it?"):
-                raise self.error(f"Cannot create database with an already existing name {self.database.name!r}")
+                if not self.console.confirm("Overwrite it?"):
+                    raise self.error(f"Cannot create database with already existing name {self.database.name!r}")
 
-            with progress.spinner(f"Dropping database {self.database.name!r}"):
-                self.database.drop()
+                with progress.spinner(f"Dropping database {self.database.name!r}"):
+                    self.database.drop()
 
     def ensure_template_exists(self):
         """Ensure the template database exists."""

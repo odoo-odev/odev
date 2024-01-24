@@ -75,8 +75,8 @@ class TestDatabaseCommands(OdevTestCase):
             cast(LocalDatabase, command.database).name, self.db_name, "The database name should be set correctly."
         )
 
-        local_database = LocalDatabase(self.db_name)
-        self.assertTrue(local_database.exists, "The database should exist on the local system.")
+        with LocalDatabase(self.db_name) as local_database, local_database.psql().nocache():
+            self.assertTrue(local_database.exists, "The database should exist on the local system.")
 
         store_database = (self.odev.store.databases.get(local_database),)
         self.assertIsNotNone(store_database, "The database should be stored in the database store.")

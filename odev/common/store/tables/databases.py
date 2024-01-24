@@ -56,7 +56,6 @@ class DatabaseStore(PostgresTable):
                 AND platform = {database.platform.name!r}
             LIMIT 1
             """,
-            nocache=True,
         )
 
         if not result:

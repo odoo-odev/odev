@@ -50,9 +50,10 @@ class PostgresDatabase(PostgresConnectorMixin):
 
     def prepare_database(self):
         """Prepare the database and ensure it exists in PostgreSQL."""
-        if not self.exists():
-            logger.debug(f"Creating database {self.name!r}")
-            self.create()
+        with self.psql("postgres").nocache():
+            if not self.exists():
+                logger.debug(f"Creating database {self.name!r}")
+                self.create()
 
     def size(self) -> int:
         with self.psql() as psql:
@@ -94,9 +95,9 @@ class PostgresDatabase(PostgresConnectorMixin):
         return self.connector.create_table(table, columns)
 
     @ensure_connected
-    def column_exists(self, table: str, column: str) -> bool:
+    def column_exists(self, table: str, columns: list[str]) -> list[str]:
         """Check if a column exists in a table."""
-        return self.connector.column_exists(table, column)
+        return self.connector.columns_exists(table, columns)
 
     @ensure_connected
     def create_column(self, table: str, column: str, definition: str):
@@ -164,12 +165,10 @@ class PostgresTable(ABC):
                 logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
                 self.database.create_table(self.name, self._columns)
             else:
-                for column_name, column_def in self._columns.items():
-                    if not self.database.column_exists(self.name, column_name):
-                        logger.debug(
-                            f"Adding column {column_name!r} to table {self.name!r} in database {self.database!r}"
-                        )
-                        self.database.create_column(self.name, column_name, column_def)
+                if missing_columns := self.database.column_exists(self.name, list(self._columns.keys())):
+                    for column in missing_columns:
+                        logger.debug(f"Adding column {column!r} to table {self.name!r} in database {self.database!r}")
+                        self.database.create_column(self.name, column, self._columns[column])
 
         if self._constraints is not None:
             for name, definition in self._constraints.items():
