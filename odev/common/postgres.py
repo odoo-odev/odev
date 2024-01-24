@@ -95,7 +95,12 @@ class PostgresDatabase(PostgresConnectorMixin):
         return self.connector.create_table(table, columns)
 
     @ensure_connected
-    def column_exists(self, table: str, columns: list[str]) -> list[str]:
+    def column_exists(self, table: str, column: str) -> list[str]:
+        """Check if a column exists in a table."""
+        return self.columns_exists(table, [column])
+
+    @ensure_connected
+    def columns_exists(self, table: str, columns: list[str]) -> list[str]:
         """Check if a column exists in a table."""
         return self.connector.columns_exists(table, columns)
 
