@@ -1,6 +1,5 @@
 """Gets help about commands."""
 
-from argparse import Namespace
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -10,7 +9,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union,
 )
 from urllib.parse import urlparse
 
@@ -40,12 +38,6 @@ class Mapped:
     or "right".
     """
 
-    display: Union[bool, Callable[[Namespace], bool]]
-    """Whether to display the column in the table.
-    Either a boolean or a callable that takes the commands arguments and
-    returns a boolean.
-    """
-
     format: Optional[Callable[[Any], str]]
     """A callable that takes the value and returns and formats it to display
     it in the table.
@@ -62,7 +54,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.process.is_running if database.process is not None else "",
         title=None,
         justify=None,
-        display=True,
         format=lambda value: "[{color}]:{color}_circle:[/{color}]".format(color="green" if value else "red")
         if value is not None
         else "",
@@ -72,7 +63,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.name,
         title="Name",
         justify=None,
-        display=True,
         format=None,
         total=False,
     ),
@@ -80,7 +70,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.version,
         title="Version",
         justify="right",
-        display=True,
         format=lambda value: str(value or ""),
         total=False,
     ),
@@ -88,7 +77,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.edition,
         title="Edition",
         justify=None,
-        display=True,
         format=lambda value: (value or "").capitalize(),
         total=False,
     ),
@@ -96,7 +84,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.size,
         title="Size (SQL)",
         justify="right",
-        display=lambda args: args.details,
         format=lambda value: string.bytes_size(value or 0),
         total=True,
     ),
@@ -104,7 +91,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.filestore.size if database.filestore else 0,
         title="Size (FS)",
         justify="right",
-        display=lambda args: args.details,
         format=lambda value: string.bytes_size(value) if value else "",
         total=True,
     ),
@@ -112,7 +98,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.last_date,
         title="Last Use",
         justify=None,
-        display=lambda args: args.details,
         format=lambda value: value.strftime("%Y-%m-%d %X") if value else "",
         total=False,
     ),
@@ -120,7 +105,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.whitelisted,
         title="Whitelisted",
         justify="center",
-        display=lambda args: args.details,
         format=lambda value: f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
         if value
         else f"[bold {Colors.RED}] ❌[bold {Colors.RED}]",
@@ -130,7 +114,6 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.process.pid if database.process is not None else "",
         title="PID",
         justify="right",
-        display=lambda args: args.details,
         format=lambda value: str(value or ""),
         total=False,
     ),
@@ -138,11 +121,18 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.url,
         title="URL",
         justify=None,
-        display=lambda args: args.details,
         format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
         total=False,
     ),
 ]
+
+ORDER_MAPPING: MutableMapping[str, str] = {
+    "name": "Name",
+    "version": "Version",
+    "size": "Size (SQL)",
+    "size_fs": "Size (FS)",
+    "date": "Last Use",
+}
 
 
 class ListCommand(ListLocalDatabasesMixin, Command):
@@ -164,16 +154,20 @@ class ListCommand(ListLocalDatabasesMixin, Command):
             "help": "Regular expression pattern to filter listed databases.",
         },
         {
-            "name": "details",
-            "aliases": ["-d", "--details"],
-            "action": "store_true",
-            "help": "Display more details for each database.",
-        },
-        {
             "name": "show_all",
             "aliases": ["-a", "--all"],
             "action": "store_true",
             "help": "Show all the databases non-Odoo databases included",
+        },
+        {
+            "name": "order",
+            "aliases": ["-s", "--sort"],
+            "action": "store",
+            "choices": list(ORDER_MAPPING.keys()),
+            "default": "name",
+            "help": f"""Sort databases by name, version, database size, filestore size or last use date.
+            Possible values are {string.join_and(list(ORDER_MAPPING.keys()))}.
+            """,
         },
     ]
 
@@ -181,7 +175,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
                 predicate=lambda database: (not self.args.expression or self.args.expression.search(database))
-                and (self.args.show_all or LocalDatabase(database).is_odoo)
+                and (self.args.show_all or (LocalDatabase(database).is_odoo and not database.endswith(":template")))
             )
 
             if not databases:
@@ -208,23 +202,27 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         totals: List[int] = []
 
         for mapped in TABLE_MAPPING:
-            if mapped.display is True or (callable(mapped.display) and mapped.display(self.args)):
-                headers.append({"name": mapped.title or "", "justify": mapped.justify or "left"})
-                totals.append(0)
+            headers.append({"name": mapped.title or "", "justify": mapped.justify or "left"})
+            totals.append(0)
 
         for database in databases:
             row: List[Any] = []
 
             with LocalDatabase(database) as db:
                 for index, mapped in enumerate(TABLE_MAPPING):
-                    if mapped.display is True or (callable(mapped.display) and mapped.display(self.args)):
-                        value = mapped.value(db)
-                        row.append(mapped.format(value) if callable(mapped.format) else value)
+                    value = mapped.value(db)
+                    row.append(mapped.format(value) if callable(mapped.format) else value)
 
-                        if mapped.total:
-                            totals[index] += value or 0
+                    if mapped.total:
+                        totals[index] += value or 0
 
             rows.append(row)
+
+        if self.args.order != "name":
+            column_index = next(
+                (index for index, header in enumerate(headers) if header["name"] == ORDER_MAPPING[self.args.order]), 1
+            )
+            rows.sort(key=lambda row: row[column_index])
 
         totals_formatted: List[str] = [string.bytes_size(total) if total != 0 else "" for total in totals]
         totals_formatted[1] = f"{len(databases)} databases"
