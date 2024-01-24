@@ -170,7 +170,7 @@ class PostgresTable(ABC):
                 logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
                 self.database.create_table(self.name, self._columns)
             else:
-                if missing_columns := self.database.column_exists(self.name, list(self._columns.keys())):
+                if missing_columns := self.database.columns_exists(self.name, list(self._columns.keys())):
                     for column in missing_columns:
                         logger.debug(f"Adding column {column!r} to table {self.name!r} in database {self.database!r}")
                         self.database.create_column(self.name, column, self._columns[column])
