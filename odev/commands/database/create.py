@@ -112,7 +112,7 @@ class CreateCommand(OdoobinCommand):
                 logger.warning(f"Database {self.database.name!r} already exists")
 
                 if not self.console.confirm("Overwrite it?"):
-                    raise self.error(f"Cannot create database with already existing name {self.database.name!r}")
+                    raise self.error(f"Cannot create database with an already existing name {self.database.name!r}")
 
                 with progress.spinner(f"Dropping database {self.database.name!r}"):
                     self.database.drop()
