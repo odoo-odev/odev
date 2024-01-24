@@ -32,7 +32,7 @@ from odev.common import progress
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseCommand, DatabaseType
 from odev.common.config import Config
-from odev.common.connectors.git import GitConnector
+from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
 from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
@@ -241,7 +241,9 @@ class Odev(Generic[CommandType]):
             )
             self.config.update.date = datetime.utcnow()
             install_requirements = self.__requirements_changed(self.git.repository)
-            self.git.repository.remotes.origin.pull()
+
+            with Stash(self.git.repository):
+                self.git.repository.remotes.origin.pull()
 
             if install_requirements:
                 logger.debug(f"Installing new package requirements for {self.git.name!r}")
