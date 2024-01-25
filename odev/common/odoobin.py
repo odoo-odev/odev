@@ -280,6 +280,17 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.pid is not None:
             bash.execute(f"kill -{9 if hard else 2} {self.pid}")
 
+    def supports_subcommand(self, subcommand: str) -> bool:
+        """Return whether the given subcommand is supported by the current version of Odoo.
+        :param subcommand: Subcommand to check.
+        :return: True if the subcommand is supported, False otherwise.
+        :rtype: bool
+        """
+        with self.console.capture() as output:
+            self.run(["-h"], subcommand=subcommand, stream=False, prepare=False)
+
+        return "Unknown command" not in output.get()
+
     def prepare_odoobin_args(self, args: List[str] = None, subcommand: str = None) -> List[str]:
         """Prepare the arguments to pass to odoo-bin.
 
@@ -354,30 +365,33 @@ class OdoobinProcess(OdevFrameworkMixin):
         subcommand_input: Optional[str] = None,
         stream: bool = True,
         progress: Callable[[str], None] = None,
+        prepare: bool = True,
     ) -> Optional[CompletedProcess]:
         """Run Odoo on the current database.
-
         :param args: Additional arguments to pass to odoo-bin.
         :param subcommand: Subcommand to pass to odoo-bin.
         :param subcommand_input: Input to pipe to the subcommand.
         :param stream: Whether to stream the output of the process.
         :param progress: Callback to call on each line outputted by the process. Ignored if `stream` is False.
+        :param prepare: Whether to prepare the environment before running the process.
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
         """
         if self.is_running and subcommand is None:
             raise RuntimeError("Odoo is already running on this database")
 
-        with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
-            self.prepare_odoobin()
+        if prepare:
+            with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
+                self.prepare_odoobin()
 
-        debugger_position = self.addons_contain_debugger()
+        if stream and progress is not None:
+            debugger_position = self.addons_contain_debugger()
 
-        if stream and progress is not None and debugger_position is not None:
-            progress = None
-            logger.warning(
-                f"Addons contain a call to a debugger, streaming of Odoo logs is deactivated: {debugger_position}"
-            )
+            if debugger_position is not None:
+                progress = None
+                logger.warning(
+                    f"Addons contain a call to a debugger, streaming of Odoo logs is deactivated: {debugger_position}"
+                )
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"

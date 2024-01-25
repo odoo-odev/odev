@@ -375,8 +375,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return psql.drop_database(self.name)
 
     def neutralize(self):
+        """Neutralize the database."""
         installed_modules: List[str] = self.installed_modules
         scripts: List[Path] = [self.odev.static_path / "neutralize-pre.sql"]
+
+        if self.process.supports_subcommand("neutralize"):
+            self.process.run(["-d", self.name], subcommand="neutralize")
+            self.console.print()
 
         with progress.spinner(f"Looking up neutralization scripts in {len(installed_modules)} installed modules"):
             for addon in self.process.addons_paths:
