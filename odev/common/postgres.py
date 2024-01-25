@@ -96,17 +96,17 @@ class PostgresDatabase(PostgresConnectorMixin):
 
     @ensure_connected
     def column_exists(self, table: str, column: str) -> list[str]:
-        """Check if a column exists in a table."""
-        return self.columns_exists(table, [column])
+        """Check if a column exist in a table."""
+        return self.columns_exist(table, [column])
 
     @ensure_connected
-    def columns_exists(self, table: str, columns: list[str]) -> list[str]:
-        """Check if a column exists in a table."""
-        return self.connector.columns_exists(table, columns)
+    def columns_exist(self, table: str, columns: list[str]) -> list[str]:
+        """Check if columns exist in a table."""
+        return self.connector.columns_exist(table, columns)
 
     @ensure_connected
     def create_column(self, table: str, column: str, definition: str):
-        """Check if a column exists in a table."""
+        """Create a column in table."""
         return self.connector.create_column(table, column, definition)
 
     @ensure_connected
@@ -170,7 +170,7 @@ class PostgresTable(ABC):
                 logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
                 self.database.create_table(self.name, self._columns)
             else:
-                if missing_columns := self.database.columns_exists(self.name, list(self._columns.keys())):
+                if missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
                     for column in missing_columns:
                         logger.debug(f"Adding column {column!r} to table {self.name!r} in database {self.database!r}")
                         self.database.create_column(self.name, column, self._columns[column])

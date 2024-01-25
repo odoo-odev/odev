@@ -281,7 +281,7 @@ class PostgresConnector(Connector):
         sql_columns: str = ", ".join(f"{name} {attributes}" for name, attributes in columns.items())
         return bool(self.query(f"CREATE TABLE IF NOT EXISTS {table} ({sql_columns})"))
 
-    def columns_exists(self, table: str, columns: list[str]) -> list[str]:
+    def columns_exist(self, table: str, columns: list[str]) -> list[str]:
         """Check whether a column exists in a table.
         :param table: The name of the table to check.
         :param columns: The name of the column to check.
