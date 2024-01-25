@@ -293,10 +293,10 @@ class PostgresConnector(Connector):
 
         results = self.query(
             f"""
-                        SELECT column_name
-                        FROM information_schema.columns
-                        WHERE table_name = '{table}' AND column_name IN ({','.join([f"'{c}'" for c in columns])})
-                        """,
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = '{table}' AND column_name IN ({','.join([f"'{c}'" for c in columns])})
+            """,
         )
 
         if results and isinstance(results, list) and columns:
