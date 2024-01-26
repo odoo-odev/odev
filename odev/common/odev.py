@@ -11,7 +11,6 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from types import ModuleType
 from typing import (
-    TYPE_CHECKING,
     Any,
     ClassVar,
     Generic,
@@ -28,6 +27,7 @@ from git import Repo
 from packaging import version
 
 from odev._version import __version__
+from odev.commands.database.delete import DeleteCommand
 from odev.common import progress
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseCommand, DatabaseType
@@ -39,10 +39,6 @@ from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
 from odev.common.string import join_bullet
-
-
-if TYPE_CHECKING:
-    from odev.commands.database.delete import DeleteCommand
 
 
 __all__ = ["Odev"]
