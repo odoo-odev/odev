@@ -16,7 +16,7 @@ class CloneCommand(DatabaseCommand):
     arguments = [
         {
             "name": "branch",
-            "help": "Single branch to checkout.",
+            "help": "Branch to checkout after cloning the repository.",
         },
     ]
 
@@ -25,7 +25,11 @@ class CloneCommand(DatabaseCommand):
             raise self.error(f"No repository found for database {self.database.name!r}")
 
         git = GitConnector(self.database.repository.full_name)
-        git.clone(branch=self.args.branch or None)
+
+        if git.path.exists():
+            git.checkout(branch=self.args.branch or None)
+        else:
+            git.clone(branch=self.args.branch or None)
 
         if not git.path.exists():
             raise self.error(f"Failed to clone repository {git.name!r}")

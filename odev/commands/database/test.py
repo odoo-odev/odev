@@ -39,7 +39,7 @@ class TestCommand(OdoobinCommand):
             "aliases": ["-m", "--modules"],
             "action": "store_comma_split",
             "nargs": "?",
-            "default": "all",
+            "default": ["all"],
             "help": "Comma-separated list of modules to install for testing. If not set, install all modules.",
         },
         {"name": "odoo_args"},

@@ -444,7 +444,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     def restore(self, file: Path):
         if not file.is_file():
-            return self.console.error(f"Invalid dump file {file}")
+            return logger.error(f"Invalid dump file {file}")
 
         tracker = progress.Progress(download=True)
 
@@ -469,7 +469,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             elif file.suffix in [".bz", ".bz2"]:
                 self._restore_bzip(file, tracker)
             else:
-                self.console.error(f"Unrecognized extension {file.suffix!r} for dump {file}")
+                logger.error(f"Unrecognized extension {file.suffix!r} for dump {file}")
 
         self = LocalDatabase(self.name)
         tracker.stop()
@@ -599,7 +599,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """
         with ZipFile(file, "r") as archive:
             if ARCHIVE_DUMP not in archive.namelist():
-                return self.console.error(
+                return logger.error(
                     f"Invalid dump file {file.as_posix()}, missing {string.stylize(f'{ARCHIVE_DUMP!r}', Colors.CYAN)} file"
                 )
 

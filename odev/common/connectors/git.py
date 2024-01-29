@@ -394,7 +394,7 @@ class GitConnector(Connector):
         options = ["--recurse-submodules"]
 
         if branch is not None:
-            options.extend(["--branch", branch, "--single-branch"])
+            options.extend(["--branch", branch])
 
         logger.debug(f"Cloning repository {self.name!r} to {self.path}" + (f" on branch {branch!r}" if branch else ""))
 

@@ -100,7 +100,10 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         )
 
         if confirm and not self.args.include_whitelisted and self.database.whitelisted:
-            confirm = self.console.confirm(f"Database {self.database.name!r} is whitelisted, are you really sure?")
+            confirm = self.console.confirm(
+                f"Database {self.database.name!r} is whitelisted, are you really sure?",
+                default=True,
+            )
 
         if not confirm:
             raise self.error("Command aborted")

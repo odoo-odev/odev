@@ -240,6 +240,22 @@ class Command(OdevFrameworkMixin, ABC):
         return None
 
     @classmethod
+    def import_arguments(cls, command: str, names: Sequence[str]) -> None:
+        """Import arguments from other command classes.
+        :param command: the name of the command to import arguments from.
+        :param names: the names of the arguments to import.
+        """
+        command_cls = cls._framework.commands[command]
+
+        for name in names:
+            if next(filter(lambda arg: arg["name"] == name, cls.arguments), None) is not None:
+                logger.debug(f"Argument {name!r} already registered in command {cls.name!r}, skipping")
+                continue
+
+            argument = next(filter(lambda arg: arg["name"] == name, command_cls.arguments), None)
+            cls.arguments.append(argument)
+
+    @classmethod
     def remove_argument(cls, name: str):
         """Remove an argument by name.
 
