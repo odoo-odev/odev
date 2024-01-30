@@ -1,6 +1,7 @@
 """Python and venv-related utilities"""
 
 import re
+import shlex
 import sys
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -44,7 +45,7 @@ class PythonEnv:
         self._global = path is None
         self.path: Path = Path(sys.prefix if self._global else path).resolve()
         self.version: str = version or (".".join(sys.version.split(".")[:2]))
-        self.python: Path = self.path / "bin" / f"python{self.version}"
+        self.python: Path = self.path / "bin" / f"python{self.version if self._global else version or ''}"
         self.pip: str = f"{self.python} -m pip"
 
         if not self.exists and self._global:
@@ -317,3 +318,18 @@ class PythonEnv:
             progress(line)
 
         return None
+
+    def run(self, command: str) -> Optional[CompletedProcess]:
+        """Run a python command.
+        :param command: The command to run.
+        :return: The result of the command execution.
+        :rtype: CompletedProcess
+        """
+        if command.startswith("pip"):
+            command = f"{self.python} -m {command}"
+        else:
+            command = f"{self.python} -c {shlex.quote(command)}"
+
+        logger.info(f"Running {command!r} in virtual environment {self.path.name!r}:")
+        console.print()
+        return bash.run(command)
