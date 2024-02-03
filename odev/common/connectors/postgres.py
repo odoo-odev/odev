@@ -136,11 +136,10 @@ class PostgresConnector(Connector):
         if is_select and not self.__class__._nocache and (self.database, query) in self.__class__._query_cache:
             result = self.__class__._query_cache[(self.database, query)]
             if DEBUG_SQL:
-                logger.debug(
-                    f"""Returning cached result for SQL query
-                    {query} : {result} on {self.database} [{len(self.__class__._query_cache)}]
-                    """
-                )
+                logger.debug(f"Returning cached PostgreSQL result for query against database {self.database!r}:")
+                console.code(string.indent(query, 4), "postgresql")
+                console.print(f"[color.black]{string.indent('─' * 80, 4)}[/color.black]")
+                console.code(string.indent(str(result), 4), "python")
             return result
 
         def signal_handler_cancel_statement(*args, **kwargs):
@@ -171,7 +170,8 @@ class PostgresConnector(Connector):
 
         if is_select and not self.__class__._nocache:
             if DEBUG_SQL:
-                logger.debug(f"Caching result {result} for query {query} on {self.database}")
+                logger.debug(f"Caching PostgreSQL result for query against {self.database!r}:")
+                console.code(string.indent(str(result), 4), "python")
             self.__class__._query_cache[(self.database, query)] = result
 
         return result if expect_result else True
