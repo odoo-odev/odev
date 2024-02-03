@@ -15,11 +15,12 @@ from typing import (
     Tuple,
     Union,
 )
+from urllib.parse import urlparse
 
 from git import GitCommandError, Remote, RemoteReference, Repo
 from github import Auth as GithubAuth, Github, GithubException
 
-from odev.common import bash
+from odev.common import bash, string
 from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
@@ -223,19 +224,30 @@ class GitConnector(Connector):
 
     def __init__(self, repo: str, path: Optional[Path] = None):
         """Initialize the Github connector.
-
         :param repo: The repository to connect to in the format `organization/repository`.
+        :param path: The path to the repository, inferred from the Odev config if omitted.
         """
         super().__init__()
 
         if path:
             self._path = path
 
+        if "@" in repo and ":" in repo:  # Assume the repo is in the format git@github.com:organization/repository.git
+            repo = repo.split(":")[-1]
+
+        repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
         repo_values = repo.split("/")
 
         if len(repo_values) != 2:
             raise ConnectorError(
-                f"Invalid repository format: expected 'organization/repository' but received {repo!r}",
+                "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
+                + string.join_bullet(
+                    [
+                        "organization/repository",
+                        "https://github.com/organization/repository",
+                        "git@github.com:organization/repository.git",
+                    ],
+                ),
                 self,
             )
 
