@@ -2,6 +2,8 @@
 stacked on top of each other.
 """
 
+import re
+from pathlib import Path
 from typing import ClassVar, List, Optional
 
 from rich.console import RenderableType
@@ -27,6 +29,19 @@ __all__ = ["Progress", "StackedStatus", "spinner"]
 
 
 logger = logging.getLogger(__name__)
+
+
+DEBUG_MODE: bool = False
+
+
+for python_file in Path(__file__).parents[1].glob("**/*.py"):
+    with python_file.open() as file:
+        for position, line in enumerate(file.readlines()):
+            if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
+                logger.debug(
+                    f"Debugger found at {python_file.resolve().as_posix()}:{position + 1}, disabling live status"
+                )
+                DEBUG_MODE = True
 
 
 class Progress(RichProgress):
@@ -99,6 +114,9 @@ class StackedStatus(Status):
         """
         if self.stack:
             self.stack[-1].stop()
+
+        if DEBUG_MODE:
+            return self
 
         console.is_live = True
         self.stack.append(self)

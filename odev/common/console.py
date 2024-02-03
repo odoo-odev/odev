@@ -521,13 +521,13 @@ class Console(RichConsole):
         return message
 
     def pause_live(self):
-        """Perform any pre-prompt actions."""
+        """Stop the current live status to perform any pre-prompt actions."""
         from odev.common.progress import StackedStatus
 
         StackedStatus.pause_stack()
 
     def resume_live(self):
-        """Perform any post-prompt actions."""
+        """Resume the current live status to perform any post-prompt actions."""
         from odev.common.progress import StackedStatus
 
         StackedStatus.resume_stack()
