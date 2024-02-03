@@ -175,15 +175,7 @@ class Odev(Generic[CommandType]):
         )
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
-
-        if self.update(self.path, self.name) or any(
-            self.update(path, f"plugin {name}")
-            for path, name in [
-                (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
-            ]
-        ):
-            self.upgrade()
-            self.restart()
+        self._update()
 
         with progress.spinner("Loading commands"):
             self.register_commands()
@@ -191,6 +183,21 @@ class Odev(Generic[CommandType]):
 
         self.prune_databases()
         self._started = True
+
+    def _update(self, restart: bool = True) -> None:
+        """Update the framework and plugins if necessary.
+        :param restart: Whether to restart the framework after updating.
+        """
+        if self.update(self.path, self.name) or any(
+            self.update(path, f"plugin {name}")
+            for path, name in [
+                (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
+            ]
+        ):
+            self.upgrade()
+
+            if restart:
+                self.restart()
 
     def load_plugins(self) -> None:
         """Load plugins from the configuration file and register them in the plugin directory."""

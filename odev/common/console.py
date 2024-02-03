@@ -74,9 +74,20 @@ RICH_THEME_LOGGING = {
     "logging.level.warning": f"bold {Colors.YELLOW}",
 }
 
+RICH_THEME_COLORS = {
+    "color.black": Colors.BLACK,
+    "color.cyan": Colors.CYAN,
+    "color.gray": Colors.GRAY,
+    "color.green": Colors.GREEN,
+    "color.purple": Colors.PURPLE,
+    "color.red": Colors.RED,
+    "color.yellow": Colors.YELLOW,
+}
+
 RICH_THEME = Theme(
     {
         **RICH_THEME_LOGGING,
+        **RICH_THEME_COLORS,
         "bar.back": "black",
         "bar.complete": Colors.PURPLE,
         "bar.finished": Colors.PURPLE,
@@ -106,7 +117,7 @@ RICH_THEME = Theme(
         "repr.path": Colors.PURPLE,
         "repr.str": Colors.CYAN,
         "repr.url": Colors.PURPLE,
-        "repr.version": f"bold {Colors.CYAN}",
+        "repr.version": Colors.CYAN,
         "repr.time": f"bold {Colors.CYAN}",
         "status.spinner": f"bold {Colors.PURPLE}",
     }
