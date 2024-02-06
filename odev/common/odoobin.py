@@ -137,7 +137,12 @@ class OdoobinProcess(OdevFrameworkMixin):
         if not process:
             return None
 
-        return int(re.split(r"\s+", process)[1])
+        pid = re.split(r"\s+", process)[1]
+
+        if not pid or not pid.isdigit():
+            return None
+
+        return int(pid)
 
     @property
     def command(self) -> Optional[str]:
