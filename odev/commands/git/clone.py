@@ -1,6 +1,6 @@
 """Clone the Git repository for a database."""
 
-
+from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.commands.database import DatabaseType
 from odev.common.connectors import GitConnector
@@ -11,21 +11,14 @@ logger = logging.getLogger(__name__)
 
 
 class CloneCommand(DatabaseCommand):
-    """Find the repository for a database and clone it locally."""
+    """Clone a GitHub repository locally, under the path managed by odev. A database name can be passed instead
+    of a repository address to find and clone the repository linked to that database.
+    """
 
     name = "clone"
 
-    arguments = [
-        {
-            "name": "repository",
-            "help": "Git URL of a repository to clone.",
-            "nargs": "?",
-        },
-        {
-            "name": "branch",
-            "help": "Branch to checkout after cloning the repository.",
-        },
-    ]
+    repository = args.String(help="Git URL of a repository to clone.", nargs="?")
+    branch = args.String(help="Branch to checkout after cloning the repository.")
 
     _database_arg_required = False
     _database_exists_required = False

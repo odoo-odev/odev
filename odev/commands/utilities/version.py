@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class VersionCommand(Command):
-    """Prints the current version of the application."""
+    """Print the current version of odev and exit."""
 
     name = "version"
     aliases = ["v"]

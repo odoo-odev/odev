@@ -9,7 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Generator, List, Optional, Tuple
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import Command
 from odev.common.logging import logging
 
@@ -24,13 +24,11 @@ class SetupCommand(Command):
 
     name = "setup"
     aliases = ["reconfigure"]
-    arguments = [
-        {
-            "aliases": ["category"],
-            "nargs": "?",
-            "help": "Run a specific part of the setup only.",
-        },
-    ]
+
+    category = args.String(
+        nargs="?",
+        help="Run a specific part of the setup only.",
+    )
 
     def run(self) -> None:
         """Run the setup or part of it."""
@@ -53,15 +51,15 @@ class SetupCommand(Command):
             for script in cls.__import_setup_scripts()
         ]
         script_names = [script[0] for script in scripts]
-        cls.update_argument("category", {"choices": script_names})
-        indent = len(max(script_names, key=len))
-        description = f"""
+        cls.update_argument("category", choices=script_names)
+        cls.description += textwrap.dedent(
+            f"""
 
             [bold underline]Available categories:[/bold underline]
 
-            {string.format_options_list(scripts, indent_len=indent + 1, blanks=1)}
-        """
-        cls.description += textwrap.dedent(description).rstrip()
+            {string.format_options_list(scripts, indent_len=len(max(script_names, key=len)) + 1, blanks=1)}
+            """
+        ).rstrip()
 
     # --- Private methods ------------------------------------------------------
 

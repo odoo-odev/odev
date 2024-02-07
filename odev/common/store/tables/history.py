@@ -65,7 +65,8 @@ class HistoryStore(PostgresTable):
             SELECT * FROM {self.name}
             {where_clause}
             ORDER BY date DESC
-            """
+            """,
+            nocache=True,
         )
 
         return [HistoryLine(*line) for line in result]

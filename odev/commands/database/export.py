@@ -36,7 +36,7 @@ class ExportCommand(DatabaseCommand):
             "name": "fields",
             "aliases": ["-F", "--fields"],
             "help": "The fields to export, all fields by default.",
-            "action": "store_comma_split",
+            "action": "store_list",
             "default": [],
         },
         {

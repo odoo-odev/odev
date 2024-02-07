@@ -2,6 +2,7 @@
 
 import re
 
+from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
@@ -19,18 +20,11 @@ class DeployCommand(DatabaseCommand):
 
     name = "deploy"
 
-    arguments = [
-        {
-            "name": "module",
-            "help": "Path to the module to deploy (must be a valid Odoo module).",
-            "action": "store_path",
-        },
-        {
-            "name": "odoo_args",
-            "nargs": "*...",
-            "help": "Additional arguments to pass to odoo-bin deploy.",
-        },
-    ]
+    module = args.Path(help="Path to the module to deploy (must be a valid Odoo module).")
+    odoo_args = args.String(
+        help="Additional arguments to pass to odoo-bin deploy.",
+        nargs="*...",
+    )
 
     def run(self):
         if not self.database.running:

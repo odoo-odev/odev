@@ -1,16 +1,18 @@
 """Kill the process of a running Odoo database."""
 
 from time import sleep
+from typing import cast
 
-from odev.common import progress
-from odev.common.commands import OdoobinCommand
+from odev.common import args, progress
+from odev.common.commands import LocalDatabaseCommand
 from odev.common.logging import logging
+from odev.common.odoobin import OdoobinProcess
 
 
 logger = logging.getLogger(__name__)
 
 
-class KillCommand(OdoobinCommand):
+class KillCommand(LocalDatabaseCommand):
     """Kill a running Odoo database. Useful if the process crashed because of
     a forgotten IPDB or if you lost your terminal and don't want to search
     for the process' PID.
@@ -18,17 +20,14 @@ class KillCommand(OdoobinCommand):
 
     name = "kill"
 
-    arguments = [
-        {
-            "name": "hard",
-            "aliases": ["-H", "--hard"],
-            "action": "store_true",
-            "help": "Kill the database process with SIGKILL instead of SIGINT.",
-        },
-    ]
+    hard = args.Flag(
+        aliases=["-H", "--hard"],
+        help="Kill the database process with SIGKILL instead of SIGINT.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.odoobin = cast(OdoobinProcess, self.database.process)
 
         if not self.odoobin.is_running:
             raise self.error(f"Database {self.database.name!r} is not running")

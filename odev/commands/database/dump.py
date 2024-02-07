@@ -1,5 +1,6 @@
 """Backup a database and save its dump file locally."""
 
+from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.logging import logging
 
@@ -8,21 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class DumpCommand(DatabaseCommand):
-    """Backup a local or remote database and save its dump file on the local
-    filesystem.
-    """
+    """Backup a database and save its dump file on the local filesystem."""
 
     name = "dump"
     aliases = ["backup"]
 
-    arguments = [
-        {
-            "name": "filestore",
-            "aliases": ["-F", "--filestore"],
-            "action": "store_true",
-            "help": "Include the filestore when downloading the database.",
-        },
-    ]
+    filestore = args.Flag(
+        aliases=["-F", "--filestore"],
+        help="Include the filestore when downloading the database.",
+    )
 
     def run(self):
         """Dump the database and save its file to disk."""

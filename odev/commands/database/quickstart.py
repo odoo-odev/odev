@@ -1,5 +1,6 @@
 from typing import Any, Mapping
 
+from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase
 
@@ -14,38 +15,29 @@ class QuickStartCommand(DatabaseCommand):
     name = "quickstart"
     aliases = ["qs"]
 
-    arguments = [
-        {
-            "name": "name",
-            "aliases": ["-n", "--name"],
-            "help": "The name of the database to create locally, defaults to the name of the database dumped.",
-        },
-    ]
+    new_name = args.String(
+        name="name",
+        aliases=["-n", "--name"],
+        help="The name of the database to create locally, defaults to the name of the database dumped.",
+    )
+    branch = args.String(
+        help="""Branch to target for downloading a backup of PaaS (Odoo SH) instances.
+        Also used as the branch to checkout after cloning the repository containing
+        code customization for the selected database.
+        """,
+    )
+    version = args.String(
+        aliases=["-V", "--version"],
+        help="""The Odoo version to use for the new database. If specified, a new database
+        will be created from scratch instead of downloading and restoring a backup.
+        """,
+    )
+    filestore = args.Flag(
+        aliases=["-F", "--filestore"],
+        help="Include the filestore when downloading a backup of the database.",
+    )
 
     _database_allowed_platforms = []
-
-    @classmethod
-    def prepare_command(cls, *args, **kwargs) -> None:
-        super().prepare_command(*args, **kwargs)
-        cls.import_arguments("dump", ["filestore"])
-        cls.import_arguments("create", ["version"])
-        cls.update_argument(
-            "branch",
-            {
-                "help": """Branch to target for downloading a backup of PaaS (Odoo SH) instances.
-                Also used as the branch to checkout after cloning the repository containing
-                code customization for the selected database.
-                """
-            },
-        )
-        cls.update_argument(
-            "version",
-            {
-                "help": """The Odoo version to use for the new database. If specified, a new database
-                will be created from scratch instead of restoring a backup.
-                """
-            },
-        )
 
     def run(self):
         branch_cli_argument = ["--branch", self.args.branch] if self.args.branch else []

@@ -8,7 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 class RunCommand(OdoobinCommand):
-    """Run the odoo-bin process for the selected database locally."""
+    """Run the odoo-bin process for the selected database locally.
+    The process is run in a python virtual environment depending on the database's odoo version (as defined
+    by the installed `base` module). The command takes care of installing and updating python requirements within
+    the virtual environment and fetching the latest sources in the odoo standard repositories, cloning them
+    if necessary. All odoo-bin arguments are passed to the odoo-bin process.
+    """
 
     name = "run"
 

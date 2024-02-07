@@ -5,7 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List, Mapping, MutableMapping, cast
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import OdoobinCommand
 from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
@@ -21,29 +21,21 @@ class TestCommand(OdoobinCommand):
 
     name = "test"
     aliases = ["tests"]
-    arguments = [
-        {
-            "name": "tests",
-            "aliases": ["-F", "--filters"],
-            "action": "store_comma_split",
-            "nargs": "?",
-            "default": [],
-            "help": """
-            Comma-separated list of files or tags to run specific tests.
-            Check https://www.odoo.com/documentation/17.0/fr/developer/cli.html#testing-configuration
-            for more information on how to use tests.
-            """,
-        },
-        {
-            "name": "modules",
-            "aliases": ["-m", "--modules"],
-            "action": "store_comma_split",
-            "nargs": "?",
-            "default": ["all"],
-            "help": "Comma-separated list of modules to install for testing. If not set, install all modules.",
-        },
-        {"name": "odoo_args"},
-    ]
+
+    tests = args.List(
+        aliases=["-F", "--filters"],
+        default=[],
+        help="""
+        Comma-separated list of files or tags to run specific tests.
+        Check https://www.odoo.com/documentation/17.0/fr/developer/cli.html#testing-configuration
+        for more information on how to use tests.
+        """,
+    )
+    modules = args.List(
+        aliases=["-m", "--modules"],
+        default=["all"],
+        help="Comma-separated list of modules to install for testing. If not set, install all modules.",
+    )
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

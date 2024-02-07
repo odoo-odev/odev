@@ -63,7 +63,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     _force_enterprise: bool = False
     """Force using the enterprise version of Odoo."""
 
-    def __init__(self, database: "LocalDatabase", venv: str = None, version: OdooVersion = None):
+    def __init__(self, database: "LocalDatabase", venv: Optional[str] = None, version: OdooVersion = None):
         """Initialize the OdoobinProcess object."""
         super().__init__()
 

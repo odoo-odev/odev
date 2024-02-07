@@ -6,7 +6,7 @@ from typing import List, Tuple
 from rich.console import RenderableType
 from rich.markup import escape
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import Command
 from odev.common.console import Colors
 from odev.common.logging import logging
@@ -22,22 +22,18 @@ class HelpCommand(Command):
 
     name = "help"
     aliases = ["h", "man", "-h", "--help"]
-    arguments = [
-        {
-            "aliases": ["command"],
-            "nargs": "?",
-            "help": """
-                Get help about a specific command.
-                Use [bold italic]odev help[/bold italic] for a list of available commands.
-            """,
-        },
-        {
-            "name": "names_only",
-            "aliases": ["-1", "--one-column", "--names-only"],
-            "action": "store_true",
-            "help": "List command names one per line - useful for parsing",
-        },
-    ]
+
+    command = args.String(
+        nargs="?",
+        help="""
+        Get help about a specific command.
+        Use [bold italic]odev help[/bold italic] for a list of available commands.
+        """,
+    )
+    names_only = args.Flag(
+        aliases=["-1", "--one-column", "--names-only"],
+        help="List command names one per line - useful for parsing",
+    )
 
     def run(self) -> None:
         """Print help about the available commands."""

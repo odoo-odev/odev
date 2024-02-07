@@ -55,10 +55,13 @@ class Action(BaseAction, ABC):
         if values is None:
             return values
 
-        if isinstance(values, str):
-            return self._transform_one(values)
+        try:
+            if isinstance(values, str):
+                return self._transform_one(values)
 
-        return [self._transform_one(value) for value in values]
+            return [self._transform_one(value) for value in values]
+        except Exception as e:
+            raise ValueError(f"Invalid value(s) for {self.dest}: {values}") from e
 
     @classmethod
     def _action_name(cls) -> str:
@@ -73,7 +76,7 @@ class IntAction(Action):
         return int(value)
 
 
-class CommaSplitAction(Action):
+class ListAction(Action):
     """Converter for command line arguments passed as comma-separated lists of values."""
 
     def _transform_one(self, value: str) -> List[str]:
@@ -91,7 +94,7 @@ class PathAction(Action):
     """Converter for command line arguments passed as a string that should be converted to a Path."""
 
     def _transform_one(self, value: str) -> Path:
-        return Path(value)
+        return Path(value).expanduser().resolve()
 
 
 class EvalAction(Action):

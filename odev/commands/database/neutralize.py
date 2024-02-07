@@ -6,7 +6,9 @@ logger = logging.getLogger(__name__)
 
 
 class NeutralizeCommand(LocalDatabaseCommand):
-    """Neutralize a local database and make it suitable for development."""
+    """Neutralize a local database and make it suitable for development without risking sending emails or running
+    undesired actions.
+    """
 
     name = "neutralize"
     aliases = ["clean", "cl"]

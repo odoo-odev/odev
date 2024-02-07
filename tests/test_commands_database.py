@@ -2,19 +2,16 @@ import shutil
 from typing import cast
 from pathlib import Path
 
-from testfixtures import Replacer
-from testfixtures.popen import MockPopen
-
 from odev.common.databases import LocalDatabase
 from odev.common.odev import logger
 from odev.common.odoobin import OdoobinProcess
 from odev.common.python import PythonEnv
 from odev.common.string import suid
 from odev.common.version import OdooVersion
-from tests.fixtures import CaptureOutput, OdevTestCase
+from tests.fixtures import CaptureOutput, OdevCommandTestCase
 
 
-class TestDatabaseCommands(OdevTestCase):
+class TestDatabaseCommands(OdevCommandTestCase):
     """Run unit tests on instances of a database command."""
 
     db_name = f"odev-unit-test-{suid()}"
@@ -24,12 +21,6 @@ class TestDatabaseCommands(OdevTestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.Popen = MockPopen()
-        cls.Popen.set_default(stdout=b"")
-        cls.replacer = Replacer()
-        cls.replacer.replace("subprocess.Popen", cls.Popen)
-        cls.replacer.replace("odev.common.bash.Popen", cls.Popen)
-        cls.addClassCleanup(cls.replacer.restore)
         if not cls.odoobin_path.exists():
             cls.odoobin_path.parent.mkdir(parents=True, exist_ok=True)
             cls.odoobin_path.touch()

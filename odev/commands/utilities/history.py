@@ -2,34 +2,28 @@
 
 import sys
 
-from odev.common.commands import DatabaseCommand
+from odev.common import args
+from odev.common.commands import Command
 from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
 
 
-class HistoryCommand(DatabaseCommand):
+class HistoryCommand(Command):
     """Check the history of odev commands run in the past."""
 
     name = "history"
 
-    arguments = [
-        {
-            "name": "command",
-            "aliases": ["-c", "--command"],
-            "help": "The command to check the history of.",
-        },
-        {
-            "name": "clear",
-            "aliases": ["-C", "--clear"],
-            "help": "Clear the history.",
-            "action": "store_true",
-        },
-    ]
-
-    _database_arg_required = False
-    _database_exists_required = False
+    command = args.String(
+        aliases=["-c", "--command"],
+        help="The command to check the history of.",
+        nargs="?",
+    )
+    clear = args.Flag(
+        aliases=["-C", "--clear"],
+        help="Clear the history.",
+    )
 
     def run(self) -> None:
         if self.args.clear:
@@ -43,14 +37,12 @@ class HistoryCommand(DatabaseCommand):
         return self.store.history.clear()
 
     def show_history(self) -> None:
-        """Show the history of a command, database, or the whole history."""
-        history = self.store.history.get(database=self.database, command=self.args.command)
+        """Show the history of a command, or the whole history."""
+        history = self.store.history.get(command=self.args.command)
 
         if not history:
             raise self.error(
-                f"No history available for "
-                f"{f'database {self.database.name!r}' if self.database else 'all databases'} and "
-                f"{f'command {self.args.command!r}' if self.args.command else 'all commands'}"
+                f"No history available for {f'command {self.args.command!r}' if self.args.command else 'all commands'}"
             )
 
         headers = [

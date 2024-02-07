@@ -2,7 +2,7 @@
 
 from typing import Any, List, MutableMapping
 
-from odev.common import progress
+from odev.common import args, progress
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector
 from odev.common.logging import logging
@@ -24,17 +24,11 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 
 
 class PullCommand(Command):
-    """Pull changes in local worktrees."""
+    """Pull changes in local worktrees mmanaged by odev."""
 
     name = "pull"
 
-    arguments = [
-        {
-            "name": "version",
-            "aliases": ["-V", "--version"],
-            "help": "Pull changes for a specific Odoo version only.",
-        },
-    ]
+    version = args.String(aliases=["-V", "--version"], help="Pull changes for a specific Odoo version only.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

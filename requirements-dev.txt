@@ -2,6 +2,7 @@ coverage
 lxml-stubs
 pre-commit>=2.10.1,<3
 pytest>=6,<7
+pytest-cov
 testfixtures
 types-psycopg2>=2.8.0,<3
 types-requests

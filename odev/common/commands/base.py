@@ -6,27 +6,31 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
+from collections import defaultdict
 from io import StringIO
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    Dict,
+    Iterable,
     List,
     MutableMapping,
     Optional,
     Sequence,
+    Tuple,
+    cast,
 )
 
 from rich import box
 from rich.console import RenderableType
 from rich.table import Table
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.actions import ACTIONS_MAPPING
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
+from odev.common.meta import OrderedClassAttributes
 from odev.common.mixins.framework import OdevFrameworkMixin
 
 
@@ -37,7 +41,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Command(OdevFrameworkMixin, ABC):
+class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     """Base class for handling commands."""
 
     argv: Sequence[str] = []
@@ -57,27 +61,7 @@ class Command(OdevFrameworkMixin, ABC):
     If omitted, the class or source module docstring will be used instead.
     """
 
-    arguments: ClassVar[List[MutableMapping[str, Any]]] = [
-        {
-            "name": "log_level",
-            "aliases": ["-v", "--log-level"],
-            "choices": ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"],
-            "default": "INFO",
-            "help": "Set logging verbosity for the execution of odev.",
-        },
-        {
-            "name": "show_help",
-            "aliases": ["-h", "--help"],
-            "action": "store_true",
-            "help": "Show help for the current command.",
-        },
-        {
-            "name": "bypass_prompt",
-            "aliases": ["-f", "--force"],
-            "action": "store_true",
-            "help": "Bypass confirmation prompts and assume a default value to all, use with caution!",
-        },
-    ]
+    _arguments: ClassVar[MutableMapping[str, MutableMapping[str, Any]]] = defaultdict(dict)
     """Arguments definitions to extend commands capabilities."""
 
     _unknown_arguments_dest: Optional[str] = None
@@ -85,12 +69,30 @@ class Command(OdevFrameworkMixin, ABC):
     If `None` and unknown arguments are found, an error will be raised.
     """
 
-    def __init__(self, args: Namespace):
+    # --------------------------------------------------------------------------
+    # Arguments
+    # --------------------------------------------------------------------------
+
+    log_level = args.String(
+        aliases=["-v", "--log-level"],
+        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "DEBUG_SQL", "NOTSET"],
+        default="INFO",
+        help="Set logging verbosity for the execution of odev.",
+    )
+    show_help = args.Flag(aliases=["-h", "--help"], help="Show help for the current command.")
+    bypass_prompt = args.Flag(
+        aliases=["-f", "--force"],
+        help="Bypass confirmation prompts and assume a default value to all, use with caution!",
+    )
+
+    # --------------------------------------------------------------------------
+
+    def __init__(self, arguments: Namespace):
         """
         Initialize the command runner.
         :param args: the parsed arguments as an instance of :class:`Namespace`
         """
-        self.args: Namespace = args
+        self.args: Namespace = arguments
         self.args.log_level = LOG_LEVEL
 
         self._bypass_prompt_orig: bool = self.console.bypass_prompt
@@ -101,8 +103,8 @@ class Command(OdevFrameworkMixin, ABC):
         self.console.bypass_prompt = self._bypass_prompt_orig
 
     def __repr__(self) -> str:
-        args = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
-        return f"{self.__class__.__name__}({args})"
+        arguments = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
+        return f"{self.__class__.__name__}({arguments})"
 
     def __str__(self) -> str:
         return self.name
@@ -122,6 +124,39 @@ class Command(OdevFrameworkMixin, ABC):
         return inspect.isabstract(cls) or ABC in cls.__bases__
 
     @classmethod
+    def convert_arguments(cls) -> None:
+        """Convert :class:`Argument` attributes to a list of dictionaries that will later be fed
+        to :class:`argparse.ArgumentParser`.
+        """
+        cls._arguments = defaultdict(dict)
+
+        for parent_cls in cls.__reversed_mro():
+            for argument in parent_cls.ordered_arguments_definitions():
+                argument_dict = argument[1].to_dict(argument[0])
+                argument_name = argument_dict["name"]
+                argument_dict.setdefault("dest", cls._arguments[argument_name].get("dest", argument_name))
+                argument_dict.setdefault("aliases", cls._arguments[argument_name].get("aliases", [argument_name]))
+
+                if argument_name not in argument_dict["aliases"] and not argument_dict["aliases"][0].startswith("-"):
+                    argument_dict["aliases"].insert(0, argument_name)
+
+                cls._arguments[argument_name].update(**argument_dict)
+
+    @classmethod
+    def ordered_arguments_definitions(cls) -> List[Tuple[str, args.Argument]]:
+        """List the arguments definitions for the command in their order of declaration."""
+        arguments = cast(
+            Iterable[Tuple[str, args.Argument]],
+            inspect.getmembers(cls, lambda a: isinstance(a, args.Argument)),
+        )
+        return sorted(
+            arguments,
+            key=lambda argument: cls.member_names.index(argument[0])
+            if argument[0] in cls.member_names
+            else float("inf"),
+        )
+
+    @classmethod
     def prepare_command(cls, framework: "Odev") -> None:
         """Set proper attributes on the command class and provide inheritance from parent classes."""
         cls._framework = framework
@@ -130,40 +165,49 @@ class Command(OdevFrameworkMixin, ABC):
             cls.__dict__.get("help") or cls.__doc__ or cls.help or sys.modules[cls.__module__].__doc__ or ""
         )
         cls.description = string.normalize_indent(cls.description or cls.help)
-        cls.arguments = cls.merge_arguments()
+        cls.convert_arguments()
 
     @classmethod
-    def merge_arguments(cls) -> List[MutableMapping[str, Any]]:
-        """Merge arguments from parent classes."""
-        merged_args: MutableMapping[str, Dict[str, Any]] = {}
+    def _find_argument(cls, name: str) -> str:
+        """Find an argument by name or alias and return its actual name as registered in the class arguments mapping."""
+        if name not in cls._arguments:
+            argument = next(
+                filter(
+                    lambda arg: name in (arg["name"], arg.get("dest", ""), *arg.get("aliases", [])),
+                    cls._arguments.values(),
+                ),
+                None,
+            )
 
-        for parent_cls in cls.__reversed_mro():
-            for arg in parent_cls.arguments:
-                arg_name = arg.get("name", arg.get("dest", arg.get("aliases", [None])[0]))
+            if argument is None:
+                raise KeyError(f"Argument {name!r} not found in command {cls.name!r}")
 
-                if arg_name is None:
-                    raise ValueError(
-                        f"Missing name for argument {arg}, provide at least one of `name`, `dest` or `aliases`"
-                    )
+            return argument["name"]
 
-                merged_arg: Dict[str, Any] = dict(merged_args.pop(arg_name, {}))
-                merged_arg.update(arg)
-                merged_arg.setdefault("name", arg_name)
-                merged_arg.setdefault("dest", arg_name)
-                merged_arg.setdefault("aliases", [arg_name])
+        return name
 
-                if arg_name not in merged_arg["aliases"] and not merged_arg["aliases"][0].startswith("-"):
-                    merged_arg["aliases"].insert(0, arg_name)
+    @classmethod
+    def update_argument(cls, name: str, **values: Any) -> None:
+        """Update the properties of an argument that is already registered. The can be used to update the properties
+        of an argument that is inherited from a parent class.
+        :param name: the name of the argument to update
+        :param values: the values to update
+        """
+        cls._arguments[cls._find_argument(name)].update(**values)
 
-                merged_args[arg_name] = merged_arg
-
-        return list(merged_args.values())
+    @classmethod
+    def remove_argument(cls, name: str) -> None:
+        """Remove an argument that is registered. This can e used to remove arguments from parent classes if they
+        don't make sense anymore in the context of the current class.
+        :param name: the name of the argument to remove.
+        """
+        cls._arguments.pop(cls._find_argument(name))
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:
-        """Prepare arguments for the command subclass."""
-        for arg in cls.arguments:
-            params = dict(arg)
+        """Digest the mapping of arguments for the command subclass and add them to the parser."""
+        for argument in cls._arguments.values():
+            params = dict(argument)
             params.pop("name")
             aliases: Sequence[str] = params.pop("aliases")
 
@@ -222,48 +266,6 @@ class Command(OdevFrameworkMixin, ABC):
                 sys.stderr = sys.__stderr__
 
         return arguments
-
-    @classmethod
-    def update_argument(cls, name: str, values: MutableMapping[str, Any]) -> Optional[MutableMapping[str, Any]]:
-        """Find argument by name and update its properties.
-
-        :param name: the name of the argument to update
-        :param values: the values to update
-        :return: the updated argument or None if not found
-        :rtype: Optional[MutableMapping[str, Any]]
-        """
-        for arg in cls.arguments:
-            if name in (arg["name"], arg["dest"], *arg["aliases"]):
-                arg.update(**values)
-                return arg
-
-        return None
-
-    @classmethod
-    def import_arguments(cls, command: str, names: Sequence[str]) -> None:
-        """Import arguments from other command classes.
-        :param command: the name of the command to import arguments from.
-        :param names: the names of the arguments to import.
-        """
-        command_cls = cls._framework.commands[command]
-
-        for name in names:
-            if next(filter(lambda arg: arg["name"] == name, cls.arguments), None) is not None:
-                logger.debug(f"Argument {name!r} already registered in command {cls.name!r}, skipping")
-                continue
-
-            argument = next(filter(lambda arg: arg["name"] == name, command_cls.arguments), None)
-            cls.arguments.append(argument)
-
-    @classmethod
-    def remove_argument(cls, name: str):
-        """Remove an argument by name.
-
-        :param name: the name of the argument to remove.
-        """
-        for arg in cls.arguments:
-            if name in (arg["name"], arg["dest"], *arg["aliases"]):
-                cls.arguments.remove(arg)
 
     @abstractmethod
     def run(self) -> None:

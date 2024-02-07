@@ -2,7 +2,7 @@
 
 from typing import Any, List, MutableMapping, Optional
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import Command
 from odev.common.console import Colors
 
@@ -20,18 +20,8 @@ class ConfigCommand(Command):
     name = "config"
     aliases = ["conf"]
 
-    arguments = [
-        {
-            "name": "key",
-            "help": "Configuration key to fetch, in the format 'section.option'.",
-            "nargs": "?",
-        },
-        {
-            "name": "value",
-            "help": "Value to set for the given key.",
-            "nargs": "?",
-        },
-    ]
+    key = args.String(help="Configuration key to fetch, in the format 'section.option'.", nargs="?")
+    value = args.String(help="Value to set for the given key.", nargs="?")
 
     def run(self):
         try:

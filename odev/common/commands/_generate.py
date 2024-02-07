@@ -1,3 +1,4 @@
+# type: ignore
 """Generate code from templates."""
 
 import random
@@ -150,14 +151,14 @@ class CodeGeneratorCommand(DatabaseCommand, ABC):
         {
             "name": "modules",
             "aliases": ["-m", "--modules"],
-            "action": "store_comma_split",
+            "action": "store_list",
             "help": "Comma-separated list of modules to export.",
             "default": DEFAULT_MODULE_LIST,
         },
         {
             "name": "models",
             "aliases": ["-M", "--models"],
-            "action": "store_comma_split",
+            "action": "store_list",
             "help": "Comma-separated list of models to export.",
             "default": [],
         },

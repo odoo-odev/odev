@@ -1,4 +1,4 @@
-from odev.common import progress
+from odev.common import args, progress
 from odev.common.commands import OdoobinCommand
 from odev.common.logging import logging
 
@@ -14,14 +14,11 @@ class StandardizeCommand(OdoobinCommand):
     name = "standardize"
     aliases = ["std", "standard"]
 
-    arguments = [
-        {
-            "name": "keep_studio",
-            "aliases": ["--no-studio"],
-            "action": "store_false",
-            "help": "Remove Studio customizations.",
-        },
-    ]
+    keep_studio = args.Flag(
+        aliases=["--no-studio"],
+        default=True,
+        help="Remove Studio customizations.",
+    )
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:

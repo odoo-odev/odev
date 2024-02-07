@@ -3,6 +3,7 @@
 # --- Import helper submodules -------------------------------------------------
 
 from . import actions
+from . import arguments as args
 from . import bash
 from . import config
 from . import console

@@ -2,7 +2,7 @@
 
 import shutil
 
-from odev.common import progress, string
+from odev.common import args, progress, string
 from odev.common.commands import LocalDatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging, silence_loggers
@@ -19,35 +19,27 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
 
     name = "delete"
     aliases = ["remove", "rm", "prune", "drop"]
-    arguments = [
-        {
-            "name": "keep",
-            "aliases": ["-k", "--keep"],
-            "action": "store_comma_split",
-            "default": [],
-            "help": """List of associated resources to keep, separated by commas. Possible values are:
-                - filestore: keep the database filestore
-                - template: keep template databases associated to this one
-                - venv: keep the virtual environment associated to the database
-                - config: keep saved attributes for the database (i.e. whitelist, saved arguments,...)
-            """,
-        },
-        {
-            "name": "expression",
-            "aliases": ["-e", "--expression"],
-            "action": "store_regex",
-            "help": """
-            Regular expression pattern to filter databases to delete.
-            Ignored if a database was provided.
-            """,
-        },
-        {
-            "name": "include_whitelisted",
-            "aliases": ["-w", "--include-whitelisted"],
-            "action": "store_true",
-            "help": """Delete whitelisted databases as well.""",
-        },
-    ]
+
+    keep = args.List(
+        aliases=["-k", "--keep"],
+        default=[],
+        help="""List of associated resources to keep, separated by commas. Possible values are:
+        - filestore: keep the database filestore
+        - template: keep template databases associated to this one
+        - venv: keep the virtual environment associated to the database
+        - config: keep saved attributes for the database (i.e. whitelist, saved arguments,...)
+        """,
+    )
+    expression = args.Regex(
+        aliases=["-e", "--expression"],
+        help="""Regular expression pattern to filter databases to delete.
+        Ignored if a database was provided.
+        """,
+    )
+    include_whitelisted = args.Flag(
+        aliases=["-w", "--include-whitelisted"],
+        help="""Delete whitelisted databases as well.""",
+    )
 
     _database_arg_required = False
     _database_exists_required = False

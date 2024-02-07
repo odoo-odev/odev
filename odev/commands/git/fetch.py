@@ -8,7 +8,7 @@ from typing import (
     Tuple,
 )
 
-from odev.common import progress, string
+from odev.common import args, progress, string
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector
 from odev.common.console import Colors
@@ -30,17 +30,11 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 
 
 class FetchCommand(Command):
-    """Fetch changes in local worktrees."""
+    """Fetch changes in local Odoo worktrees managed by odev."""
 
     name = "fetch"
 
-    arguments = [
-        {
-            "name": "version",
-            "aliases": ["-V", "--version"],
-            "help": "Fetch changes for a specific Odoo version only.",
-        },
-    ]
+    version = args.String(aliases=["-V", "--version"], help="Fetch changes for a specific Odoo version only.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

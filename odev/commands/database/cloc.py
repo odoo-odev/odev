@@ -5,24 +5,20 @@ import re
 from io import StringIO
 from typing import List, MutableMapping, Optional, Sequence
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import OdoobinCommand
 from odev.common.console import Colors
 
 
 class ClocCommand(OdoobinCommand):
-    """Run odoo-bin cloc on a database and count custom lines of code in installed modules."""
+    """Run odoo-bin cloc on a database and count custom lines of code within the installed modules."""
 
     name = "cloc"
 
-    arguments = [
-        {
-            "name": "csv",
-            "aliases": ["--csv"],
-            "action": "store_true",
-            "help": "Format output as CSV.",
-        }
-    ]
+    csv = args.Flag(
+        aliases=["--csv"],
+        help="Format output as CSV.",
+    )
 
     re_line_details = re.compile(
         r"""

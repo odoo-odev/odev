@@ -1,6 +1,6 @@
 """Restore a backup of a database."""
 
-from odev.common import progress
+from odev.common import args, progress
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
@@ -10,27 +10,23 @@ logger = logging.getLogger(__name__)
 
 
 class RestoreCommand(DatabaseCommand):
-    """Restore a dump file on the local filesystem to a local or remote database."""
+    """Restore a dump file on the local filesystem to a database.
+    This will effectively replace all data in the target database.
+    """
 
     name = "restore"
     aliases = ["upload"]
 
-    arguments = [
-        {
-            "name": "backup",
-            "metavar": "PATH",
-            "help": "Path to the backup file to restore.",
-            "action": "store_path",
-        },
-        {
-            "name": "neutralize",
-            "aliases": ["--no-clean", "--no-neutralize"],
-            "action": "store_false",
-            "help": """Do not neutralize the database after the dump has been restored.
-            Only used on local databases.
-            """,
-        },
-    ]
+    backup = args.Path(
+        help="Path to the backup file to restore.",
+    )
+    neutralize = args.Flag(
+        aliases=["--no-clean", "--no-neutralize"],
+        default=True,
+        help="""Do not neutralize the database after the dump has been restored.
+        Only used on local databases.
+        """,
+    )
 
     _database_exists_required = False
     _database_allowed_platforms = ["local"]

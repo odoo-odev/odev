@@ -1,9 +1,15 @@
 """Find the shortest path between two models in a database using the BFS algorithm."""
 
 import ast
-from typing import Any, List, MutableMapping, Optional, Tuple
+from typing import (
+    Any,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+)
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import OdoobinShellScriptCommand
 from odev.common.console import Colors
 
@@ -17,24 +23,13 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 
 
 class PathfinderCommand(OdoobinShellScriptCommand):
-    """Find the shortest path between two models in a database using
-    the BFS algorithm.
-    """
+    """Find the shortest path between two models in a database using a BFS algorithm."""
 
     name = "pathfinder"
     aliases = ["pf", "shortest_path", "sp"]
 
-    arguments = [
-        {
-            "name": "origin",
-            "help": "Model to start from.",
-        },
-        {
-            "name": "destination",
-            "help": "Model to end at.",
-        },
-        {"name": "odoo_args"},
-    ]
+    origin = args.String(help="Model to start from.")
+    destination = args.String(help="Model to end at.")
 
     @property
     def script_run_after(self) -> str:

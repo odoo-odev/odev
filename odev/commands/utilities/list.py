@@ -12,7 +12,7 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from odev.common import progress, string
+from odev.common import args, progress, string
 from odev.common.commands import Command
 from odev.common.console import Colors
 from odev.common.databases import LocalDatabase
@@ -136,40 +136,31 @@ ORDER_MAPPING: MutableMapping[str, str] = {
 
 
 class ListCommand(ListLocalDatabasesMixin, Command):
-    """List local databases and provide information about them."""
+    """List local Odoo databases with some information about them."""
 
     name = "list"
     aliases = ["ls"]
-    arguments = [
-        {
-            "name": "names_only",
-            "aliases": ["-1", "--one-column", "--names-only"],
-            "action": "store_true",
-            "help": "List database names one per line - useful for parsing.",
-        },
-        {
-            "name": "expression",
-            "aliases": ["-e", "--expression"],
-            "action": "store_regex",
-            "help": "Regular expression pattern to filter listed databases.",
-        },
-        {
-            "name": "show_all",
-            "aliases": ["-a", "--all"],
-            "action": "store_true",
-            "help": "Show all the databases non-Odoo databases included",
-        },
-        {
-            "name": "order",
-            "aliases": ["-s", "--sort"],
-            "action": "store",
-            "choices": list(ORDER_MAPPING.keys()),
-            "default": "name",
-            "help": f"""Sort databases by name, version, database size, filestore size or last use date.
-            Possible values are {string.join_and(list(ORDER_MAPPING.keys()))}.
-            """,
-        },
-    ]
+
+    names_only = args.Flag(
+        aliases=["-1", "--one-column", "--names-only"],
+        help="List database names one per line - useful for parsing.",
+    )
+    expression = args.Regex(
+        aliases=["-e", "--expression"],
+        help="Regular expression pattern to filter listed databases.",
+    )
+    show_all = args.Flag(
+        aliases=["-a", "--all"],
+        help="Show non-Odoo databases as well.",
+    )
+    order = args.String(
+        aliases=["-s", "--sort"],
+        choices=list(ORDER_MAPPING.keys()),
+        default="name",
+        help=f"""Sort databases by name, version, database size, filestore size or last use date.
+        Possible values are {string.join_and(list(ORDER_MAPPING.keys()))}.
+        """,
+    )
 
     def run(self) -> None:
         with progress.spinner("Listing databases"):
@@ -227,8 +218,3 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         totals_formatted: List[str] = [string.bytes_size(total) if total != 0 else "" for total in totals]
         totals_formatted[1] = f"{len(databases)} databases"
         return headers, rows, totals_formatted
-
-    def get_database_info(self, database: str) -> MutableMapping[str, Any]:
-        """Get information about a database."""
-        with LocalDatabase(database) as db:
-            return db.info()

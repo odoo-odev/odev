@@ -1,30 +1,32 @@
 """Rename a local database and move its filestore."""
 
 import shutil
+from typing import cast
 
-from odev.common import progress
-from odev.common.commands import OdoobinCommand
+from odev.common import args, progress
+from odev.common.commands import LocalDatabaseCommand
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
+from odev.common.odoobin import OdoobinProcess
 
 
 logger = logging.getLogger(__name__)
 
 
-class RenameCommand(OdoobinCommand):
+class RenameCommand(LocalDatabaseCommand):
     """Rename a local database and move its filestore to the correct path."""
 
     name = "rename"
     aliases = ["mv", "move"]
-    arguments = [
-        {
-            "name": "name",
-            "help": "New name for the database.",
-        },
-    ]
+
+    new_name = args.String(
+        name="name",
+        help="New name for the database.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.odoobin = cast(OdoobinProcess, self.database.process)
 
         if self.odoobin.is_running:
             if not self.args.force:

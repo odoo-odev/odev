@@ -25,4 +25,4 @@ class UpdateCommand(Command):
         if self.config.update.version != self.odev.version:
             logger.info(f"Updated to [repr.version]{self.odev.version}[/repr.version]!")
         else:
-            logger.info("Already up-to-date!")
+            logger.info("No update available")

@@ -4,7 +4,7 @@ from abc import ABC
 from argparse import Namespace
 from typing import ClassVar, Mapping, Optional, Sequence
 
-from odev.common import progress, string
+from odev.common import args, progress, string
 from odev.common.commands import Command
 from odev.common.databases import LocalDatabase
 from odev.common.errors import CommandError
@@ -36,25 +36,30 @@ class DatabaseCommand(Command, ABC):
     An empty sequence means all platforms are allowed.
     """
 
-    arguments = [
-        {
-            "name": "database",
-            "help": "The database to target.",
-        },
-        {
-            "name": "platform",
-            "aliases": ["-p", "--platform"],
-            "choices": [],
-        },
-        {
-            "name": "branch",
-            "aliases": ["-b", "--branch"],
-            "help": """
-            The branch to target, only used with PaaS (Odoo SH) databases
-            to force using a specific branch after project detection.
-            """,
-        },
-    ]
+    # --------------------------------------------------------------------------
+    # Arguments
+    # --------------------------------------------------------------------------
+
+    target_database = args.String(name="database", help="The database to target.")
+    platform = args.String(
+        aliases=["-p", "--platform"],
+        choices=[],
+        help=f"""
+        Force searching for the database on the specified platform, useful when
+        different databases have the same name on different hosting (usually one
+        local database being a copy of a remote one).
+        One of {string.join_or(list(_database_allowed_platforms))}.
+        """,
+    )
+    branch = args.String(
+        aliases=["-b", "--branch"],
+        help="""
+        The branch to target, only used with PaaS (Odoo SH) databases
+        to force using a specific branch after project detection.
+        """,
+    )
+
+    # --------------------------------------------------------------------------
 
     database: Optional[DatabaseType] = None
     """The database instance associated with the command."""
@@ -83,19 +88,17 @@ class DatabaseCommand(Command, ABC):
             cls._database_allowed_platforms = list(cls._database_platforms.keys())
 
         if not cls._database_arg_required:
-            cls.update_argument("database", {"nargs": "?"})
+            cls.update_argument("database", nargs="?")
 
         cls.update_argument(
             "platform",
-            {
-                "choices": list(cls._database_allowed_platforms),
-                "help": f"""
-                Force searching for the database on the specified platform, useful when
-                different databases have the same name on different hosting (usually one
-                local database being a copy of a remote one).
-                One of {string.join_or(list(cls._database_allowed_platforms))}.
-                """,
-            },
+            choices=list(cls._database_allowed_platforms),
+            help=f"""
+            Force searching for the database on the specified platform, useful when
+            different databases have the same name on different hosting (usually one
+            local database being a copy of a remote one).
+            One of {string.join_or(list(cls._database_allowed_platforms))}.
+            """,
         )
 
     def infer_database_instance(self) -> Optional[DatabaseType]:
@@ -144,7 +147,7 @@ class DatabaseCommand(Command, ABC):
         raise CommandError(f"Could not determine database type from name: {self.database_name!r}", self)
 
 
-class LocalDatabaseCommand(DatabaseCommand):
+class LocalDatabaseCommand(DatabaseCommand, ABC):
     """Base class for commands that require a local database to work."""
 
     database: LocalDatabase

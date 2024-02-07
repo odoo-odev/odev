@@ -1,8 +1,8 @@
 """Enable and disable plugins to add new features and commands."""
 
-import re
-
+from odev.common import args
 from odev.common.commands import Command
+from odev.common.connectors import GitConnector
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 
@@ -16,44 +16,21 @@ class PluginCommand(Command):
     name = "plugin"
     aliases = ["addons"]
 
-    arguments = [
-        {
-            "name": "plugin",
-            "help": """Plugin to enable or disable, must be a git repository hosted on GitHub.
-            Use format <organization>/<repository>.
-            """,
-        },
-        {
-            "name": "--enable",
-            "dest": "enable",
-            "help": "Enable the given plugin.",
-            "action": "store_true",
-        },
-        {
-            "name": "--disable",
-            "dest": "disable",
-            "help": "Disable the given plugin.",
-            "action": "store_true",
-        },
-    ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        if self.args.enable and self.args.disable:
-            raise self.error(
-                "Cannot enable and disable a plugin at the same time, remove one of `--enable` or `--disable` "
-                "and try again"
-            )
-
-        if not self.args.enable and not self.args.disable:
-            raise self.error("Must enable or disable a plugin, provide one of `--enable` or `--disable` and try again")
+    action = args.String(
+        help="Action to perform, either 'enable' or 'disable'.",
+        choices=["enable", "disable"],
+    )
+    plugin = args.String(
+        help="""Plugin to enable or disable, must be a git repository hosted on GitHub.
+        Use format <organization>/<repository>.
+        """,
+    )
 
     def run(self):
         """Enable or disable a plugin."""
-        repository = self.__parse_repository()
+        repository = GitConnector(self.args.plugin).name
 
-        if self.args.enable:
+        if self.args.action == "enable":
             self.__add_plugin_to_config(repository)
 
             try:
@@ -64,7 +41,7 @@ class PluginCommand(Command):
             else:
                 logger.info(f"Enabled plugin {repository!r}")
 
-        if self.args.disable:
+        else:
             self.__remove_plugin_from_config(repository)
 
             try:
@@ -90,12 +67,3 @@ class PluginCommand(Command):
             raise self.error(f"Plugin {repository!r} is not enabled")
 
         self.config.plugins.enabled = [plugin for plugin in self.config.plugins.enabled if plugin != repository]
-
-    def __parse_repository(self) -> str:
-        """Parse the repository name from the given plugin."""
-        match = re.search(r"(?P<organization>[^/]+)/(?P<repository>[^/]+)$", self.args.plugin)
-
-        if not match:
-            raise self.error(f"Invalid plugin {self.args.plugin!r}, must be in format <organization>/<repository>")
-
-        return "/".join([match.group("organization"), match.group("repository")])

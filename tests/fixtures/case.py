@@ -1,6 +1,10 @@
+import shlex
 from typing import ClassVar, List
 from unittest import TestCase
 from unittest.mock import PropertyMock, _patch, patch
+
+from testfixtures import Replacer
+from testfixtures.popen import MockPopen
 
 from odev.common.commands.base import Command
 from odev.common.connectors import Connector
@@ -49,8 +53,27 @@ class OdevTestCase(TestCase):
         """Patch an object's property."""
         return patch.object(obj, attr, new_callable=PropertyMock, **kwargs)
 
-    def setup_command(self, command: str, arguments: str = "") -> Command:
-        """Setup a command for testing."""
+    def setup_command(self, command: str, arguments: str = "", keep_quotes: bool = True) -> Command:
+        """Setup a command for testing.
+        :param command: The name of the command to setup.
+        :param arguments: The arguments to pass to the command.
+        :param keep_quotes: Whether to keep quotes in the arguments when spliting them.
+        """
         command_cls = self.odev.commands[command]
-        namespace = self.odev.parse_arguments(command_cls, *arguments.split())
+        namespace = self.odev.parse_arguments(command_cls, *shlex.split(arguments, posix=not keep_quotes))
         return command_cls(namespace)  # type: ignore[misc] # CommandType? is not callable
+
+
+class OdevCommandTestCase(OdevTestCase):
+    """Base test class for testing Odev commands."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Mock Popen and Subprocess calls
+        cls.Popen = MockPopen()
+        cls.Popen.set_default(stdout=b"")
+        cls.replacer = Replacer()
+        cls.replacer.replace("subprocess.Popen", cls.Popen)
+        cls.replacer.replace("odev.common.bash.Popen", cls.Popen)
+        cls.addClassCleanup(cls.replacer.restore)
+        return super().setUpClass()

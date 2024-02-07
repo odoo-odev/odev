@@ -5,7 +5,7 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Optional
 
-from odev.common import string
+from odev.common import args, string
 from odev.common.commands import LocalDatabaseCommand
 from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
@@ -20,46 +20,38 @@ logger = logging.getLogger(__name__)
 class OdoobinCommand(LocalDatabaseCommand, ABC):
     """Base class for commands that interact with an odoo-bin process."""
 
-    arguments = [
-        {
-            "name": "addons",
-            "nargs": "?",
-            "action": "store_comma_split",
-            "help": """Comma-separated list of additional addon paths.
-            The standard Odoo addons paths are automatically added to the odoo-bin command (including enterprise
-            if any enterprise module is installed). If this command is run from within an Odoo addons directory
-            and no additional addons are specified, the current directory will be added to the list of addons.
-            """,
-        },
-        {
-            "name": "odoo_args",
-            "nargs": "*...",
-            "help": """Additional arguments to pass to odoo-bin; Check the documentation at
-            https://www.odoo.com/documentation/17.0/fr/developer/cli.html
-            for the list of available arguments.
-            """,
-        },
-        {
-            "name": "enterprise",
-            "aliases": ["-c", "--community"],
-            "action": "store_false",
-            "help": "Force running the database without enterprise addons.",
-        },
-        {
-            "name": "version",
-            "aliases": ["-V", "--version"],
-            "help": """The Odoo version to use for running the database.
-            If not specified, defaults to the latest version of the base module installed in the database.
-            """,
-        },
-        {
-            "name": "venv",
-            "aliases": ["--venv"],
-            "help": """Name of the Python virtual environment to use when running this database.
-            If not specified, defaults to the common virtual environment for the current Odoo version.
-            """,
-        },
-    ]
+    addons = args.List(
+        nargs="?",
+        help="""Comma-separated list of additional addon paths.
+        The standard Odoo addons paths are automatically added to the odoo-bin command (including enterprise
+        if any enterprise module is installed). If this command is run from within an Odoo addons directory
+        and no additional addons are specified, the current directory will be added to the list of addons.
+        """,
+    )
+    odoo_args = args.String(
+        nargs="*...",
+        help="""Additional arguments to pass to odoo-bin; Check the documentation at
+        https://www.odoo.com/documentation/17.0/fr/developer/cli.html
+        for the list of available arguments.
+        """,
+    )
+    enterprise = args.Flag(
+        aliases=["-c", "--community"],
+        help="Force running the database without enterprise addons.",
+        default=True,
+    )
+    version = args.String(
+        aliases=["-V", "--version"],
+        help="""The Odoo version to use for running the database.
+        If not specified, defaults to the latest version of the base module installed in the database.
+        """,
+    )
+    venv = args.String(
+        aliases=["--venv"],
+        help="""Name of the Python virtual environment to use when running this database.
+        If not specified, defaults to the common virtual environment for the current Odoo version.
+        """,
+    )
 
     _odoo_log_regex: re.Pattern = re.compile(
         r"""
@@ -146,17 +138,14 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
     """Base class for commands that interact with an odoo-bin shell process
     with the added ability to run scripts inside its environment."""
 
-    arguments = [
-        {
-            "name": "script",
-            "aliases": ["--script"],
-            "help": """
-            Run a script inside of odoo-bin shell and exit. Can be a path
-            to a file containing python code or a string representing
-            python code to be executed inside the shell environment.
-            """,
-        },
-    ]
+    script = args.String(
+        aliases=["--script"],
+        help="""
+        Run a script inside of odoo-bin shell and exit. Can be a path
+        to a file containing python code or a string representing
+        python code to be executed inside the shell environment.
+        """,
+    )
 
     @property
     def script_run_after(self) -> str:

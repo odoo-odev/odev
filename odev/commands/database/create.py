@@ -4,7 +4,7 @@ import re
 import shutil
 from typing import List, Optional
 
-from odev.common import progress
+from odev.common import args, progress
 from odev.common.commands import OdoobinCommand
 from odev.common.databases import LocalDatabase
 from odev.common.odev import logger
@@ -20,46 +20,34 @@ class CreateCommand(OdoobinCommand):
 
     name = "create"
     aliases = ["init"]
-    arguments = [
-        {
-            "name": "template",
-            "aliases": ["-t", "--template"],
-            "help": "Name of an existing PostgreSQL database to copy.",
-        },
-        {
-            "name": "new_template",
-            "aliases": ["-T", "--create-template"],
-            "action": "store_true",
-            "help": "Create the database as a template to reuse later (append '-template' to its name).",
-        },
-        {
-            "name": "copy_filestore",
-            "aliases": ["--no-filestore"],
-            "action": "store_false",
-            "help": "Do not copy the filestore from the template.",
-        },
-        {
-            "name": "bare",
-            "aliases": ["--bare", "--no-init"],
-            "action": "store_true",
-            "help": "Do not initialize the database (create the SQL database then exit).",
-        },
-    ]
+
+    template_argument = args.String(
+        name="template",
+        aliases=["-t", "--template"],
+        help="Name of an existing PostgreSQL database to copy.",
+    )
+    new_template = args.Flag(
+        aliases=["-T", "--create-template"],
+        help=f"Create the database as a template to reuse later (append {TEMPLATE_SUFFIX!r} to its name).",
+    )
+    copy_filestore = args.Flag(
+        aliases=["--no-filestore"],
+        help="Do not copy the filestore from the template.",
+        default=True,
+    )
+    bare = args.Flag(
+        aliases=["--bare", "--no-init"],
+        help="Do not initialize the database (create the PostgreSQL database then exit).",
+    )
+    version_argument = args.String(
+        name="version",
+        help="""The Odoo version to use for the new database.
+        If not specified and a template is provided, the version of
+        the template database will be used. Otherwise, the version will default to "master".
+        """,
+    )
 
     _database_exists_required = False
-
-    @classmethod
-    def prepare_command(cls, *args, **kwargs) -> None:
-        super().prepare_command(*args, **kwargs)
-        cls.update_argument(
-            "version",
-            {
-                "help": """The Odoo version to use for the new database.
-                If not specified and a template is provided, the version of
-                the template database will be used. Otherwise, the version will default to "master".
-                """
-            },
-        )
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
