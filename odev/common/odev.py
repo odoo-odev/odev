@@ -422,7 +422,7 @@ class Odev(Generic[CommandType]):
             raise command_cls.error(None, str(exception))
         return arguments
 
-    def run_command(self, name: str, *cli_args: str, history: bool = False, database: DatabaseType = None) -> None:
+    def run_command(self, name: str, *cli_args: str, history: bool = False, database: DatabaseType = None) -> bool:
         """Run a command with the given arguments.
 
         :param name: Name of the command to run.
@@ -433,9 +433,11 @@ class Odev(Generic[CommandType]):
         command_cls = self.commands.get(name)
 
         if command_cls is None:
-            return logger.error(f"Command {name!r} not found")
+            logger.error(f"Command {name!r} not found")
+            return False
 
         command: CommandType
+        command_errored: bool = False
 
         try:
             if database is None:
@@ -455,6 +457,7 @@ class Odev(Generic[CommandType]):
             logger.debug(f"Dispatching {command!r}")
             command.run()
         except OdevError as exception:
+            command_errored = True
             logger.error(str(exception))
         else:
             if history:
@@ -464,6 +467,8 @@ class Odev(Generic[CommandType]):
                 command.cleanup()
             except UnboundLocalError:
                 pass
+
+        return not command_errored
 
     def dispatch(self) -> None:
         """Handle commands and arguments as received from the terminal."""

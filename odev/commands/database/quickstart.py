@@ -48,7 +48,9 @@ class QuickStartCommand(DatabaseCommand):
             if self.args.filestore:
                 branch_cli_argument.append("--filestore")
 
-            self.odev.run_command("dump", *branch_cli_argument, database=self.database)
+            if not self.odev.run_command("dump", *branch_cli_argument, database=self.database):
+                return
+
             self.odev.run_command(
                 "restore",
                 (self.odev.dumps_path / self.database._get_dump_filename(**self.get_dump_filename_kwargs())).as_posix(),
