@@ -16,14 +16,11 @@ class VenvCommand(Command):
 
     venv_name = args.String(
         name="name",
-        help="""Name of the virtual environment to activate, or a local Odoo database to select
+        description="""Name of the virtual environment to activate, or a local Odoo database to select
         the virtual environment it is linked to.
         """,
     )
-    command = args.String(
-        help="""Python command to execute in the virtual environment.""",
-        nargs="*",
-    )
+    command = args.String(description="""Python command to execute in the virtual environment.""", nargs="*")
 
     def run(self):
         venv = PythonEnv(self.odev.home_path / "virtualenvs" / self.args.name)

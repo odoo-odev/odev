@@ -171,7 +171,8 @@ class Odev(Generic[CommandType]):
             return logger.debug("Framework already started")
 
         logger.debug(
-            f"Starting {self.name} version {self.version} {'in test mode' if self.in_test_mode else ''}".strip()
+            f"Starting {self.name} version [repr.version]{self.version}[/repr.version] "
+            f"{'in test mode' if self.in_test_mode else ''}".strip()
         )
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)

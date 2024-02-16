@@ -20,11 +20,8 @@ class DeployCommand(DatabaseCommand):
 
     name = "deploy"
 
-    module = args.Path(help="Path to the module to deploy (must be a valid Odoo module).")
-    odoo_args = args.String(
-        help="Additional arguments to pass to odoo-bin deploy.",
-        nargs="*...",
-    )
+    module = args.Path(description="Path to the module to deploy (must be a valid Odoo module).")
+    odoo_args = args.String(description="Additional arguments to pass to odoo-bin deploy.", nargs="*...")
 
     def run(self):
         if not self.database.running:

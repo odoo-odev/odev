@@ -16,12 +16,9 @@ class PluginCommand(Command):
     name = "plugin"
     aliases = ["addons"]
 
-    action = args.String(
-        help="Action to perform, either 'enable' or 'disable'.",
-        choices=["enable", "disable"],
-    )
+    action = args.String(description="Action to perform, either 'enable' or 'disable'.", choices=["enable", "disable"])
     plugin = args.String(
-        help="""Plugin to enable or disable, must be a git repository hosted on GitHub.
+        description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
         """,
     )

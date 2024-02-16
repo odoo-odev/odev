@@ -28,8 +28,8 @@ class PathfinderCommand(OdoobinShellScriptCommand):
     name = "pathfinder"
     aliases = ["pf", "shortest_path", "sp"]
 
-    origin = args.String(help="Model to start from.")
-    destination = args.String(help="Model to end at.")
+    origin = args.String(description="Model to start from.")
+    destination = args.String(description="Model to end at.")
 
     @property
     def script_run_after(self) -> str:

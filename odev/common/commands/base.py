@@ -77,12 +77,12 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         aliases=["-v", "--log-level"],
         choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "DEBUG_SQL", "NOTSET"],
         default="INFO",
-        help="Set logging verbosity for the execution of odev.",
+        description="Set logging verbosity for the execution of odev.",
     )
-    show_help = args.Flag(aliases=["-h", "--help"], help="Show help for the current command.")
+    show_help = args.Flag(aliases=["-h", "--help"], description="Show help for the current command.")
     bypass_prompt = args.Flag(
         aliases=["-f", "--force"],
-        help="Bypass confirmation prompts and assume a default value to all, use with caution!",
+        description="Bypass confirmation prompts and assume a default value to all, use with caution!",
     )
 
     # --------------------------------------------------------------------------
@@ -94,7 +94,6 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         """
         self.args: Namespace = arguments
         self.args.log_level = LOG_LEVEL
-
         self._bypass_prompt_orig: bool = self.console.bypass_prompt
         self.console.bypass_prompt = self.args.bypass_prompt
 
@@ -264,6 +263,9 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                 raise SystemExit(error_message.capitalize()) from exception
             finally:
                 sys.stderr = sys.__stderr__
+
+        for argument in cls.ordered_arguments_definitions():
+            setattr(cls, argument[0], getattr(arguments, argument[0]))
 
         return arguments
 

@@ -14,11 +14,7 @@ class StandardizeCommand(OdoobinCommand):
     name = "standardize"
     aliases = ["std", "standard"]
 
-    keep_studio = args.Flag(
-        aliases=["--no-studio"],
-        default=True,
-        help="Remove Studio customizations.",
-    )
+    keep_studio = args.Flag(aliases=["--no-studio"], default=True, description="Remove Studio customizations.")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:

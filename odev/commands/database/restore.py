@@ -17,13 +17,11 @@ class RestoreCommand(DatabaseCommand):
     name = "restore"
     aliases = ["upload"]
 
-    backup = args.Path(
-        help="Path to the backup file to restore.",
-    )
+    backup = args.Path(description="Path to the backup file to restore.")
     neutralize = args.Flag(
         aliases=["--no-clean", "--no-neutralize"],
         default=True,
-        help="""Do not neutralize the database after the dump has been restored.
+        description="""Do not neutralize the database after the dump has been restored.
         Only used on local databases.
         """,
     )

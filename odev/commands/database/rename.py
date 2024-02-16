@@ -19,10 +19,7 @@ class RenameCommand(LocalDatabaseCommand):
     name = "rename"
     aliases = ["mv", "move"]
 
-    new_name = args.String(
-        name="name",
-        help="New name for the database.",
-    )
+    new_name = args.String(name="name", description="New name for the database.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

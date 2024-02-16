@@ -23,7 +23,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     keep = args.List(
         aliases=["-k", "--keep"],
         default=[],
-        help="""List of associated resources to keep, separated by commas. Possible values are:
+        description="""List of associated resources to keep, separated by commas. Possible values are:
         - filestore: keep the database filestore
         - template: keep template databases associated to this one
         - venv: keep the virtual environment associated to the database
@@ -32,13 +32,13 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     )
     expression = args.Regex(
         aliases=["-e", "--expression"],
-        help="""Regular expression pattern to filter databases to delete.
+        description="""Regular expression pattern to filter databases to delete.
         Ignored if a database was provided.
         """,
     )
     include_whitelisted = args.Flag(
         aliases=["-w", "--include-whitelisted"],
-        help="""Delete whitelisted databases as well.""",
+        description="""Delete whitelisted databases as well.""",
     )
 
     _database_arg_required = False

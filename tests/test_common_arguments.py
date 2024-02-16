@@ -6,7 +6,7 @@ from tests.fixtures import OdevTestCase
 class TestCommonArguments(OdevTestCase):
 
     def test_argument_string(self):
-        arg_string = args.String(name="str", help="String argument")
+        arg_string = args.String(name="str", description="String argument")
         self.assertDictEqual(
             arg_string.to_dict("str"),
             {
@@ -17,7 +17,7 @@ class TestCommonArguments(OdevTestCase):
             "should convert the string argument to a valid mapping, optional keys should not be set",
         )
 
-        arg_string = args.String(name="str", help="String argument", aliases=["s"], default="default")
+        arg_string = args.String(name="str", description="String argument", aliases=["s"], default="default")
         self.assertDictEqual(
             arg_string.to_dict("str"),
             {
@@ -31,7 +31,7 @@ class TestCommonArguments(OdevTestCase):
         )
 
     def test_argument_flag(self):
-        arg_flag = args.Flag(name="flag", help="Flag argument")
+        arg_flag = args.Flag(name="flag", description="Flag argument")
         self.assertDictEqual(
             arg_flag.to_dict("flag"),
             {
@@ -43,7 +43,7 @@ class TestCommonArguments(OdevTestCase):
             "when default is not set",
         )
 
-        arg_flag = args.Flag(name="flag", help="Flag argument", default=False)
+        arg_flag = args.Flag(name="flag", description="Flag argument", default=False)
         self.assertDictEqual(
             arg_flag.to_dict("flag"),
             {
@@ -55,7 +55,7 @@ class TestCommonArguments(OdevTestCase):
             "when default is set to False",
         )
 
-        arg_flag = args.Flag(name="flag", help="Flag argument", default=True)
+        arg_flag = args.Flag(name="flag", description="Flag argument", default=True)
         self.assertDictEqual(
             arg_flag.to_dict("flag"),
             {

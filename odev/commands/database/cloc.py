@@ -15,10 +15,7 @@ class ClocCommand(OdoobinCommand):
 
     name = "cloc"
 
-    csv = args.Flag(
-        aliases=["--csv"],
-        help="Format output as CSV.",
-    )
+    csv = args.Flag(aliases=["--csv"], description="Format output as CSV.")
 
     re_line_details = re.compile(
         r"""

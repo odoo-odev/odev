@@ -17,8 +17,8 @@ class CloneCommand(DatabaseCommand):
 
     name = "clone"
 
-    repository = args.String(help="Git URL of a repository to clone.", nargs="?")
-    branch = args.String(help="Branch to checkout after cloning the repository.")
+    repository = args.String(description="Git URL of a repository to clone.", nargs="?")
+    branch = args.String(description="Branch to checkout after cloning the repository.")
 
     _database_arg_required = False
     _database_exists_required = False

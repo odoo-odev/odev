@@ -16,7 +16,7 @@ class DumpCommand(DatabaseCommand):
 
     filestore = args.Flag(
         aliases=["-F", "--filestore"],
-        help="Include the filestore when downloading the database.",
+        description="Include the filestore when downloading the database.",
     )
 
     def run(self):

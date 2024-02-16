@@ -24,24 +24,24 @@ class CreateCommand(OdoobinCommand):
     template_argument = args.String(
         name="template",
         aliases=["-t", "--template"],
-        help="Name of an existing PostgreSQL database to copy.",
+        description="Name of an existing PostgreSQL database to copy.",
     )
     new_template = args.Flag(
         aliases=["-T", "--create-template"],
-        help=f"Create the database as a template to reuse later (append {TEMPLATE_SUFFIX!r} to its name).",
+        description=f"Create the database as a template to reuse later (append {TEMPLATE_SUFFIX!r} to its name).",
     )
     copy_filestore = args.Flag(
         aliases=["--no-filestore"],
-        help="Do not copy the filestore from the template.",
+        description="Do not copy the filestore from the template.",
         default=True,
     )
     bare = args.Flag(
         aliases=["--bare", "--no-init"],
-        help="Do not initialize the database (create the PostgreSQL database then exit).",
+        description="Do not initialize the database (create the PostgreSQL database then exit).",
     )
     version_argument = args.String(
         name="version",
-        help="""The Odoo version to use for the new database.
+        description="""The Odoo version to use for the new database.
         If not specified and a template is provided, the version of
         the template database will be used. Otherwise, the version will default to "master".
         """,

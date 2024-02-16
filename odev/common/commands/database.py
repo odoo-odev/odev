@@ -40,11 +40,11 @@ class DatabaseCommand(Command, ABC):
     # Arguments
     # --------------------------------------------------------------------------
 
-    target_database = args.String(name="database", help="The database to target.")
+    target_database = args.String(name="database", description="The database to target.")
     platform = args.String(
         aliases=["-p", "--platform"],
         choices=[],
-        help=f"""
+        description=f"""
         Force searching for the database on the specified platform, useful when
         different databases have the same name on different hosting (usually one
         local database being a copy of a remote one).
@@ -53,7 +53,7 @@ class DatabaseCommand(Command, ABC):
     )
     branch = args.String(
         aliases=["-b", "--branch"],
-        help="""
+        description="""
         The branch to target, only used with PaaS (Odoo SH) databases
         to force using a specific branch after project detection.
         """,

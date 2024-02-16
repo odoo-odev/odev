@@ -18,23 +18,23 @@ class QuickStartCommand(DatabaseCommand):
     new_name = args.String(
         name="name",
         aliases=["-n", "--name"],
-        help="The name of the database to create locally, defaults to the name of the database dumped.",
+        description="The name of the database to create locally, defaults to the name of the database dumped.",
     )
     branch = args.String(
-        help="""Branch to target for downloading a backup of PaaS (Odoo SH) instances.
+        description="""Branch to target for downloading a backup of PaaS (Odoo SH) instances.
         Also used as the branch to checkout after cloning the repository containing
         code customization for the selected database.
         """,
     )
     version = args.String(
         aliases=["-V", "--version"],
-        help="""The Odoo version to use for the new database. If specified, a new database
+        description="""The Odoo version to use for the new database. If specified, a new database
         will be created from scratch instead of downloading and restoring a backup.
         """,
     )
     filestore = args.Flag(
         aliases=["-F", "--filestore"],
-        help="Include the filestore when downloading a backup of the database.",
+        description="Include the filestore when downloading a backup of the database.",
     )
 
     _database_allowed_platforms = []

@@ -20,7 +20,7 @@ class Argument(ABC):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[Any] = None,
         choices: Optional[ListType[Any]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
@@ -40,7 +40,7 @@ class Argument(ABC):
         `prepare_arguments`method.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument.
         :param choices: A list of valid choices for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
@@ -48,6 +48,7 @@ class Argument(ABC):
             - `+` for one or more values.
             - `?` for zero or one value.
             - `*...` for the remainder values that are not consumed by the previous arguments.
+
         :param action: The action to take when the argument is encountered, can be one of the following:
             - `store` to store the value.
             - `store_const` to store a constant value.
@@ -61,7 +62,7 @@ class Argument(ABC):
         """
         self.name = name
         self.aliases = aliases
-        self.help = help
+        self.description = description
         self.default = default
         self.nargs = nargs
         self.action = action
@@ -73,7 +74,7 @@ class Argument(ABC):
         """
         arg_dict: MutableMapping[str, Any] = {
             "name": self.name or name,
-            "help": self.help,
+            "help": self.description,
             "action": self.action or "store",
         }
 
@@ -99,7 +100,7 @@ class String(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[str] = None,
         choices: Optional[ListType[str]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
@@ -107,7 +108,7 @@ class String(Argument):
         """Add a string argument to the command class.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument.
         :param choices: A list of valid choices for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
@@ -119,7 +120,7 @@ class String(Argument):
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             default=default,
             nargs=nargs,
             choices=choices,
@@ -134,7 +135,7 @@ class Integer(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[int] = None,
         choices: Optional[ListType[int]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
@@ -142,7 +143,7 @@ class Integer(Argument):
         """Add an integer argument to the command class.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument.
         :param choices: A list of valid choices for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
@@ -154,7 +155,7 @@ class Integer(Argument):
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             default=default,
             nargs=nargs,
             choices=choices,
@@ -169,21 +170,21 @@ class Flag(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[bool] = None,
     ) -> None:
         """Add a flag that has a boolean value which depends on whether it was passed in the command line.
         The default value is inverted if the flag is set.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument; a default value of `False` will result in the argument
         being set to `True` if present in the CLI arguments.
         """
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             action="store_false" if default is True else "store_true",
         )
 
@@ -195,14 +196,14 @@ class List(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[ListType[Any]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
     ) -> None:
         """Add a comma-separated list of values argument to the command class.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument, defaults to an empty list.
         :param choices: A list of valid choices for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
@@ -214,7 +215,7 @@ class List(Argument):
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             default=default,
             nargs=nargs,
             action="store_list",
@@ -228,14 +229,14 @@ class Path(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[pathlib.Path] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
     ) -> None:
         """Add a path argument to the command class, stored as a `pathlib.Path` object.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
             - `*` for zero or more values.
@@ -246,7 +247,7 @@ class Path(Argument):
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             default=default,
             nargs=nargs,
             action="store_path",
@@ -260,14 +261,14 @@ class Regex(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[re.Pattern] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
     ) -> None:
         """Add a path argument to the command class, evaluated and stored as a regular expression.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
             - `*` for zero or more values.
@@ -278,7 +279,7 @@ class Regex(Argument):
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             default=default,
             nargs=nargs,
             action="store_regex",
@@ -292,14 +293,14 @@ class Eval(Argument):
         self,
         name: Optional[str] = None,
         aliases: Optional[ListType[str]] = None,
-        help: Optional[str] = None,  # pylint: disable=redefined-builtin
+        description: Optional[str] = None,
         default: Optional[Any] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
     ) -> None:
         """Add a python literal argument to the command class, evaluated by `ast.literal_eval()`.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
-        :param help: A description for the argument, will be displayed in the `help` command.
+        :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument.
         :param nargs: The number of values the argument should accept, can be an integer value or one of the symbols:
             - `*` for zero or more values.
@@ -310,7 +311,7 @@ class Eval(Argument):
         super().__init__(
             name=name,
             aliases=aliases,
-            help=help,
+            description=description,
             default=default,
             nargs=nargs,
             action="store_eval",

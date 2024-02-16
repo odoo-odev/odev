@@ -25,14 +25,14 @@ class HelpCommand(Command):
 
     command = args.String(
         nargs="?",
-        help="""
+        description="""
         Get help about a specific command.
         Use [bold italic]odev help[/bold italic] for a list of available commands.
         """,
     )
     names_only = args.Flag(
         aliases=["-1", "--one-column", "--names-only"],
-        help="List command names one per line - useful for parsing",
+        description="List command names one per line - useful for parsing",
     )
 
     def run(self) -> None:

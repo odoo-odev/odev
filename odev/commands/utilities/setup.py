@@ -25,10 +25,7 @@ class SetupCommand(Command):
     name = "setup"
     aliases = ["reconfigure"]
 
-    category = args.String(
-        nargs="?",
-        help="Run a specific part of the setup only.",
-    )
+    category = args.String(description="Run a specific part of the setup only.", nargs="?")
 
     def run(self) -> None:
         """Run the setup or part of it."""

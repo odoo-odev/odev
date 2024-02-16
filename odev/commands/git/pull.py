@@ -28,7 +28,7 @@ class PullCommand(Command):
 
     name = "pull"
 
-    version = args.String(aliases=["-V", "--version"], help="Pull changes for a specific Odoo version only.")
+    version = args.String(aliases=["-V", "--version"], description="Pull changes for a specific Odoo version only.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

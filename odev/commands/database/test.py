@@ -25,7 +25,7 @@ class TestCommand(OdoobinCommand):
     tests = args.List(
         aliases=["-F", "--filters"],
         default=[],
-        help="""
+        description="""
         Comma-separated list of files or tags to run specific tests.
         Check https://www.odoo.com/documentation/17.0/fr/developer/cli.html#testing-configuration
         for more information on how to use tests.
@@ -34,7 +34,7 @@ class TestCommand(OdoobinCommand):
     modules = args.List(
         aliases=["-m", "--modules"],
         default=["all"],
-        help="Comma-separated list of modules to install for testing. If not set, install all modules.",
+        description="Comma-separated list of modules to install for testing. If not set, install all modules.",
     )
 
     def __init__(self, *args, **kwargs) -> None:

@@ -15,15 +15,8 @@ class HistoryCommand(Command):
 
     name = "history"
 
-    command = args.String(
-        aliases=["-c", "--command"],
-        help="The command to check the history of.",
-        nargs="?",
-    )
-    clear = args.Flag(
-        aliases=["-C", "--clear"],
-        help="Clear the history.",
-    )
+    command = args.String(aliases=["-c", "--command"], description="The command to check the history of.", nargs="?")
+    clear = args.Flag(aliases=["-C", "--clear"], description="Clear the history.")
 
     def run(self) -> None:
         if self.args.clear:

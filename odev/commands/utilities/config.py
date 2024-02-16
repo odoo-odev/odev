@@ -20,8 +20,8 @@ class ConfigCommand(Command):
     name = "config"
     aliases = ["conf"]
 
-    key = args.String(help="Configuration key to fetch, in the format 'section.option'.", nargs="?")
-    value = args.String(help="Value to set for the given key.", nargs="?")
+    key = args.String(description="Configuration key to fetch, in the format 'section.option'.", nargs="?")
+    value = args.String(description="Value to set for the given key.", nargs="?")
 
     def run(self):
         try:

@@ -34,7 +34,7 @@ class FetchCommand(Command):
 
     name = "fetch"
 
-    version = args.String(aliases=["-V", "--version"], help="Fetch changes for a specific Odoo version only.")
+    version = args.String(aliases=["-V", "--version"], description="Fetch changes for a specific Odoo version only.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -143,21 +143,18 @@ class ListCommand(ListLocalDatabasesMixin, Command):
 
     names_only = args.Flag(
         aliases=["-1", "--one-column", "--names-only"],
-        help="List database names one per line - useful for parsing.",
+        description="List database names one per line - useful for parsing.",
     )
     expression = args.Regex(
         aliases=["-e", "--expression"],
-        help="Regular expression pattern to filter listed databases.",
+        description="Regular expression pattern to filter listed databases.",
     )
-    show_all = args.Flag(
-        aliases=["-a", "--all"],
-        help="Show non-Odoo databases as well.",
-    )
+    show_all = args.Flag(aliases=["-a", "--all"], description="Show non-Odoo databases as well.")
     order = args.String(
         aliases=["-s", "--sort"],
         choices=list(ORDER_MAPPING.keys()),
         default="name",
-        help=f"""Sort databases by name, version, database size, filestore size or last use date.
+        description=f"""Sort databases by name, version, database size, filestore size or last use date.
         Possible values are {string.join_and(list(ORDER_MAPPING.keys()))}.
         """,
     )

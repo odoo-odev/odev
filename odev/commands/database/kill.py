@@ -22,7 +22,7 @@ class KillCommand(LocalDatabaseCommand):
 
     hard = args.Flag(
         aliases=["-H", "--hard"],
-        help="Kill the database process with SIGKILL instead of SIGINT.",
+        description="Kill the database process with SIGKILL instead of SIGINT.",
     )
 
     def __init__(self, *args, **kwargs):
