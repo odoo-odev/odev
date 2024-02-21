@@ -175,7 +175,7 @@ class PythonEnv:
 
         return installed
 
-    def missing_requirements(self, path: Union[Path, str]) -> Generator[str, None, None]:
+    def missing_requirements(self, path: Union[Path, str], raise_if_error: bool = True) -> Generator[str, None, None]:
         """Check for missing packages in a requirements.txt file.
         Useful to ensure all packages have the correct version even if the user already installed some packages
         manually.
@@ -184,7 +184,13 @@ class PythonEnv:
         :return: A list of missing packages.
         :rtype: List[str]
         """
-        requirements_path = self.__check_requirements_path(path)
+        try:
+            requirements_path = self.__check_requirements_path(path)
+        except FileNotFoundError as error:
+            if raise_if_error:
+                raise error
+            return
+
         logger.debug(f"Checking missing python packages from {requirements_path}")
         installed_packages = self.installed_packages()
         required_packages = requirements_path.read_text().splitlines()

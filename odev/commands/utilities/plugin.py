@@ -68,7 +68,8 @@ class PluginCommand(Command):
             self.__remove_plugin_from_config(repository)
 
             try:
-                self.odev.plugins_path.joinpath(repository.split("/", 1)[-1].replace("-", "_")).unlink(missing_ok=True)
+                plugin_name = repository.split("/", 1)[-1].replace("-", "_").replace(".git", "")
+                self.odev.plugins_path.joinpath(plugin_name).unlink(missing_ok=True)
                 self.odev.load_plugins()
             except ConnectorError as error:
                 self.__add_plugin_to_config(repository)

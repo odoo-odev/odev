@@ -219,7 +219,7 @@ class Odev(Generic[CommandType]):
 
             python = PythonEnv()
 
-            if list(python.missing_requirements(plugin_path)):
+            if list(python.missing_requirements(plugin_path, False)):
                 python.install_requirements(plugin_path)
 
     def update(self, path: Path, prompt_name: str) -> bool:
