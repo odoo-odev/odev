@@ -14,6 +14,7 @@ __pycache__
 .coverage
 .hypothesis
 htmlcov
+coverage.xml
 
 # --- Odev plugins, loaded as submodules
 odev/plugins/*
