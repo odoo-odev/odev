@@ -93,7 +93,7 @@ class DatabaseCommand(Command, ABC):
         cls.update_argument(
             "platform",
             choices=list(cls._database_allowed_platforms),
-            help=f"""
+            description=f"""
             Force searching for the database on the specified platform, useful when
             different databases have the same name on different hosting (usually one
             local database being a copy of a remote one).
