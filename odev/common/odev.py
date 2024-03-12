@@ -19,6 +19,7 @@ from typing import (
     List,
     Literal,
     MutableMapping,
+    Optional,
     Type,
     cast,
 )
@@ -62,10 +63,10 @@ class Odev(Generic[CommandType]):
     path: ClassVar[Path] = Path(__file__).parents[2]
     """Local path to the odev repository."""
 
-    config: ClassVar[Config] = None
+    config: ClassVar[Config]
     """Odev configuration."""
 
-    store: ClassVar[DataStore] = None
+    store: ClassVar[DataStore]
     """Odev data storage."""
 
     commands: MutableMapping[str, Type[CommandType]] = {}
@@ -84,11 +85,8 @@ class Odev(Generic[CommandType]):
         self.in_test_mode = test
         """Whether the framework is in testing mode."""
 
-        if self.__class__.config is None:
-            self.__class__.config = Config(self.name)
-
-        if self.__class__.store is None:
-            self.__class__.store = DataStore(self.name)
+        self.__class__.config = Config(self.name)
+        self.__class__.store = DataStore(self.name)
 
     def __repr__(self) -> str:
         return f"Odev(version={self.version})"
@@ -230,6 +228,7 @@ class Odev(Generic[CommandType]):
         :rtype: bool
         """
         logger.debug(f"Checking for updates in {self.git.name!r}")
+        assert self.git.repository is not None
 
         if not self.__date_check_interval() or not self.__git_branch_behind(self.git.repository):
             self.git.fetch()
@@ -295,7 +294,7 @@ class Odev(Generic[CommandType]):
         if last_pruning >= PRUNING_INTERVAL:
             from odev.common.databases.local import LocalDatabase
 
-            delete_command_cls = self.commands.get("delete")
+            delete_command_cls = cast(Type[CommandType], self.commands.get("delete"))
             delete_command = cast(DeleteCommand, delete_command_cls(delete_command_cls.parse_arguments([])))
 
             def filter_databases(name: str) -> bool:
@@ -372,11 +371,11 @@ class Odev(Generic[CommandType]):
     def register_commands(self) -> None:
         """Register all commands from the commands directory."""
         for command_class in self.import_commands(self.commands_path.iterdir()):
-            logger.debug(f"Registering command {command_class.name!r}")
-            command_names = [command_class.name] + (list(command_class.aliases) or [])
+            logger.debug(f"Registering command {command_class._name!r}")
+            command_names = [command_class._name] + (list(command_class._aliases) or [])
 
             if any(name in command_names for name in self.commands.keys()):
-                raise ValueError(f"Another command {command_class.name!r} is already registered")
+                raise ValueError(f"Another command {command_class._name!r} is already registered")
 
             command_class.prepare_command(self)
             self.commands.update({name: command_class for name in command_names})
@@ -385,8 +384,8 @@ class Odev(Generic[CommandType]):
         """Register all commands from the plugins directories."""
         for plugin_path in self.plugins_path.iterdir():
             for command_class in self.import_commands(plugin_path.glob("commands/**")):
-                command_names = [command_class.name] + (list(command_class.aliases) or [])
-                base_command_class = self.commands.get(command_class.name)
+                command_names = [command_class._name] + (list(command_class._aliases) or [])
+                base_command_class = self.commands.get(command_class._name)
 
                 if base_command_class is not None and issubclass(base_command_class, command_class):
                     continue
@@ -395,9 +394,9 @@ class Odev(Generic[CommandType]):
                     if command_class.__bases__ == base_command_class.__bases__:
                         continue
 
-                logger.debug(f"Registering command {command_class.name!r} from plugin {plugin_path.name!r}")
+                logger.debug(f"Registering command {command_class._name!r} from plugin {plugin_path.name!r}")
 
-                if command_class.name in self.commands.keys():
+                if command_class._name in self.commands.keys():
                     if command_class.__bases__ != base_command_class.__bases__:
 
                         class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
@@ -407,7 +406,7 @@ class Odev(Generic[CommandType]):
                         PatchedCommand.__name__ = base_command_class.__name__
 
                 command_class.prepare_command(self)
-                self.commands.update({name: command_class for name in command_names})
+                self.commands.update({name: command_class for name in command_names})  # type: ignore [assignment]
 
     def parse_arguments(self, command_cls: Type[CommandType], *args):
         """Parse arguments for a command.
@@ -420,10 +419,16 @@ class Odev(Generic[CommandType]):
             logger.debug(f"Parsing command arguments '{' '.join(args)}'")
             arguments = command_cls.parse_arguments(args)
         except SystemExit as exception:
-            raise command_cls.error(None, str(exception))
+            raise command_cls.error(None, str(exception))  # type: ignore [call-arg]
         return arguments
 
-    def run_command(self, name: str, *cli_args: str, history: bool = False, database: DatabaseType = None) -> bool:
+    def run_command(
+        self,
+        name: str,
+        *cli_args: str,
+        history: bool = False,
+        database: Optional[DatabaseType] = None,
+    ) -> bool:
         """Run a command with the given arguments.
 
         :param name: Name of the command to run.
@@ -453,7 +458,7 @@ class Odev(Generic[CommandType]):
                 else:
                     command = command_cls(arguments)
 
-            command.argv = cli_args
+            command._argv = cli_args
 
             logger.debug(f"Dispatching {command!r}")
             command.run()
@@ -479,7 +484,7 @@ class Odev(Generic[CommandType]):
             not len(argv)
             or (
                 len(argv) >= 2
-                and any(arg in filter(lambda a: a.startswith("-"), self.commands.get("help").aliases) for arg in argv)
+                and any(arg in filter(lambda a: a.startswith("-"), self.commands.get("help")._aliases) for arg in argv)
             )
             or argv[0].startswith("-")
         ):

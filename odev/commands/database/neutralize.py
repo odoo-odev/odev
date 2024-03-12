@@ -10,14 +10,14 @@ class NeutralizeCommand(LocalDatabaseCommand):
     undesired actions.
     """
 
-    name = "neutralize"
-    aliases = ["clean", "cl"]
+    _name = "neutralize"
+    _aliases = ["clean", "cl"]
 
     def run(self):
-        self.database.neutralize()
+        self._database.neutralize()
         logger.info(
             f"""
-            Database {self.database.name!r} has been neutralized and is now safe to use for development
+            Database {self._database.name!r} has been neutralized and is now safe to use for development
             - Login to the administrator account with the credentials 'admin:admin'
             - Login to other users with their login and the password 'odoo'
             - Scheduled actions have been deactivated

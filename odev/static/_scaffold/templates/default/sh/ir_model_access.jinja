@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-{%-for ima in data %}
-{{ima.__xml_id | odoo_field}},{{ima.name | odoo_field}},{{ima.model_id | odoo_field}},{%-if ima.group_id -%}{{ima.group_id | odoo_field}}{%-endif-%},{{ima.perm_read | int}},{{ima.perm_write | int}},{{ima.perm_create | int}},{{ima.perm_unlink | int}}
-{%- endfor %}

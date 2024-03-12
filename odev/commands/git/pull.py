@@ -26,7 +26,7 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 class PullCommand(Command):
     """Pull changes in local worktrees mmanaged by odev."""
 
-    name = "pull"
+    _name = "pull"
 
     version = args.String(aliases=["-V", "--version"], description="Pull changes for a specific Odoo version only.")
 

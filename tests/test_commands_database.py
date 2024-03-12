@@ -61,9 +61,9 @@ class TestDatabaseCommands(OdevCommandTestCase):
             "The odoo-bin executable should be run with the correct arguments.",
         )
 
-        self.assertIsInstance(command.database, LocalDatabase, "The database should be an instance of LocalDatabase.")
+        self.assertIsInstance(command._database, LocalDatabase, "The database should be an instance of LocalDatabase.")
         self.assertEqual(
-            cast(LocalDatabase, command.database).name, self.db_name, "The database name should be set correctly."
+            cast(LocalDatabase, command._database).name, self.db_name, "The database name should be set correctly."
         )
 
         with LocalDatabase(self.db_name) as local_database, local_database.psql().nocache():
@@ -98,9 +98,9 @@ class TestDatabaseCommands(OdevCommandTestCase):
             "The odoo-bin executable should be run with the correct arguments.",
         )
 
-        self.assertIsInstance(command.database, LocalDatabase, "The database should be an instance of LocalDatabase.")
+        self.assertIsInstance(command._database, LocalDatabase, "The database should be an instance of LocalDatabase.")
         self.assertEqual(
-            cast(LocalDatabase, command.database).name, self.db_name, "The database name should be set correctly."
+            cast(LocalDatabase, command._database).name, self.db_name, "The database name should be set correctly."
         )
 
         local_database = LocalDatabase(self.db_name)

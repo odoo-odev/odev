@@ -20,8 +20,8 @@ class HelpCommand(Command):
     lightly covering all available commands.
     """
 
-    name = "help"
-    aliases = ["h", "man", "-h", "--help"]
+    _name = "help"
+    _aliases = ["h", "man", "-h", "--help"]
 
     command = args.String(
         nargs="?",
@@ -62,21 +62,21 @@ class HelpCommand(Command):
         usage = escape(parser.format_usage().replace("usage:", executable).strip())
 
         message = f"""
-            [bold {Colors.PURPLE}]{executable.upper()} {command.name.upper()}[/bold {Colors.PURPLE}]
+            [bold {Colors.PURPLE}]{executable.upper()} {command._name.upper()}[/bold {Colors.PURPLE}]
 
-            {{command.description}}
+            {{command._description}}
 
             [bold][underline]Usage:[/underline] [{Colors.CYAN}]{usage}[/{Colors.CYAN}][/bold]
         """
 
         message_indent = string.min_indent(message)
         message_options_indent = message_indent + 4
-        description = string.indent(command.description, message_indent)[message_indent:]
-        message = message.replace("{command.description}", description)
+        description = string.indent(command._description, message_indent)[message_indent:]
+        message = message.replace("{command._description}", description)
 
-        if command.aliases:
+        if command._aliases:
             aliases = f"""
-                [bold underline]Aliases:[/bold underline] {', '.join(command.aliases)}
+                [bold underline]Aliases:[/bold underline] {', '.join(command._aliases)}
             """
             message += string.dedent(aliases, message_options_indent - message_indent)
 
@@ -129,18 +129,18 @@ class HelpCommand(Command):
             arguments without brackets ('arg') are required.
         """
 
-        commands = [command for name, command in self.odev.commands.items() if name == command.name]
+        commands = [command for name, command in self.odev.commands.items() if name == command._name]
         message_indent = string.min_indent(message)
         commands_list = string.indent(
             string.format_options_list(
                 [
                     (
-                        command.name,
-                        command.help
+                        command._name,
+                        command._help
                         + (
                             f"\nAliases: "
-                            f"{string.join_and([f'[italic]{alias}[/italic]' for alias in sorted(command.aliases)])}"
-                            if command.aliases
+                            f"{string.join_and([f'[italic]{alias}[/italic]' for alias in sorted(command._aliases)])}"
+                            if command._aliases
                             else ""
                         ),
                     )
@@ -167,7 +167,7 @@ class HelpCommand(Command):
         """
         return "\n".join(sorted(filter(lambda name: not name.startswith("-"), self.odev.commands.keys())))
 
-    def print(self, renderable: RenderableType = None, *args, **kwargs) -> None:
+    def print(self, renderable: RenderableType = "", *args, **kwargs) -> None:
         """Print a message to the standard output.
 
         :param message: The message to print.

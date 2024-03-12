@@ -7,19 +7,22 @@ from typing import (
     ClassVar,
     List,
     Optional,
+    Sequence,
     Tuple,
     Type,
     Union,
 )
 
-from InquirerPy import get_style, inquirer
+from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
 from InquirerPy.base.simple import BaseSimplePrompt
+from InquirerPy.utils import get_style
 from InquirerPy.validator import EmptyInputValidator, NumberValidator, PathValidator
 from prompt_toolkit.validation import ValidationError
 from rich.console import Console as RichConsole
-from rich.control import Control, ControlType
+from rich.control import Control
 from rich.highlighter import ISO8601Highlighter, ReprHighlighter, _combine_regex
+from rich.segment import ControlType
 from rich.syntax import Syntax
 from rich.theme import Theme
 
@@ -252,7 +255,7 @@ class Console(RichConsole):
         if file is not None:
             self.file = console_file
 
-    def code(self, text: str, language: str = "python", file: Path = None, **kwargs):
+    def code(self, text: str, language: str = "python", file: Optional[Path] = None, **kwargs):
         """Display a code block.
         :param text: Code to display.
         :param language: Language of the code.
@@ -296,7 +299,7 @@ class Console(RichConsole):
                         "skipped": False,
                     }
 
-                    prompt_message: List[Tuple[str, str]] = prompt._get_prompt_message()
+                    prompt_message: List[Tuple[str, str]] = prompt._get_prompt_message()  # type: ignore [call_args]
                     question: str = next(m for m in prompt_message if m[0] == "class:answered_question")[1].strip()
                     answer: str = next(m for m in prompt_message if m[0] == "class:answer")[1].strip()
 
@@ -331,7 +334,7 @@ class Console(RichConsole):
     def integer(
         self,
         message: str,
-        default: int = None,
+        default: Optional[int] = None,
         min_value: Optional[int] = None,
         max_value: Optional[int] = None,
     ) -> Optional[int]:
@@ -357,7 +360,7 @@ class Console(RichConsole):
     def floating(
         self,
         message: str,
-        default: float = None,
+        default: Optional[float] = None,
         min_value: Optional[float] = None,
         max_value: Optional[float] = None,
     ) -> Optional[float]:
@@ -439,7 +442,7 @@ class Console(RichConsole):
         )
 
     def select(
-        self, message: str, choices: List[Tuple[Any, Optional[str]]], default: Optional[str] = None
+        self, message: str, choices: Sequence[Tuple[Optional[Any], Optional[str]]], default: Optional[Any] = None
     ) -> Optional[Any]:
         """Prompt for a selection.
         :param message: Question to ask the user
@@ -457,7 +460,9 @@ class Console(RichConsole):
             default=default,
         )
 
-    def checkbox(self, message: str, choices: List[Tuple[str, Optional[str]]], defaults: List[str] = None):
+    def checkbox(
+        self, message: str, choices: Sequence[Tuple[str, Optional[str]]], defaults: Optional[Sequence[str]] = None
+    ):
         """Prompt for a checkbox selection.
         :param message: Question to ask the user
         :param choices: List of choices to select from
@@ -477,7 +482,7 @@ class Console(RichConsole):
         )
 
     def fuzzy(
-        self, message: str, choices: List[Tuple[str, Optional[str]]], default: Optional[str] = None
+        self, message: str, choices: Sequence[Tuple[str, Optional[str]]], default: Optional[str] = None
     ) -> Optional[Any]:
         """Prompt for a fuzzy selection.
         :param message: Question to ask the user

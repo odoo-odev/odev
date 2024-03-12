@@ -8,7 +8,7 @@ from typing import cast
 
 # --- Common modules -----------------------------------------------------------
 
-from .base import Branch, Database, Filestore, Repository
+from .base import Branch, Database, DummyDatabase, Filestore, Repository
 from .local import LocalDatabase
 
 

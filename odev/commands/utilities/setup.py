@@ -22,8 +22,8 @@ class SetupCommand(Command):
     A category can be provided to run a specific part of the setup only.
     """
 
-    name = "setup"
-    aliases = ["reconfigure"]
+    _name = "setup"
+    _aliases = ["reconfigure"]
 
     category = args.String(description="Run a specific part of the setup only.", nargs="?")
 
@@ -49,7 +49,7 @@ class SetupCommand(Command):
         ]
         script_names = [script[0] for script in scripts]
         cls.update_argument("category", choices=script_names)
-        cls.description += textwrap.dedent(
+        cls._description += textwrap.dedent(
             f"""
 
             [bold underline]Available categories:[/bold underline]

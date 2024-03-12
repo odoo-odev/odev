@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 class UpdateCommand(Command):
     """Force updating Odev and the currently enabled plugins."""
 
-    name = "update"
-    aliases = ["upgrade", "u"]
+    _name = "update"
+    _aliases = ["upgrade", "u"]
 
     def run(self):
         logger.info(f"Current version: [repr.version]{self.odev.version}[/repr.version]")

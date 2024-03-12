@@ -18,20 +18,20 @@ class DeployCommand(DatabaseCommand):
     and the database to be running.
     """
 
-    name = "deploy"
+    _name = "deploy"
 
     module = args.Path(description="Path to the module to deploy (must be a valid Odoo module).")
     odoo_args = args.String(description="Additional arguments to pass to odoo-bin deploy.", nargs="*...")
 
     def run(self):
-        if not self.database.running:
+        if not self._database.running:
             raise self.error(
-                f"{self.database.platform.display} database {self.database.name!r} must be running to deploy a module"
+                f"{self._database.platform.display} database {self._database.name!r} must be running to deploy a module"
             )
 
-        odoobin: OdoobinProcess = OdoobinProcess(LocalDatabase(self.odev.name), version=self.database.version)
+        odoobin: OdoobinProcess = OdoobinProcess(LocalDatabase(self.odev.name), version=self._database.version)
         process = odoobin.deploy(
-            url=self.database.url,
+            url=self._database.url,
             module=self.args.module,
             args=self.args.odoo_args,
         )
@@ -45,4 +45,4 @@ class DeployCommand(DatabaseCommand):
         if error_match is not None:
             raise self.error(result[error_match.start() + 1 :])
 
-        logger.info(f"Successfully deployed module {self.args.module.name!r} to database {self.database.name!r}")
+        logger.info(f"Successfully deployed module {self.args.module.name!r} to database {self._database.name!r}")

@@ -34,11 +34,11 @@ class PostgresDatabase(PostgresConnectorMixin):
         self.prepare_database()
 
     def __enter__(self):
-        self.connector = self.psql(self.name).__enter__()
+        self.connector = self._connector_class(self.name).__enter__()
         return self
 
     def __exit__(self, *args):
-        self.psql(self.name).__exit__(*args)
+        self._connector_class(self.name).__exit__(*args)
 
     def __repr__(self):
         """Return the representation of the database."""
@@ -50,7 +50,7 @@ class PostgresDatabase(PostgresConnectorMixin):
 
     def prepare_database(self):
         """Prepare the database and ensure it exists in PostgreSQL."""
-        with self.psql("postgres").nocache():
+        with self.psql().nocache():
             if not self.exists():
                 logger.debug(f"Creating database {self.name!r}")
                 self.create()
@@ -63,14 +63,14 @@ class PostgresDatabase(PostgresConnectorMixin):
                 LIMIT 1
                 """
             )
-        return result and result[0][0] or 0
+        return isinstance(result, list) and result[0][0] or 0
 
     def exists(self) -> bool:
         """Check if the database exists."""
         with self.psql() as psql:
             return bool(psql.database_exists(self.name))
 
-    def create(self, template: str = None) -> bool:
+    def create(self, template: Optional[str] = None) -> bool:
         """Create the database.
 
         :param template: The name of the template to copy.
@@ -149,7 +149,7 @@ class PostgresTable(ABC):
     Format: `{constraint_name: constraint_definition}` where `constraint_definition`.
     """
 
-    def __init__(self, database: PostgresDatabase, name: str = None):
+    def __init__(self, database: PostgresDatabase, name: Optional[str] = None):
         """Initialize the database."""
 
         self.database: PostgresDatabase = database

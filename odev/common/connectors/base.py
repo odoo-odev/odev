@@ -28,6 +28,7 @@ class Connector(ABC):
     def __enter__(self):
         """Open a connection to the external service."""
         self.connect()
+        assert self._connection is not None, "Connection was not established"
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -41,6 +42,7 @@ class Connector(ABC):
     @abstractproperty
     def url(self) -> str:
         """Return the URL to the external service."""
+        raise NotImplementedError
 
     @property
     def connected(self) -> bool:

@@ -14,6 +14,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
 )
 from urllib.parse import urlparse
 
@@ -128,15 +129,15 @@ class GitWorktree:
         self,
         connector: "GitConnector",
         worktree: str,
-        ref: str = None,
-        branch: str = None,
-        commit: str = None,
+        ref: str,
+        branch: str,
+        commit: str,
         bare: bool = False,
         detached: bool = False,
         locked: bool = False,
-        locked_reason: str = None,
+        locked_reason: Optional[str] = None,
         prunable: bool = False,
-        prunable_reason: str = None,
+        prunable_reason: Optional[str] = None,
     ):
         """Initialize the Git worktree.
 
@@ -161,7 +162,7 @@ class GitWorktree:
         return isinstance(__o, GitWorktree) and self.path == __o.path
 
     def __repr__(self) -> str:
-        return f"GitWorktree({self.repository.name} on {self.branch})"
+        return f"GitWorktree({self.repository.working_dir} on {self.branch})"
 
     @property
     def repository(self) -> Repo:
@@ -180,7 +181,7 @@ class GitWorktree:
         :return: The Git worktree.
         :rtype: GitWorktree
         """
-        matched_values = cls._re_porcelain.search(entry).groupdict()
+        matched_values = cast(re.Match[str], cls._re_porcelain.search(entry)).groupdict()
         values: Mapping[str, Union[str, bool]] = {
             key: bool(value) if key in ("bare", "detached", "locked", "prunable") else value
             for key, value in matched_values.items()
@@ -201,26 +202,23 @@ class GitWorktree:
 class GitConnector(Connector):
     """A class for connecting to the Github API."""
 
-    _token: str = None
+    _token: Optional[str] = None
     """The Github API token for the current session."""
 
-    _connection: Github = None
+    _connection: Optional[Github] = None
     """The connection to the Github API."""
 
     _token_vault_key: str = "github.com:token"
     """The key to use to store the Github API token in the vault."""
 
-    _organization: str = None
+    _organization: str
     """The organization to which the repository belongs."""
 
-    _repository: str = None
+    _repository: str
     """The name of repository to connect to."""
 
     _requirements_changed: bool = False
     """Whether the requirements.txt file has been modified since the last pull."""
-
-    _path: Path = None
-    """The path to the repository."""
 
     def __init__(self, repo: str, path: Optional[Path] = None):
         """Initialize the Github connector.
@@ -229,8 +227,8 @@ class GitConnector(Connector):
         """
         super().__init__()
 
-        if path:
-            self._path = path
+        self._path: Optional[Path] = path
+        """Forced path to the git repository on the local system."""
 
         if "@" in repo and ":" in repo:  # Assume the repo is in the format git@github.com:organization/repository.git
             repo = repo.split(":")[-1]
@@ -289,6 +287,9 @@ class GitConnector(Connector):
     @property
     def remote(self) -> Optional[Remote]:
         """The reference to the remote of the local repository."""
+        if self.repository is None:
+            return None
+
         if hasattr(self.repository.remotes, "origin"):
             return self.repository.remotes.origin
 
@@ -300,7 +301,7 @@ class GitConnector(Connector):
     @property
     def remote_branch(self) -> Optional[RemoteReference]:
         """Reference to the tracked branch on the remote."""
-        if self.remote is None:
+        if self.repository is None or self.remote is None:
             return None
 
         return self.repository.active_branch.tracking_branch()
@@ -308,6 +309,9 @@ class GitConnector(Connector):
     @property
     def default_branch(self) -> Optional[str]:
         """The main branch of the repository."""
+        if self.repository is None:
+            return None
+
         if self.remote is None:
             if not self.repository.heads:
                 return None
@@ -315,7 +319,7 @@ class GitConnector(Connector):
             return self.repository.heads[0].name.split("/")[-1]
 
         with self:
-            return self._connection.get_repo(self.name).default_branch
+            return cast(Github, self._connection).get_repo(self.name).default_branch
 
     @property
     def branch(self) -> Optional[str]:
@@ -365,8 +369,8 @@ class GitConnector(Connector):
                 prompt_format="Please enter your Github API token:",
             ).password
 
-        if self._connection is None:
-            self._connection = Github(auth=GithubAuth.Token(self._token))
+        if not self.connected:
+            self._connection = Github(auth=GithubAuth.Token(self._token))  # type: ignore [assignment]
 
         if not self.authenticated:
             logger.warning("Failed to connect to Github API, please check your token is valid")
@@ -384,7 +388,6 @@ class GitConnector(Connector):
     def _disconnect(self):
         """Disconnect from the Github API."""
         self._token = None
-        self._connection = None
         del self._connection
 
     def fetch(self):
@@ -395,7 +398,7 @@ class GitConnector(Connector):
         """
         bash.detached(f"cd {self.path} && git fetch")
 
-    def clone(self, branch: str = None):
+    def clone(self, branch: Optional[str] = None):
         """Clone the repository locally."""
         if self.path.exists():
             if branch is not None:
@@ -425,10 +428,10 @@ class GitConnector(Connector):
                 + (f" on branch {branch!r}" if branch else "")
             )
 
-    def pull(self, force: bool = False):
+    def pull(self, force: bool = False) -> None:
         """Pull the latest modifications from the remote repository."""
-        if not self.has_pending_changes():
-            return False
+        if self.repository is None or self.remote is None or not self.has_pending_changes():
+            return
 
         logger.info(f"Repository {self.name!r} has pending changes on branch {self.branch!r}")
         self.check_requirements()
@@ -445,11 +448,14 @@ class GitConnector(Connector):
 
                 raise ConnectorError(message, self) from error
 
-    def checkout(self, branch: str = None, quiet: bool = False):
+    def checkout(self, branch: Optional[str] = None, quiet: bool = False) -> None:
         """Checkout a branch in the repository.
         :param branch: The branch to checkout. Defaults to the main branch of the repository.
         :param quiet: Do not log checkout status.
         """
+        if self.repository is None:
+            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+
         if branch is None:
             branch = self.default_branch
 
@@ -476,7 +482,7 @@ class GitConnector(Connector):
         :return: A tuple of the number of commits behind and the number of commits ahead.
         :rtype: Tuple[int, int]
         """
-        if self.remote_branch is None:
+        if self.repository is None or self.remote_branch is None:
             return 0, 0
 
         rev_list: str = self.repository.git.rev_list("--left-right", "--count", "@{u}...HEAD")
@@ -485,7 +491,7 @@ class GitConnector(Connector):
 
     def has_pending_changes(self):
         """Check whether the current branch in the repository has pending changes ready to be pulled."""
-        if self.remote_branch is None:
+        if self.remote_branch is None or self.remote is None:
             return False
 
         commits_behind, commits_ahead = self.pending_changes()
@@ -511,6 +517,10 @@ class GitConnector(Connector):
         """Check whether a requirements.txt file exists in the current repository and if has been modified
         since the last pull.
         """
+        if self.repository is None:
+            self._requirements_changed = False
+            return
+
         requirements_file = self.path / "requirements.txt"
 
         diff = self.repository.git.diff("--name-only", "HEAD", "--", requirements_file).strip()
@@ -527,7 +537,9 @@ class GitConnector(Connector):
         task_description_delta = f"Resolving deltas in {self.name!r}"
         task = progress.add_task(task_description_clone, total=None, start=False)
 
-        def update_progress(operation_code: int, current_count: int, max_count: int = None, message: str = None):
+        def update_progress(
+            operation_code: int, current_count: int, max_count: Optional[int] = None, message: Optional[str] = None
+        ):
             if operation_code == 66:
                 progress.stop_task(task)
                 progress.stop()
@@ -540,7 +552,9 @@ class GitConnector(Connector):
 
             progress.update(task, total=max_count, completed=current_count)
 
-        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+        def signal_handler_progress(
+            signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None
+        ):
             progress.stop_task(task)
             progress.stop()
             logger.warning(f"{task_description_clone}: task interrupted by user")
@@ -562,18 +576,24 @@ class GitConnector(Connector):
 
     def worktrees(self) -> Generator[GitWorktree, None, None]:
         """Iterate over the working trees of the git repository."""
+        if self.repository is None:
+            return
+
         tree_list: str = self.repository.git.worktree("list", "--porcelain")
 
         for worktree in [tree.strip() for tree in tree_list.split("\n" * 2) if tree and tree.startswith("worktree ")]:
             yield GitWorktree.parse(self, worktree)
 
-    def create_worktree(self, path: Union[Path, str], branch: str = None):
+    def create_worktree(self, path: Union[Path, str], branch: Optional[str] = None):
         """Create a new worktree for the repository based on a specific branch
         or the default branch of the repository.
 
         :param path: Path to the worktree.
         :param branch: Branch to create the worktree from. Defaults to the main branch of the repository.
         """
+        if self.repository is None:
+            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+
         if branch is None:
             branch = self.default_branch
 
@@ -607,6 +627,9 @@ class GitConnector(Connector):
 
     def prune_worktrees(self):
         """Prune worktrees marked as prunable by git."""
+        if self.repository is None:
+            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+
         if any(worktree.prunable for worktree in self.worktrees()):
             logger.debug(f"Pruning worktrees for repository {self.name!r}")
             self.repository.git.worktree("prune")
@@ -631,6 +654,9 @@ class GitConnector(Connector):
         :return: A worktree that belongs to the current repository and is based on the specified branch.
         :rtype: Optional[GitWorktree]
         """
+        if self.repository is None:
+            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+
         for worktree in self.worktrees():
             if not worktree.path.is_dir():
                 logger.debug(f"Worktree path {worktree.path!s} does not exist, removing references")
@@ -646,22 +672,22 @@ class GitConnector(Connector):
 
         return None
 
-    def fetch_worktrees(self, worktrees: Sequence[GitWorktree] = None):
+    def fetch_worktrees(self, worktrees: Optional[Sequence[GitWorktree]] = None):
         """Fetch all worktrees of the repository.
         Attention: Do not call right before `pull_worktrees` as both git processes might enter into conflict.
 
         :param worktrees: A list of worktrees to fetch. If not specified, all worktrees will be fetched.
         """
-        for worktree in self._filter_worktrees(worktrees):
+        for worktree in self._filter_worktrees(worktrees or []):
             logger.debug(f"Fetching changes in worktree {worktree.path!s}")
             bash.detached(f"cd {worktree.path!s} && git fetch")
 
-    def pull_worktrees(self, worktrees: Sequence[GitWorktree] = None, force: bool = False):
+    def pull_worktrees(self, worktrees: Optional[Sequence[GitWorktree]] = None, force: bool = False):
         """Pull all worktrees of the repository.
 
         :param worktrees: A list of worktrees to pull. If not specified, all worktrees will be pulled.
         """
-        for worktree in self._filter_worktrees(worktrees):
+        for worktree in self._filter_worktrees(worktrees or []):
             commits_behind, _ = worktree.pending_changes()
             logger.debug(f"Worktree at {worktree.path!s} is {commits_behind} commits behind 'origin/{worktree.branch}'")
 
@@ -687,6 +713,6 @@ class GitConnector(Connector):
         :rtype: List[str]
         """
         with self:
-            branches = self._connection.get_repo(self.name).get_branches()
+            branches = cast(Github, self._connection).get_repo(self.name).get_branches()
 
         return [branch.name for branch in branches]

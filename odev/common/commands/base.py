@@ -44,19 +44,19 @@ logger = logging.getLogger(__name__)
 class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     """Base class for handling commands."""
 
-    argv: Sequence[str] = []
+    _argv: Sequence[str] = []
     """Arguments passed to the command before parsing."""
 
-    name: ClassVar[str]
+    _name: ClassVar[str]
     """The name of the command associated with the class. Must be unique."""
 
-    aliases: ClassVar[Sequence[str]] = []
+    _aliases: ClassVar[Sequence[str]] = []
     """The aliases of the command associated with the class. Must be unique."""
 
-    help: ClassVar[str] = None
+    _help: ClassVar[str]
     """Optional help information on what the command does."""
 
-    description: ClassVar[str] = None
+    _description: ClassVar[str] = ""
     """Optional short help information on what the command does.
     If omitted, the class or source module docstring will be used instead.
     """
@@ -106,7 +106,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         return f"{self.__class__.__name__}({arguments})"
 
     def __str__(self) -> str:
-        return self.name
+        return self._name
 
     @classmethod
     def __reversed_mro(cls):
@@ -159,11 +159,11 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def prepare_command(cls, framework: "Odev") -> None:
         """Set proper attributes on the command class and provide inheritance from parent classes."""
         cls._framework = framework
-        cls.name = (cls.name or cls.__name__).lower()
-        cls.help = string.normalize_indent(
-            cls.__dict__.get("help") or cls.__doc__ or cls.help or sys.modules[cls.__module__].__doc__ or ""
+        cls._name = (cls._name or cls.__name__).lower()
+        cls._help = string.normalize_indent(
+            cls.__dict__.get("help") or cls.__doc__ or cls._help or sys.modules[cls.__module__].__doc__ or ""
         )
-        cls.description = string.normalize_indent(cls.description or cls.help)
+        cls._description = string.normalize_indent(cls._description or cls._help)
         cls.convert_arguments()
 
     @classmethod
@@ -179,7 +179,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
             )
 
             if argument is None:
-                raise KeyError(f"Argument {name!r} not found in command {cls.name!r}")
+                raise KeyError(f"Argument {name!r} not found in command {cls._name!r}")
 
             return argument["name"]
 
@@ -192,6 +192,9 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         :param name: the name of the argument to update
         :param values: the values to update
         """
+        if "description" in values:
+            values["help"] = values.pop("description")
+
         cls._arguments[cls._find_argument(name)].update(**values)
 
     @classmethod
@@ -230,8 +233,8 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
             defined in the command and in its parent's classes.
         """
         parser = ArgumentParser(
-            prog=cls.name,
-            description=cls.help,
+            prog=cls._name,
+            description=cls._help,
             formatter_class=RawTextHelpFormatter,
             add_help=False,
         )
@@ -258,14 +261,16 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                     setattr(arguments, cls._unknown_arguments_dest, unknown)
             except SystemExit as exception:
                 error_message = stderr.getvalue()
-                error = re.search(rf"{cls.name}: error: (.*)$", error_message, re.MULTILINE)
+                error = re.search(rf"{cls._name}: error: (.*)$", error_message, re.MULTILINE)
                 error_message = str(error.group(1)) if error else error_message
                 raise SystemExit(error_message.capitalize()) from exception
             finally:
                 sys.stderr = sys.__stderr__
 
         for argument in cls.ordered_arguments_definitions():
-            setattr(cls, argument[0], getattr(arguments, argument[0]))
+            if argument[1].name not in cls._arguments and argument[0] not in cls._arguments:
+                continue
+            setattr(cls, argument[0], getattr(arguments, argument[1].name or argument[0]))
 
         return arguments
 
@@ -277,11 +282,8 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def cleanup(self) -> None:
         """Cleanup after the command execution."""
 
-    def print(self, renderable: RenderableType = None, auto_paginate: bool = True, *args: Any, **kwargs: Any) -> None:
+    def print(self, renderable: RenderableType = "", auto_paginate: bool = True, *args: Any, **kwargs: Any) -> None:
         """Print to stdout with highlighting and theming."""
-        if renderable is None:
-            renderable = ""
-
         if (
             self.console.is_terminal
             and isinstance(renderable, str)
@@ -309,7 +311,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         self,
         columns: Sequence[MutableMapping[str, Any]],
         rows: Sequence[List[Any]],
-        total: List[Any] = None,
+        total: Optional[List[Any]] = None,
         file: Optional[Path] = None,
         **kwargs,
     ) -> None:

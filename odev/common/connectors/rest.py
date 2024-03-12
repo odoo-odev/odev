@@ -16,11 +16,13 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    cast,
 )
 from urllib.parse import ParseResult, quote, urlparse
 
 from requests import Response, Session
 from requests.exceptions import ConnectionError as RequestsConnectionError
+from rich.progress import Task
 
 from odev._version import __version__
 from odev.common.connectors.base import Connector
@@ -104,21 +106,24 @@ class RestConnector(Connector, ABC):
     @abstractproperty
     def exists(self) -> bool:
         """Return whether the endpoint exists."""
+        raise NotImplementedError
 
     @abstractproperty
     def login(self) -> str:
         """Login for authenticating to the endpoint."""
+        raise NotImplementedError
 
     @abstractproperty
     def password(self):
         """Password or API key for authenticating to the endpoint."""
+        raise NotImplementedError
 
     def connect(self):
         """Open a session to the endpoint."""
         if self._connection is not None:
             return
 
-        self._connection = Session()
+        self._connection = Session()  # type: ignore [assignment]
 
         for domain in {*ODOO_DOMAINS, self.parsed_url.netloc}:
             for key in ODOO_SESSION_COOKIES:
@@ -144,7 +149,7 @@ class RestConnector(Connector, ABC):
             self._connection.close()
             del self._connection
 
-    def cache(self, key: str, value: Response = None) -> Optional[Response]:
+    def cache(self, key: str, value: Optional[Response] = None) -> Optional[Response]:
         """Get the cached value for the specified key.
         If value is not `None`, add the value to the cache.
         :param key: The key to get or set.
@@ -168,7 +173,7 @@ class RestConnector(Connector, ABC):
         self,
         method: Union[Literal["GET"], Literal["POST"]],
         path: str,
-        obfuscate_params: Sequence[str] = None,
+        obfuscate_params: Optional[Sequence[str]] = None,
         raise_for_status: bool = True,
         retry_on_error: bool = True,
         **kwargs,
@@ -186,6 +191,7 @@ class RestConnector(Connector, ABC):
         if not self.connected:
             self.connect()
 
+        assert self._connection is not None, "Connection was not established"
         parsed = urlparse(path)
 
         if parsed.scheme and parsed.netloc:
@@ -255,7 +261,7 @@ class RestConnector(Connector, ABC):
                 self.store.secrets.set(
                     f"{cookie.domain}:{cookie.name}",
                     "",
-                    cookie.value,
+                    cookie.value or "",
                 )
 
         return response
@@ -266,7 +272,7 @@ class RestConnector(Connector, ABC):
         method: Union[Literal["GET"], Literal["POST"]],
         path: str,
         authenticate: bool = True,
-        params: dict = None,
+        params: Optional[dict] = None,
         **kwargs,
     ) -> Response:
         """Executes an HTTP request to the endpoint.
@@ -280,7 +286,7 @@ class RestConnector(Connector, ABC):
         :rtype: requests.Response
         """
 
-    def get(self, path: str, params: dict = None, authenticate: bool = True, **kwargs) -> Response:
+    def get(self, path: str, params: Optional[dict] = None, authenticate: bool = True, **kwargs) -> Response:
         """Perform a GET request to the endpoint.
         Authentication is handled automatically using the Odoo credentials stored in the secrets vault.
 
@@ -292,7 +298,7 @@ class RestConnector(Connector, ABC):
         """
         return self.request("GET", path, params=params, authenticate=authenticate, **kwargs)
 
-    def post(self, path: str, params: dict = None, authenticate: bool = True, **kwargs) -> Response:
+    def post(self, path: str, params: Optional[dict] = None, authenticate: bool = True, **kwargs) -> Response:
         """Perform a POST request to the endpoint.
         Authentication is handled automatically using the Odoo credentials stored in the secrets vault.
 
@@ -316,10 +322,12 @@ class RestConnector(Connector, ABC):
         progress = Progress(download=True)
         task = progress.add_task(progress_message, total=None)
 
-        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+        def signal_handler_progress(
+            signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None
+        ):
             progress.stop_task(task)
             progress.stop()
-            logger.warning(f"{progress._tasks.get(task).description}: task interrupted by user")
+            logger.warning(f"{cast(Task, progress._tasks.get(task)).description}: task interrupted by user")
             raise KeyboardInterrupt
 
         try:

@@ -10,4 +10,4 @@ logger = logging.getLogger(__name__)
 class ShellCommand(OdoobinShellCommand):
     """Run the odoo-bin process in shell mode for the selected database locally."""
 
-    name = "shell"
+    _name = "shell"

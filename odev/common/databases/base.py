@@ -15,7 +15,7 @@ from odev.common.version import OdooVersion
 class Platform:
     """Information about the platform on which a database is running."""
 
-    name: Literal["local", "saas", "paas"]
+    name: Literal["local", "saas", "paas", "dummy"]
     """The name of the platform."""
 
     display: str
@@ -26,7 +26,7 @@ class Platform:
 class Filestore:
     """Information about the filestore of an Odoo database."""
 
-    path: Optional[Path]
+    path: Path
     """The path to the filestore."""
 
     size: int
@@ -73,13 +73,13 @@ class Repository:
 class Database(OdevFrameworkMixin, ABC):
     """Base abstract class for manipulating databases."""
 
-    _name: str = None
+    _name: str
     """The name of the database."""
 
-    _platform: ClassVar[Literal["local", "saas", "paas"]] = None
+    _platform: ClassVar[Literal["local", "saas", "paas", "dummy"]]
     """The platform on which the database is running."""
 
-    _platform_display: ClassVar[str] = None
+    _platform_display: ClassVar[str]
     """The display name of the platform on which the database is running."""
 
     _filestore: Optional[Filestore] = None
@@ -110,10 +110,12 @@ class Database(OdevFrameworkMixin, ABC):
     @abstractmethod
     def __enter__(self):
         """Setup connection to the required underlying systems."""
+        raise NotImplementedError
 
     @abstractmethod
     def __exit__(self):
         """Close connection with the required underlying systems."""
+        raise NotImplementedError
 
     @property
     def name(self) -> str:
@@ -128,30 +130,37 @@ class Database(OdevFrameworkMixin, ABC):
     @abstractproperty
     def is_odoo(self) -> bool:
         """Return whether the database is an Odoo database."""
+        raise NotImplementedError
 
     @abstractproperty
     def version(self) -> Optional[OdooVersion]:
         """Return the Odoo version of the database."""
+        raise NotImplementedError
 
     @abstractproperty
-    def edition(self) -> Optional[str]:
+    def edition(self) -> Optional[Literal["community", "enterprise"]]:
         """Return the Odoo edition of the database."""
+        raise NotImplementedError
 
     @abstractproperty
     def filestore(self) -> Filestore:
         """Return information about the Odoo filestore."""
+        raise NotImplementedError
 
     @abstractproperty
     def size(self) -> int:
         """Return the size of the database in bytes."""
+        raise NotImplementedError
 
     @abstractproperty
     def expiration_date(self) -> Optional[datetime]:
         """Return the expiration date of the database."""
+        raise NotImplementedError
 
     @abstractproperty
     def uuid(self) -> Optional[str]:
         """Return the UUID of the database."""
+        raise NotImplementedError
 
     @abstractproperty
     def last_access_date(self) -> Optional[datetime]:
@@ -160,28 +169,34 @@ class Database(OdevFrameworkMixin, ABC):
     @abstractproperty
     def url(self) -> Optional[str]:
         """Return the URL to access the database."""
+        raise NotImplementedError
 
     @abstractproperty
     def exists(self) -> bool:
         """Return whether the database exists."""
+        raise NotImplementedError
 
     @abstractproperty
     def running(self) -> bool:
         """Return whether the database is currently running and accessible."""
+        raise NotImplementedError
 
     @abstractproperty
     def rpc_port(self) -> Optional[int]:
         """Return the port used by the Odoo RPC interface."""
+        raise NotImplementedError
 
     @abstractproperty
     def repository(self) -> Optional[Repository]:
         """The repository containing custom code for the database."""
+        raise NotImplementedError
 
     @abstractproperty
-    def branch(self) -> Branch:
+    def branch(self) -> Optional[Branch]:
         """Return information about the branch of the repository containing custom
         code for the database.
         """
+        raise NotImplementedError
 
     @property
     def models(self) -> RpcConnector:
@@ -202,7 +217,7 @@ class Database(OdevFrameworkMixin, ABC):
         """Neutralize the database and make it suitable for development."""
         raise NotImplementedError(f"Database neutralization not implemented for {self.platform.display} databases")
 
-    def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
+    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Optional[Path]:
         """Generate a dump file for the database.
         :param filestore: Whether to include the filestore in the dump.
         :param path: The path to the dump file.
@@ -217,7 +232,12 @@ class Database(OdevFrameworkMixin, ABC):
         """
         raise NotImplementedError(f"Database restore not implemented for {self.platform.display} databases")
 
-    def _get_dump_filename(self, filestore: bool = False, suffix: str = None, extension: str = None) -> str:
+    def _get_dump_filename(
+        self,
+        filestore: bool = False,
+        suffix: Optional[str] = None,
+        extension: Optional[str] = None,
+    ) -> str:
         """Return the filename of the dump file.
         :param filestore: Whether to include the filestore in the dump.
         :param suffix: An optional suffix to add to the filename.
@@ -228,3 +248,96 @@ class Database(OdevFrameworkMixin, ABC):
         suffix = f".{suffix}" if suffix else ""
         extension = extension if extension is not None else "zip" if filestore else "sql"
         return f"{prefix}-{self.name}.dump{suffix}.{extension}"
+
+
+class DummyDatabase(Database):
+    """Dummy database class used when no database is specified in commands."""
+
+    _platform = "dummy"
+
+    def __init__(self, name: str = "$dummy$", *args, **kwargs):
+        """Initialize the dummy database."""
+        super().__init__(name, *args, **kwargs)
+
+    @property
+    def platform(self) -> Platform:
+        """The platform on which the database is running."""
+        return Platform("dummy", "Dummy")
+
+    @property
+    def is_odoo(self) -> bool:
+        """Return whether the database is an Odoo database."""
+        return False
+
+    @property
+    def version(self) -> Optional[OdooVersion]:
+        """Return the Odoo version of the database."""
+        return None
+
+    @property
+    def edition(self) -> Optional[Literal["community", "enterprise"]]:
+        """Return the Odoo edition of the database."""
+        return None
+
+    @property
+    def filestore(self) -> Filestore:
+        """Return information about the Odoo filestore."""
+        raise NotImplementedError
+
+    @property
+    def size(self) -> int:
+        """Return the size of the database in bytes."""
+        return 0
+
+    @property
+    def expiration_date(self) -> Optional[datetime]:
+        """Return the expiration date of the database."""
+        return None
+
+    @property
+    def uuid(self) -> Optional[str]:
+        """Return the UUID of the database."""
+        return None
+
+    @property
+    def last_access_date(self) -> Optional[datetime]:
+        """Return the date of the last access to the database."""
+        return None
+
+    @property
+    def url(self) -> Optional[str]:
+        """Return the URL to access the database."""
+        return None
+
+    @property
+    def exists(self) -> bool:
+        """Return whether the database exists."""
+        return False
+
+    @property
+    def running(self) -> bool:
+        """Return whether the database is currently running and accessible."""
+        return False
+
+    @property
+    def rpc_port(self) -> Optional[int]:
+        """Return the port used by the Odoo RPC interface."""
+        return None
+
+    @property
+    def repository(self) -> Optional[Repository]:
+        """The repository containing custom code for the database."""
+        return None
+
+    @property
+    def branch(self) -> Optional[Branch]:
+        """Return information about the branch of the repository containing custom
+        code for the database.
+        """
+        return None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        pass

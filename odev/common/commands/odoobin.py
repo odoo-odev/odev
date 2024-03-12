@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 class OdoobinCommand(LocalDatabaseCommand, ABC):
     """Base class for commands that interact with an odoo-bin process."""
 
+    # --------------------------------------------------------------------------
+    # Arguments
+    # --------------------------------------------------------------------------
+
     addons = args.List(
         nargs="?",
         description="""Comma-separated list of additional addon paths.
@@ -53,6 +57,10 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         """,
     )
 
+    # --------------------------------------------------------------------------
+    # Properties
+    # --------------------------------------------------------------------------
+
     _odoo_log_regex: re.Pattern = re.compile(
         r"""
             (?:
@@ -71,27 +79,27 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     )
     """Regular expression to match the output of odoo-bin."""
 
-    last_level: str = None
+    last_level: str = "INFO"
     """Log-level level of the last line printed by the odoo-bin process."""
 
     def __init__(self, args: Namespace, **kwargs):
         super().__init__(args, **kwargs)
-        if not isinstance(self.database, LocalDatabase):
+        if not isinstance(self._database, LocalDatabase):
             raise self.error(f"Database must be an instance of {LocalDatabase.__name__}.")
 
-        if self.args.addons is not None:
-            addons_paths = [Path(addon).resolve() for addon in self.args.addons]
-            invalid_paths = [path for path in addons_paths if not self.odoobin.check_addons_path(path)]
-
-            if invalid_paths:
-                logger.warning(
-                    "Some additional addons paths are invalid, they will be ignored:\n"
-                    + "\n".join(path.as_posix() for path in invalid_paths)
-                )
-        else:
-            addons_paths = [Path().resolve()]
-
         if self.odoobin is not None:
+            if self.args.addons is not None:
+                addons_paths = [Path(addon).resolve() for addon in self.args.addons]
+                invalid_paths = [path for path in addons_paths if not self.odoobin.check_addons_path(path)]
+
+                if invalid_paths:
+                    logger.warning(
+                        "Some additional addons paths are invalid, they will be ignored:\n"
+                        + "\n".join(path.as_posix() for path in invalid_paths)
+                    )
+            else:
+                addons_paths = [Path().resolve()]
+
             self.odoobin.additional_addons_paths = addons_paths
             self.odoobin._force_enterprise = bool(self.args.enterprise)
 
@@ -104,7 +112,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     @property
     def odoobin(self) -> Optional[OdoobinProcess]:
         """The odoo-bin process associated with the database."""
-        return self.database.process
+        return self._database.process
 
     def odoobin_progress(self, line: str):
         """Beautify odoo logs on the fly."""
@@ -156,12 +164,14 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
 
     def run(self):
         """Run the odoo-bin process for the selected database locally."""
+        if self.odoobin is None:
+            raise self.error(f"No odoo-bin process could be instantiated for database {self._database!r}")
+
         if self.args.script:
             result = self.run_script()
 
             if result is not None:
                 return self.run_script_handle_result(result)
-
         else:
             self.odoobin.run(args=self.args.odoo_args, subcommand="shell")
 
@@ -169,6 +179,9 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
         """Run a script inside of odoo-bin shell and exit.
         :return: The output of the script.
         """
+        if self.odoobin is None:
+            raise self.error(f"No odoo-bin process could be instantiated for database {self._database!r}")
+
         if Path(self.args.script).is_file():
             subcommand_input = f"cat {self.args.script}"
         else:
@@ -209,7 +222,7 @@ class OdoobinShellScriptCommand(OdoobinShellCommand, ABC):
 
     def __init__(self, args: Namespace, **kwargs):
         super().__init__(args, **kwargs)
-        self.args.script = (self.odev.scripts_path / f"{self.name}.py").as_posix()
+        self.args.script = (self.odev.scripts_path / f"{self!s}.py").as_posix()
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:

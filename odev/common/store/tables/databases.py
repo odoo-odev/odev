@@ -64,7 +64,7 @@ class DatabaseStore(PostgresTable):
 
         return DatabaseInfo(*result[0][1:])
 
-    def set(self, database: Database, arguments: str = None):
+    def set(self, database: Database, arguments: Optional[str] = None):
         """Save values for a database."""
         values = {
             "name": f"{database.name!r}",

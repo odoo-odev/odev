@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 class ExportCommand(DatabaseCommand):
     """Export data from a database."""
 
-    name = "export"
-    aliases = ["search", "read", "records"]
+    _name = "export"
+    _aliases = ["search", "read", "records"]
 
     arguments = [
         {
@@ -58,7 +58,7 @@ class ExportCommand(DatabaseCommand):
         super().__init__(*args, **kwargs)
 
         if self.args.output is not None and self.args.output.is_dir():
-            file_name = re.sub(r"[^a-zA-Z0-9]", "_", f"{self.database.name}_{self.args.model}")
+            file_name = re.sub(r"[^a-zA-Z0-9]", "_", f"{self._database.name}_{self.args.model}")
             self.args.output /= f"{file_name}.{self.args.format}"
 
         if self.args.output is not None:
@@ -66,7 +66,7 @@ class ExportCommand(DatabaseCommand):
 
     def run(self):
         with progress.spinner(f"Searching records in {self.args.model}"):
-            model = self.database.models[self.args.model]
+            model = self._database.models[self.args.model]
             record_ids = model.search(self.args.domain)
 
         with progress.spinner(f"Exporting {len(record_ids)} records"):

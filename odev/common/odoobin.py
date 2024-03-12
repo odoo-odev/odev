@@ -9,9 +9,11 @@ from typing import (
     Callable,
     Generator,
     List,
+    Literal,
     Mapping,
     Optional,
     Sequence,
+    cast,
 )
 
 from odev.common import bash, string
@@ -63,14 +65,14 @@ class OdoobinProcess(OdevFrameworkMixin):
     _force_enterprise: bool = False
     """Force using the enterprise version of Odoo."""
 
-    def __init__(self, database: "LocalDatabase", venv: Optional[str] = None, version: OdooVersion = None):
+    def __init__(self, database: "LocalDatabase", venv: Optional[str] = None, version: Optional[OdooVersion] = None):
         """Initialize the OdoobinProcess object."""
         super().__init__()
 
         self.database: LocalDatabase = database
         """Database this process is for."""
 
-        self._version: Optional[OdooVersion] = version
+        self._version: Optional[OdooVersion] = self.database.version or version or OdooVersion("master")
         """Force the version of Odoo when running the process."""
 
         self._venv_name: str = venv or str(self.version)
@@ -206,11 +208,11 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     @property
     def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
-        """Return the list of Odoo worktrees the current version."""
+        """Return the list of Odoo worktrees for the current version."""
         branch = self._get_odoo_branch()
 
         for repo in self.odoo_repositories:
-            yield repo.get_worktree(branch)
+            yield cast(GitWorktree, repo.get_worktree(branch))
 
     @property
     def odoo_addons_paths(self) -> List[Path]:
@@ -240,8 +242,25 @@ class OdoobinProcess(OdevFrameworkMixin):
         )
         return (path for glob in globs for path in glob)
 
-    def with_version(self, version: OdooVersion = None) -> "OdoobinProcess":
+    def with_edition(self, edition: Optional[Literal["community", "enterprise"]] = None) -> "OdoobinProcess":
+        """Return the OdoobinProcess instance with the given edition forced."""
+        if edition is None:
+            edition = "enterprise"
+
+        self._force_enterprise = edition == "enterprise"
+        return self
+
+    def with_venv(self, venv: str) -> "OdoobinProcess":
+        """Return the OdoobinProcess instance with the given virtual environment forced."""
+        self._venv_name = venv
+        self._venv = None
+        return self
+
+    def with_version(self, version: Optional[OdooVersion] = None) -> "OdoobinProcess":
         """Return the OdoobinProcess instance with the given version forced."""
+        if version is None:
+            version = OdooVersion("master")
+
         self._version = version
         self._venv = None
         return self
@@ -267,7 +286,9 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.version == OdooVersion("master"):
             return ODOO_PYTHON_VERSIONS.get(max(ODOO_PYTHON_VERSIONS.keys()), None)
 
-        return ODOO_PYTHON_VERSIONS.get(min(ODOO_PYTHON_VERSIONS, key=lambda v: abs(v - self.version.major)), None)
+        return ODOO_PYTHON_VERSIONS.get(
+            min(ODOO_PYTHON_VERSIONS, key=lambda v: abs(v - cast(OdooVersion, self.version).major)), None
+        )
 
     def _get_odoo_branch(self) -> str:
         """Return the branch of the current Odoo installation."""
@@ -296,7 +317,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         return "Unknown command" not in output.get()
 
-    def prepare_odoobin_args(self, args: List[str] = None, subcommand: str = None) -> List[str]:
+    def prepare_odoobin_args(self, args: Optional[List[str]] = None, subcommand: Optional[str] = None) -> List[str]:
         """Prepare the arguments to pass to odoo-bin.
 
         :param args: Additional arguments to pass to odoo-bin.
@@ -326,18 +347,29 @@ class OdoobinProcess(OdevFrameworkMixin):
         self.update_worktrees()
         self.prepare_venv()
 
-    def deploy(self, module: Path, args: List[str] = None, url: str = None) -> Optional[CompletedProcess]:
+    def deploy(
+        self,
+        module: Path,
+        args: Optional[List[str]] = None,
+        url: Optional[str] = None,
+    ) -> Optional[CompletedProcess]:
         """Run odoo-bin deploy to import a module on the database at the given URL.
-        :param url: URL of the database to which import the module.
         :param args: Additional arguments to pass to odoo-bin.
+        :param url: URL of the database to which import the module.
         """
+        if not self.database.is_odoo:
+            raise RuntimeError("Cannot deploy onto a non-odoo database")
+
+        if args is None:
+            args = []
+
         odoo_subcommand: str = "deploy"
         odoo_command: str = f"odoo-bin {odoo_subcommand}"
         odoo_args: List[str] = [
             odoo_subcommand,
             *args,
             module.as_posix(),
-            url if url else self.database.url,
+            url if url else cast(str, self.database.url),
         ]
 
         info_message: str = (
@@ -365,11 +397,11 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def run(
         self,
-        args: List[str] = None,
-        subcommand: str = None,
+        args: Optional[List[str]] = None,
+        subcommand: Optional[str] = None,
         subcommand_input: Optional[str] = None,
         stream: bool = True,
-        progress: Callable[[str], None] = None,
+        progress: Optional[Callable[[str], None]] = None,
         prepare: bool = True,
     ) -> Optional[CompletedProcess]:
         """Run Odoo on the current database.
@@ -434,6 +466,9 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def prepare_npm(self):
         """Prepare the packages of the Odoo installation."""
+        if not self.database.exists:
+            raise RuntimeError("Database does not exist")
+
         logger.debug("Verifying NPM installation")
         npm_process = bash.execute("which npm")
 
@@ -442,7 +477,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         packages = ["rtlcss"]
 
-        if self.version.major <= 10:
+        if cast(OdooVersion, self.version).major <= 10:
             packages.extend(["less", "less-plugin-clean-css"])
 
         missing = list(self.missing_npm_packages(packages))
@@ -452,7 +487,12 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def missing_npm_packages(self, packages: Sequence[str]) -> Generator[str, None, None]:
         """Check whether the given NPM packages are installed in the version folder of Odoo."""
-        installed_packages = bash.execute(f"cd {self.odoo_path} && npm list").stdout.decode()
+        installed_packages_process = bash.execute(f"cd {self.odoo_path} && npm list")
+
+        if installed_packages_process is None:
+            raise RuntimeError("Failed to check installed NPM packages")
+
+        installed_packages = installed_packages_process.stdout.decode()
 
         for package in packages:
             if f" {package}" not in installed_packages:
@@ -460,12 +500,17 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def prepare_venv(self):
         """Prepare the virtual environment of the Odoo installation."""
+        if not self.database.exists:
+            raise RuntimeError("Database does not exist")
+
         if not self.venv.exists:
             self.venv.create_venv()
 
         for path in self.addons_requirements:
             if any(self.venv.missing_requirements(path)):
                 self.venv.install_requirements(path)
+
+        assert isinstance(self.version, OdooVersion)
 
         if self.version.major < 10 and not self.version.master:
             self.venv.install_packages(["psycopg2==2.7.3.1"])
@@ -474,7 +519,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         """Update the worktrees of the Odoo repositories."""
         for repository in self.odoo_repositories:
             repository.prune_worktrees()
-            worktree = repository.get_worktree(self._get_odoo_branch())
+            worktree = cast(GitWorktree, repository.get_worktree(self._get_odoo_branch()))
             repository.pull_worktrees([worktree])
             repository.fetch_worktrees([worktree])
 
@@ -526,7 +571,9 @@ class OdoobinProcess(OdevFrameworkMixin):
             return
 
         self.database.repository = Repository(repository._repository, repository._organization)
-        self.database.branch = Branch(repository.branch, self.database.repository)
+
+        if repository.branch is not None:
+            self.database.branch = Branch(repository.branch, cast(Repository, self.database.repository))
 
     def standardize(self, remove_studio: bool = False, dry: bool = False) -> Optional[CompletedProcess]:
         """Remove customizations from a database using the `clean_database.py` script

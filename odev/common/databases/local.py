@@ -19,6 +19,7 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
 from zipfile import ZipFile
 
@@ -62,7 +63,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _branch: Optional[Branch] = None
     """The branch of the repository containing custom code for the database."""
 
-    _platform: ClassVar[Literal["local"]] = "local"
+    _platform: ClassVar[Literal["local"]] = "local"  # type: ignore [assignment]
     """The platform on which the database is running."""
 
     _platform_display: ClassVar[str] = "Local"
@@ -79,7 +80,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.whitelisted = info is not None and info.whitelisted
 
     def __enter__(self):
-        self.connector = self.psql(self.name).__enter__()
+        self.connector = self.psql(self.name).__enter__()  # type: ignore [assignment]
         return self
 
     def __exit__(self, *args):
@@ -102,6 +103,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if not self.is_odoo:
             return None
 
+        if self.process is not None:
+            return self.process.venv_path
+
         info = self.store.databases.get(self)
 
         if info is None:
@@ -110,12 +114,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return Path(info.virtualenv)
 
     @cached_property
-    def version(self) -> Optional[OdooVersion]:
+    def version(self) -> Optional[OdooVersion]:  # type: ignore [override]
         if not self.is_odoo:
             return None
 
         with self:
-            result = self.is_odoo and self.connector.query(
+            result = self.is_odoo and cast(PostgresConnector, self.connector).query(
                 """
                 SELECT latest_version
                 FROM ir_module_module
@@ -124,15 +128,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result is not True and result[0][0] and OdooVersion(result[0][0]) or None
+        return None if not result or isinstance(result, bool) else OdooVersion(result[0][0])
 
     @cached_property
-    def edition(self) -> Optional[str]:
+    def edition(self) -> Optional[Literal["community", "enterprise"]]:  # type: ignore [override]
         if not self.is_odoo:
             return None
 
         with self:
-            result = self.connector.query(
+            result = cast(PostgresConnector, self.connector).query(
                 """
                 SELECT true
                 FROM ir_module_module
@@ -142,7 +146,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result is not True and result[0][0] and "enterprise" or "community"
+        return "enterprise" if result and result is not True and result[0][0] else "community"
 
     @property
     def filestore(self) -> Filestore:
@@ -155,7 +159,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def url(self) -> Optional[str]:
-        if not self.is_odoo:
+        if not self.is_odoo or self.process is None:
             return None
 
         return self.process.is_running and f"http://localhost:{self.process.rpc_port}" or None
@@ -172,7 +176,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 LIMIT 1
                 """
             )
-        return result and result[0][0] or 0
+        return cast(int, result[0][0]) if result and result is not True else 0
 
     @property
     def expiration_date(self) -> Optional[datetime]:
@@ -180,7 +184,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return None
 
         with self:
-            result = self.connector.query(
+            result = cast(PostgresConnector, self.connector).query(
                 """
                 SELECT value
                 FROM ir_config_parameter
@@ -203,7 +207,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return None
 
         with self:
-            result = self.connector.query(
+            result = cast(PostgresConnector, self.connector).query(
                 """
                 SELECT value
                 FROM ir_config_parameter
@@ -212,7 +216,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result is not True and result[0][0] or None
+        return None if not result or isinstance(result, bool) else result[0][0]
 
     @property
     def last_date(self) -> Optional[datetime]:
@@ -241,7 +245,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 LIMIT 1
                 """
             )
-            return result and result[0][0] or None
+            return None if not result or isinstance(result, bool) else result[0][0]
 
     @property
     def last_access_date(self) -> Optional[datetime]:
@@ -249,7 +253,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return None
 
         with self:
-            result = self.is_odoo and self.connector.query(
+            result = cast(PostgresConnector, self.connector).query(
                 """
                 SELECT create_date
                 FROM res_users_log
@@ -258,7 +262,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return result and result is not True and result[0][0] or None
+        return None if not result or isinstance(result, bool) else result[0][0]
 
     @property
     def exists(self) -> bool:
@@ -303,6 +307,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def branch(self) -> Optional[Branch]:
+        if self.repository is None:
+            return None
+
         if self._branch is None:
             if not self.is_odoo:
                 return None
@@ -360,7 +367,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         return [module[0] for module in modules]
 
-    def create(self, template: str = None) -> bool:
+    def create(self, template: Optional[str] = None) -> bool:
         """Create the database.
 
         :param template: The name of the template to copy.
@@ -376,6 +383,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     def neutralize(self):
         """Neutralize the database."""
+        assert self.process is not None
         installed_modules: List[str] = self.installed_modules
         scripts: List[Path] = [self.odev.static_path / "neutralize-pre.sql"]
 
@@ -393,6 +401,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         scripts.append(self.odev.static_path / "neutralize-post.sql")
 
+        if self.version is None:
+            raise ValueError("Database version is not set")
+
         if self.version.major < 15:
             scripts.append(self.odev.static_path / "neutralize-post-before-15.0.sql")
 
@@ -402,12 +413,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.start()
 
         for python_file in scripts:
-            tracker.update(task, advance=1, description=self.console.render_str(f"Running {python_file.as_posix()}"))
+            tracker.update(task, advance=1, description=self.console.render_str(f"Running {python_file.as_posix()}"))  # type: ignore [attr-defined]  # noqa: B950
             self.query(python_file.read_text())
 
         tracker.stop()
 
-    def dump(self, filestore: bool = False, path: Path = None) -> Optional[Path]:
+    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Optional[Path]:
         if path is None:
             path = self.odev.dumps_path
 
@@ -448,7 +459,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         tracker = progress.Progress(download=True)
 
-        def signal_handler_progress(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+        def signal_handler_progress(
+            signal_number: int,
+            frame: Optional[FrameType] = None,
+            message: Optional[str] = None,
+        ):
             for task in tracker.tasks:
                 if not task.finished:
                     tracker.stop_task(task.id)
@@ -480,11 +495,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param tracker: An instance of Progress to track the restore process.
         """
         re_filestore_file = re.compile(rf"^{ARCHIVE_FILESTORE}(?P<dirname>[\da-f]{{2}})/(?P<filename>[\da-f]{{40}})$")
-        info: List[Tuple[re.Match[str], int]] = [
-            (re_filestore_file.match(info.filename), info.file_size)
-            for info in archive.filelist
-            if re_filestore_file.match(info.filename)
-        ]
+        info: List[Tuple[re.Match[str], int]] = []
+
+        for archive_info in archive.filelist:
+            file_match = re_filestore_file.match(archive_info.filename)
+
+            if file_match:
+                info.append((file_match, archive_info.file_size))
 
         if not info:
             return logger.debug("No filestore found in archive")
@@ -493,14 +510,17 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         if self.filestore.path.exists():
             logger.warning(f"A filestore already exists for database {self.name!r}")
-            overwrite_mode: Literal["overwrite", "merge", "keep"] = self.console.select(
-                "Overwrite the existing filestore?",
-                default="overwrite",
-                choices=[
-                    ("overwrite", "Remove existing and overwrite with dump"),
-                    ("merge", "Merge dump into existing filestore"),
-                    ("keep", "Keep existing filestore"),
-                ],
+            overwrite_mode = cast(
+                Literal["overwrite", "merge", "keep"],
+                self.console.select(
+                    "Overwrite the existing filestore?",
+                    default="overwrite",
+                    choices=[
+                        ("overwrite", "Remove existing and overwrite with dump"),
+                        ("merge", "Merge dump into existing filestore"),
+                        ("keep", "Keep existing filestore"),
+                    ],
+                ),
             )
 
             if overwrite_mode == "keep":
@@ -571,6 +591,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             command = f"psql --dbname {self.name} --single-transaction"
 
         psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, bufsize=-1)
+        assert psql_process.stdin is not None
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
         thread.start()
 
@@ -588,6 +609,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Thread to monitor the restore process of a zipped dump file and update the progress tracker.
         :param process: The process to monitor.
         """
+        assert process.stdout is not None
         for _ in iter(process.stdout.readline, b""):
             if process.poll() is not None:
                 break
@@ -684,14 +706,14 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @ensure_connected
     def table_exists(self, table: str) -> bool:
         """Check if a table exists in the database."""
-        return self.connector.table_exists(table)
+        return cast(PostgresConnector, self.connector).table_exists(table)
 
     @ensure_connected
     def create_table(self, table: str, columns: Mapping[str, str]):
         """Create a table in the database."""
-        return self.connector.create_table(table, columns)
+        return cast(PostgresConnector, self.connector).create_table(table, columns)
 
     @ensure_connected
     def query(self, query: str):
         """Execute a query on the database."""
-        return self.connector.query(query)
+        return cast(PostgresConnector, self.connector).query(query)

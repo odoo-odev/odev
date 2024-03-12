@@ -124,6 +124,13 @@ TABLE_MAPPING: List[Mapped] = [
         format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
         total=False,
     ),
+    Mapped(
+        value=lambda database: database.venv.as_posix() if database.venv is not None else "",
+        title="Virtual Environment",
+        justify=None,
+        format=lambda value: str(value or ""),
+        total=False,
+    ),
 ]
 
 ORDER_MAPPING: MutableMapping[str, str] = {
@@ -138,8 +145,8 @@ ORDER_MAPPING: MutableMapping[str, str] = {
 class ListCommand(ListLocalDatabasesMixin, Command):
     """List local Odoo databases with some information about them."""
 
-    name = "list"
-    aliases = ["ls"]
+    _name = "list"
+    _aliases = ["ls"]
 
     names_only = args.Flag(
         aliases=["-1", "--one-column", "--names-only"],

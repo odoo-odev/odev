@@ -64,7 +64,7 @@ def __ask_dir(message: str, default: Optional[str] = None, path: Optional[Path] 
     return path
 
 
-def __get_dir(message: str, default: Optional[Path]) -> Optional[Path]:
+def __get_dir(message: str, default: Path) -> Optional[Path]:
     """Prompt for a directory path."""
     new_path: Optional[Path] = None
 

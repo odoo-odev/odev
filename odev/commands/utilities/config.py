@@ -17,8 +17,8 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 class ConfigCommand(Command):
     """Get or set configuration values."""
 
-    name = "config"
-    aliases = ["conf"]
+    _name = "config"
+    _aliases = ["conf"]
 
     key = args.String(description="Configuration key to fetch, in the format 'section.option'.", nargs="?")
     value = args.String(description="Value to set for the given key.", nargs="?")

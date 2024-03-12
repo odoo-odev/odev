@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from odev.common import string
 from odev.common.commands import Command, DatabaseCommand
@@ -41,7 +41,7 @@ class HistoryStore(PostgresTable):
     }
     _constraints = {"history_unique_command_arguments": "UNIQUE(command, arguments)"}
 
-    def get(self, command: Command = None, database: Database = None) -> List[HistoryLine]:
+    def get(self, command: Optional[Command] = None, database: Optional[Database] = None) -> List[HistoryLine]:
         """Get the history of a command or a database.
         :param command: The command to get the history of.
         :param database: The database to get the history of.
@@ -73,12 +73,14 @@ class HistoryStore(PostgresTable):
 
     def set(self, command: Command):
         """Set the history of a command."""
-        database = f"{command.database.name!r}" if isinstance(command, DatabaseCommand) and command.database else "NULL"
-        argv = " ".join([string.quote(arg, dirty_only=True) for arg in command.argv])
+        database = (
+            f"{command._database.name!r}" if isinstance(command, DatabaseCommand) and command._database else "NULL"
+        )
+        argv = " ".join([string.quote(arg, dirty_only=True) for arg in command._argv])
         self.database.query(
             f"""
             INSERT INTO {self.name} (command, database, arguments)
-            VALUES ({command.name!r}, {database}, E{argv!r})
+            VALUES ({command._name!r}, {database}, E{argv!r})
             ON CONFLICT (command, arguments) DO
                 UPDATE SET date = CURRENT_TIMESTAMP
             """

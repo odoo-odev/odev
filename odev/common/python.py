@@ -43,7 +43,7 @@ class PythonEnv:
             If omitted, defaults to the version of the current python interpreter.
         """
         self._global = path is None
-        self.path: Path = Path(sys.prefix if self._global else path).resolve()
+        self.path: Path = Path(path or sys.prefix).resolve()
         self.version: str = version or (".".join(sys.version.split(".")[:2]))
         self.python: Path = self.path / "bin" / f"python{self.version if self._global else version or ''}"
         self.pip: str = f"{self.python} -m pip"
@@ -159,6 +159,10 @@ class PythonEnv:
         """
         logger.debug(f"Running pip freeze in {self.path}")
         result = bash.execute(f"{self.pip} freeze --all")
+
+        if result is None:
+            raise RuntimeError("Failed to run pip freeze")
+
         packages = result.stdout.decode().splitlines()
         installed: MutableMapping[str, version.Version] = {}
 

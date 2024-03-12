@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 class VenvCommand(Command):
     """Interact with virtual environments created and managed by Odev."""
 
-    name = "venv"
-    aliases = ["virtualenv"]
+    _name = "venv"
+    _aliases = ["virtualenv"]
 
     venv_name = args.String(
         name="name",

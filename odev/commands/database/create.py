@@ -2,7 +2,7 @@
 
 import re
 import shutil
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from odev.common import args, progress
 from odev.common.commands import OdoobinCommand
@@ -18,8 +18,8 @@ TEMPLATE_SUFFIX = ":template"
 class CreateCommand(OdoobinCommand):
     """Create a new Odoo database locally, or copy an existing database template."""
 
-    name = "create"
-    aliases = ["init"]
+    _name = "create"
+    _aliases = ["init"]
 
     template_argument = args.String(
         name="template",
@@ -57,7 +57,7 @@ class CreateCommand(OdoobinCommand):
 
         if self.args.new_template:
             self.args.database += TEMPLATE_SUFFIX
-            self.database = LocalDatabase(self.args.database)
+            self._database = LocalDatabase(self.args.database)
 
         if self.args.template:
             self.template: Optional[LocalDatabase] = LocalDatabase(self.args.template + TEMPLATE_SUFFIX)
@@ -95,15 +95,15 @@ class CreateCommand(OdoobinCommand):
 
     def ensure_database_not_exists(self):
         """Drop the database if it exists."""
-        with self.database.psql("postgres").nocache():
-            if self.database.exists:
-                logger.warning(f"Database {self.database.name!r} already exists")
+        with self._database.psql("postgres").nocache():
+            if self._database.exists:
+                logger.warning(f"Database {self._database.name!r} already exists")
 
                 if not self.console.confirm("Overwrite it?"):
-                    raise self.error(f"Cannot create database with an already existing name {self.database.name!r}")
+                    raise self.error(f"Cannot create database with an already existing name {self._database.name!r}")
 
-                with progress.spinner(f"Dropping database {self.database.name!r}"):
-                    self.database.drop()
+                with progress.spinner(f"Dropping database {self._database.name!r}"):
+                    self._database.drop()
 
     def ensure_template_exists(self):
         """Ensure the template database exists."""
@@ -118,12 +118,12 @@ class CreateCommand(OdoobinCommand):
 
     def copy_template_filestore(self):
         """Copy the template filestore to the new database."""
-        fs_template = self.template.filestore.path
-        fs_database = self.database.filestore.path
+        fs_template = cast(LocalDatabase, self.template).filestore.path
+        fs_database = self._database.filestore.path
 
         if fs_template is not None and fs_template.exists() and fs_database is not None:
             if fs_database.exists():
-                logger.warning(f"Filestore for {self.database.name!r} already exists")
+                logger.warning(f"Filestore for {self._database.name!r} already exists")
 
                 if not self.console.confirm("Overwrite it?"):
                     raise self.error(f"Cannot copy template filestore to existing directory {fs_database!s}")
@@ -143,23 +143,23 @@ class CreateCommand(OdoobinCommand):
         self.ensure_template_exists()
 
         template = self.template.name if self.template else None
-        message = f"database {self.database.name!r}" + (f" from template {template!r}" if template else "")
+        message = f"database {self._database.name!r}" + (f" from template {template!r}" if template else "")
 
-        if self.template:
+        if self.template and self.template.connector:
             self.template.connector.disconnect()
 
         with progress.spinner(f"Creating {message}"):
-            created = self.database.create(template=template) & self.database.unaccent()
+            created = self._database.create(template=template) & self._database.unaccent()
 
             if created is False:
-                raise self.error(f"Failed to create database {self.database.name!r}")
+                raise self.error(f"Failed to create database {self._database.name!r}")
 
         logger.info(f"Created {message}")
 
     def initialize_database(self) -> None:
         """Initialize the database."""
         if self.template:
-            logger.debug(f"Initializing database {self.database.name!r} from template {self.template.name!r}")
+            logger.debug(f"Initializing database {self._database.name!r} from template {self.template.name!r}")
 
         args: List[str] = self.args.odoo_args
         joined_args = " ".join(args)
@@ -170,11 +170,11 @@ class CreateCommand(OdoobinCommand):
         if not re.search(r"--st(op-after-init)?", joined_args):
             args.append("--stop-after-init")
 
-        process = self.odoobin or OdoobinProcess(self.database)
+        process = self.odoobin or OdoobinProcess(self._database)
         process._force_enterprise = bool(self.args.enterprise)
         process.with_version(self.version).run(args=args, progress=self.odoobin_progress)
 
         if process is None:
-            raise self.error(f"Failed to initialize database {self.database.name!r}")
+            raise self.error(f"Failed to initialize database {self._database.name!r}")
 
-        logger.info(f"Initialized database {self.database.name!r}")
+        logger.info(f"Initialized database {self._database.name!r}")

@@ -25,8 +25,8 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 class PathfinderCommand(OdoobinShellScriptCommand):
     """Find the shortest path between two models in a database using a BFS algorithm."""
 
-    name = "pathfinder"
-    aliases = ["pf", "shortest_path", "sp"]
+    _name = "pathfinder"
+    _aliases = ["pf", "shortest_path", "sp"]
 
     origin = args.String(description="Model to start from.")
     destination = args.String(description="Model to end at.")

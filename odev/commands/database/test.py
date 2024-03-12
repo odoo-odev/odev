@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class TestCommand(OdoobinCommand):
     """Run unit tests on an empty local Odoo database, creating it on the fly."""
 
-    name = "test"
-    aliases = ["tests"]
+    _name = "test"
+    _aliases = ["tests"]
 
     tests = args.List(
         aliases=["-F", "--filters"],
@@ -63,7 +63,7 @@ class TestCommand(OdoobinCommand):
         :return: Name of the test database to use.
         :rtype: str
         """
-        with self.database.psql() as psql, psql.nocache():
+        with self._database.psql() as psql, psql.nocache():
             name = self.__generate_database_name()
 
             while psql.database_exists(name):
@@ -77,14 +77,14 @@ class TestCommand(OdoobinCommand):
         :return: Name of the test database to use.
         :rtype: str
         """
-        return f"{self.database.name}_{string.suid()}"
+        return f"{self._database.name}_{string.suid()}"
 
     def create_test_database(self):
         """Return the arguments to pass to the create command."""
         args = ["--bare"]
 
-        if self.database.version is not None:
-            args.extend(["--version", str(self.database.version)])
+        if self._database.version is not None:
+            args.extend(["--version", str(self._database.version)])
 
         args.append(self.test_database.name)
         self.odev.run_command("create", *args)
@@ -110,16 +110,21 @@ class TestCommand(OdoobinCommand):
         if not self.test_database.exists:
             self.create_test_database()
 
-        odoobin = cast(OdoobinProcess, self.test_database.process).with_version(self.database.version)
-        odoobin._venv_name = self.database.venv.name
-        odoobin._force_enterprise = self.database.edition == "enterprise"
+        odoobin = (
+            cast(OdoobinProcess, self.test_database.process)
+            .with_version(self._database.version)
+            .with_venv(self._database.venv.name if self._database.venv else str(self._database.version or "master"))
+            .with_edition(self._database.edition)
+        )
+
         odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
 
         try:
             odoobin.run(args=args, progress=self.odoobin_progress)
             self.print_tests_results()
         except RuntimeError as error:
-            self.test_database.process.kill(hard=True)
+            if self.test_database.process is not None:
+                self.test_database.process.kill(hard=True)
             raise self.error(str(error)) from error
 
     def odoobin_progress(self, line: str):

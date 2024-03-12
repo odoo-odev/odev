@@ -2,11 +2,17 @@ import inspect
 import re
 from abc import ABC
 from argparse import Namespace
-from typing import ClassVar, Mapping, Optional, Sequence
+from typing import (
+    ClassVar,
+    Mapping,
+    Optional,
+    Sequence,
+    Union,
+)
 
 from odev.common import args, progress, string
 from odev.common.commands import Command
-from odev.common.databases import LocalDatabase
+from odev.common.databases import DummyDatabase, LocalDatabase
 from odev.common.errors import CommandError
 from odev.common.logging import logging
 
@@ -14,11 +20,14 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-DatabaseType = LocalDatabase
+DatabaseType = Union[LocalDatabase, DummyDatabase]
 
 
 class DatabaseCommand(Command, ABC):
     """Base class for commands that require a database to work."""
+
+    _database: DatabaseType
+    """The database instance associated with the command."""
 
     _database_arg_required: ClassVar[bool] = True
     """Whether the command requires a database to be specified or not in its arguments."""
@@ -61,24 +70,23 @@ class DatabaseCommand(Command, ABC):
 
     # --------------------------------------------------------------------------
 
-    database: Optional[DatabaseType] = None
-    """The database instance associated with the command."""
-
-    def __init__(self, args: Namespace, database: DatabaseType = None, **kwargs):
+    def __init__(self, args: Namespace, database: Optional[DatabaseType] = None, **kwargs):
         super().__init__(args, **kwargs)
         self.database_name: Optional[str] = self.args.database or None
         """The database name specified by the user."""
 
+        self._database: DatabaseType = DummyDatabase()
+
         if database is not None:
-            self.database = database
+            self._database = database
         elif self._database_arg_required or self.database_name is not None:
-            self.database = self.infer_database_instance()
+            self._database = self.infer_database_instance()
 
         if self._database_exists_required:
-            if self.database is None:
+            if isinstance(database, DummyDatabase):
                 raise self.error("No database specified")
-            if not self.database.exists:
-                raise self.error(f"Database {self.database.name!r} does not exist")
+            if not self._database.exists:
+                raise self.error(f"Database {self._database.name!r} does not exist")
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
@@ -101,10 +109,9 @@ class DatabaseCommand(Command, ABC):
             """,
         )
 
-    def infer_database_instance(self) -> Optional[DatabaseType]:
+    def infer_database_instance(self) -> DatabaseType:
         """Return the database instance to use with this command, inferred from the database's name."""
-        if not self.database_name:
-            return None
+        assert self.database_name is not None
 
         if hasattr(self.args, "platform") and self.args.platform:
             allowed_database_classes = [self._database_platforms[self.args.platform]]
@@ -150,8 +157,7 @@ class DatabaseCommand(Command, ABC):
 class LocalDatabaseCommand(DatabaseCommand, ABC):
     """Base class for commands that require a local database to work."""
 
-    database: LocalDatabase
-
+    _database: LocalDatabase  # type: ignore [assignment]
     _database_allowed_platforms = ["local"]
 
     @classmethod

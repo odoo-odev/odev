@@ -28,7 +28,7 @@ class ConnectorMixin:
     _connector_attribute_name: str = "connector"
     """The name of the attribute to set on the command instance."""
 
-    connector: Connector = None
+    connector: Connector
     """The connector instance used."""
 
     def __init__(self, *args, **kwargs):

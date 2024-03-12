@@ -83,7 +83,7 @@ class PostgresConnector(Connector):
     def connect(self):
         """Connect to the database engine."""
         if self._connection is None:
-            self._connection = psycopg2.connect(database=self.database)
+            self._connection = psycopg2.connect(database=self.database)  # type: ignore [assignment]
             self._connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
         if self.cr is None:
@@ -100,7 +100,7 @@ class PostgresConnector(Connector):
             self._connection.close()
             del self._connection
 
-    def invalidate_cache(self, database: str = None):
+    def invalidate_cache(self, database: Optional[str] = None):
         """Invalidate the cache for a given database."""
         database = database or self.database
         logger.debug(f"Invalidating SQL cache for database {database!r}")
@@ -127,7 +127,7 @@ class PostgresConnector(Connector):
         :param params: Additional parameters to pass to the cursor.
         :param transaction: Whether to execute the query in a transaction.
         """
-        assert self.cr, "The cursor is not initialized, connect first"
+        assert self.cr is not None, "The cursor is not initialized, connect first"
         query = textwrap.dedent(query).strip()
         query_lower = query.lower()
         is_select = query_lower.startswith("select")
@@ -146,7 +146,9 @@ class PostgresConnector(Connector):
             """Cancel the SQL query currently running."""
             logger.warning("Aborting execution of SQL query")
             logger.debug(f"Aborting query:\n{query}")
-            self.cr.connection.cancel()
+
+            if self.cr is not None:
+                self.cr.connection.cancel()
 
         with (
             self.cr.transaction() if transaction else nullcontext(),
@@ -176,7 +178,7 @@ class PostgresConnector(Connector):
 
         return result if expect_result else True
 
-    def create_database(self, database: str, template: str = None) -> bool:
+    def create_database(self, database: str, template: Optional[str] = None) -> bool:
         """Create a database.
 
         :param database: The name of the database to create.

@@ -11,8 +11,8 @@ class StandardizeCommand(OdoobinCommand):
     Optionally also remove Studio customizations.
     """
 
-    name = "standardize"
-    aliases = ["std", "standard"]
+    _name = "standardize"
+    _aliases = ["std", "standard"]
 
     keep_studio = args.Flag(aliases=["--no-studio"], default=True, description="Remove Studio customizations.")
 
@@ -24,10 +24,10 @@ class StandardizeCommand(OdoobinCommand):
         cls.remove_argument("odoo_args")
 
     def run(self) -> None:
-        if not self.database.exists or not self.database.is_odoo:
-            raise self.error(f"Invalid database {self.database.name!r}, must be an Odoo database")
+        if not self._database.exists or not self._database.is_odoo:
+            raise self.error(f"Invalid database {self._database.name!r}, must be an Odoo database")
 
-        message: str = f"customizations from database {self.database.name!r}"
+        message: str = f"customizations from database {self._database.name!r}"
 
         with progress.spinner(f"Removing {message}"):
             assert self.odoobin is not None

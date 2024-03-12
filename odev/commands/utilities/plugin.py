@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 class PluginCommand(Command):
     """Enable and disable plugins to add new features and commands."""
 
-    name = "plugin"
-    aliases = ["addons"]
+    _name = "plugin"
+    _aliases = ["addons"]
 
     action = args.String(description="Action to perform, either 'enable' or 'disable'.", choices=["enable", "disable"])
     plugin = args.String(

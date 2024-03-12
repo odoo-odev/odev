@@ -17,8 +17,8 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     If no database is provided, prune all databases that are not whitelisted.
     """
 
-    name = "delete"
-    aliases = ["remove", "rm", "prune", "drop"]
+    _name = "delete"
+    _aliases = ["remove", "rm", "prune", "drop"]
 
     keep = args.List(
         aliases=["-k", "--keep"],
@@ -45,11 +45,11 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     _database_exists_required = False
 
     def run(self):
-        if self.database is not None:
+        if self._database.exists:
             self.confirm_delete()
 
-            with progress.spinner(f"Dropping database {self.database.name!r}"):
-                return self.delete_one(self.database)
+            with progress.spinner(f"Dropping database {self._database.name!r}"):
+                return self.delete_one(self._database)
 
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
@@ -87,13 +87,13 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     def confirm_delete(self) -> None:
         """Confirm the deletion of the database."""
         confirm: bool = self.console.confirm(
-            f"Are you sure you want to delete the database {self.database.name!r}?",
+            f"Are you sure you want to delete the database {self._database.name!r}?",
             default=True,
         )
 
-        if confirm and not self.args.include_whitelisted and self.database.whitelisted:
+        if confirm and not self.args.include_whitelisted and self._database.whitelisted:
             confirm = self.console.confirm(
-                f"Database {self.database.name!r} is whitelisted, are you really sure?",
+                f"Database {self._database.name!r} is whitelisted, are you really sure?",
                 default=True,
             )
 
@@ -148,7 +148,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
                 """
             )
 
-        if using_venv[0][0] > 0:
+        if using_venv is not None and not isinstance(using_venv, bool) and using_venv[0][0] > 0:
             return logger.info(f"Virtual environment {venv_path} is used by other databases, keeping it")
 
         shutil.rmtree(venv_path)

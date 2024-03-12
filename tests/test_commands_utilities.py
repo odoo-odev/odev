@@ -113,7 +113,7 @@ class TestUtilCommands(OdevCommandTestCase):
         with CaptureOutput() as output:
             command.run()
 
-        self.assertIn(self.odev.commands["help"].help, output.stdout)
+        self.assertIn(self.odev.commands["help"]._help, output.stdout)
 
         # ----------------------------------------------------------------------
         # Run the command with an invalid command argument
@@ -148,7 +148,7 @@ class TestUtilCommands(OdevCommandTestCase):
         command.run()
         self.assertEqual(self.odev.store.history.get(), [], "should clear the history")
 
-        command.argv = ["history", "--clear"]
+        command._argv = ["history", "--clear"]
         self.odev.store.history.set(command)
 
         # ----------------------------------------------------------------------
@@ -206,7 +206,7 @@ class TestUtilCommands(OdevCommandTestCase):
 
         with (
             CaptureOutput() as output,
-            self.patch(command.psql, "query", return_value=[("test1",), ("test2",)]),
+            self.patch(command.connector, "query", return_value=[("test1",), ("test2",)]),
         ):
             command.run()
 
@@ -220,7 +220,7 @@ class TestUtilCommands(OdevCommandTestCase):
 
         with (
             self.assertRaises(CommandError, msg="No database found"),
-            self.patch(command.psql, "query", return_value=[]),
+            self.patch(command.connector, "query", return_value=[]),
         ):
             command.run()
 
@@ -232,7 +232,7 @@ class TestUtilCommands(OdevCommandTestCase):
 
         with (
             CaptureOutput() as output,
-            self.patch(command.psql, "query", return_value=[("test1",), ("test2",)]),
+            self.patch(command.connector, "query", return_value=[("test1",), ("test2",)]),
         ):
             command.run()
 
@@ -247,7 +247,7 @@ class TestUtilCommands(OdevCommandTestCase):
 
         with (
             self.assertRaises(CommandError, msg="No database found matching pattern 'no-match'"),
-            self.patch(command.psql, "query", return_value=[("test1",), ("test2",)]),
+            self.patch(command.connector, "query", return_value=[("test1",), ("test2",)]),
         ):
             command.run()
 

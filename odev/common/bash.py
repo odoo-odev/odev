@@ -33,7 +33,7 @@ sudo_password: Optional[str] = None
 # --- Helpers ------------------------------------------------------------------
 
 
-def __run_command(command: str, capture: bool = True, sudo_password: str = None) -> CompletedProcess[bytes]:
+def __run_command(command: str, capture: bool = True, sudo_password: Optional[str] = None) -> CompletedProcess[bytes]:
     """Execute a command as a subprocess.
     If `sudo_password` is provided and not `None`, the command will be executed with
     elevated privileges.
@@ -146,6 +146,9 @@ def stream(command: str) -> Generator[str, None, None]:
     """
     logger.debug(f"Streaming process: {quote(command)}")
     process = Popen(command, shell=True, stdout=PIPE, stderr=STDOUT)
+
+    if process.stdout is None:
+        return
 
     for line in iter(process.stdout.readline, b""):
         yield line.rstrip().decode()

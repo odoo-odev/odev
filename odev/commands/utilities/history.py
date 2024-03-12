@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class HistoryCommand(Command):
     """Check the history of odev commands run in the past."""
 
-    name = "history"
+    _name = "history"
 
     command = args.String(aliases=["-c", "--command"], description="The command to check the history of.", nargs="?")
     clear = args.Flag(aliases=["-C", "--clear"], description="Clear the history.")

@@ -13,7 +13,7 @@ from odev.common.console import Colors
 class ClocCommand(OdoobinCommand):
     """Run odoo-bin cloc on a database and count custom lines of code within the installed modules."""
 
-    name = "cloc"
+    _name = "cloc"
 
     csv = args.Flag(aliases=["--csv"], description="Format output as CSV.")
 
@@ -35,7 +35,7 @@ class ClocCommand(OdoobinCommand):
 
     def run(self):
         """Run the odoo-bin process for the selected database locally."""
-        process = self.odoobin.run(args=self.args.odoo_args, subcommand=self.name, stream=False)
+        process = self.odoobin.run(args=self.args.odoo_args, subcommand=self._name, stream=False)
 
         if process is None:
             raise self.error("Failed to fetch cloc result.")

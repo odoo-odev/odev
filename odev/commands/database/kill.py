@@ -18,7 +18,7 @@ class KillCommand(LocalDatabaseCommand):
     for the process' PID.
     """
 
-    name = "kill"
+    _name = "kill"
 
     hard = args.Flag(
         aliases=["-H", "--hard"],
@@ -27,14 +27,16 @@ class KillCommand(LocalDatabaseCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.odoobin = cast(OdoobinProcess, self.database.process)
+        self.odoobin = cast(OdoobinProcess, self._database.process)
 
         if not self.odoobin.is_running:
-            raise self.error(f"Database {self.database.name!r} is not running")
+            raise self.error(f"Database {self._database.name!r} is not running")
 
     def run(self):
         """Kill the process of the current database."""
-        with progress.spinner(f"Killing process for running database {self.database.name!r} (pid: {self.odoobin.pid})"):
+        with progress.spinner(
+            f"Killing process for running database {self._database.name!r} (pid: {self.odoobin.pid})"
+        ):
             self.odoobin.kill(hard=self.args.hard)
 
             # Wait for up to 3 seconds total with 5 retries until the process is gone
@@ -45,6 +47,6 @@ class KillCommand(LocalDatabaseCommand):
 
             if self.odoobin.is_running:
                 logger.warn(
-                    f"Database {self.database.name!r} (pid: {self.odoobin.pid}) is still running, force-killing it"
+                    f"Database {self._database.name!r} (pid: {self.odoobin.pid}) is still running, force-killing it"
                 )
                 self.odoobin.kill(hard=True)

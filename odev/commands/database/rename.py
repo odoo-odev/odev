@@ -16,18 +16,18 @@ logger = logging.getLogger(__name__)
 class RenameCommand(LocalDatabaseCommand):
     """Rename a local database and move its filestore to the correct path."""
 
-    name = "rename"
-    aliases = ["mv", "move"]
+    _name = "rename"
+    _aliases = ["mv", "move"]
 
     new_name = args.String(name="name", description="New name for the database.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.odoobin = cast(OdoobinProcess, self.database.process)
+        self.odoobin = cast(OdoobinProcess, self._database.process)
 
         if self.odoobin.is_running:
             if not self.args.force:
-                raise self.error(f"Database {self.database.name!r} is running, stop it and retry")
+                raise self.error(f"Database {self._database.name!r} is running, stop it and retry")
 
             self.odoobin.kill()
 
@@ -36,25 +36,26 @@ class RenameCommand(LocalDatabaseCommand):
         if new_database.exists:
             raise self.error(f"Database with name {self.args.name!r} already exists")
 
-        self.old_filestore = self.database.filestore.path
+        self.old_filestore = self._database.filestore.path
         self.new_filestore = new_database.filestore.path
 
     def run(self):
-        with progress.spinner(f"Renaming database {self.database.name!r} to {self.args.name!r}"):
+        with progress.spinner(f"Renaming database {self._database.name!r} to {self.args.name!r}"):
             self.rename_database()
 
         self.move_filestore()
         self.move_configuration()
-        logger.info(f"Renamed database {self.database.name!r} to {self.args.name!r}.")
+        logger.info(f"Renamed database {self._database.name!r} to {self.args.name!r}.")
 
     def rename_database(self):
         """Rename the database in PostgreSQL."""
-        self.database.connector.disconnect()
+        if self._database.connector is not None:
+            self._database.connector.disconnect()
 
-        with self.database.psql() as psql:
+        with self._database.psql() as psql:
             psql.query(
                 f"""
-                ALTER DATABASE "{self.database.name}"
+                ALTER DATABASE "{self._database.name}"
                 RENAME TO "{self.args.name}"
                 """
             )
@@ -74,11 +75,11 @@ class RenameCommand(LocalDatabaseCommand):
 
     def move_configuration(self):
         """Rename the database in the stored configuration."""
-        with self.database.psql(self.odev.name) as psql:
+        with self._database.psql(self.odev.name) as psql:
             psql.query(
                 f"""
                 UPDATE databases
                     SET name = '{self.args.name}'
-                    WHERE name = '{self.database.name}'
+                    WHERE name = '{self._database.name}'
                 """
             )

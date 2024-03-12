@@ -1,4 +1,4 @@
-from typing import Any, Mapping
+from typing import Any, MutableMapping
 
 from odev.common import args
 from odev.common.commands import DatabaseCommand
@@ -12,8 +12,8 @@ class QuickStartCommand(DatabaseCommand):
     the selected database.
     """
 
-    name = "quickstart"
-    aliases = ["qs"]
+    _name = "quickstart"
+    _aliases = ["qs"]
 
     new_name = args.String(
         name="name",
@@ -43,28 +43,30 @@ class QuickStartCommand(DatabaseCommand):
         branch_cli_argument = ["--branch", self.args.branch] if self.args.branch else []
 
         if self.args.version:
-            self.odev.run_command("create", "--version", self.args.version, database=self.database)
+            self.odev.run_command("create", "--version", self.args.version, database=self._database)
         else:
             if self.args.filestore:
                 branch_cli_argument.append("--filestore")
 
-            if not self.odev.run_command("dump", *branch_cli_argument, database=self.database):
+            if not self.odev.run_command("dump", *branch_cli_argument, database=self._database):
                 return
 
             self.odev.run_command(
                 "restore",
-                (self.odev.dumps_path / self.database._get_dump_filename(**self.get_dump_filename_kwargs())).as_posix(),
+                (
+                    self.odev.dumps_path / self._database._get_dump_filename(**self.get_dump_filename_kwargs())
+                ).as_posix(),
                 "--no-neutralize",
-                database=LocalDatabase(self.args.name or self.database.name),
+                database=LocalDatabase(self.args.name or self._database.name),
             )
 
-        self.odev.run_command("clone", *branch_cli_argument, database=self.database)
-        self.odev.run_command("neutralize", database=LocalDatabase(self.args.name or self.database.name))
+        self.odev.run_command("clone", *branch_cli_argument, database=self._database)
+        self.odev.run_command("neutralize", database=LocalDatabase(self.args.name or self._database.name))
 
-    def get_dump_filename_kwargs(self) -> Mapping[str, Any]:
+    def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
         """Return the keyword arguments to pass to Database.get_dump_filename()."""
         return {
             "filestore": self.args.filestore,
-            "suffix": self.database.platform.name,
+            "suffix": self._database.platform.name,
             "extension": "zip",
         }

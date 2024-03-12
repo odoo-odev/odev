@@ -5,6 +5,7 @@ from typing import (
     Generator,
     List,
     MutableMapping,
+    Optional,
     Tuple,
 )
 
@@ -32,7 +33,7 @@ TABLE_HEADERS: List[MutableMapping[str, Any]] = [
 class FetchCommand(Command):
     """Fetch changes in local Odoo worktrees managed by odev."""
 
-    name = "fetch"
+    _name = "fetch"
 
     version = args.String(aliases=["-V", "--version"], description="Fetch changes for a specific Odoo version only.")
 
@@ -96,7 +97,7 @@ class FetchCommand(Command):
 
         return changes
 
-    def print_table(self, rows: List[List[str]], name: str = None, style: str = None):
+    def print_table(self, rows: List[List[str]], name: Optional[str] = None, style: Optional[str] = None):
         """Print a table.
         :param rows: The table rows.
         :param name: The table name.

@@ -84,8 +84,8 @@ class SecretStore(PostgresTable):
     def get(
         self,
         key: str,
-        fields: Sequence[Union[Literal["login"], Literal["password"]]] = None,
-        prompt_format: str = None,
+        fields: Optional[Sequence[Union[Literal["login"], Literal["password"]]]] = None,
+        prompt_format: Optional[str] = None,
         ask_missing: bool = True,
         force_ask: bool = False,
     ) -> Secret:

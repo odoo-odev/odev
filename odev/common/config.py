@@ -65,7 +65,7 @@ class PathsSection(Section):
         with the path `<directory>/<organization>/<name>`.
         Defaults to ~/odoo/repositories.
         """
-        return Path(self.get("repositories", "~/odoo/repositories")).expanduser()
+        return Path(cast(str, self.get("repositories", "~/odoo/repositories"))).expanduser()
 
     @repositories.setter
     def repositories(self, value: Union[str, Path]):
@@ -77,7 +77,7 @@ class PathsSection(Section):
         When using the dump command, downloaded files will be stored under this path.
         Defaults to ~/odoo/dumps.
         """
-        return Path(self.get("dumps", "~/odoo/dumps")).expanduser()
+        return Path(cast(str, self.get("dumps", "~/odoo/dumps"))).expanduser()
 
     @dumps.setter
     def dumps(self, value: Union[str, Path]):
@@ -118,7 +118,7 @@ class UpdateSection(Section):
         """Last time available updates were checked for.
         You should not have to modify this value as it is updated automatically.
         """
-        return datetime.strptime(self.get("date", datetime.now().strftime(DATETIME_FORMAT)), DATETIME_FORMAT)
+        return datetime.strptime(cast(str, self.get("date", datetime.now().strftime(DATETIME_FORMAT))), DATETIME_FORMAT)
 
     @date.setter
     def date(self, value: Union[str, datetime]):
@@ -130,7 +130,7 @@ class UpdateSection(Section):
         Used to run upgrade scripts when updating.
         You should not have to modify this value as it is updated automatically.
         """
-        return self.get("version", __version__)
+        return cast(str, self.get("version", __version__))
 
     @version.setter
     def version(self, value: str):
@@ -142,7 +142,7 @@ class UpdateSection(Section):
         Updates will be checked for once every `interval` day(s).
         Defaults to 1 day.
         """
-        return int(self.get("interval", "1"))
+        return int(cast(str, self.get("interval", "1")))
 
     @interval.setter
     def interval(self, value: Union[str, int]):
@@ -158,7 +158,7 @@ class PluginsSection(Section):
         """List of enabled plugins repositories.
         Defaults to an empty list.
         """
-        return self.get("enabled", "").split(",")
+        return cast(str, self.get("enabled", "")).split(",")
 
     @enabled.setter
     def enabled(self, value: Union[str, List[str]]):
@@ -173,7 +173,7 @@ class PruningSection(Section):
         """Last time local databases were pruned.
         You should not have to modify this value as it is updated automatically.
         """
-        return datetime.strptime(self.get("date", datetime.now().strftime(DATETIME_FORMAT)), DATETIME_FORMAT)
+        return datetime.strptime(cast(str, self.get("date", datetime.now().strftime(DATETIME_FORMAT))), DATETIME_FORMAT)
 
     @date.setter
     def date(self, value: Union[str, datetime]):
@@ -238,6 +238,8 @@ class Config:
                 List[Tuple[str, property]],
                 inspect.getmembers(section.__class__, lambda member: isinstance(member, property)),
             ):
+                assert option.fset is not None
+                assert option.fget is not None
                 if not self.parser.has_option(section_name, option_name):
                     option.fset(section, option.fget(section))
 
@@ -262,7 +264,7 @@ class Config:
         if option is not None and option not in self.parser[section]:
             raise KeyError(f"{option!r} is not a valid option in section {section!r} of config {self.name!r}")
 
-    def get(self, section: str, option: str, default: Optional[str] = None) -> str:
+    def get(self, section: str, option: str, default: Optional[str] = None) -> Optional[str]:
         """Get a value from the config."""
         self.check_attribute(section, option)
         return self.parser.get(section, option, fallback=default)

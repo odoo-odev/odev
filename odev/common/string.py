@@ -5,7 +5,13 @@ import random
 import re
 import string as string_module
 import textwrap
-from typing import List, Sequence, Tuple, Union
+from typing import (
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import timeago  # type: ignore [import]
 
@@ -80,7 +86,7 @@ def dedent(text: str, dedent: int = 0) -> str:
 
     :param text: The text to dedent.
     :param dedent: The number of spaces to dedent the text.
-    :return: The dedented text.
+    :return: The un-indented text.
     :rtype: str
     """
     return indent(textwrap.dedent(text), min_indent(text) - dedent)
@@ -147,7 +153,7 @@ def stylize(value: str, style: str) -> str:
     return f"[{style}]{value}[/{style}]"
 
 
-def join(parts: Sequence[str], last_delimiter: str = None) -> str:
+def join(parts: Sequence[str], last_delimiter: Optional[str] = None) -> str:
     """Join parts, optionally adding a last delimiter between the last two items.
     :param parts: Parts to join.
     :param last_delimiter: The last delimiter to add.

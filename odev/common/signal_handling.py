@@ -32,13 +32,13 @@ logger = logging.getLogger(__name__)
 # --- Handle signals and interrupts --------------------------------------------
 
 
-def signal_handler_warning(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+def signal_handler_warning(signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None):
     """Log a warning message with the signal received."""
     console.clear_line(0)  # Hide control characters
     logger.warning(message or f"Received signal ({signal_number})")
 
 
-def signal_handler_exit(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+def signal_handler_exit(signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None):
     """Log a warning message with the signal received and exit the current process."""
     signal_handler_warning(
         signal_number=signal_number,
@@ -48,7 +48,7 @@ def signal_handler_exit(signal_number: int, frame: Optional[FrameType] = None, m
     exit(signal_number)
 
 
-def signal_handler_subprocess(signal_number: int, frame: Optional[FrameType] = None, message: str = None):
+def signal_handler_subprocess(signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None):
     """Send over the signal to a subprocess when using :func:`capture_signals` or do nothing."""
 
 
