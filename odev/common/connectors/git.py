@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 from git import GitCommandError, Remote, RemoteReference, Repo
 from github import Auth as GithubAuth, Github, GithubException
 
-from odev.common import bash, string
+from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
@@ -672,9 +672,13 @@ class GitConnector(Connector):
                     if not console.confirm("Pull changes now?", default=True):
                         continue
 
-                with Stash(worktree.repository):
+                with Stash(worktree.repository), progress.spinner(f"Pulling changes in worktree {worktree.path!s}"):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
-                    worktree.repository.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
+
+                    try:
+                        worktree.repository.git.pull("origin", worktree.branch, ff_only=True, quiet=True)
+                    except GitCommandError as error:
+                        logger.error(f"Failed to pull changes in worktree {worktree.path!s}:\n{error.args[2].decode()}")
 
     def list_remote_branches(self) -> List[str]:
         """List all remote branches of the repository.
