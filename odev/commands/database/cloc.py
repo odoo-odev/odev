@@ -76,7 +76,7 @@ class ClocCommand(OdoobinCommand):
         """
         result_lines: List[str] = output.strip().splitlines()
         total_line = result_lines[~0]
-        result_lines = result_lines[2:~2]
+        result_lines = result_lines[2:~1]
         total = self._parse_line(total_line)
 
         if total is None:

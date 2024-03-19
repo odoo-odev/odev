@@ -1,10 +1,12 @@
 """Clone the Git repository for a database."""
 
+from typing import cast
+
 from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.commands.database import DatabaseType
 from odev.common.connectors import GitConnector
-from odev.common.databases import DummyDatabase
+from odev.common.databases import DummyDatabase, Repository
 from odev.common.logging import logging
 
 
@@ -25,7 +27,7 @@ class CloneCommand(DatabaseCommand):
     _database_exists_required = False
 
     def infer_database_instance(self) -> DatabaseType:
-        if any(char in self.args.database for char in "@:"):
+        if any(char in self.args.database for char in "@:/"):
             self.args.repository = self.args.database
             self.args.database = None
             return DummyDatabase()
@@ -39,12 +41,13 @@ class CloneCommand(DatabaseCommand):
         if self.args.database and self.args.repository:
             raise self.error("You cannot specify both a database and a repository to clone")
 
-        if not self.args.repository or self._database.repository is None:
+        if not self.args.repository and self._database.repository is None:
             raise self.error("No repository found to clone")
 
-        git = GitConnector(self.args.repository or self._database.repository.full_name)
+        git = GitConnector(self.args.repository or cast(Repository, self._database.repository).full_name)
 
         if git.path.exists():
+            logger.info(f"Repository {git.name!r} already cloned under {git.path.as_posix()}")
             git.checkout(branch=self.args.branch or None)
         else:
             git.clone(branch=self.args.branch or None)

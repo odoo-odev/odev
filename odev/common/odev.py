@@ -5,7 +5,7 @@ import os
 import pkgutil
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -242,7 +242,7 @@ class Odev(Generic[CommandType]):
                 f"Pulling latest changes from {self.git.name!r} "
                 "on branch {self.git.repository.active_branch.tracking_branch()}"
             )
-            self.config.update.date = datetime.utcnow()
+            self.config.update.date = datetime.now(timezone.utc)
             install_requirements = self.__requirements_changed(self.git.repository)
 
             with Stash(self.git.repository):
@@ -387,7 +387,7 @@ class Odev(Generic[CommandType]):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
 
-                if base_command_class is not None and issubclass(base_command_class, command_class):
+                if base_command_class is None or issubclass(base_command_class, command_class):
                     continue
 
                 if any(name in command_names for name in self.commands.keys()):
@@ -470,7 +470,7 @@ class Odev(Generic[CommandType]):
                 self.store.history.set(command)
         finally:
             try:
-                command.cleanup()
+                command.cleanup()  # type: ignore [unbound-variable]
             except UnboundLocalError:
                 pass
 
@@ -484,7 +484,10 @@ class Odev(Generic[CommandType]):
             not len(argv)
             or (
                 len(argv) >= 2
-                and any(arg in filter(lambda a: a.startswith("-"), self.commands.get("help")._aliases) for arg in argv)
+                and any(
+                    arg in filter(lambda a: a.startswith("-"), cast(CommandType, self.commands.get("help"))._aliases)
+                    for arg in argv
+                )
             )
             or argv[0].startswith("-")
         ):

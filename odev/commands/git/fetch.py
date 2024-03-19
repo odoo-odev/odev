@@ -9,6 +9,8 @@ from typing import (
     Tuple,
 )
 
+from git import GitCommandError
+
 from odev.common import args, progress, string
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector
@@ -77,11 +79,18 @@ class FetchCommand(Command):
                     continue
 
                 with progress.spinner(f"Fetching changes in {repository!r} for version {worktree.branch!r}"):
-                    worktree.repository.remotes.origin.fetch()
-                    behind, ahead = worktree.pending_changes()
-                    yield repository, worktree.branch, behind, ahead
+                    try:
+                        worktree.repository.remotes.origin.fetch()
+                        behind, ahead = worktree.pending_changes()
+                        yield repository, worktree.branch, behind, ahead
+                    except GitCommandError as error:
+                        logger.error(
+                            f"Failed to fetch changes in {repository!r} for version {worktree.branch!r}"
+                            f":\n{error.args[2].decode()}"
+                        )
+                        continue
 
-                logger.info(f"Repository {repository!r} correctly updated for version {worktree.branch!r}")
+                logger.info(f"Changes fetched in repository {repository!r} for version {worktree.branch!r}")
 
     def pending_changes_by_version(self) -> MutableMapping[str, List[Tuple[str, int, int]]]:
         """List pending changes by version."""

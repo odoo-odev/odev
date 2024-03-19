@@ -15,7 +15,7 @@ class UpdateCommand(Command):
     _aliases = ["upgrade", "u"]
 
     def run(self):
-        logger.info(f"Current version: [repr.version]{self.odev.version}[/repr.version]")
+        logger.info(f"Current version: [repr.version]{self.config.update.version}[/repr.version]")
         update_mode = self.odev.config.update.mode
         self.odev.config.update.mode = "always"
         self.odev.config.update.date = datetime.strptime("1995-12-21 00:00:00", DATETIME_FORMAT)

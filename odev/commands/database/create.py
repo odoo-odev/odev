@@ -95,11 +95,11 @@ class CreateCommand(OdoobinCommand):
 
     def ensure_database_not_exists(self):
         """Drop the database if it exists."""
-        with self._database.psql("postgres").nocache():
+        with self._database.psql().nocache():
             if self._database.exists:
                 logger.warning(f"Database {self._database.name!r} already exists")
 
-                if not self.console.confirm("Overwrite it?"):
+                if not self.console.confirm("Overwrite it?", default=True):
                     raise self.error(f"Cannot create database with an already existing name {self._database.name!r}")
 
                 with progress.spinner(f"Dropping database {self._database.name!r}"):
@@ -125,7 +125,7 @@ class CreateCommand(OdoobinCommand):
             if fs_database.exists():
                 logger.warning(f"Filestore for {self._database.name!r} already exists")
 
-                if not self.console.confirm("Overwrite it?"):
+                if not self.console.confirm("Overwrite it?", default=True):
                     raise self.error(f"Cannot copy template filestore to existing directory {fs_database!s}")
 
                 with progress.spinner(f"Removing {fs_database!s}"):

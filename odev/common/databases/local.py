@@ -376,7 +376,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return psql.create_database(self.name, template=template)
 
     def drop(self) -> bool:
-        if self.connector is not None:
+        if isinstance(self.connector, PostgresConnector):
             self.connector.disconnect()
         with self.psql() as psql:
             return psql.drop_database(self.name)
