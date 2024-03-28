@@ -15,14 +15,15 @@ class UpdateCommand(Command):
     _aliases = ["upgrade", "u"]
 
     def run(self):
-        logger.info(f"Current version: [repr.version]{self.config.update.version}[/repr.version]")
+        from_version = self.config.update.version
+        logger.info(f"Current version: [repr.version]{from_version}[/repr.version]")
         update_mode = self.odev.config.update.mode
         self.odev.config.update.mode = "always"
         self.odev.config.update.date = datetime.strptime("1995-12-21 00:00:00", DATETIME_FORMAT)
-        self.odev._update(restart=False)
+        self.odev._update(restart=False, upgrade=True)
         self.odev.config.update.mode = update_mode
 
-        if self.config.update.version != self.odev.version:
+        if from_version != self.odev.version:
             logger.info(f"Updated to [repr.version]{self.odev.version}[/repr.version]!")
         else:
             logger.info("No update available")

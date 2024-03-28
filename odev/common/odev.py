@@ -183,15 +183,20 @@ class Odev(Generic[CommandType]):
         self.prune_databases()
         self._started = True
 
-    def _update(self, restart: bool = True) -> None:
+    def _update(self, restart: bool = True, upgrade: bool = False) -> None:
         """Update the framework and plugins if necessary.
         :param restart: Whether to restart the framework after updating.
+        :param upgrade: Whether to force the upgrade process.
         """
-        if self.update(self.path, self.name) or any(
-            self.update(path, f"plugin {name}")
-            for path, name in [
-                (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
-            ]
+        if (
+            upgrade
+            or self.update(self.path, self.name)
+            or any(
+                self.update(path, f"plugin {name}")
+                for path, name in [
+                    (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
+                ]
+            )
         ):
             self.upgrade()
 
