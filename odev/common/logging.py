@@ -53,6 +53,7 @@ SILENCED_LOGGERS = [
     "asyncio",
     "blib2to3",
     "git.cmd",
+    "git.remote",
     "github.Requester",
     "odoolib",
     "pip._internal",

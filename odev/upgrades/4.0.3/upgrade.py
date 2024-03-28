@@ -1,15 +1,15 @@
-"""Upgrade to odev 4.0.0"""
+"""Upgrade to odev 4.0.3"""
 
-from odev.common.config import Config
 from odev.common.connectors import PostgresConnector
 from odev.common.logging import logging
 from odev.common.mixins import ListLocalDatabasesMixin
+from odev.common.odev import Odev
 
 
 logger = logging.getLogger(__name__)
 
 
-def run(config: Config) -> None:
+def run(odev: Odev) -> None:
 
     # --- Upgrade old database ---------------------------------------------------
 

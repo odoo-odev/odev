@@ -3,25 +3,25 @@
 from pathlib import Path
 
 from odev._version import __version__
-from odev.common.config import Config
+from odev.common.odev import Odev
 
 
-def run(config: Config) -> None:
+def run(odev: Odev) -> None:
 
     # --- Update config file ---------------------------------------------------
 
-    interval = config.parser.get("update", "check_interval", fallback="1")
-    version = config.parser.get("odev", "version", fallback=__version__)
-    config.reset("update")
-    config.update.interval = int(interval)
-    config.update.version = version
+    interval = odev.config.parser.get("update", "check_interval", fallback="1")
+    version = odev.config.parser.get("odev", "version", fallback=__version__)
+    odev.config.reset("update")
+    odev.config.update.interval = int(interval)
+    odev.config.update.version = version
 
-    repositories = config.parser.get("paths", "repositories", fallback="~/odoo/repositories")
-    dumps = config.parser.get("paths", "dumps", fallback="~/odoo/dumps")
-    config.reset("paths")
-    config.paths.repositories = Path(repositories).expanduser()
-    config.paths.dumps = Path(dumps).expanduser()
+    repositories = odev.config.parser.get("paths", "repositories", fallback="~/odoo/repositories")
+    dumps = odev.config.parser.get("paths", "dumps", fallback="~/odoo/dumps")
+    odev.config.reset("paths")
+    odev.config.paths.repositories = Path(repositories).expanduser()
+    odev.config.paths.dumps = Path(dumps).expanduser()
 
-    config.delete("odev")
-    config.delete("cleaning")
-    config.delete("repos")
+    odev.config.delete("odev")
+    odev.config.delete("cleaning")
+    odev.config.delete("repos")

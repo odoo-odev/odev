@@ -174,7 +174,7 @@ class Odev(Generic[CommandType]):
         )
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
-        self._update()
+        self.update()
 
         with progress.spinner("Loading commands"):
             self.register_commands()
@@ -183,21 +183,22 @@ class Odev(Generic[CommandType]):
         self.prune_databases()
         self._started = True
 
-    def _update(self, restart: bool = True, upgrade: bool = False) -> None:
+    def update(self, restart: bool = True, upgrade: bool = False) -> None:
         """Update the framework and plugins if necessary.
         :param restart: Whether to restart the framework after updating.
         :param upgrade: Whether to force the upgrade process.
         """
         if (
             upgrade
-            or self.update(self.path, self.name)
+            or self._update(self.path, self.name)
             or any(
-                self.update(path, f"plugin {name}")
+                self._update(path, f"plugin {name}")
                 for path, name in [
                     (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
                 ]
             )
         ):
+            self.config.update.date = datetime.now(timezone.utc)
             self.upgrade()
 
             if restart:
@@ -226,38 +227,42 @@ class Odev(Generic[CommandType]):
             if list(python.missing_requirements(plugin_path, False)):
                 python.install_requirements(plugin_path)
 
-    def update(self, path: Path, prompt_name: str) -> bool:
+    def _update(self, path: Path, prompt_name: str) -> bool:
         """Check for updates in the odev repository and download them if necessary.
         :param path: Path to a repository to update
         :return: Whether updates were pulled and installed
         :rtype: bool
         """
-        logger.debug(f"Checking for updates in {self.git.name!r}")
-        assert self.git.repository is not None
+        path = path.resolve()
+        repository = Repo(path.as_posix())
+        repository_name = "/".join(repository.remotes.origin.url.split("/")[-2:]).split(":")[-1].removesuffix(".git")
+        git = GitConnector(repository_name, path)
+        assert git.repository is not None
 
-        if not self.__date_check_interval() or not self.__git_branch_behind(self.git.repository):
-            self.git.fetch()
+        if not self.__date_check_interval() or not self.__git_branch_behind(git.repository):
+            git.fetch()
             return False
+
+        logger.debug(f"Checking for updates in {git.name!r}")
 
         if not self.__update_prompt(prompt_name):
             return False
 
-        with progress.spinner(f"Updating {self.git.name!r}"):
+        with progress.spinner(f"Updating {prompt_name!r}"):
             logger.debug(
-                f"Pulling latest changes from {self.git.name!r} "
-                "on branch {self.git.repository.active_branch.tracking_branch()}"
+                f"Pulling latest changes from {git.name!r} "
+                f"on branch {git.repository.active_branch.tracking_branch()}"
             )
-            self.config.update.date = datetime.now(timezone.utc)
-            install_requirements = self.__requirements_changed(self.git.repository)
+            install_requirements = self.__requirements_changed(git.repository)
 
-            with Stash(self.git.repository):
-                self.git.repository.remotes.origin.pull()
+            with Stash(git.repository):
+                repository.remotes.origin.pull()
 
             if install_requirements:
-                logger.debug(f"Installing new package requirements for {self.git.name!r}")
+                logger.debug(f"Installing new package requirements for {prompt_name!r}")
                 PythonEnv().install_requirements(path)
 
-            return True
+        return True
 
     def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
@@ -386,6 +391,26 @@ class Odev(Generic[CommandType]):
             self.commands.update({name: command_class for name in command_names})
 
     def register_plugin_commands(self) -> None:
+        """Register commands for the plugins directories, pulling changes in plugins if an error arises while loading
+        the commands.
+        """
+        try:
+            self._register_plugin_commands()
+        except Exception as error:
+            logger.debug(f"Error while loading plugins commands: {error}")
+
+            with progress.spinner("Updating plugins"):
+                for plugin in self.plugins:
+                    git = GitConnector(plugin)
+                    assert git.repository is not None
+
+                    with Stash(git.repository):
+                        git.repository.remotes.origin.fetch()
+                        git.repository.remotes.origin.pull(git.branch, rebase=True)
+
+            self._register_plugin_commands()
+
+    def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
         for plugin_path in self.plugins_path.iterdir():
             for command_class in self.import_commands(plugin_path.glob("commands/**")):
@@ -615,7 +640,7 @@ class Odev(Generic[CommandType]):
         spec.loader.exec_module(script_module)
 
         try:
-            script_module.run(self.config)
+            script_module.run(self)
         except Exception as e:
             raise RuntimeError(f"Error while running upgrade script {script.parent.name}: {e.args[0]}") from e
         else:

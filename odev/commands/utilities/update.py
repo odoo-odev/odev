@@ -20,7 +20,7 @@ class UpdateCommand(Command):
         update_mode = self.odev.config.update.mode
         self.odev.config.update.mode = "always"
         self.odev.config.update.date = datetime.strptime("1995-12-21 00:00:00", DATETIME_FORMAT)
-        self.odev._update(restart=False, upgrade=True)
+        self.odev.update(restart=False, upgrade=True)
         self.odev.config.update.mode = update_mode
 
         if from_version != self.odev.version:
