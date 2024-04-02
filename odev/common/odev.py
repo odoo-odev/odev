@@ -413,27 +413,37 @@ class Odev(Generic[CommandType]):
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
         for plugin_path in self.plugins_path.iterdir():
+            logger.debug(f"Loading plugin {plugin_path.name!r}")
+
             for command_class in self.import_commands(plugin_path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
 
+                if (
+                    base_command_class is not None
+                    and any(name in command_names for name in self.commands.keys())
+                    and command_class.__bases__ == base_command_class.__bases__
+                ):
+                    continue  # Ignore base command import when used in python inheritance
+
                 if base_command_class is None or issubclass(base_command_class, command_class):
-                    continue
+                    action = "Registering new command"
+                else:
+                    action = "Patching existing command"
 
-                if any(name in command_names for name in self.commands.keys()):
-                    if command_class.__bases__ == base_command_class.__bases__:
-                        continue
+                logger.debug(f"{action} {command_class._name!r} from plugin {plugin_path.name!r}")
 
-                logger.debug(f"Registering command {command_class._name!r} from plugin {plugin_path.name!r}")
+                if (
+                    command_class._name in self.commands.keys()
+                    and base_command_class is not None
+                    and command_class.__bases__ != base_command_class.__bases__
+                ):
 
-                if command_class._name in self.commands.keys():
-                    if command_class.__bases__ != base_command_class.__bases__:
+                    class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
+                        pass
 
-                        class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
-                            pass
-
-                        command_class = PatchedCommand
-                        PatchedCommand.__name__ = base_command_class.__name__
+                    command_class = PatchedCommand
+                    PatchedCommand.__name__ = base_command_class.__name__
 
                 command_class.prepare_command(self)
                 self.commands.update({name: command_class for name in command_names})  # type: ignore [assignment]
