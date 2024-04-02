@@ -35,6 +35,9 @@ class ClocCommand(OdoobinCommand):
 
     def run(self):
         """Run the odoo-bin process for the selected database locally."""
+        if self.odoobin is None:
+            raise self.error(f"Could no spawn process instance for database {self._database.name!r}")
+
         process = self.odoobin.run(args=self.args.odoo_args, subcommand=self._name, stream=False)
 
         if process is None:
