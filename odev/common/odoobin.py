@@ -316,10 +316,13 @@ class OdoobinProcess(OdevFrameworkMixin):
         :return: True if the subcommand is supported, False otherwise.
         :rtype: bool
         """
-        with self.console.capture() as output:
-            self.run(["-h"], subcommand=subcommand, stream=False, prepare=False)
+        if not self.venv.exists:
+            self.prepare_venv()
 
-        return "Unknown command" not in output.get()
+        with self.console.capture() as output:
+            process = self.run(["-h"], subcommand=subcommand, stream=False, prepare=False)
+
+        return process is not None and "Unknown command" not in output.get()
 
     def prepare_odoobin_args(self, args: Optional[List[str]] = None, subcommand: Optional[str] = None) -> List[str]:
         """Prepare the arguments to pass to odoo-bin.
