@@ -355,9 +355,9 @@ class GitConnector(Connector):
     def update(self):
         """Update the repository."""
         if self.repository and self.remote:
+            self.prune_worktrees()
             self.pull()
             self.fetch()
-            self.prune_worktrees()
             self.fetch_worktrees()
 
     def connect(self):
