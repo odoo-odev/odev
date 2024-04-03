@@ -3,6 +3,7 @@ stacked on top of each other.
 """
 
 import re
+from glob import glob
 from pathlib import Path
 from typing import ClassVar, List, Optional
 
@@ -34,14 +35,15 @@ logger = logging.getLogger(__name__)
 DEBUG_MODE: bool = False
 
 
-for python_file in Path(__file__).parents[1].glob("**/*.py"):
+for python_file in map(Path, glob((Path(__file__).parents[1] / "**/*.py").as_posix(), recursive=True)):
     with python_file.open() as file:
         for position, line in enumerate(file.readlines()):
             if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                logger.debug(
-                    f"Debugger found at {python_file.resolve().as_posix()}:{position + 1}, disabling live status"
-                )
+                logger.debug(f"Debugger found at {python_file.resolve().as_posix()}:{position + 1}")
                 DEBUG_MODE = True
+
+if DEBUG_MODE:
+    logger.debug("Disabling live status due to debugger usage")
 
 
 class Progress(RichProgress):
