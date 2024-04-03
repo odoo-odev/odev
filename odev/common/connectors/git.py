@@ -114,7 +114,7 @@ class GitWorktree:
         (?:
             (?:worktree\s)(?P<worktree>\/.+)?\n?
             (?:HEAD\s)(?P<commit>[a-f0-9]{40})?\n?
-            (?:branch\s)(?P<ref>refs\/heads\/(?P<branch>.+))?\n?
+            ((?:branch\s)(?P<ref>refs\/heads\/(?P<branch>.+)))?\n?
             (?P<detached>detached)?\n?
             |(?P<bare>bare)?\n?
             |(?P<locked>locked)\s?(?P<locked_reason>.+)?\n?
