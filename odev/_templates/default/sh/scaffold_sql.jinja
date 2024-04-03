@@ -1,6 +1,0 @@
-{% for line in data["sql"] %}
-{%- if line.model or line.field %}
--- {% if line.model -%}{{line.model}}.{%-endif-%}{%-if line.field -%}{{line.field}}{%-endif-%}
-{% endif %}
--- {{line.description}}
-{% endfor %}
