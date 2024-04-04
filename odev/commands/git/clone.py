@@ -41,9 +41,13 @@ class CloneCommand(DatabaseCommand):
         if self.args.database and self.args.repository:
             raise self.error("You cannot specify both a database and a repository to clone")
 
-        if not self.args.repository and self._database.repository is None:
+        if not self.__check_repository():
             raise self.error("No repository found to clone")
 
+        self._clone_repository()
+
+    def _clone_repository(self):
+        """Find and clone the correct repository."""
         git = GitConnector(self.args.repository or cast(Repository, self._database.repository).full_name)
 
         if git.path.exists():
@@ -54,3 +58,7 @@ class CloneCommand(DatabaseCommand):
 
         if not git.path.exists():
             raise self.error(f"Failed to clone repository {git.name!r}")
+
+    def __check_repository(self):
+        """Check if a repository is available to clone."""
+        return self.args.repository or self._database.repository is not None
