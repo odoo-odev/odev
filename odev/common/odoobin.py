@@ -221,13 +221,17 @@ class OdoobinProcess(OdevFrameworkMixin):
             worktree.path / addon
             for addon in ["", "addons", "odoo/addons", "openerp/addons"]
             for worktree in self.odoo_worktrees
-            if self.check_addons_path(worktree.path / addon)
+            if OdoobinProcess.check_addons_path(worktree.path / addon)
         ]
 
     @property
     def addons_paths(self) -> List[Path]:
         """Return the list of addons paths."""
-        return [path for path in self.odoo_addons_paths + self.additional_addons_paths if self.check_addons_path(path)]
+        return [
+            path
+            for path in self.odoo_addons_paths + self.additional_addons_paths
+            if OdoobinProcess.check_addons_path(path)
+        ]
 
     @property
     def addons_requirements(self) -> Generator[Path, None, None]:
@@ -529,7 +533,8 @@ class OdoobinProcess(OdevFrameworkMixin):
             repo.clone()
             repo.checkout(branch="master", quiet=True)
 
-    def check_addons_path(self, path: Path) -> bool:
+    @classmethod
+    def check_addons_path(cls, path: Path) -> bool:
         """Return whether the given path is a valid Odoo addons path.
 
         :param path: Path to check.

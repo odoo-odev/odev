@@ -46,6 +46,7 @@ RecordMetaData = TypedDict("RecordMetaData", {"xml_id": str, "noupdate": bool})
 
 RPC_DATA_CACHE: MutableMapping[str, MutableMapping[int, RecordData]] = {}
 RPC_FIELDS_CACHE: MutableMapping[str, FieldsGetMapping] = {}
+RPC_DEFAULT_CACHE: MutableMapping[str, FieldsGetMapping] = {}
 
 
 class Model:
@@ -62,6 +63,7 @@ class Model:
         self._model = self._connector._connection.get_model(model)
         RPC_DATA_CACHE.setdefault(self._name, {})
         RPC_FIELDS_CACHE.setdefault(self._name, {})
+        RPC_DEFAULT_CACHE.setdefault(self._name, {})
 
     def __repr__(self) -> str:
         return f"{self._name}()"
@@ -114,13 +116,26 @@ class Model:
 
         return cached
 
+    def default_get(self, fields_list: list = None) -> FieldsGetMapping:
+        """Return the default value for all models fields."""
+        cached = RPC_DEFAULT_CACHE[self._name]
+
+        if not cached:
+            cached = RPC_DEFAULT_CACHE[self._name] = cast(FieldsGetMapping, self._model.default_get(fields_list))
+
+        return cached
+
     def read(self, ids: Sequence[int], fields: Sequence[str] = None) -> RecordDataList:
         """Read the data of the records with the given ids.
         :param ids: The ids of the records to read
         :param fields: The fields to read, all fields by default
         :return: The data of the records with the given ids
         """
-        missing_ids = set(ids) - set(self.cache.keys())
+        missing_ids = []
+
+        for id_ in ids:
+            if id_ not in self.cache or not set(self.fields).issubset(set(self.cache[id_].keys())):
+                missing_ids.append(id_)
 
         if not fields:
             fields = list(self.fields.keys())
