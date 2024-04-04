@@ -594,6 +594,8 @@ class GitConnector(Connector):
         if self.repository is None:
             raise ConnectorError(f"Repository {self.name!r} does not exist", self)
 
+        self.prune_worktrees()
+
         if branch is None:
             branch = self.default_branch
 

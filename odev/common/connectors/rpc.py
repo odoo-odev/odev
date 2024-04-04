@@ -1,12 +1,8 @@
 """Interact with any Odoo database using XML/JSON RPC."""
 
-import csv
-import json
-from io import StringIO
 from typing import (
     TYPE_CHECKING,
     Any,
-    Dict,
     List,
     Literal,
     Mapping,
@@ -14,7 +10,6 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Tuple,
     TypedDict,
     Union,
     cast,
@@ -23,7 +18,6 @@ from urllib.parse import urlparse
 
 import black
 import odoolib  # type: ignore [import]
-from lxml import etree
 
 from odev.common import string
 from odev.common.connectors.base import Connector
@@ -226,375 +220,6 @@ class Model:
             context=context,
         )
 
-    def __convert_defaults(
-        self, ids: Sequence[int] = None, fields: Sequence[str] = None
-    ) -> Tuple[Sequence[int], Sequence[str]]:
-        """Default values for ids and fields to use in the `_convert_*` methods.
-        :param ids: The ids of the records to serialize
-        :param fields: The fields to serialize, all fields by default
-        :return: The Python code representation of the records with the given ids
-        """
-        ids = ids or list(self.cache.keys())
-        fields = fields or list(self.fields.keys())
-        return ids, fields
-
-    def __convert_check_relational_complexity(self, ids: Sequence[int], fields: Sequence[str]) -> None:
-        """Check the complexity of converting relational fields to XML IDs.
-        :param ids: The ids of the records to serialize
-        :param fields: The fields to serialize, all fields by default
-        """
-        if len(ids) * len(set(fields) & self.fields_relational) >= 10:
-            logger.warning(
-                f"Converting relational fields to XML IDs is costly for the number of records and fields selected "
-                f"({len(ids)} records, {len(fields)} fields), this may take a while...\n"
-                f"Expected RPC calls to backend: {len(fields) * len(ids) + 1}"
-            )
-
-            if not console.confirm("Do you want to continue?", default=False):
-                raise ConnectorError("Aborted conversion to XML", self._connector)
-
-    def __convert_xml_many2one(self, node: etree._Element, value: Union[Literal[False], int]) -> None:
-        """Serialize a many2one field to XML.
-        :param node: The XML node to serialize the field to
-        :param field: The name of the field to serialize
-        :param value: The value of the field to serialize
-        """
-        if value is False:
-            node.set("eval", str(value))
-        else:
-            field = cast(str, node.get("name"))
-            record_metadata = self.env[cast(str, self.fields[field]["relation"])]._get_metadata([value])
-            node.set("ref", record_metadata[value]["xml_id"])
-
-    def __convert_xml_x2many(self, node: etree._Element, value: List[int]) -> None:
-        """Serialize a x2many field to XML.
-        :param node: The XML node to serialize the field to
-        :param field: The name of the field to serialize
-        :param value: The value of the field to serialize
-        """
-        field = cast(str, node.get("name"))
-        linked_record_metadata = self.env[cast(str, self.fields[field]["relation"])]._get_metadata(value)
-
-        def _link_command(__metadata: RecordMetaData):
-            linked_record_ref = f"ref('{__metadata['xml_id']}')"
-            return (
-                f"Command.link({linked_record_ref})"
-                if self.env.database.version.major >= 16
-                else f"(4, {linked_record_ref})"
-            )
-
-        commands = ", ".join(_link_command(metadata) for metadata in linked_record_metadata.values())
-        node.set("eval", f"[{commands}]")
-
-    def __convert_xml_any(self, node: etree._Element, value: Any) -> None:
-        """Serialize a field to XML.
-        :param node: The XML node to serialize the field to
-        :param field: The name of the field to serialize
-        :param value: The value of the field to serialize
-        """
-        if value is False:
-            node.set("eval", str(value))
-        elif self._name == "ir.ui.view" and node.get("name") == "arch":
-            parser = etree.XMLParser(remove_blank_text=True, strip_cdata=False)
-            arch = etree.parse(StringIO(value), parser).getroot()
-
-            if arch.tag == "data":
-                for element in arch.iterchildren():
-                    node.append(element)
-            else:
-                node.append(arch)
-        else:
-            node.text = str(value)
-
-    def _convert_xml(self, ids: Sequence[int] = None, fields: Sequence[str] = None) -> str:
-        """Serialize records with the given ids to XML.
-        :param ids: The ids of the records to serialize
-        :param fields: The fields to serialize, all fields by default
-        :return: The XML representation of the records with the given ids
-        """
-        ids, fields = self.__convert_defaults(ids, fields)
-        self.__convert_check_relational_complexity(ids, fields)
-
-        raw_records: RecordDataList = [record.copy() for record in self.read(ids, fields)]
-        metadata = self._get_metadata(ids)
-        noupdate_mapping: Dict[bool, RecordDataList] = {}
-
-        for record in raw_records:
-            record_metadata = metadata[cast(int, record["id"])]
-            record_noupdate = record_metadata["noupdate"]
-            record["__xml_id"] = record_metadata["xml_id"]
-            noupdate_mapping.setdefault(record_noupdate, []).append(record)
-
-        root = etree.Element("odoo")
-
-        for noupdate, records in noupdate_mapping.items():
-            if len(noupdate_mapping) > 1:
-                _root = root
-                root = etree.SubElement(root, "data", {"noupdate": str(int(noupdate))})
-            elif noupdate:
-                root.set("noupdate", str(int(noupdate)))
-
-            for record in records:
-                record_node = etree.SubElement(root, "record", {"id": record["__xml_id"], "model": self._name})
-
-                for field, value in record.items():
-                    if field in ("id", "__xml_id"):
-                        continue
-
-                    field_node = etree.SubElement(record_node, "field", {"name": field})
-
-                    match self.fields[field]["type"]:
-                        case "many2one":
-                            value = cast(Union[int, Literal[False]], value)
-                            self.__convert_xml_many2one(field_node, value)
-                        case "one2many" | "many2many":
-                            value = cast(List[int], value)
-                            self.__convert_xml_x2many(field_node, value)
-                        case "boolean":
-                            value = cast(bool, value)
-                            field_node.text = str(value)
-                        case _:
-                            self.__convert_xml_any(field_node, value)
-
-            if len(noupdate_mapping) > 1:
-                root = _root
-
-        etree.indent(root, space=" " * 4)
-        return etree.tostring(
-            root,
-            pretty_print=True,
-            xml_declaration=True,
-            encoding="utf-8",
-        ).decode("utf-8")
-
-    def _convert_json(self, ids: Sequence[int] = None, fields: Sequence[str] = None) -> str:
-        """Serialize records with the given ids to JSON.
-        :param ids: The ids of the records to serialize
-        :param fields: The fields to serialize, all fields by default
-        :return: The JSON representation of the records with the given ids
-        """
-        ids, fields = self.__convert_defaults(ids, fields)
-        return json.dumps(self.read(ids, fields), indent=4, sort_keys=True)
-
-    def _convert_csv(self, ids: Sequence[int] = None, fields: Sequence[str] = None) -> str:
-        """Serialize records with the given ids to CSV.
-        :param ids: The ids of the records to serialize
-        :param fields: The fields to serialize, all fields by default
-        :return: The CSV representation of the records with the given ids
-        """
-        ids, fields = self.__convert_defaults(ids, fields)
-        self.__convert_check_relational_complexity(ids, fields)
-        fields_m2x = set(fields) & self.fields_relational_x2m
-        raw_records: RecordDataList = [record.copy() for record in self.read(ids, fields)]
-        records_metadata = self._get_metadata(ids)
-
-        for record in raw_records:
-            record["id"] = records_metadata[cast(int, record["id"])]["xml_id"]
-
-            for field in fields_m2x:
-                record[field] = ", ".join(str(id_) for id_ in cast(List[int], record[field]))
-
-        with StringIO() as output:
-            fields = ["id"] + list(set(fields) - {"id"})  # ID comes first
-            writer = csv.DictWriter(output, fieldnames=fields)
-            writer.writeheader()
-            writer.writerows(raw_records)
-            return output.getvalue()
-
-    # def _export_python(self) -> str:
-    #     """Serialize the current model to readable python code.
-    #     :return: The python code representation of the current model
-    #     """
-    #     _module = ast.Module(body=[], type_ignores=[])
-    #     _imports = ast.ImportFrom(
-    #         module="odoo",
-    #         names=[
-    #             ast.alias(name="models", asname=None),
-    #             ast.alias(name="fields", asname=None),
-    #             ast.alias(name="api", asname=None),
-    #         ],
-    #         level=0,
-    #     )
-    #     _class = ast.ClassDef(
-    #         name=self._name.title().replace(".", "").replace("_", ""),
-    #         bases=[ast.Attribute(value=ast.Name(id="models", ctx=ast.Load()), attr="Model", ctx=ast.Load())],
-    #         body=[
-    #             ast.Assign(
-    #                 lineno=0,
-    #                 targets=[ast.Name(id="_name", ctx=ast.Store())],
-    #                 value=ast.Str(s=self._name),
-    #             ),
-    #         ],
-    #         keywords=[],
-    #         decorator_list=[],
-    #     )
-
-    #     _fields = []
-    #     _computes = []
-
-    #     for field, field_data in self.fields.items():
-    #         _field = ast.Call(
-    #             func=ast.Name(id=f"fields.{field_data['type'].capitalize()}", ctx=ast.Load()),
-    #             args=[],
-    #             keywords=[],
-    #         )
-
-    #         append_string = re.match(field, field_data["string"].replace(" ", "_"), flags=re.IGNORECASE) is None
-
-    #         if "relation" in field_data:
-    #             _field.args.append(ast.Str(s=field_data["relation"]))
-
-    #             if append_string:
-    #                 _field.keywords.append(ast.keyword(arg="string", value=ast.Str(s=field_data["string"])))
-    #         else:
-    #             if append_string:
-    #                 _field.args.append(ast.Str(s=field_data["string"]))
-
-    #         if field_data.get("required"):
-    #             _field.keywords.append(ast.keyword(arg="required", value=ast.NameConstant(value=True)))
-
-    #         if field_data.get("index"):
-    #             _field.keywords.append(ast.keyword(arg="index", value=ast.NameConstant(value=True)))
-
-    #         if field_data.get("copy"):
-    #             _field.keywords.append(ast.keyword(arg="copy", value=ast.NameConstant(value=True)))
-
-    #         if field_data.get("translate"):
-    #             _field.keywords.append(ast.keyword(arg="translate", value=ast.NameConstant(value=True)))
-
-    #         if field_data.get("depends") or field_data.get("related"):
-    #             if field_data.get("related"):
-    #                 _field.keywords.append(
-    #                     ast.keyword(arg="related", value=ast.NameConstant(value=".".join(field_data["related"])))
-    #                 )
-    #             else:
-    #                 _field.keywords.append(ast.keyword(arg="compute", value=ast.NameConstant(value=f"_compute_{field}")))
-    #                 _computes.append(
-    #                     ast.FunctionDef(
-    #                         name=f"_compute_{field}",
-    #                         lineno=0,
-    #                         args=ast.arguments(
-    #                             args=[ast.arg(arg="self", annotation=None)],
-    #                             posonlyargs=[],
-    #                             vararg=None,
-    #                             kwonlyargs=[],
-    #                             kw_defaults=[],
-    #                             kwarg=None,
-    #                             defaults=[],
-    #                         ),
-    #                         body=[
-    #                             ast.For(
-    #                                 target=ast.Name(id="record", ctx=ast.Store()),
-    #                                 iter=ast.Name(id="self", ctx=ast.Load()),
-    #                                 lineno=0,
-    #                                 body=[
-    #                                     ast.Assign(
-    #                                         lineno=0,
-    #                                         targets=[ast.Name(id=f"record.{field}", ctx=ast.Store())],
-    #                                         value=ast.NameConstant(value=False),
-    #                                     ),
-    #                                 ],
-    #                                 orelse=[]
-    #                             ),
-    #                         ],
-    #                         decorator_list=[
-    #                             ast.Call(
-    #                                 func=ast.Name(id="api.depends", ctx=ast.Load()),
-    #                                 args=[ast.Str(s=depends) for depends in field_data["depends"]],
-    #                                 keywords=[],
-    #                             ),
-    #                         ],
-    #                         returns=None,
-    #                         type_comment=None,
-    #                     )
-    #                 )
-
-    #                 if field_data.get("inverse"):
-    #                     _field.keywords.append(ast.keyword(arg="inverse", value=ast.NameConstant(value=f"_inverse_{field}")))
-    #                     _computes.append(
-    #                         ast.FunctionDef(
-    #                             name=f"_inverse_{field}",
-    #                             lineno=0,
-    #                             args=ast.arguments(
-    #                                 args=[ast.arg(arg="self", annotation=None)],
-    #                                 posonlyargs=[],
-    #                                 vararg=None,
-    #                                 kwonlyargs=[],
-    #                                 kw_defaults=[],
-    #                                 kwarg=None,
-    #                                 defaults=[],
-    #                             ),
-    #                             body=[
-    #                                 ast.For(
-    #                                     target=ast.Name(id="record", ctx=ast.Store()),
-    #                                     iter=ast.Name(id="self", ctx=ast.Load()),
-    #                                     lineno=0,
-    #                                     body=[ast.Pass()],
-    #                                     orelse=[]
-    #                                 ),
-    #                             ],
-    #                             decorator_list=[],
-    #                             returns=None,
-    #                             type_comment=None,
-    #                         )
-    #                     )
-
-    #             if field_data.get("store"):
-    #                 _field.keywords.append(ast.keyword(arg="store", value=ast.NameConstant(value=True)))
-
-    #             if not field_data.get("readonly"):
-    #                 _field.keywords.append(ast.keyword(arg="readonly", value=ast.NameConstant(value=False)))
-    #         else:
-    #             if field_data.get("readonly"):
-    #                 _field.keywords.append(ast.keyword(arg="readonly", value=ast.NameConstant(value=True)))
-
-    #         _fields.append(
-    #             ast.Assign(
-    #                 lineno=0,
-    #                 targets=[ast.Name(id=field, ctx=ast.Store())],
-    #                 value=_field,
-    #             )
-    #         )
-
-    #     _module.body.extend([_imports, _class])
-    #     _class.body.extend(_fields)
-    #     _class.body.extend(_computes)
-    #     return black.format_str(ast.unparse(_module), mode=black.FileMode(line_length=120)).rstrip()
-
-    def _get_metadata(self, ids: Sequence[int] = None) -> Dict[int, RecordMetaData]:
-        """Get the metadata of the records with the given ids.
-        :param ids: The ids of the records to get the metadata of
-        :return: The metadata of the records with the given ids in a dict indexed by record id in format:
-        >>> {
-        >>>    "xml_id": "module.name",
-        >>>    "noupdate": bool,
-        >>> }
-        """
-        if not ids:
-            return {}
-
-        metadata = self.env["ir.model.data"].search_read(
-            domain=[("model", "=", self._name), ("res_id", "in", ids)],
-            fields=["res_id", "complete_name", "noupdate"],
-            order="id DESC",
-        )
-
-        clean_metadata: Dict[int, RecordMetaData] = {
-            cast(int, record["res_id"]): {
-                "xml_id": cast(str, record["complete_name"]),
-                "noupdate": cast(bool, record["noupdate"]),
-            }
-            for record in sorted(metadata, key=lambda record: record["id"], reverse=True)
-        }
-
-        for id_ in set(ids) - clean_metadata.keys():
-            clean_metadata[id_] = {
-                "xml_id": f"__unknown__.{self._name.replace('.', '_')}_{id_}",
-                "noupdate": False,
-            }
-
-        return clean_metadata
-
 
 class RpcConnector(Connector):
     """Interact with any Odoo database using XML/JSON RPC."""
@@ -645,12 +270,10 @@ class RpcConnector(Connector):
                     self,
                 )
 
-            try:
-                credentials = self.store.secrets.get(
-                    self.credentials_key,
-                    prompt_format=f"{self.database.platform.display} database '{self.database.name}' {{field}}:",
-                )
+            credentials_prompt = f"{self.database.platform.display} database '{self.database.name}' {{field}}:"
 
+            try:
+                credentials = self.store.secrets.get(self.credentials_key, prompt_format=credentials_prompt)
                 self._connection = odoolib.get_connection(
                     hostname=self.url,
                     database=self.database.name,
@@ -659,13 +282,14 @@ class RpcConnector(Connector):
                     protocol=self.protocol,
                     port=self.port,
                 )
-
+                self._connection.check_login()
             except odoolib.AuthenticationError:
                 logger.error(
                     f"Invalid credentials for {self.database.platform.display} "
-                    f"database {self.database.name} ({self.database.url})"
+                    f"database {self.database.name!r} ({self.database.url})"
                 )
-                self.store.secrets.invalidate(self.credentials_key)
+                self.store.secrets.get(self.credentials_key, prompt_format=credentials_prompt, force_ask=True)
+                self._connection = None
                 return self.connect()
 
         self.__patch_odoolib_send()

@@ -1,6 +1,7 @@
 """Interact with the terminal and the user."""
 
 from abc import ABC
+from contextlib import contextmanager
 from pathlib import Path
 from typing import (
     Any,
@@ -228,6 +229,14 @@ class Console(RichConsole):
     def is_live(self, value: bool):
         """Set the is_live property."""
         Console._is_live = value
+
+    @contextmanager
+    def no_bypass_prompt(self):
+        """Context manager to temporarily disable prompt bypassing."""
+        original_bypass = self.bypass_prompt
+        self.bypass_prompt = False
+        yield
+        self.bypass_prompt = original_bypass
 
     def clear_line(self, count: int = 1):
         """Clear up a number of lines from the terminal.
