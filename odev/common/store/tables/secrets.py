@@ -1,9 +1,8 @@
 from base64 import b64decode, b64encode
 from dataclasses import dataclass
-from io import StringIO
 from typing import Literal, Optional, Sequence, Union
 
-from agentcrypt.io import Container  # type: ignore [import]
+from ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt
 
 from odev.common.console import console
 from odev.common.logging import logging
@@ -11,12 +10,6 @@ from odev.common.postgres import PostgresTable
 
 
 logger = logging.getLogger(__name__)
-
-
-class NamedStringIO(StringIO):
-    """StringIO with a name attribute."""
-
-    name: str = "NamedStringIO"
 
 
 @dataclass
@@ -56,30 +49,21 @@ class SecretStore(PostgresTable):
     @classmethod
     def encrypt(cls, plaintext: str) -> str:
         """Symmetrically encrypt a string using ssh-agent.
-
         :param plaintext: The string to encrypt.
         :return: The encrypted string.
         :rtype: str
         """
-
-        with NamedStringIO() as stream, Container.create(stream) as container:
-            container.write(plaintext)
-            container.flush()
-            encrypted = stream.getvalue()
-        return b64encode(encrypted.encode()).decode()
+        return b64encode(ssh_encrypt(plaintext)).decode()
 
     @classmethod
     def decrypt(cls, ciphertext: str) -> str:
         """Symmetrically decrypt a string using ssh-agent.
-
         :param ciphertext: The string to decrypt.
         :return: The decrypted string.
         :rtype: str
         """
         decoded = b64decode(ciphertext.encode()).decode()
-
-        with NamedStringIO(decoded) as stream, Container.load(stream) as container:
-            return container.getvalue().decode()
+        return str(ssh_decrypt(decoded))
 
     def get(
         self,
