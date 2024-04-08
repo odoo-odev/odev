@@ -53,7 +53,7 @@ class SecretStore(PostgresTable):
         :return: The encrypted string.
         :rtype: str
         """
-        return b64encode(ssh_encrypt(plaintext)).decode()
+        return b64encode(ssh_encrypt(plaintext)).decode() if plaintext else ""
 
     @classmethod
     def decrypt(cls, ciphertext: str) -> str:
@@ -62,8 +62,7 @@ class SecretStore(PostgresTable):
         :return: The decrypted string.
         :rtype: str
         """
-        decoded = b64decode(ciphertext.encode()).decode()
-        return str(ssh_decrypt(decoded))
+        return str(ssh_decrypt(b64decode(ciphertext.encode()).decode())) if ciphertext else ""
 
     def get(
         self,
