@@ -251,7 +251,7 @@ class Odev(Generic[CommandType]):
         with progress.spinner(f"Updating {prompt_name!r}"):
             logger.debug(
                 f"Pulling latest changes from {git.name!r} "
-                f"on branch {git.repository.active_branch.tracking_branch()}"
+                f"on branch '{git.repository.active_branch.tracking_branch()}'"
             )
             install_requirements = self.__requirements_changed(git.repository)
 
@@ -586,7 +586,9 @@ class Odev(Generic[CommandType]):
         :rtype: bool
         """
         requirements_file = Path(repository.working_dir) / "requirements.txt"
-        diff = repository.git.diff("--name-only", "HEAD", requirements_file).strip()
+        remote_branch = repository.active_branch.tracking_branch()
+        tracking_ref = remote_branch.name if remote_branch is not None else "HEAD"
+        diff = repository.git.diff("--name-only", tracking_ref, requirements_file).strip()
 
         if diff == requirements_file.as_posix():
             logger.debug("Repository requirements have changed since last version")
