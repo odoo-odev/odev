@@ -296,4 +296,11 @@ class Config:
 
     def to_dict(self) -> dict[str, dict[str, str]]:
         """Convert the config to a dict."""
-        return self.parser.__dict__["_sections"]
+        converted: dict[str, dict[str, str]] = self.parser.__dict__["_sections"]
+
+        for section in converted:
+            for key in converted[section]:
+                if isinstance(getattr(getattr(self, section), key), list):
+                    converted[section][key] = "\n".join(converted[section][key].split(","))
+
+        return converted

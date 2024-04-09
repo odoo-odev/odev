@@ -69,6 +69,11 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     If `None` and unknown arguments are found, an error will be raised.
     """
 
+    _exclusive_arguments: ClassVar[Sequence[Sequence[str]]] = []
+    """List of exclusive arguments that cannot be used together but at least on of them is required.
+    Each list item is a list of argument names that are mutually exclusive.
+    """
+
     # --------------------------------------------------------------------------
     # Arguments
     # --------------------------------------------------------------------------
@@ -204,6 +209,16 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         :param name: the name of the argument to remove.
         """
         cls._arguments.pop(cls._find_argument(name))
+
+    @classmethod
+    def check_arguments(cls, arguments: Namespace):
+        """Ensure all arguments are compatible together and that they posses a correct value."""
+        for exclusive_group in cls._exclusive_arguments:
+            exclusive_arguments = [getattr(arguments, argument) for argument in exclusive_group]
+            if sum(bool(argument) for argument in exclusive_arguments) != 1:
+                raise SystemExit(
+                    f"Arguments {string.join_and(exclusive_group)} are mutually exclusive and at least one is required"
+                )
 
     @classmethod
     def prepare_arguments(cls, parser: ArgumentParser) -> None:

@@ -207,6 +207,7 @@ class Odev(Generic[CommandType]):
     def load_plugins(self) -> None:
         """Load plugins from the configuration file and register them in the plugin directory."""
         self.plugins_path.mkdir(parents=True, exist_ok=True)
+        self.config.paths.repositories.mkdir(parents=True, exist_ok=True)
 
         for plugin in self.plugins:
             logger.debug(f"Loading plugin {plugin!r}")
@@ -458,6 +459,7 @@ class Odev(Generic[CommandType]):
         try:
             logger.debug(f"Parsing command arguments '{' '.join(args)}'")
             arguments = command_cls.parse_arguments(args)
+            command_cls.check_arguments(arguments)
         except SystemExit as exception:
             raise command_cls.error(None, str(exception))  # type: ignore [call-arg]
         return arguments

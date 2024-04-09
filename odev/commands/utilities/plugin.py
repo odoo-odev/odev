@@ -3,7 +3,6 @@
 from odev.common import args
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector
-from odev.common.errors import ConnectorError
 from odev.common.logging import logging
 
 
@@ -15,8 +14,10 @@ class PluginCommand(Command):
 
     _name = "plugin"
     _aliases = ["addons"]
+    _exclusive_arguments = [("enable", "disable")]
 
-    action = args.String(description="Action to perform, either 'enable' or 'disable'.", choices=["enable", "disable"])
+    enable = args.Flag(aliases=["--enable"], description="Download and enable an inactive plugin.")
+    disable = args.Flag(aliases=["--disable"], description="Disable an active plugin.")
     plugin = args.String(
         description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
@@ -27,12 +28,12 @@ class PluginCommand(Command):
         """Enable or disable a plugin."""
         repository = GitConnector(self.args.plugin).name
 
-        if self.args.action == "enable":
+        if self.args.enable:
             self.__add_plugin_to_config(repository)
 
             try:
                 self.odev.load_plugins()
-            except ConnectorError as error:
+            except Exception as error:
                 self.__remove_plugin_from_config(repository)
                 raise error
             else:
@@ -45,7 +46,7 @@ class PluginCommand(Command):
                 plugin_name = repository.split("/", 1)[-1].replace("-", "_").replace(".git", "")
                 self.odev.plugins_path.joinpath(plugin_name).unlink(missing_ok=True)
                 self.odev.load_plugins()
-            except ConnectorError as error:
+            except Exception as error:
                 self.__add_plugin_to_config(repository)
                 raise error
             else:
