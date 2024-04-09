@@ -1,3 +1,4 @@
+import shutil
 from odev._version import __version__
 from odev.common.errors import CommandError, ConnectorError
 from odev.common.python import PythonEnv
@@ -258,7 +259,7 @@ class TestUtilCommands(OdevCommandTestCase):
         # Run the command to enable a plugin
         # ----------------------------------------------------------------------
 
-        command = self.setup_command("plugin", "enable test/test")
+        command = self.setup_command("plugin", "--enable test/test")
 
         with self.patch(command.odev, "load_plugins"):
             command.run()
@@ -276,7 +277,7 @@ class TestUtilCommands(OdevCommandTestCase):
         # Run the command to disable a plugin
         # ----------------------------------------------------------------------
 
-        command = self.setup_command("plugin", "disable test/test")
+        command = self.setup_command("plugin", "--disable test/test")
 
         with self.patch(command.odev, "load_plugins"):
             command.run()
@@ -294,7 +295,7 @@ class TestUtilCommands(OdevCommandTestCase):
         # Run the command with an invalid plugin to enable
         # ----------------------------------------------------------------------
 
-        command = self.setup_command("plugin", "enable invalid/invalid")
+        command = self.setup_command("plugin", "--enable invalid/invalid")
 
         with self.assertRaises(ConnectorError):
             command.run()
@@ -373,6 +374,7 @@ class TestUtilCommands(OdevCommandTestCase):
         command.run()
 
         self.assertRegex(self.Popen.all_calls[-4].args[0], r"python[\d.?]+\s-m\spip\s--version", "should detect pip as a module and print its version")
+        shutil.rmtree("odev-test")
 
     def test_command_version(self):
         """Command `odev version` should print the version of the application."""
