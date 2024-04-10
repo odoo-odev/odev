@@ -1,11 +1,6 @@
 import os
-import sys
 from signal import SIGINT, SIGTERM, signal
 from time import monotonic
-
-
-if sys.version_info < (3, 10):
-    raise RuntimeError("Odev requires Python 3.10 or later")
 
 
 # --- Main entry method --------------------------------------------------------

@@ -1,11 +1,5 @@
 import os
-import sys
 from signal import SIGINT, SIGTERM, signal
-
-
-if sys.version_info < (3, 10):
-    raise RuntimeError("Odev requires Python 3.10 or later")
-
 
 import odev.setup as setup
 from odev._version import __version__
