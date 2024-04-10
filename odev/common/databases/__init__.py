@@ -10,6 +10,7 @@ from typing import cast
 
 from .base import Branch, Database, DummyDatabase, Filestore, Repository
 from .local import LocalDatabase
+from .remote import RemoteDatabase
 
 
 # --- Plugins ------------------------------------------------------------------

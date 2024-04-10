@@ -12,7 +12,7 @@ from typing import (
 
 from odev.common import args, progress, string
 from odev.common.commands import Command
-from odev.common.databases import DummyDatabase, LocalDatabase
+from odev.common.databases import DummyDatabase, LocalDatabase, RemoteDatabase
 from odev.common.errors import CommandError
 from odev.common.logging import logging
 
@@ -20,7 +20,11 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-DatabaseType = Union[LocalDatabase, DummyDatabase]
+DatabaseType = Union[
+    LocalDatabase,
+    RemoteDatabase,
+    DummyDatabase,
+]
 
 
 class DatabaseCommand(Command, ABC):
@@ -35,7 +39,10 @@ class DatabaseCommand(Command, ABC):
     _database_exists_required: ClassVar[bool] = True
     """Whether the database must exist before running the command."""
 
-    _database_platforms: ClassVar[Mapping[str, type[DatabaseType]]] = {"local": LocalDatabase}
+    _database_platforms: ClassVar[Mapping[str, type[DatabaseType]]] = {
+        "local": LocalDatabase,
+        "remote": RemoteDatabase,
+    }
     """The database hosting platforms supported by this command, in order of priority for hosting lookup
     (the first key in this ordered dictionary will be checked first).
     """
@@ -168,3 +175,10 @@ class LocalDatabaseCommand(DatabaseCommand, ABC):
         # for this command (`branch` is only used for PaaS databases)
         cls.remove_argument("platform")
         cls.remove_argument("branch")
+
+
+class RemoteDatabaseCommand(DatabaseCommand, ABC):
+    """Base class for commands that require a remote database to work."""
+
+    _database: RemoteDatabase  # type: ignore [assignment]
+    _database_allowed_platforms = ["remote", "paas", "saas"]

@@ -15,7 +15,7 @@ from odev.common.version import OdooVersion
 class Platform:
     """Information about the platform on which a database is running."""
 
-    name: Literal["local", "saas", "paas", "dummy"]
+    name: Literal["local", "remote", "saas", "paas", "dummy"]
     """The name of the platform."""
 
     display: str
@@ -76,7 +76,7 @@ class Database(OdevFrameworkMixin, ABC):
     _name: str
     """The name of the database."""
 
-    _platform: ClassVar[Literal["local", "saas", "paas", "dummy"]]
+    _platform: ClassVar[Literal["local", "remote", "saas", "paas", "dummy"]]
     """The platform on which the database is running."""
 
     _platform_display: ClassVar[str]
