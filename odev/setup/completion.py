@@ -39,13 +39,13 @@ def setup(config: Config) -> None:
         logger.debug(f"Directory {comp_path.parent} does not exist, creating it")
         comp_path.parent.mkdir(parents=True)
 
-    if comp_path.exists():
+    if comp_path.exists() or comp_path.is_symlink():
         logger.warning(f"Symlink path {comp_path} already exists, this is used to enable bash auto-completion")
 
         if console.confirm("Would you like to overwrite it?"):
             logger.debug(f"Removing symlink path {comp_path}")
             comp_path.unlink(missing_ok=True)
 
-    if not comp_path.exists():
+    if not comp_path.exists() and not comp_path.is_symlink():
         logger.debug(f"Creating symlink from {comp_path} to {file_path}")
         comp_path.symlink_to(file_path)

@@ -219,7 +219,7 @@ class Odev(Generic[CommandType]):
             repository.update()
             plugin_path = self.plugins_path.joinpath(repository._repository.replace("-", "_"))
 
-            if not plugin_path.exists():
+            if not plugin_path.exists() and not plugin_path.is_symlink():
                 logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
                 plugin_path.symlink_to(repository.path, target_is_directory=True)
 
