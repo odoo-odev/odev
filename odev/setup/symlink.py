@@ -25,14 +25,14 @@ def setup(config: Config) -> None:
         logger.debug(f"Directory {link_path.parent} does not exist, creating it")
         link_path.parent.mkdir(parents=True)
 
-    if link_path.exists():
+    if link_path.exists() or link_path.is_symlink():
         logger.warning(f"Symlink path {link_path} already exists, this is used to run odev as a shell command")
 
         if console.confirm("Would you like to overwrite it?"):
             logger.debug(f"Removing symlink path {link_path}")
             link_path.unlink(missing_ok=True)
 
-    if not link_path.exists():
+    if not link_path.exists() and not link_path.is_symlink():
         logger.debug(f"Creating symlink from {link_path} to {main_path}")
         link_path.symlink_to(main_path)
 
