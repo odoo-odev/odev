@@ -1,5 +1,11 @@
 import os
+import sys
 from signal import SIGINT, SIGTERM, signal
+
+
+if sys.version_info < (3, 10):
+    raise RuntimeError("Odev requires Python 3.10 or later")
+
 
 import odev.setup as setup
 from odev._version import __version__
@@ -24,7 +30,7 @@ def main():
 
         logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
-            raise Exception("Odev should not be run as root")
+            raise RuntimeError("Odev should not be run as root")
 
         # --- Initialize odev configuration files ------------------------------
         logger.debug("Initializing configuration files")

@@ -1,6 +1,11 @@
 import os
+import sys
 from signal import SIGINT, SIGTERM, signal
 from time import monotonic
+
+
+if sys.version_info < (3, 10):
+    raise RuntimeError("Odev requires Python 3.10 or later")
 
 
 # --- Main entry method --------------------------------------------------------
@@ -28,7 +33,7 @@ def main():
 
         logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
-            raise Exception("Odev should not be run as root")
+            raise RuntimeError("Odev should not be run as root")
 
         odev = init_framework()
         odev.start()
