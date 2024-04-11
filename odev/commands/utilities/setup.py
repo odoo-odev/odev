@@ -3,9 +3,8 @@
 import inspect
 import pkgutil
 import textwrap
-from importlib.machinery import FileFinder
-from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
+from importlib import import_module
+from importlib.util import find_spec
 from types import ModuleType
 from typing import Generator, List, Optional, Tuple
 
@@ -36,16 +35,21 @@ class SetupCommand(Command):
 
     def run_setup(self, name: Optional[str] = None) -> None:
         """Run the entire setup."""
-        for script in self.__import_setup_scripts():
+        package = self.odev.setup_path.relative_to(self.odev.path).as_posix().replace("/", ".")
+
+        for script in self.__import_setup_scripts(package):
             if name is None or script.__name__ == name:
-                script.setup(self.config)
+                script.setup(self.odev)
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
         super().prepare_command(*args, **kwargs)
+        assert cls.odev.fget is not None  # type: ignore [attr-defined]
+        odev = cls.odev.fget(cls)  # type: ignore [attr-defined]
+        package = odev.setup_path.relative_to(odev.path).as_posix().replace("/", ".")
         scripts: List[Tuple[str, str]] = [
             (script.__name__, string.normalize_indent(script.__doc__ or "No description."))
-            for script in cls.__import_setup_scripts()
+            for script in cls.__import_setup_scripts(package)
         ]
         script_names = [script[0] for script in scripts]
         cls.update_argument("category", choices=script_names)
@@ -61,24 +65,26 @@ class SetupCommand(Command):
     # --- Private methods ------------------------------------------------------
 
     @classmethod
-    def __import_setup_scripts(cls) -> Generator[ModuleType, None, None]:
+    def __import_setup_scripts(cls, package: str) -> Generator[ModuleType, None, None]:
         """Import all setup scripts from the setup directory.
-
         :return: Imported setup modules
         :rtype: Generator[ModuleType]
         """
-        setup_modules = pkgutil.iter_modules([d.as_posix() for d in cls._framework.setup_path.parent.glob("setup")])
+        loader = find_spec(package)
+        assert loader is not None and loader.submodule_search_locations, "Could not find the setup module"
 
-        for module_info in setup_modules:
-            assert isinstance(module_info.module_finder, FileFinder)
-            module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
-            spec = spec_from_file_location(module_path.stem, module_path.as_posix())
-            assert spec is not None and spec.loader is not None
-            setup_module: ModuleType = module_from_spec(spec)
-            spec.loader.exec_module(setup_module)
+        submodules = sorted(
+            (
+                import_module(f"{loader.name}.{submodule_info.name}")
+                for submodule_info in pkgutil.iter_modules(loader.submodule_search_locations)
+            ),
+            key=lambda submodule: getattr(submodule, "PRIORITY", 0),
+        )
 
-            if cls.__filter_setup_scripts(setup_module):
-                yield setup_module
+        for submodule in submodules:
+            if cls.__filter_setup_scripts(submodule):
+                submodule.__name__ = submodule.__name__.removeprefix(f"{package}.")
+                yield submodule
 
     @classmethod
     def __filter_setup_scripts(cls, module: ModuleType) -> bool:

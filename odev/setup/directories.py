@@ -4,12 +4,15 @@ import shutil
 from pathlib import Path
 from typing import Optional, Union
 
-from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
+from odev.common.odev import Odev
 
 
 logger = logging.getLogger(__name__)
+
+
+PRIORITY = 20
 
 
 # --- Helpers ------------------------------------------------------------------
@@ -78,7 +81,7 @@ def __get_dir(message: str, default: Path) -> Optional[Path]:
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Config) -> None:
+def setup(odev: Odev) -> None:
     """Setup working directories for odev.
     :param config: Odev configuration
     """
@@ -91,5 +94,7 @@ def setup(config: Config) -> None:
         """
     )
 
-    config.paths.repositories = __get_dir("Where do you want to store repositories?", config.paths.repositories)
-    config.paths.dumps = __get_dir("Where do you want to store dump files?", config.paths.dumps)
+    odev.config.paths.repositories = __get_dir(
+        "Where do you want to store repositories?", odev.config.paths.repositories
+    )
+    odev.config.paths.dumps = __get_dir("Where do you want to store dump files?", odev.config.paths.dumps)

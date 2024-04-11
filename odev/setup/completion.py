@@ -1,18 +1,20 @@
-"""Setup auto completion script for odev commands and databases.
-
-See:
+"""Setup auto completion script for odev commands and databases, see:
 - https://github.com/scop/bash-completion/
 - https://www.gnu.org/savannah-checkouts/gnu/bash/manual/html_node/Programmable-Completion.html
 """
 
 from pathlib import Path
 
-from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
+from odev.common.odev import Odev
 
 
 logger = logging.getLogger(__name__)
+
+
+PRIORITY = 50
+"""Setup priority for this module."""
 
 
 # --- Values -------------------------------------------------------------------
@@ -25,7 +27,7 @@ comp_path = Path("~/.local/share/bash-completion/completions/complete_odev.sh").
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Config) -> None:
+def setup(odev: Odev) -> None:
     """Setup auto completion script for odev commands and databases.
 
     See:

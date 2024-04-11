@@ -22,7 +22,7 @@ class TestSetup(OdevTestCase):
             self.patch(completion.logger, "warning"),
             self.patch(completion.console, "confirm", return_value=True),
         ):
-            completion.setup(self.odev.config)
+            completion.setup(self.odev)
 
         self.assertTrue(
             Path("~/.local/share/bash-completion/completions/complete_odev.sh").expanduser().is_symlink(),
@@ -37,7 +37,7 @@ class TestSetup(OdevTestCase):
             self.patch(symlink.logger, "warning"),
             self.patch(symlink.console, "confirm", return_value=True),
         ):
-            symlink.setup(self.odev.config)
+            symlink.setup(self.odev)
 
         self.assertTrue(Path("~/.local/bin/odev").expanduser().is_symlink(), "should create a symlink to odev")
 
@@ -53,7 +53,7 @@ class TestSetup(OdevTestCase):
             self.patch(directories.console, "confirm", return_value=True),
             self.patch(shutil, "move") as mock_move,
         ):
-            directories.setup(self.odev.config)
+            directories.setup(self.odev)
 
         mock_logger_debug.assert_any_call(f"Directory {self.odev.config.paths.repositories} did not change, skipping")
         mock_move.assert_not_called()
@@ -76,7 +76,7 @@ class TestSetup(OdevTestCase):
             self.patch(directories.console, "confirm", return_value=True),
             self.patch(shutil, "move") as mock_move,
         ):
-            directories.setup(self.odev.config)
+            directories.setup(self.odev)
 
         logger_debug.assert_any_call(f"Moving {old_path} to {self.odev.config.paths.repositories}")
         mock_move.assert_called_once()
@@ -102,7 +102,7 @@ class TestSetup(OdevTestCase):
             self.patch(directories.console, "directory", return_value=new_path.as_posix()),
             self.patch(directories.console, "confirm", return_value=True),
         ):
-            directories.setup(self.odev.config)
+            directories.setup(self.odev)
 
         logger_debug.assert_any_call(f"Directory {new_path.as_posix()} exists but is empty, removing it")
         shutil.rmtree(new_path.as_posix(), ignore_errors=True)
@@ -120,7 +120,7 @@ class TestSetup(OdevTestCase):
             self.patch(update.console, "select", return_value="never"),
             self.patch(update.console, "integer", return_value=5),
         ):
-            update.setup(self.odev.config)
+            update.setup(self.odev)
 
         self.assertEqual(self.odev.config.update.mode, "never", "should update the configuration file")
         self.assertEqual(self.odev.config.update.interval, 5, "should update the configuration file")

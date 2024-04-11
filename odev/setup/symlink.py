@@ -3,18 +3,21 @@
 import stat
 from pathlib import Path
 
-from odev.common.config import Config
 from odev.common.console import console
 from odev.common.logging import logging
+from odev.common.odev import Odev
 
 
 logger = logging.getLogger(__name__)
 
 
+PRIORITY = 10
+
+
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(config: Config) -> None:
+def setup(odev: Odev) -> None:
     """Setup symlinks to odev for using it as a shell command.
     :param config: Odev configuration
     """

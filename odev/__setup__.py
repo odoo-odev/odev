@@ -1,7 +1,9 @@
 import os
+import pkgutil
+from importlib import import_module
+from importlib.util import find_spec
 from signal import SIGINT, SIGTERM, signal
 
-import odev.setup as setup
 from odev._version import __version__
 from odev.common import init_framework, signal_handling as handlers
 from odev.common.logging import logging
@@ -22,6 +24,7 @@ def main():
         for sig in (SIGINT, SIGTERM):
             signal(sig, handlers.signal_handler_exit)
 
+        # --- Do not run as superuser ------------------------------------------
         logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
             raise RuntimeError("Odev should not be run as root")
@@ -30,21 +33,23 @@ def main():
         logger.debug("Initializing configuration files")
         odev = init_framework()
 
-        # --- Create directories -------------------------------------------
-        logger.info("Setting up working directories")
-        setup.directories.setup(odev.config)
+        # --- Load and run setup modules ---------------------------------------
+        loader = find_spec("odev.setup")
+        assert loader is not None and loader.submodule_search_locations, "Could not find the setup module"
 
-        # --- Create symlinks ----------------------------------------------
-        logger.info("Setting up symlinks for command registration")
-        setup.symlink.setup(odev.config)
+        submodules = sorted(
+            (
+                import_module(f"{loader.name}.{submodule_info.name}")
+                for submodule_info in pkgutil.iter_modules(loader.submodule_search_locations)
+            ),
+            key=lambda submodule: getattr(submodule, "PRIORITY", 0),
+        )
 
-        # --- Enable autocompletion ----------------------------------------
-        logger.info("Setting up autocompletion")
-        setup.completion.setup(odev.config)
-
-        # --- Configure self-update ----------------------------------------
-        logger.info("Configuring self-update")
-        setup.update.setup(odev.config)
+        for submodule in submodules:
+            if hasattr(submodule, "setup"):
+                if hasattr(submodule, "__doc__") and submodule.__doc__ is not None:
+                    logger.info(submodule.__doc__.strip())
+                submodule.setup(odev)
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)
