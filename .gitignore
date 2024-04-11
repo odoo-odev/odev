@@ -19,3 +19,7 @@ coverage.xml
 # --- Odev plugins, loaded as submodules
 odev/plugins/*
 tests/plugins/*
+
+# --- Temporary and testing files
+_*/
+tmp/
