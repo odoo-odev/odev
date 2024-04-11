@@ -40,17 +40,16 @@ class QuickStartCommand(DatabaseCommand):
     _database_allowed_platforms = []
 
     def run(self):
-        branch_cli_argument = ["--branch", self.args.branch] if self.args.branch else []
+        passthrough_args = ["--branch", self.args.branch] if self.args.branch else []
 
         if self.args.version:
             self.odev.run_command("create", "--version", self.args.version, database=self._database)
         else:
-            if self.args.filestore:
-                branch_cli_argument.append("--filestore")
-
-            if not self.odev.run_command("dump", *branch_cli_argument, database=self._database):
-                return
-
+            self.odev.run_command(
+                "dump",
+                *([*passthrough_args, "--filestore"] if self.args.filestore else passthrough_args),
+                database=self._database,
+            )
             self.odev.run_command(
                 "restore",
                 (
@@ -60,7 +59,7 @@ class QuickStartCommand(DatabaseCommand):
                 database=LocalDatabase(self.args.name or self._database.name),
             )
 
-        self.odev.run_command("clone", *branch_cli_argument, database=self._database)
+        self.odev.run_command("clone", *passthrough_args, database=self._database)
         self.odev.run_command("neutralize", database=LocalDatabase(self.args.name or self._database.name))
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:

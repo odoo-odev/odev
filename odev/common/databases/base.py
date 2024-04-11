@@ -217,7 +217,7 @@ class Database(OdevFrameworkMixin, ABC):
         """Neutralize the database and make it suitable for development."""
         raise NotImplementedError(f"Database neutralization not implemented for {self.platform.display} databases")
 
-    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Optional[Path]:
+    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Path:
         """Generate a dump file for the database.
         :param filestore: Whether to include the filestore in the dump.
         :param path: The path to the dump file.

@@ -418,7 +418,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         tracker.stop()
 
-    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Optional[Path]:
+    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Path:
         if path is None:
             path = self.odev.dumps_path
 
@@ -427,7 +427,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         file = path / filename
 
         if file.exists() and not self.console.confirm(f"File {file} already exists. Overwrite it?"):
-            return None
+            return file
 
         file.unlink(missing_ok=True)
 

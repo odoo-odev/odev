@@ -54,7 +54,7 @@ class RestoreCommand(DatabaseCommand):
                 logger.warning(f"{self._database.platform.display} database {self._database.name!r} already exists")
 
                 if not self.console.confirm("Do you want to overwrite it?", default=True):
-                    raise self.error("Command aborted")
+                    raise self.error("Dump restoration aborted")
 
                 if self._database.process.is_running:
                     with progress.spinner(f"Stopping database {self._database.process.pid}"):
