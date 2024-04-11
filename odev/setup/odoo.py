@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 PRIORITY = 30
 
+ODOO_REPOSITORIES = ["odoo", "enterprise", "design-themes"]
+
 
 # --- Setup --------------------------------------------------------------------
 
@@ -49,7 +51,25 @@ def setup(odev: Odev) -> None:
         ],
     )
 
-    for repo in ("odoo", "enterprise", "design-themes"):
+    repositories = sorted(
+        (
+            repository.name
+            for repository in old_parent_path.iterdir()
+            if repository.is_dir() and (repository / ".git").is_dir()
+        ),
+        key=lambda repo: ODOO_REPOSITORIES.index(repo.lower()) if repo.lower() in ODOO_REPOSITORIES else 999,
+    )
+
+    if not repositories:
+        return logger.info("No repositories found in the old parent directory")
+
+    repositories = console.checkbox(
+        f"Which repositories do you want to {action}?",
+        choices=[(repo, None) for repo in repositories],
+        defaults=list(set(repositories) & set(ODOO_REPOSITORIES)),
+    )
+
+    for repo in repositories:
         old_repo_path = old_parent_path / repo
         new_repo_path = new_parent_path / repo
 
@@ -76,3 +96,5 @@ def setup(odev: Odev) -> None:
                     shutil.copytree(old_repo_path, new_repo_path)
         else:
             logger.debug(f"Path {old_repo_path} does not exist, skipping")
+
+    logger.info(f"Moved {len(repositories)} repositories to {new_parent_path}")
