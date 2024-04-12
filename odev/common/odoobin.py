@@ -522,12 +522,50 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.version.major < 10 and not self.version.master:
             self.venv.install_packages(["psycopg2==2.7.3.1"])
 
+    def outdated_odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
+        """Return the Odoo repositories with pending changes."""
+        for worktree in self.odoo_worktrees:
+            commits_behind, _ = worktree.pending_changes()
+
+            if commits_behind:
+                yield worktree
+
     def update_worktrees(self):
         """Update the worktrees of the Odoo repositories."""
         for repository in self.odoo_repositories:
             repository.prune_worktrees()
             worktree = cast(GitWorktree, repository.get_worktree(self._get_odoo_branch()))
-            repository.pull_worktrees([worktree])
+
+        outdated_worktrees = list(self.outdated_odoo_worktrees())
+
+        if len(outdated_worktrees) == 1:
+            worktree = outdated_worktrees[0]
+            commits_behind, _ = worktree.pending_changes()
+            remote_name = f"{worktree.repository.remote().name}/{worktree.branch}"
+
+            logger.info(
+                f"Repository {worktree.connector.name!r} on branch {worktree.branch!r} "
+                f"is {commits_behind} commits behind {remote_name!r}"
+            )
+
+            if self.console.confirm("Pull changes now?", default=True):
+                worktree.connector.pull_worktrees([worktree], force=True)
+
+        elif outdated_worktrees:
+            logger.info(f"Multiple repositories have pending changes on branch {self._get_odoo_branch()!r}")
+            worktrees_to_pull: List[GitWorktree] = self.console.checkbox(
+                "Select the repositories to update:",
+                choices=[
+                    (worktree, f"{worktree.connector.name} ({worktree.pending_changes()[0]} commits)")
+                    for worktree in outdated_worktrees
+                ],
+                defaults=outdated_worktrees,
+            )
+
+            for worktree in worktrees_to_pull:
+                worktree.connector.pull_worktrees(worktrees_to_pull, force=True)
+
+        for repository in self.odoo_repositories:
             repository.fetch_worktrees([worktree])
 
     def clone_repositories(self):

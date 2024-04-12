@@ -470,7 +470,7 @@ class Console(RichConsole):
         )
 
     def checkbox(
-        self, message: str, choices: Sequence[Tuple[str, Optional[str]]], defaults: Optional[Sequence[str]] = None
+        self, message: str, choices: Sequence[Tuple[Any, Optional[str]]], defaults: Optional[Sequence[Any]] = None
     ):
         """Prompt for a checkbox selection.
         :param message: Question to ask the user
