@@ -54,7 +54,6 @@ class RestConnector(Connector, ABC):
 
     def __init__(self, url: str):
         """Initialize the connector.
-
         :param url: The URL of the endpoint.
         """
         super().__init__()
@@ -134,7 +133,6 @@ class RestConnector(Connector, ABC):
                 ).password
 
                 if cookie:
-                    logger.debug(f"Setting cookie {key!r} for domain {domain!r}")
                     self._connection.cookies.set(key, cookie, domain=domain)
 
     def disconnect(self):
@@ -171,7 +169,7 @@ class RestConnector(Connector, ABC):
 
     def _request(
         self,
-        method: Union[Literal["GET"], Literal["POST"]],
+        method: Literal["GET", "POST", "HEAD"],
         path: str,
         obfuscate_params: Optional[Sequence[str]] = None,
         raise_for_status: bool = True,
@@ -257,7 +255,6 @@ class RestConnector(Connector, ABC):
 
         for cookie in self._connection.cookies:
             if cookie.name in ODOO_SESSION_COOKIES:
-                logger.debug(f"Storing cookie {cookie.name!r} for domain {cookie.domain!r}")
                 self.store.secrets.set(
                     f"{cookie.domain}:{cookie.name}",
                     "",

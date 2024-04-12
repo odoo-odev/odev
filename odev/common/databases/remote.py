@@ -1,5 +1,11 @@
 from datetime import datetime
-from typing import ClassVar, Literal, Optional, cast
+from typing import (
+    ClassVar,
+    Literal,
+    Optional,
+    Tuple,
+    cast,
+)
 from urllib.parse import urlparse
 
 from odev.common.config import DATETIME_FORMAT
@@ -19,19 +25,18 @@ class RemoteDatabase(Database):
     _url: str
     """The URL of the remote database."""
 
+    _filestore: Optional[Filestore] = None
+    """The filestore of the database."""
+
+    _repository: Optional[Repository] = None
+    """The repository containing custom code for the database."""
+
+    _branch: Optional[Branch] = None
+    """The branch of the repository containing custom code for the database."""
+
     def __init__(self, url: str) -> None:
         super().__init__(url)
-        parsed = urlparse(url)
-
-        if not parsed.scheme:
-            parsed = urlparse(f"https://{url}")
-
-        if parsed.netloc:
-            self._name = parsed.netloc.split(".")[0]
-            self._url = f"{parsed.scheme}://{parsed.netloc}"
-        else:
-            self._name = url
-            self._url = f"http://{url}"
+        self._name, self._url = self.get_name_from_url(url)
 
     def __enter__(self):
         self.rpc.__enter__()
@@ -39,6 +44,19 @@ class RemoteDatabase(Database):
 
     def __exit__(self, *args):
         self.rpc.__exit__(*args)
+
+    def get_name_from_url(self, url: str) -> Tuple[str, str]:
+        """Infer the name of the database from its URL or its URL from its name."""
+        parsed = urlparse(url)
+
+        if not parsed.scheme:
+            parsed = urlparse(f"https://{url}")
+
+        return (
+            (parsed.netloc.split(".")[0], f"{parsed.scheme}://{parsed.netloc}")
+            if parsed.netloc
+            else (url, f"http://{url}")
+        )
 
     @property
     def is_odoo(self) -> bool:
