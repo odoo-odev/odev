@@ -3,6 +3,7 @@ from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
 from typing import (
+    Iterable,
     List,
     Literal,
     Optional,
@@ -154,15 +155,15 @@ class PluginsSection(Section):
     """Odev plugins configuration."""
 
     @property
-    def enabled(self) -> List[str]:
+    def enabled(self) -> Iterable[str]:
         """List of enabled plugins repositories.
         Defaults to an empty list.
         """
-        return cast(str, self.get("enabled", "")).split(",")
+        return [plugin for plugin in cast(str, self.get("enabled", "")).split(",") if plugin]
 
     @enabled.setter
-    def enabled(self, value: Union[str, List[str]]):
-        self.set("enabled", ",".join(value) if isinstance(value, list) else value)
+    def enabled(self, value: Union[str, Iterable[str]]):
+        self.set("enabled", value if isinstance(value, str) else ",".join(list(value)))
 
 
 class PruningSection(Section):

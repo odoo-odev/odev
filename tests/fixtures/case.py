@@ -95,6 +95,8 @@ class OdevTestCase(TestCase):
         :param attribute: The name of the property to patch.
         :param value: The value to return when the property is accessed.
         """
+        if isinstance(target, str):
+            return patch(f"{target}.{attribute}", new_callable=PropertyMock, return_value=value)
         return patch.object(target, attribute, new_callable=PropertyMock, return_value=value, **kwargs)
     
     @classmethod
@@ -169,7 +171,10 @@ class OdevTestCase(TestCase):
         """Patch framework low-level features that could conflict with the tests execution."""
         cls._patch_object(
             Odev,
-            [("prune_databases", None)],
+            [
+                ("prune_databases", None),
+                ("_update", False),
+            ],
             [
                 ("name", "odev-test"),
                 ("upgrades_path", cls.odev.tests_path / "resources" / "upgrades"),

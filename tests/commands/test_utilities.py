@@ -1,9 +1,12 @@
+from pathlib import Path
+
 from odev._version import __version__
 
 from tests.fixtures import OdevCommandTestCase
 
 
 POSTGRES_PATH = "odev.common.connectors.PostgresConnector"
+GIT_PATH = "odev.common.connectors.git.GitConnector"
 
 
 class TestCommandUtilitiesVersion(OdevCommandTestCase):
@@ -201,31 +204,54 @@ class TestCommandUtilitiesUpdate(OdevCommandTestCase):
 class TestCommandUtilitiesPlugin(OdevCommandTestCase):
     """Command `odev plugin` should enable and disable plugins to add new features and commands."""
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.plugin = "test/test-plugin"
+        cls.plugin_link = Path(cls.odev.plugins_path) / "test_plugin"
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        cls.plugin_link.unlink(missing_ok=True)
+
     def test_01_enable(self):
         """Run the command to enable a plugin."""
-        with self.patch(self.odev, "load_plugins"):
-            self.dispatch_command("plugin", "--enable", "test/test")
+        self.odev.config.paths.repositories = self.odev.tests_path / "resources" / "repositories"
 
-        self.assertIn("test/test", self.odev.config.plugins.enabled)
+        with (
+            self.patch_property(GIT_PATH, "exists", True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            self.dispatch_command("plugin", "--enable", self.plugin)
+
+        self.assertIn(self.plugin, self.odev.config.plugins.enabled)
+        self.assertTrue(self.plugin_link.is_symlink())
 
     def test_02_disable(self):
         """Run the command to disable a plugin."""
-        with self.patch(self.odev, "load_plugins"):
-            self.dispatch_command("plugin", "--disable", "test/test")
+        self.odev.config.plugins.enabled = [self.plugin]
 
-        self.assertNotIn("test/test", self.odev.config.plugins.enabled)
+        with (
+            self.patch_property(GIT_PATH, "exists", True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            self.dispatch_command("plugin", "--disable", self.plugin)
+
+        self.assertNotIn(self.plugin, self.odev.config.plugins.enabled)
+        self.assertFalse(self.plugin_link.is_symlink())
 
     def test_03_enable_already_enabled(self):
         """Run the command to enable an already enabled plugin."""
-        self.odev.config.plugins.enabled = ["test/test"]
-        _, stderr = self.dispatch_command("plugin", "--enable", "test/test")
-        self.assertIn("Plugin 'test/test' is already enabled", stderr)
+        self.odev.config.plugins.enabled = [self.plugin]
+        _, stderr = self.dispatch_command("plugin", "--enable", self.plugin)
+        self.assertIn(f"Plugin '{self.plugin}' is already enabled", stderr)
 
     def test_04_disable_already_disabled(self):
         """Run the command to disable an already disabled plugin."""
         self.odev.config.plugins.enabled = []
-        _, stderr = self.dispatch_command("plugin", "--disable", "test/test")
-        self.assertIn("Plugin 'test/test' is not enabled", stderr)
+        _, stderr = self.dispatch_command("plugin", "--disable", self.plugin)
+        self.assertIn(f"Plugin '{self.plugin}' is not enabled", stderr)
 
     def test_05_enable_invalid(self):
         """Run the command with an invalid plugin to enable."""
