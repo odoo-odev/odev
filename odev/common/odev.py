@@ -6,6 +6,8 @@ import pkgutil
 import re
 import sys
 from datetime import datetime, timezone
+from functools import lru_cache
+from importlib.abc import Loader
 from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -13,18 +15,22 @@ from types import ModuleType
 from typing import (
     Any,
     ClassVar,
+    Generator,
     Generic,
     Iterable,
     Iterator,
     List,
     Literal,
     MutableMapping,
+    NamedTuple,
     Optional,
     Type,
+    TypedDict,
     cast,
 )
 
-from git import Repo
+import networkx as nx
+from git import NoSuchPathError, Repo
 from packaging import version
 
 from odev._version import __version__
@@ -55,6 +61,23 @@ HOME_PATH = Path("~").expanduser() / "odev"
 
 VENVS_DIRNAME = "virtualenvs"
 """Name of the directory where virtual environments are stored."""
+
+
+class Manifest(TypedDict):
+    """Plugin manifest information."""
+
+    name: str
+    description: str
+    version: str
+    depends: List[str]
+
+
+class Plugin(NamedTuple):
+    """Plugin information."""
+
+    name: str
+    path: Path
+    manifest: Manifest
 
 
 logger = logging.getLogger(__name__)
@@ -176,9 +199,12 @@ class Odev(Generic[CommandType]):
         return self.config.paths.dumps
 
     @property
-    def plugins(self) -> List[str]:
-        """List of enabled plugins."""
-        return [plugin for plugin in self.config.plugins.enabled if plugin]
+    def plugins(self) -> Generator[Plugin, None, None]:
+        """Yields enabled plugins sorted topologically."""
+        for plugin_name in self._plugins_dependency_tree():
+            plugin_path = self.plugins_path / plugin_name.split("/")[-1].replace("-", "_")
+            plugin_manifest = self._load_plugin_manifest(plugin_path)
+            yield Plugin(plugin_name, plugin_path, plugin_manifest)
 
     def start(self) -> None:
         """Start the framework, check for updates and load plugins and commands."""
@@ -205,45 +231,19 @@ class Odev(Generic[CommandType]):
         :param restart: Whether to restart the framework after updating.
         :param upgrade: Whether to force the upgrade process.
         """
-        if (
-            upgrade
-            or self._update(self.path, self.name)
-            or any(
-                self._update(path, f"plugin {name}")
-                for path, name in [
-                    (self.plugins_path / plugin.split("/")[-1].replace("-", "_"), plugin) for plugin in self.plugins
-                ]
-            )
-        ):
+        logger.debug(f"Checking for updates in {self.name!r}")
+        upgrade |= self._update(self.path, f"{self.name!r}")
+
+        logger.debug("Checking for updates in plugins")
+        upgrade |= any(self._update(path, f"plugin {plugin!r}") for plugin, path, _ in self.plugins)
+
+        if upgrade:
             self.config.update.date = datetime.now(timezone.utc)
             self.upgrade()
+            self.load_plugins()
 
             if restart:
                 self.restart()
-
-    def load_plugins(self) -> None:
-        """Load plugins from the configuration file and register them in the plugin directory."""
-        self.plugins_path.mkdir(parents=True, exist_ok=True)
-        self.config.paths.repositories.mkdir(parents=True, exist_ok=True)
-
-        for plugin in self.plugins:
-            logger.debug(f"Loading plugin {plugin!r}")
-            repository = GitConnector(plugin)
-
-            if not repository.exists:
-                repository.clone()
-
-            repository.update()
-            plugin_path = self.plugins_path.joinpath(repository._repository.replace("-", "_"))
-
-            if not plugin_path.exists() and not plugin_path.is_symlink():
-                logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
-                plugin_path.symlink_to(repository.path, target_is_directory=True)
-
-            python = PythonEnv()
-
-            if list(python.missing_requirements(plugin_path, False)):
-                python.install_requirements(plugin_path)
 
     def _update(self, path: Path, prompt_name: str) -> bool:
         """Check for updates in the odev repository and download them if necessary.
@@ -252,9 +252,14 @@ class Odev(Generic[CommandType]):
         :rtype: bool
         """
         path = path.resolve()
-        repository = Repo(path.as_posix())
-        repository_name = "/".join(repository.remotes.origin.url.split("/")[-2:]).split(":")[-1].removesuffix(".git")
-        git = GitConnector(repository_name, path)
+
+        try:
+            repository = Repo(path.as_posix())
+        except NoSuchPathError:
+            raise OdevError(f"Error while updating {prompt_name}, likely a missing plugin dependency")
+
+        manifest: Manifest = self._load_plugin_manifest(path)
+        git = GitConnector(cast(str, manifest["name"]), path)
         assert git.repository is not None
 
         if not self.__date_check_interval() or not self.__git_branch_behind(git.repository):
@@ -279,6 +284,10 @@ class Odev(Generic[CommandType]):
             if install_requirements:
                 logger.debug(f"Installing new package requirements for {prompt_name!r}")
                 PythonEnv().install_requirements(path)
+
+            self._load_plugin_manifest.cache_clear()
+            manifest = self._load_plugin_manifest(path)
+            self.config.plugins.enabled = {*self.config.plugins.enabled, *manifest["depends"]}
 
         return True
 
@@ -418,7 +427,7 @@ class Odev(Generic[CommandType]):
             logger.debug(f"Error while loading plugins commands: {error}")
 
             with progress.spinner("Updating plugins"):
-                for plugin in self.plugins:
+                for plugin, _, _ in self.plugins:
                     git = GitConnector(plugin)
                     assert git.repository is not None
 
@@ -430,10 +439,12 @@ class Odev(Generic[CommandType]):
 
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
-        for plugin_path in self.plugins_path.iterdir():
-            logger.debug(f"Loading plugin {plugin_path.name!r}")
+        for plugin in self.plugins:
+            logger.debug(
+                f"Loading plugin {plugin.name!r} version [repr.version]{plugin.manifest['version']}[/repr.version]"
+            )
 
-            for command_class in self.import_commands(plugin_path.glob("commands/**")):
+            for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
 
@@ -449,7 +460,7 @@ class Odev(Generic[CommandType]):
                 else:
                     action = "Patching existing command"
 
-                logger.debug(f"{action} {command_class._name!r} from plugin {plugin_path.name!r}")
+                logger.debug(f"{action} {command_class._name!r} from plugin {plugin.name!r}")
 
                 if (
                     command_class._name in self.commands.keys()
@@ -465,6 +476,80 @@ class Odev(Generic[CommandType]):
 
                 command_class.prepare_command(self)
                 self.commands.update({name: command_class for name in command_names})  # type: ignore [assignment]
+
+    def load_plugins(self) -> None:
+        """Load plugins from the configuration file and register them in the plugin directory."""
+        self.plugins_path.mkdir(parents=True, exist_ok=True)
+        self.config.paths.repositories.mkdir(parents=True, exist_ok=True)
+
+        for plugin in self.config.plugins.enabled:
+            logger.debug(f"Registering plugin {plugin!r}")
+            repository = GitConnector(plugin)
+
+            if not repository.exists:
+                repository.clone()
+
+            repository.update()
+            plugin_path = self.plugins_path.joinpath(repository._repository.replace("-", "_"))
+
+            if not plugin_path.exists() and not plugin_path.is_symlink():
+                logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
+                plugin_path.symlink_to(repository.path, target_is_directory=True)
+
+            python = PythonEnv()
+
+            if list(python.missing_requirements(plugin_path, False)):
+                python.install_requirements(plugin_path)
+
+        self._plugins_dependency_tree.cache_clear()
+
+    @lru_cache
+    def _load_plugin_manifest(self, plugin_path: Path) -> Manifest:
+        """Load the manifest file of a plugin."""
+        resolved_path = plugin_path.resolve()
+        defaults: Manifest = {
+            "name": f"{resolved_path.parent.name}/{resolved_path.name}",
+            "version": "1.0.0",
+            "description": "",
+            "depends": [],
+        }
+
+        if not (plugin_path / "__manifest__.py").exists():
+            return defaults
+
+        spec = spec_from_file_location(f"{plugin_path.name}.__manifest__", (plugin_path / "__manifest__.py").as_posix())
+        assert spec is not None
+        manifest = module_from_spec(spec)
+        cast(Loader, spec.loader).exec_module(manifest)
+
+        return {
+            **defaults,
+            "version": getattr(manifest, "__version__", defaults["version"]),
+            "description": getattr(manifest, "__doc__", defaults["description"]),
+            "depends": getattr(manifest, "depends", defaults["depends"]),
+        }
+
+    @lru_cache
+    def _plugins_dependency_tree(self) -> List[str]:
+        """Order plugins by mutual dependencies, the first one in the returned list being the first one that needs to
+        be imported to respect the dependency graph.
+        """
+        graph = nx.DiGraph()
+
+        for plugin_path in self.plugins_path.iterdir():
+            manifest = self._load_plugin_manifest(plugin_path)
+            graph.add_node(manifest["name"])
+
+            for dependency in manifest["depends"]:
+                graph.add_edge(dependency, manifest["name"])
+
+        try:
+            resolved_graph: List[str] = list(nx.topological_sort(graph))
+            logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
+        except nx.NetworkXUnfeasible:
+            raise OdevError("Circular dependency detected in plugins")
+
+        return resolved_graph
 
     def parse_arguments(self, command_cls: Type[CommandType], *args):
         """Parse arguments for a command.
@@ -580,19 +665,21 @@ class Odev(Generic[CommandType]):
         if remote_branch is None:
             return False
 
+        repository_path = Path(repository.working_dir)
+        repository_name = f"'{repository_path.parent.name}/{repository_path.name}'"
         rev_list: str = repository.git.rev_list("--left-right", "--count", f"{remote_branch.name}...HEAD")
         commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
         message_behind = f"{commits_behind} commit{'s' if commits_behind > 1 else ''} behind"
         message_ahead = f"{commits_ahead} commit{'s' if commits_ahead > 1 else ''} ahead of"
 
         if commits_behind and commits_ahead:
-            logger.debug(f"Repository is {message_behind} and {message_ahead} {remote_branch.name!r}")
+            logger.debug(f"Repository {repository_name} is {message_behind} and {message_ahead} {remote_branch.name!r}")
         elif commits_behind:
-            logger.debug(f"Repository is {message_behind} {remote_branch.name!r}")
+            logger.debug(f"Repository {repository_name} is {message_behind} {remote_branch.name!r}")
         elif commits_ahead:
-            logger.debug(f"Repository is {message_ahead} {remote_branch.name!r}")
+            logger.debug(f"Repository {repository_name} is {message_ahead} {remote_branch.name!r}")
         else:
-            logger.debug(f"Repository is up-to-date with {remote_branch.name!r}")
+            logger.debug(f"Repository {repository_name} is up-to-date with {remote_branch.name!r}")
 
         if commits_ahead:
             logger.debug("Running in development mode (no self-update)")

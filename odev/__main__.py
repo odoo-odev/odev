@@ -15,6 +15,7 @@ def main():
 
     # --- Dynamically import odev to include startup time in performance stats -
     from odev.common import init_framework, signal_handling as handlers
+    from odev.common.errors.odev import OdevError
     from odev.common.logging import logging
 
     logger = logging.getLogger(__name__)
@@ -33,6 +34,10 @@ def main():
         odev = init_framework()
         odev.start()
         odev.dispatch()
+
+    except OdevError as error:
+        logger.error(error)
+        exit(1)
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)

@@ -53,7 +53,7 @@ class Stash:
     def __enter__(self):
         """Stash changes in the repository."""
         if self.repository.is_dirty():
-            logger.debug(f"Stashing changes in repository {self.repository!r}")
+            logger.debug(f"Stashing changes in repository {self.repository.working_dir!r}")
             self.repository.git.stash("save")
             self.stashed = True
 
@@ -63,7 +63,7 @@ class Stash:
             return
 
         if self.stashed:
-            logger.debug(f"Restoring stashed changes in repository {self.repository!r}")
+            logger.debug(f"Restoring stashed changes in repository {self.repository.working_dir!r}")
             self.repository.git.stash("pop")
 
 
