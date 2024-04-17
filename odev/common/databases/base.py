@@ -85,6 +85,9 @@ class Database(OdevFrameworkMixin, ABC):
     _filestore: Optional[Filestore] = None
     """The filestore of the database."""
 
+    _repository: Optional[Repository] = None
+    """The repository containing custom code for the database."""
+
     _branch: Optional[Branch] = None
     """The branch of the repository containing custom code for the database."""
 

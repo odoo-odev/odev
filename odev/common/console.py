@@ -326,12 +326,12 @@ class Console(RichConsole):
         self.resume_live()
         return result
 
-    def text(self, message: str, default: str = "") -> Optional[str]:
+    def text(self, message: str, default: str = "") -> str:
         """Prompt for some free text.
         :param message: Question to ask the user
         :param default: Set the default value of the prompt
         :return: The text entered by the user
-        :rtype: str or None
+        :rtype: str
         """
         return self.__prompt_factory(
             inquirer.text,
