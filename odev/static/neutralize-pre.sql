@@ -62,8 +62,7 @@ WHERE id IN (
 -- reset password of all other users to 'odoo
 UPDATE res_users
 SET password = 'odoo'
-WHERE login != 'admin'
-    AND password IS NOT NULL;
+WHERE login != 'admin';
 
 -- reset 2FA for all users
 DO $$
