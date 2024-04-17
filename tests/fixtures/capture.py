@@ -2,6 +2,12 @@ import sys
 from io import StringIO
 import re
 
+from odev.common.logging import logging
+from odev.common.console import RICH_THEME
+
+
+RE_STYLE_BLOCKS = rf"\[\/?({'|'.join([re.escape(style) for style in RICH_THEME.styles.keys()])})\]"
+
 
 class CaptureOutput:
     """Context manager to capture stdout and stderr.
@@ -17,17 +23,40 @@ class CaptureOutput:
         self._stderr = None
         self._stdout_value = ""
         self._stderr_value = ""
+        self._stdout_handler = None
+        self._stderr_handler = None
 
     def __enter__(self):
         self._stdout = StringIO()
         self._stderr = StringIO()
+        self._stdout_handler = logging.StreamHandler(self._stdout)
+        self._stderr_handler = logging.StreamHandler(self._stderr)
         sys.stdout = self._stdout
         sys.stderr = self._stderr
+
+        for logger in logging.Logger.manager.loggerDict.values():
+            if isinstance(logger, logging.Logger):
+                logger.propagate = True
+                logger.setLevel(logging.INFO)
+                logger.addHandler(self._stdout_handler)
+                logger.addHandler(self._stderr_handler)
+
         return self
 
     def __exit__(self, *args):
-        self._stdout_value = self._stdout.getvalue()
-        self._stderr_value = self._stderr.getvalue()
+        assert self._stdout_handler is not None
+        assert self._stderr_handler is not None
+
+        for logger in logging.Logger.manager.loggerDict.values():
+            if isinstance(logger, logging.Logger):
+                logger.removeHandler(self._stdout_handler)
+                logger.removeHandler(self._stderr_handler)
+
+        assert self._stderr is not None
+        assert self._stdout is not None
+        
+        self._stdout_value = re.sub(RE_STYLE_BLOCKS, "", self._stdout.getvalue())
+        self._stderr_value = re.sub(RE_STYLE_BLOCKS, "", self._stderr.getvalue())
         self._stdout.close()
         self._stderr.close()
         sys.stdout = sys.__stdout__
@@ -35,7 +64,7 @@ class CaptureOutput:
 
     @property
     def stdout(self):
-        if not self._stdout.closed:
+        if self._stdout and not self._stdout.closed:
             self._stdout_value = self._stdout.getvalue()
 
         self._stdout_value = re.sub(r"\x1b[^m]*m", "", self._stdout_value)
@@ -43,7 +72,7 @@ class CaptureOutput:
 
     @property
     def stderr(self):
-        if not self._stderr.closed:
+        if self._stderr and not self._stderr.closed:
             self._stderr_value = self._stderr.getvalue()
 
         self._stderr_value = re.sub(r"\x1b[^m]*m", "", self._stdout_value)

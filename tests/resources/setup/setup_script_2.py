@@ -1,2 +1,2 @@
-def setup(config):
+def setup(odev):
     print("Hello, odev from script 2!")

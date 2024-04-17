@@ -43,10 +43,26 @@ class PythonEnv:
             If omitted, defaults to the version of the current python interpreter.
         """
         self._global = path is None
-        self.path: Path = Path(path or sys.prefix).resolve()
+        """Whether the python environment is using the global interpreter (no virtualenv)."""
+
+        path = Path(path or sys.prefix)
+
+        if len(path.parts) == 1:
+            from odev.common.odev import HOME_PATH, VENVS_DIRNAME
+
+            path = HOME_PATH / VENVS_DIRNAME / path
+
+        self.path: Path = path.resolve()
+        """Path to the current environment."""
+
         self.version: str = version or (".".join(sys.version.split(".")[:2]))
+        """Python version used in the current environment."""
+
         self.python: Path = self.path / "bin" / f"python{self.version if self._global else version or ''}"
+        """Path to the python interpreter in the current environment."""
+
         self.pip: str = f"{self.python} -m pip"
+        """Base command to run pip in the current environment."""
 
         if not self.exists and self._global:
             raise FileNotFoundError(f"Python interpreter not found at {self.python}")

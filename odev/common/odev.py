@@ -50,6 +50,12 @@ PRUNING_INTERVAL = 14
 must be dropped if not used.
 """
 
+HOME_PATH = Path("~").expanduser() / "odev"
+"""Local path to the odev home directory containing application data for the current user."""
+
+VENVS_DIRNAME = "virtualenvs"
+"""Name of the directory where virtual environments are stored."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +95,8 @@ class Odev(Generic[CommandType]):
         self.__class__.store = DataStore(self.name)
 
     def __repr__(self) -> str:
-        return f"Odev(version={self.version})"
+        test_mode = ", test=True" if self.in_test_mode else ""
+        return f"Odev(version={self.version}{test_mode})"
 
     @property
     def git(self) -> GitConnector:
@@ -111,7 +118,17 @@ class Odev(Generic[CommandType]):
         """Local path to the odev home directory containing application data
         for the current user.
         """
-        return Path("~").expanduser() / "odev"
+        return HOME_PATH
+
+    @property
+    def worktrees_path(self) -> Path:
+        """Local path to the odev worktrees directory."""
+        return self.home_path / "worktrees"
+
+    @property
+    def venvs_path(self) -> Path:
+        """Local path to the odev virtual environments directory."""
+        return self.home_path / VENVS_DIRNAME
 
     @property
     def base_path(self) -> Path:
@@ -121,7 +138,7 @@ class Odev(Generic[CommandType]):
     @property
     def tests_path(self) -> Path:
         """Local path to the tests directory."""
-        return self.path / "tests/resources"
+        return self.path / "tests"
 
     @property
     def plugins_path(self) -> Path:
@@ -136,17 +153,17 @@ class Odev(Generic[CommandType]):
     @property
     def upgrades_path(self) -> Path:
         """Local path to the upgrades directory."""
-        return (self.tests_path if self.in_test_mode else self.base_path) / "upgrades"
+        return self.base_path / "upgrades"
 
     @property
     def setup_path(self) -> Path:
         """Local path to the setup directory."""
-        return (self.tests_path if self.in_test_mode else self.base_path) / "setup"
+        return self.base_path / "setup"
 
     @property
     def scripts_path(self) -> Path:
         """Local path to the directory where odoo-bin shell scripts are stored."""
-        return (self.tests_path if self.in_test_mode else self.base_path) / "scripts"
+        return self.base_path / "scripts"
 
     @property
     def static_path(self) -> Path:
@@ -518,9 +535,11 @@ class Odev(Generic[CommandType]):
 
         return not command_errored
 
-    def dispatch(self) -> None:
-        """Handle commands and arguments as received from the terminal."""
-        argv = sys.argv[1:]
+    def dispatch(self, argv: Optional[List[str]] = None) -> None:
+        """Handle commands and arguments as received from the terminal.
+        :param argv: Optional list of command-line arguments used to override arguments received from the CLI.
+        """
+        argv = (argv or sys.argv)[1:]
 
         if (
             not len(argv)

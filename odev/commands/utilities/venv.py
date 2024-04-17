@@ -23,13 +23,16 @@ class VenvCommand(Command):
     command = args.String(description="""Python command to execute in the virtual environment.""", nargs="*")
 
     def run(self):
-        venv = PythonEnv(self.odev.home_path / "virtualenvs" / self.args.name)
+        venv = PythonEnv(self.odev.venvs_path / self.args.name)
 
         if not venv.exists:
-            database = LocalDatabase(self.args.name)
+            venv = PythonEnv(self.args.name)
 
-            if database.exists:
-                venv = PythonEnv(database.venv)
+            if not venv.exists:
+                database = LocalDatabase(self.args.name)
+
+                if database.exists:
+                    venv = PythonEnv(database.venv)
 
         if not venv.exists:
             raise self.error(f"Virtual environment {venv.path} does not exist.")
