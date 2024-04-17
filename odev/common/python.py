@@ -186,7 +186,10 @@ class PythonEnv:
             if "==" in package:
                 package_name, package_version = package.split("==")
             elif " @ " in package:
-                package_name, _ = package.split(" @ ")
+                # ie: odoo_upgrade @ git+https://github.com/odoo/upgrade-util@aaa1f0fee6870075e25cb5e6744e4c589bb32b46
+                # git+https://github.com/odoo/upgrade-util is what is in requirements.txt
+                _, package_name = package.split(" @ ")
+                package_name, _ = package_name.split("@")
                 package_version = "1.0.0"
             else:
                 raise ValueError(f"Invalid package spec {package}")
@@ -235,6 +238,14 @@ class PythonEnv:
             line = line.split("#", 1)[0].strip()
 
             if not line.strip():
+                continue
+
+            if "git+" in line:
+                package_name, _ = line.split("@")
+                installed_version = installed_packages.get(package_name)
+                if installed_version is None:
+                    logger.debug(f"Missing git python package {package_name}")
+                    yield line
                 continue
 
             match = re_package.search(line)
