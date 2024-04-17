@@ -15,14 +15,14 @@ from .remote import RemoteDatabase
 
 # --- Plugins ------------------------------------------------------------------
 
-plugins = [
-    path for path in (Path(__file__).parent.parent.parent / "plugins").glob("*/common/databases") if path.is_dir()
-]
+odev_path = Path(__file__).parent.parent.parent
+
+plugins = [path for path in (odev_path / "plugins").glob("*/common/databases") if path.is_dir()]
 modules = pkgutil.iter_modules([directory.as_posix() for directory in plugins])
 
 for module_info in modules:
-    module_path = cast(str, module_info.module_finder.path).split("/odev/", 1)[1].replace("/", ".")  # type: ignore [union-attr]
-    module = import_module(f"odev.{module_path}.{module_info.name}")
+    module_path = cast(str, module_info.module_finder.path).replace(str(odev_path.parent) + "/", "").replace("/", ".")  # type: ignore [union-attr]
+    module = import_module(f"{module_path}.{module_info.name}")
 
     for attribute in dir(module):
         obj = getattr(module, attribute)
