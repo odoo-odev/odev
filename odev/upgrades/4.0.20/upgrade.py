@@ -30,9 +30,11 @@ def run(odev: Odev) -> None:
     )
 
     try:
+        from agentcrypt3.exceptions import NoContainerException
         from agentcrypt3.io import Container
     except ImportError:
         try:
+            from agentcrypt.exceptions import NoContainerException
             from agentcrypt.io import Container
         except ImportError:
             logger.warning(
@@ -61,8 +63,12 @@ def run(odev: Odev) -> None:
     for name, ciphertext in secrets:
         decoded = b64decode(ciphertext.encode()).decode()
 
-        with NamedStringIO(decoded) as stream, Container.load(stream) as container:
-            plaintext = container.getvalue().decode()
+        try:
+            with NamedStringIO(decoded) as stream, Container.load(stream) as container:
+                plaintext = container.getvalue().decode()
+        except NoContainerException as error:
+            logger.debug(f"Error decrypting secret '{name}': {error}")
+            continue
 
         ciphertext = b64encode(ssh_encrypt(plaintext)).decode()
         odev.store.query(
