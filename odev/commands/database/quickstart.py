@@ -38,6 +38,7 @@ class QuickStartCommand(DatabaseCommand):
     )
 
     _database_allowed_platforms = []
+    _database_exists_required = False
 
     def run(self):
         passthrough_args = ["--branch", self.args.branch] if self.args.branch else []
@@ -55,12 +56,10 @@ class QuickStartCommand(DatabaseCommand):
                 (
                     self.odev.dumps_path / self._database._get_dump_filename(**self.get_dump_filename_kwargs())
                 ).as_posix(),
-                "--no-neutralize",
                 database=LocalDatabase(self.args.name or self._database.name),
             )
 
-        self.odev.run_command("clone", *passthrough_args, database=self._database)
-        self.odev.run_command("neutralize", database=LocalDatabase(self.args.name or self._database.name))
+            self.odev.run_command("clone", *passthrough_args, database=self._database)
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
         """Return the keyword arguments to pass to Database.get_dump_filename()."""
