@@ -135,7 +135,7 @@ class InfoCommand(DatabaseCommand):
             if self._database.filestore is not None and self._database.filestore.path is not None
             else DISPLAY_NA
         )
-        venv_path: str = self._database.venv.as_posix() if self._database.venv is not None else DISPLAY_NA
+        venv_path: str = self._database.venv.path.as_posix() if not self._database.venv._global else DISPLAY_NA
         addons: List[str] = [DISPLAY_NA]
 
         if self._database.process is None:

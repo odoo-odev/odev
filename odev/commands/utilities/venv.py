@@ -32,9 +32,9 @@ class VenvCommand(Command):
                 database = LocalDatabase(self.args.name)
 
                 if database.exists:
-                    venv = PythonEnv(database.venv)
+                    venv = database.venv
 
         if not venv.exists:
-            raise self.error(f"Virtual environment {venv.path} does not exist.")
+            raise self.error(f"Virtual environment {venv.name!r} does not exist.")
 
         venv.run(" ".join(self.args.command) if isinstance(self.args.command, list) else self.args.command)

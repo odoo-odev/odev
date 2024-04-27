@@ -68,7 +68,12 @@ class PythonEnv:
             raise FileNotFoundError(f"Python interpreter not found at {self.python}")
 
     def __repr__(self) -> str:
-        return f"PythonEnv(name={self.path.name!r}, version={self.version})"
+        return f"PythonEnv(name={self.name!r}, version={self.version})"
+
+    @property
+    def name(self) -> str:
+        """The name of the python environment."""
+        return "GLOBAL" if self._global else self.path.name
 
     @property
     def exists(self) -> bool:
@@ -80,8 +85,8 @@ class PythonEnv:
         if self._global:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
-        logger.info(f"Creating virtual environment {self.path.name!r} with python version {self.version}")
-        logger.debug(f"Creating virtual environment at {self.path} with python version {self.version}")
+        logger.info(f"Creating virtual environment {self.name!r} with python version {self.version}")
+        logger.debug(f"Virtual environment stored at {self.path} using python version {self.version}")
 
         try:
             with silence_loggers("root", "distlib.util", "filelock"):

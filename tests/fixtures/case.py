@@ -7,8 +7,6 @@ from unittest.mock import PropertyMock, _patch, patch
 from testfixtures import Replacer
 from testfixtures.popen import MockPopen
 
-from odev.common.connectors import Connector
-from odev.common.databases import Database
 from odev.common.databases.local import LocalDatabase
 from odev.common.odev import Odev
 from odev.common.odoobin import OdoobinProcess
@@ -53,15 +51,15 @@ class OdevTestCase(TestCase):
         cls.replacer = Replacer()
         cls.__patch_progress()
         cls.__patch_odev()
-        cls.__patch_framework_property()
+        cls.__patch_framework()
         cls.__setup_environment()
         cls.addClassCleanup(cls.tearDownClass)
         cls.odev.start()
 
     @classmethod
     def tearDownClass(cls):
-        cls.__unpatch_all()
         cls.__cleanup_environment()
+        cls.__unpatch_all()
         cls.replacer.restore()
         cls.odev.commands.clear()
         cls.odev.store.drop()
@@ -85,7 +83,7 @@ class OdevTestCase(TestCase):
         >>>     ...
         """
         if isinstance(target, str):
-            return patch(f"{target}.{attribute}", return_value=return_value)
+            return patch(f"{target}.{attribute}", return_value=return_value, **kwargs)
         return patch.object(target, attribute, return_value=return_value, **kwargs)
 
     @classmethod
@@ -96,7 +94,7 @@ class OdevTestCase(TestCase):
         :param value: The value to return when the property is accessed.
         """
         if isinstance(target, str):
-            return patch(f"{target}.{attribute}", new_callable=PropertyMock, return_value=value)
+            return patch(f"{target}.{attribute}", new_callable=PropertyMock, return_value=value, **kwargs)
         return patch.object(target, attribute, new_callable=PropertyMock, return_value=value, **kwargs)
     
     @classmethod
@@ -125,7 +123,9 @@ class OdevTestCase(TestCase):
             """
         )
 
-        cls.odev.store.databases.set(database)
+        assert database.connector is not None
+        database.connector.invalidate_cache()
+        database.venv = cls.venv
         return database
 
     @classmethod
@@ -161,10 +161,15 @@ class OdevTestCase(TestCase):
         cls._patch_object("odev.common.progress", [("DEBUG_MODE", True)])
 
     @classmethod
-    def __patch_framework_property(cls):
-        """Patch the framework property of related classes."""
-        for patched_cls in (Connector, Database, OdoobinProcess):
-            cls._patch_object(patched_cls, properties=[("odev", cls.odev)])
+    def __patch_framework(cls):
+        """Patch the framework across all of odev to use the test environment."""
+        patch_paths = [
+            "odev.common.mixins.framework.framework.OdevFrameworkMixin",
+            "odev.common.connectors.base.Connector",
+        ]
+
+        for path in patch_paths:
+            cls._patch_object(path, properties=[("odev", cls.odev)])
 
     @classmethod
     def __patch_odev(cls):

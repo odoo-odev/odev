@@ -11,6 +11,7 @@ from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoobin import OdoobinProcess
+from odev.common.python import PythonEnv
 from odev.common.version import OdooVersion
 
 
@@ -50,7 +51,8 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         If not specified, defaults to the latest version of the base module installed in the database.
         """,
     )
-    venv = args.String(
+    venv_argument = args.String(
+        name="venv",
         aliases=["--venv"],
         description="""Name of the Python virtual environment to use when running this database.
         If not specified, defaults to the common virtual environment for the current Odoo version.
@@ -101,18 +103,31 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
                 addons_paths = [Path().resolve()]
 
             self.odoobin.additional_addons_paths = addons_paths
-            self.odoobin._force_enterprise = bool(self.args.enterprise)
+            self.odoobin.with_edition("enterprise" if self.args.enterprise else "community")
 
             if self.args.version is not None:
-                self.odoobin._version = OdooVersion(self.args.version)
+                self.odoobin.with_version(OdooVersion(self.args.version))
 
-            self.odoobin._venv_name = self.args.venv or str(self.odoobin.version)
-            self.odoobin._venv = None
+            self.odoobin.with_venv(self.venv.name)
 
     @property
     def odoobin(self) -> Optional[OdoobinProcess]:
         """The odoo-bin process associated with the database."""
         return self._database.process
+
+    @property
+    def venv(self) -> PythonEnv:
+        """The Python virtual environment associated with the odoo-bin process."""
+        if self.args.venv:
+            return PythonEnv(self.args.venv)
+
+        if not self._database.venv._global:
+            return self._database.venv
+
+        if self.args.version:
+            return PythonEnv(self.args.version)
+
+        return PythonEnv(str(self._database.version))
 
     def odoobin_progress(self, line: str):
         """Beautify odoo logs on the fly."""

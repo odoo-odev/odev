@@ -30,6 +30,7 @@ from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoobin import OdoobinProcess
+from odev.common.python import PythonEnv
 from odev.common.signal_handling import capture_signals
 from odev.common.thread import Thread
 from odev.common.version import OdooVersion
@@ -44,9 +45,6 @@ ARCHIVE_FILESTORE = "filestore/"
 
 class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
-
-    _process: Optional[OdoobinProcess] = None
-    """The Odoo process running the database."""
 
     connector: Optional[PostgresConnector] = None
     """The PostgreSQL connector of the database."""
@@ -68,6 +66,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     _platform_display: ClassVar[str] = "Local"
     """The display name of the platform on which the database is running."""
+
+    _venv: Optional[PythonEnv] = None
+    """The path to the virtual environment of the database."""
+
+    _process: Optional[OdoobinProcess] = None
+    """The Odoo process running the database."""
 
     def __init__(self, name: str):
         """Initialize the database.
@@ -99,19 +103,25 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return self.table_exists("ir_module_module")
 
     @property
-    def venv(self) -> Optional[Path]:
-        if not self.is_odoo:
-            return None
+    def venv(self) -> PythonEnv:
+        if self._venv is None:
+            info = self.store.databases.get(self)
 
-        if self.process is not None:
-            return self.process.venv_path
+            if info is None:
+                return PythonEnv()
 
-        info = self.store.databases.get(self)
+            self._venv = PythonEnv(info.virtualenv)
 
-        if info is None:
-            return None
+        return self._venv
 
-        return Path(info.virtualenv)
+    @venv.setter
+    def venv(self, value: Union["str", Path, PythonEnv]):
+        """Set the virtualenv path of the database."""
+        if isinstance(value, (str, Path)):
+            value = PythonEnv(value)
+
+        self._venv = value
+        self.store.databases.set(self)
 
     @cached_property
     def version(self) -> Optional[OdooVersion]:  # type: ignore [override]
@@ -278,8 +288,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def process(self) -> Optional[OdoobinProcess]:
         if self._process is None and self.exists:
-            with self:
-                self._process = OdoobinProcess(self)
+            self._process = OdoobinProcess(
+                self,
+                (self.venv and self.venv.path.name) or str(self.version),
+                self.version,
+            )
 
         return self._process
 
@@ -333,7 +346,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def whitelisted(self) -> bool:
         """Whether the database is whitelisted and should not be removed automatically."""
         info = self.store.databases.get(self)
-        return not self.is_odoo if info is None else info.whitelisted
+        return not self.is_odoo or (info is not None and info.whitelisted)
 
     @whitelisted.setter
     def whitelisted(self, value: bool):
@@ -373,13 +386,26 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param template: The name of the template to copy.
         """
         with self.psql() as psql:
-            return psql.create_database(self.name, template=template)
+            created = psql.create_database(self.name, template=template)
+
+        if created and self.is_odoo:
+            self.store.databases.set(self)
+
+        return created
 
     def drop(self) -> bool:
+        shutil.rmtree(self.filestore.path, ignore_errors=True)
+
         if isinstance(self.connector, PostgresConnector):
             self.connector.disconnect()
+
         with self.psql() as psql:
-            return psql.drop_database(self.name)
+            deleted = psql.drop_database(self.name)
+
+        if deleted:
+            self.store.databases.delete(self)
+
+        return deleted
 
     def neutralize(self):
         """Neutralize the database."""
