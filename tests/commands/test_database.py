@@ -97,10 +97,11 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         database = LocalDatabase(self.create_database_name)
         self.assertFalse(database.exists)
 
-        self.dispatch_command("create", self.create_database_name)
+        stdout, _ = self.dispatch_command("create", self.create_database_name)
 
         database = LocalDatabase(self.create_database_name)
         self.assertTrue(database.exists)
+        self.assertIn("Running 'odoo-bin' in version master on database", stdout)
         self.assertRegex(
             self.Popen.all_calls[-1].args[0],
             rf"odoo-bin -d {self.create_database_name} --addons-path [a-z0-9. \-/,]+ --init base --stop-after-init",
@@ -153,13 +154,47 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         self.assertTrue(database.exists)
         self.assertIn(f"Database '{self.create_database_name}' already exists", stdout)
 
+    def test_06_with_venv(self):
+        """Command `odev create` should create a new database with a specific virtual environment."""
+        database = LocalDatabase(self.create_database_name)
+        self.assertFalse(database.exists)
+
+        self.dispatch_command("create", self.create_database_name, "--venv", self.venv.name)
+
+        database = LocalDatabase(self.create_database_name)
+        self.assertTrue(database.exists)
+        self.assertEqual(database.venv.name, self.venv.name)
+
+    def test_07_with_version(self):
+        """Command `odev create` should create a new database with a specific Odoo version."""
+        database = LocalDatabase(self.create_database_name)
+        self.assertFalse(database.exists)
+
+        stdout, _ = self.dispatch_command("create", self.create_database_name, "--version", "17.0")
+
+        database = LocalDatabase(self.create_database_name)
+        self.assertTrue(database.exists)
+        self.assertIn("Running 'odoo-bin' in version 17.0 on database", stdout)
+        self.assertEqual(database.venv.name, "17.0")
+
+    def test_08_with_version_and_venv(self):
+        """Command `odev create` should create a new database with a specific Odoo version and virtual environment."""
+        database = LocalDatabase(self.create_database_name)
+        self.assertFalse(database.exists)
+
+        stdout, _ = self.dispatch_command("create", self.create_database_name, "--version", "17.0", "--venv", self.venv.name)
+
+        database = LocalDatabase(self.create_database_name)
+        self.assertTrue(database.exists)
+        self.assertIn("Running 'odoo-bin' in version 17.0 on database", stdout)
+        self.assertEqual(database.venv.name, self.venv.name)
+
 
 class TestCommandDatabaseTest(OdevCommandTestCase):
     """Command `odev test` should run tests on a database."""
 
     def test_01_test(self):
         """Command `odev test` should run tests on a database."""
-        # with self.patch(ODOOBIN_PATH, "run", CompletedProcess(args=["test"], returncode=0)):
         stdout, _ = self.dispatch_command("test", self.database.name, "--modules", "base")
 
         self.assertTrue(self.database.exists)

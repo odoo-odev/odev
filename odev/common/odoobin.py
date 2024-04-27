@@ -13,6 +13,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Union,
     cast,
 )
 
@@ -75,7 +76,10 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._version: Optional[OdooVersion] = self.database.version or version or OdooVersion("master")
         """Force the version of Odoo when running the process."""
 
-        self._venv_name: str = venv or str(self.version)
+        self._forced_venv_name: Optional[str] = venv
+        """Forced name of the virtual environment to use."""
+
+        self._venv_name: str = str(self.version)
         """Name of the virtual environment to use."""
 
         self.repository: GitConnector = GitConnector("odoo/odoo")
@@ -129,7 +133,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def venv_path(self):
         """Path to the virtual environment of the Odoo installation."""
-        return self.odev.home_path / "virtualenvs" / str(self._venv_name)
+        return self.odev.home_path / "virtualenvs" / str(self._forced_venv_name or self._venv_name)
 
     @property
     def pid(self) -> Optional[int]:
@@ -254,9 +258,9 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._force_enterprise = edition == "enterprise"
         return self
 
-    def with_venv(self, venv: str) -> "OdoobinProcess":
+    def with_venv(self, venv: Union[PythonEnv, str]) -> "OdoobinProcess":
         """Return the OdoobinProcess instance with the given virtual environment forced."""
-        self._venv_name = venv
+        self._forced_venv_name = venv.name if isinstance(venv, PythonEnv) else venv
         self._venv = None
         return self
 
@@ -266,6 +270,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             version = OdooVersion("master")
 
         self._version = version
+        self._venv_name = str(version)
         self._venv = None
         return self
 
@@ -455,6 +460,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
             try:
                 with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
+                    self.database.venv = self.venv
                     process = self.venv.run_script(
                         self.odoobin_path,
                         odoobin_args,

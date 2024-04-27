@@ -110,14 +110,12 @@ class TestCommand(OdoobinCommand):
         if not self.test_database.exists:
             self.create_test_database()
 
-        odoobin = (
-            cast(OdoobinProcess, self.test_database.process)
-            .with_version(self._database.version)
-            .with_venv(self._database.venv.name if self._database.venv else str(self._database.version or "master"))
-            .with_edition(self._database.edition)
-        )
+        odoobin = cast(OdoobinProcess, self.test_database.process)
+        odoobin.with_version(self._database.version)
+        odoobin.with_edition(self._database.edition)
+        odoobin.with_venv(self.venv)
 
-        odoobin.additional_addons_paths = self.odoobin.additional_addons_paths
+        odoobin.additional_addons_paths = cast(OdoobinProcess, self.odoobin).additional_addons_paths
 
         try:
             odoobin.run(args=args, progress=self.odoobin_progress)

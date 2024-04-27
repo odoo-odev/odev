@@ -69,11 +69,11 @@ class DatabaseStore(PostgresTable):
         values = {
             "name": f"{database.name!r}",
             "platform": f"{database.platform.name!r}",
-            "virtualenv": f"{database.process.venv.path.as_posix()!r}"
-            if isinstance(database, LocalDatabase) and database.process is not None
+            "virtualenv": f"{database.venv.name!r}"
+            if isinstance(database, LocalDatabase) and not database.venv._global
             else "NULL",
             "arguments": f"{arguments!r}" if arguments else "NULL",
-            "whitelisted": str(database._whitelisted) if isinstance(database, LocalDatabase) else "False",
+            "whitelisted": str(not isinstance(database, LocalDatabase) or database._whitelisted),
             "repository": f"{database.repository.full_name!r}" if database.repository else "NULL",
             "branch": f"{database.branch.name!r}" if database.branch is not None and database.branch.name else "NULL",
         }

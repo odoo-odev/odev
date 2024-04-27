@@ -125,7 +125,7 @@ TABLE_MAPPING: List[Mapped] = [
         total=False,
     ),
     Mapped(
-        value=lambda database: database.venv.as_posix() if database.venv is not None else "",
+        value=lambda database: database.venv.name if not database.venv._global else "",
         title="Virtual Environment",
         justify=None,
         format=lambda value: str(value or ""),

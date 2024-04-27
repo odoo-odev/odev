@@ -266,7 +266,7 @@ class TestCommandUtilitiesVenv(OdevCommandTestCase):
     def test_01_invalid_name(self):
         """Run the command with an invalid virtual environment name."""
         _, stderr = self.dispatch_command("venv", "invalid", "print('test')")
-        self.assertRegex(stderr, r"Virtual environment [\w/._-]*(invalid) does not exist")
+        self.assertRegex(stderr, r"Virtual environment 'invalid' does not exist")
 
     def test_02_python_command(self):
         """Run the command with a name valid argument and a python command."""

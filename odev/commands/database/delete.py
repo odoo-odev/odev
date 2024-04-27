@@ -131,12 +131,10 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
 
     def remove_venv(self, database: LocalDatabase):
         """Remove the venv linked to this database if not used by any other database."""
-        venv = database.venv
-
-        if venv is None or not venv.exists():
+        if database.venv is None or not database.venv.exists:
             return logger.debug(f"No virtual environment found for database {database.name!r}")
 
-        venv_path = venv.as_posix()
+        venv_path = database.venv.path.as_posix()
 
         with database.psql(self.odev.name) as psql, psql.nocache():
             using_venv = psql.query(
@@ -151,7 +149,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         if using_venv is not None and not isinstance(using_venv, bool) and using_venv[0][0] > 0:
             return logger.info(f"Virtual environment {venv_path} is used by other databases, keeping it")
 
-        shutil.rmtree(venv_path)
+        shutil.rmtree(venv_path, ignore_errors=True)
 
     def remove_filestore(self, database: LocalDatabase):
         """Remove the filestore linked to this database."""

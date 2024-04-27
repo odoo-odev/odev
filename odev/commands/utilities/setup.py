@@ -6,11 +6,22 @@ import textwrap
 from importlib import import_module
 from importlib.util import find_spec
 from types import ModuleType
-from typing import Generator, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+    cast,
+)
 
 from odev.common import args, string
 from odev.common.commands import Command
 from odev.common.logging import logging
+
+
+if TYPE_CHECKING:
+    from odev.common.odev import Odev
 
 
 logger = logging.getLogger(__name__)
@@ -44,8 +55,11 @@ class SetupCommand(Command):
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
         super().prepare_command(*args, **kwargs)
-        assert cls.odev.fget is not None  # type: ignore [attr-defined]
-        odev = cls.odev.fget(cls)  # type: ignore [attr-defined]
+
+        # During tests, the Odev instance is a patched property and we get the Odev instance back from the class
+        # instead of a property object as we would outside tests; I don't like this workaround, but it's the best
+        # solution I could come up with...
+        odev = cast("Odev", cls.odev.fget(cls) if isinstance(cls.odev, property) and cls.odev.fget else cls.odev)  # type: ignore [attr-defined] # noqa: B950 [line too long]
         package = odev.setup_path.relative_to(odev.path).as_posix().replace("/", ".")
         scripts: List[Tuple[str, str]] = [
             (script.__name__, string.normalize_indent(script.__doc__ or "No description."))

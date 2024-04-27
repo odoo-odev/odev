@@ -171,8 +171,11 @@ class CreateCommand(OdoobinCommand):
             args.append("--stop-after-init")
 
         process = self.odoobin or OdoobinProcess(self._database)
-        process._force_enterprise = bool(self.args.enterprise)
-        process.with_version(self.version).run(args=args, progress=self.odoobin_progress)
+        process.with_edition("enterprise" if self.args.enterprise else "community")
+        process.with_version(self.version)
+        process.with_venv(self.venv)
+
+        process.run(args=args, progress=self.odoobin_progress)
 
         if process is None:
             raise self.error(f"Failed to initialize database {self._database.name!r}")
