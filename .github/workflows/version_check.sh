@@ -1,6 +1,9 @@
 #!/bin/bash
 
+TARGET_BRANCH="origin/$1"
 VERSION_FILE_PATH="odev/_version.py"
+
+echo "::notice::Checking version update from target branch: $TARGET_BRANCH"
 
 function determine_version_file_line() {
     echo `cat $VERSION_FILE_PATH | grep -n '^__version__' | cut -d : -f 1`
@@ -18,7 +21,7 @@ function exit_ok() {
 
 ERROR_MESSAGE="Please update incrementally the __version__ value on $VERSION_FILE_PATH"
 
-GIT_DIFF=`git diff HEAD^1 HEAD $VERSION_FILE_PATH | grep __version__`
+GIT_DIFF=`git diff ${TARGET_BRANCH}..HEAD $VERSION_FILE_PATH | grep __version__`
 
 if [ -z "$GIT_DIFF" ]; then
     raise_file_version_wrong "Version Not Updated" "The odev version has not been updated"
