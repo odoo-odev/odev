@@ -18,11 +18,11 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     """
 
     _name = "delete"
-    _aliases = ["remove", "rm", "prune", "drop"]
+    _aliases = ["remove", "rm", "drop"]
 
     keep = args.List(
         aliases=["-k", "--keep"],
-        default=[],
+        default=["template"],
         description="""List of associated resources to keep, separated by commas. Possible values are:
         - filestore: keep the database filestore
         - template: keep template databases associated to this one
@@ -43,6 +43,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
 
     _database_arg_required = False
     _database_exists_required = False
+    _exclusive_arguments = [("database", "expression")]
 
     def run(self):
         if self._database.exists:
@@ -54,13 +55,16 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
                 predicate=lambda database: (self.args.include_whitelisted or not LocalDatabase(database).whitelisted)
+                and (not self.args.database or database == self.args.database)
                 and (not self.args.expression or self.args.expression.search(database))
             )
 
         if not databases:
             message = "No database found" if self.args.include_whitelisted else "No non-whitelisted database found"
 
-            if self.args.expression:
+            if self.args.database:
+                message += f" named {self.args.database!r}"
+            elif self.args.expression:
                 message += f" matching pattern '{self.args.expression.pattern}'"
 
             raise self.error(message)
@@ -116,18 +120,19 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         if "config" not in self.args.keep:
             self.remove_configuration(database)
 
-        self.drop_database(database)
+        if database.exists:
+            database.drop()
+
         logger.info(f"Dropped database {database.name!r}")
 
-    def drop_database(self, database: LocalDatabase):
-        """Drop the database if it exists."""
-        if not database.exists:
-            return logger.info(f"PostgreSQL database {database.name!r} does not exist, cleaning up resources")
-
-        database.drop()
-
     def remove_template_databases(self, database: LocalDatabase):
-        pass
+        """Remove template databases associated to this database."""
+        # TODO: implement in a safe way, avoid deleting templates each time
+        # template = LocalDatabase(f"{database.name}:template")
+
+        # if template.exists:
+        #     template.drop()
+        #     logger.info(f"Dropped template database {template.name!r}")
 
     def remove_venv(self, database: LocalDatabase):
         """Remove the venv linked to this database if not used by any other database."""

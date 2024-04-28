@@ -207,3 +207,56 @@ class TestCommandDatabaseTest(OdevCommandTestCase):
             self.Popen.all_calls[-1].args[0],
             rf"odoo-bin -d {self.database.name}_[a-z0-9]{{8}} --addons-path [a-z0-9.\s\-/,]* --log-level info --stop-after-init --test-enable --init base",
         )
+
+
+class TestCommandDatabaseDelete(OdevCommandTestCase):
+    """Command `odev delete` should delete a database."""
+
+    def setUp(self):
+        super().setUp()
+        self.delete_database = self.create_odoo_database(f"{self.run_name}-delete")
+
+    def tearDown(self):
+        super().tearDown()
+
+        if self.delete_database.exists:
+            self.delete_database.drop()
+
+    def test_01_delete_database(self):
+        """Command `odev delete` should delete a database if a name is provided."""
+        self.assertTrue(self.delete_database.exists)
+
+        stdout, _ = self.dispatch_command("delete", self.delete_database.name)
+
+        self.assertFalse(self.delete_database.exists)
+        self.assertIn(f"Dropped database '{self.delete_database.name}'", stdout)
+
+    def test_02_delete_non_existent(self):
+        """Command `odev delete` should display an error message when trying to delete a non-existent database."""
+        self.delete_database.drop()
+        self.assertFalse(self.delete_database.exists)
+
+        _, stderr = self.dispatch_command("delete", self.delete_database.name)
+
+        self.assertFalse(self.delete_database.exists)
+        self.assertIn(f"No non-whitelisted database found named '{self.delete_database.name}'", stderr)
+
+    def test_03_delete_no_filter(self):
+        """Command `odev delete` should not delete databases if no filter (database or expression) are provided."""
+        self.assertTrue(self.delete_database.exists)
+
+        _, stderr = self.dispatch_command("delete")
+
+        self.assertTrue(self.delete_database.exists)
+        self.assertIn("Arguments database and expression are mutually exclusive and at least one is required", stderr)
+
+    def test_04_delete_expression(self):
+        """Command `odev delete` should delete databases matching a regular expression."""
+        self.assertTrue(self.delete_database.exists)
+
+        with self.patch("odev.common.console.Console", "confirm", True):
+            stdout, _ = self.dispatch_command("delete", "-e", ".*-delete$")
+
+        self.assertFalse(self.delete_database.exists)
+        self.assertIn(f"You are about to delete the following databases: '{self.delete_database.name}'", stdout)
+        self.assertIn("Deleted 1 databases", stdout)
