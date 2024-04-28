@@ -49,7 +49,7 @@ class OdevTestCase(TestCase):
         cls.run_name = f"{cls.odev.name}-{cls.run_id}"
         cls.run_path = Path(f"/tmp/{cls.run_name}")
         cls.replacer = Replacer()
-        cls.__patch_progress()
+        cls.__patch_cli()
         cls.__patch_odev()
         cls.__patch_framework()
         cls.__setup_environment()
@@ -156,8 +156,9 @@ class OdevTestCase(TestCase):
             patched.start()
 
     @classmethod
-    def __patch_progress(cls):
-        """Patch the progress module to avoid displaying spinners during tests."""
+    def __patch_cli(cls):
+        """Patch interactions with the CLI to avoid waiting for user input or showing live status during tests."""
+        cls._patch_object("odev.common.console.Console", properties=[("bypass_prompt", True)])
         cls._patch_object("odev.common.progress", [("DEBUG_MODE", True)])
 
     @classmethod
