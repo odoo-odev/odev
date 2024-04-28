@@ -39,11 +39,14 @@ for python_file in map(Path, glob((Path(__file__).parents[1] / "**/*.py").as_pos
     with python_file.open() as file:
         for position, line in enumerate(file.readlines()):
             if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                logger.debug(f"Debugger found at {python_file.resolve().as_posix()}:{position + 1}")
+                logger.warning(f"Debugger found at {python_file.resolve().as_posix()}:{position + 1}")
                 DEBUG_MODE = True
 
 if DEBUG_MODE:
-    logger.debug("Disabling live status due to debugger usage")
+    logger.warning(
+        "Disabling live status due to debugger usage:\n"
+        + string.join_bullet(["Progress bars will not be shown", "Spinners will be replaced with log messages"])
+    )
 
 
 class Progress(RichProgress):
@@ -183,6 +186,9 @@ def spinner(message: str) -> StackedStatus:
     :param message: The message to display.
     :type message: str
     """
+    if DEBUG_MODE:
+        logger.info(message)
+
     status = StackedStatus(console.render_str(message), console=console, spinner="arc")
     status._spinner.frames = [f"[{frame}]" for frame in status._spinner.frames]
     return status

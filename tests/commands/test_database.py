@@ -32,13 +32,14 @@ class TestCommandDatabaseCloc(OdevCommandTestCase):
             stdout, _ = self.dispatch_command("cloc", self.database.name)
 
         self.assertIn("test_module_01", stdout)
-        self.assertEqual(len(stdout.splitlines()), 9)
+        self.assertEqual(len(stdout.splitlines()), 10)
 
         totals = (0, 0, 0)
 
-        for line in stdout.splitlines()[3:~2]:
+        for line in stdout.splitlines()[:~2]:
             numbers_match = re.search(r"\s+(\d+) +(\d+) +(\d+)", line)
-            assert numbers_match is not None
+            if not numbers_match:
+                continue
             numbers = numbers_match.groups()
             totals = tuple(int(a) + int(b) for a, b in zip(totals, numbers))
 
@@ -50,13 +51,14 @@ class TestCommandDatabaseCloc(OdevCommandTestCase):
             stdout, _ = self.dispatch_command("cloc", self.database.name, "--csv")
 
         self.assertIn("test_module_01", stdout)
-        self.assertEqual(len(stdout.strip().splitlines()), 5)
+        self.assertEqual(len(stdout.strip().splitlines()), 6)
 
         totals = (0, 0, 0)
 
-        for line in stdout.splitlines()[1:~1]:
+        for line in stdout.splitlines()[:~1]:
             numbers_match = re.search(r",(\d+),(\d+),(\d+)", line)
-            assert numbers_match is not None
+            if not numbers_match:
+                continue
             numbers = numbers_match.groups()
             totals = tuple(int(a) + int(b) for a, b in zip(totals, numbers))
 
