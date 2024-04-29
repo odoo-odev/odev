@@ -1,13 +1,11 @@
 import shutil
 from pathlib import Path
 
-from tests.fixtures import OdevTestCase
-
 from odev.setup import completion, directories, symlink, update
+from tests.fixtures import OdevTestCase
 
 
 class TestSetupCompletion(OdevTestCase):
-
     def test_01_completion(self):
         """Test the setup script responsible of creating a symlink to the bash
         completion script of odev. A symlink should be created on the file system.
@@ -19,7 +17,6 @@ class TestSetupCompletion(OdevTestCase):
 
 
 class TestSetupSymlink(OdevTestCase):
-
     def test_01_symlink(self):
         """Test the setup script responsible of creating a symlink to odev.
         A symlink should be created to map the "odev" command to the main file
@@ -32,7 +29,6 @@ class TestSetupSymlink(OdevTestCase):
 
 
 class TestSetupDirectories(OdevTestCase):
-
     def test_01_directories_unchanged(self):
         """Test the setup script responsible of registering the chosen directories
         to the configuration file creating the necessary paths on the file system.
@@ -96,7 +92,6 @@ class TestSetupDirectories(OdevTestCase):
 
 
 class TestSetupUpdate(OdevTestCase):
-
     def test_01_update(self):
         """Test the setup script responsible of setting the auto-update values for odev.
         The configuration file should be updated with the new values.

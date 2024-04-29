@@ -3,7 +3,6 @@ from time import monotonic
 
 from odev.common import bash
 from odev.common.console import console
-
 from tests.fixtures import OdevTestCase
 
 
