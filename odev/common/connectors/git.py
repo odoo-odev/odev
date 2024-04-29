@@ -390,6 +390,11 @@ class GitConnector(Connector):
         self._token = None
         del self._connection
 
+    def _check_repository(self):
+        """Check whether the repository exists locally."""
+        if self.repository is None:
+            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+
     def fetch(self):
         """Fetch changes from the remote in a detached process.
         Doesn't wait for the fetch to end so pulling right after calling this method
@@ -453,8 +458,7 @@ class GitConnector(Connector):
         :param branch: The branch to checkout. Defaults to the main branch of the repository.
         :param quiet: Do not log checkout status.
         """
-        if self.repository is None:
-            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+        self._check_repository()
 
         if branch is None:
             branch = self.default_branch
@@ -591,8 +595,7 @@ class GitConnector(Connector):
         :param path: Path to the worktree.
         :param branch: Branch to create the worktree from. Defaults to the main branch of the repository.
         """
-        if self.repository is None:
-            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+        self._check_repository()
 
         self.prune_worktrees()
 
@@ -629,8 +632,7 @@ class GitConnector(Connector):
 
     def prune_worktrees(self):
         """Prune worktrees marked as prunable by git."""
-        if self.repository is None:
-            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+        self._check_repository()
 
         if any(worktree.prunable for worktree in self.worktrees()):
             logger.debug(f"Pruning worktrees for repository {self.name!r}")
@@ -656,8 +658,7 @@ class GitConnector(Connector):
         :return: A worktree that belongs to the current repository and is based on the specified branch.
         :rtype: Optional[GitWorktree]
         """
-        if self.repository is None:
-            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+        self._check_repository()
 
         for worktree in self.worktrees():
             if not worktree.path.is_dir():

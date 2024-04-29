@@ -13,6 +13,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     Union,
     cast,
 )
@@ -21,6 +22,7 @@ from odev.common import bash, string
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.console import Colors
 from odev.common.databases import Branch, Repository
+from odev.common.debug import find_debuggers
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.progress import spinner
@@ -434,13 +436,12 @@ class OdoobinProcess(OdevFrameworkMixin):
                 self.prepare_odoobin()
 
         if stream and progress is not None:
-            debugger_position = self.addons_contain_debugger()
+            debuggers = [f"{file.as_posix()}:{line}" for file, line in self.addons_debuggers()]
 
-            if debugger_position is not None:
+            if debuggers:
+                logger.warning(f"Interactive debuggers detected in addons:\n{string.join_bullet(debuggers)}")
+                logger.warning("Disabling logs prettifying to avoid interfering with the debugger")
                 progress = None
-                logger.warning(
-                    f"Addons contain a call to a debugger, streaming of Odoo logs is deactivated: {debugger_position}"
-                )
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
@@ -594,21 +595,16 @@ class OdoobinProcess(OdevFrameworkMixin):
         globs = (path.glob(f"*/__{manifest}__.py") for manifest in ["manifest", "openerp"])
         return path.is_dir() and any(manifest for glob in globs for manifest in glob)
 
-    def addons_contain_debugger(self) -> Optional[str]:
-        """Check if the source code has a debugger called.
+    def addons_debuggers(self) -> Generator[Tuple[Path, int], None, None]:
+        """Find all calls to interactive debuggers in the addons paths for the current Odoo version.
         :return: The path to the file and line where the debugger is called, if any.
         """
         odoo_base_path: Path = self.odoo_path / "odoo"
         addons_paths = {(odoo_base_path if odoo_base_path in path.parents else path) for path in self.addons_paths}
 
         for addon in addons_paths:
-            for python_file in addon.glob("**/*.py"):
-                with python_file.open() as file:
-                    for position, line in enumerate(file.readlines()):
-                        if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                            return f"{python_file.resolve().as_posix()}:{position + 1}"
-
-        return None
+            for debugger in find_debuggers(addon):
+                yield debugger
 
     def set_database_repository(self):
         """Link the database to the first repository in additional addons-paths."""

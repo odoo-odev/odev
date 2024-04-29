@@ -13,6 +13,7 @@ from typing import (
     MutableMapping,
     Optional,
     Union,
+    cast,
 )
 
 import virtualenv
@@ -199,7 +200,7 @@ class PythonEnv:
             else:
                 raise ValueError(f"Invalid package spec {package}")
 
-            installed[package_name.strip().lower()] = version.parse(package_version.strip())
+            installed[package_name.strip().lower()] = cast(version.Version, version.parse(package_version.strip()))
 
         return installed
 

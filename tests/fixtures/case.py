@@ -1,6 +1,12 @@
 import shutil
 from pathlib import Path
-from typing import ClassVar, List, Optional, Tuple, Any
+from typing import (
+    Any,
+    ClassVar,
+    List,
+    Optional,
+    Tuple,
+)
 from unittest import TestCase
 from unittest.mock import PropertyMock, _patch, patch
 
@@ -12,7 +18,6 @@ from odev.common.odev import Odev
 from odev.common.odoobin import OdoobinProcess
 from odev.common.python import PythonEnv
 from odev.common.string import suid
-
 from tests.fixtures import CaptureOutput
 
 
@@ -28,7 +33,7 @@ class OdevTestCase(TestCase):
     run_path: ClassVar[Path]
     """Path to the test case run directory under `/tmp`."""
 
-    __patches: ClassVar[List[_patch]] = []
+    _patches: ClassVar[List[_patch]] = []
     """The patches applied to the test case."""
 
     __config: str
@@ -96,7 +101,7 @@ class OdevTestCase(TestCase):
         if isinstance(target, str):
             return patch(f"{target}.{attribute}", new_callable=PropertyMock, return_value=value, **kwargs)
         return patch.object(target, attribute, new_callable=PropertyMock, return_value=value, **kwargs)
-    
+
     @classmethod
     def create_odoo_database(cls, name: str) -> LocalDatabase:
         """Create a new database for the test case."""
@@ -130,7 +135,7 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def __unpatch_all(cls):
-        for patched in cls.__patches:
+        for patched in cls._patches:
             patched.stop()
 
     @classmethod
@@ -139,6 +144,7 @@ class OdevTestCase(TestCase):
         target: Any,
         attributes: Optional[List[Tuple[str, Any]]] = None,
         properties: Optional[List[Tuple[str, Any]]] = None,
+        **kwargs,
     ):
         """Patch an object's attributes and properties.
         :param target: The object to patch.
@@ -146,19 +152,20 @@ class OdevTestCase(TestCase):
         :param properties: A list of tuples with the property name and value to patch.
         """
         for attribute, value in attributes or []:
-            patched = cls.patch(target, attribute, return_value=value)
-            cls.__patches.append(patched)
+            patched = cls.patch(target, attribute, return_value=value, **kwargs)
+            cls._patches.append(patched)
             patched.start()
 
         for attribute, value in properties or []:
-            patched = cls.patch_property(target, attribute, value)
-            cls.__patches.append(patched)
+            patched = cls.patch_property(target, attribute, value, **kwargs)
+            cls._patches.append(patched)
             patched.start()
 
     @classmethod
     def __patch_cli(cls):
         """Patch interactions with the CLI to avoid waiting for user input or showing live status during tests."""
         cls._patch_object("odev.common.console.Console", properties=[("bypass_prompt", True)])
+        cls._patch_object("odev.common.debug", [("DEBUG_MODE", True)])
         cls._patch_object("odev.common.progress", [("DEBUG_MODE", True)])
 
     @classmethod
@@ -237,6 +244,7 @@ class OdevCommandTestCase(OdevTestCase):
         cls.Popen.set_default(stdout=b"")
         cls.replacer.replace("subprocess.Popen", cls.Popen)
         cls.replacer.replace("odev.common.bash.Popen", cls.Popen)
+        cls.replacer.replace("odev.common.bash.stream", lambda _: [])
 
     @classmethod
     def __patch_odoobin(cls):
@@ -250,11 +258,11 @@ class OdevCommandTestCase(OdevTestCase):
             [
                 ("clone_repositories", None),
                 ("prepare_odoobin", None),
-                ("addons_contain_debugger", None),
             ],
             [
                 ("odoo_addons_paths", []),
                 ("odoobin_path", odoobin_path),
+                ("odoo_path", cls.run_path),
             ],
         )
 

@@ -1,10 +1,8 @@
-from subprocess import CompletedProcess
 import re
+from subprocess import CompletedProcess
 
 from odev.common import string
-
 from odev.common.databases import LocalDatabase
-from odev.common.odoobin import OdoobinProcess
 from tests.fixtures import OdevCommandTestCase
 
 
@@ -99,15 +97,16 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         database = LocalDatabase(self.create_database_name)
         self.assertFalse(database.exists)
 
-        stdout, _ = self.dispatch_command("create", self.create_database_name)
+        with self.patch("odev.common.bash", "stream", []) as mock_stream:
+            stdout, _ = self.dispatch_command("create", self.create_database_name)
 
         database = LocalDatabase(self.create_database_name)
         self.assertTrue(database.exists)
         self.assertIn("Running 'odoo-bin' in version master on database", stdout)
+        mock_stream.assert_called_once()
         self.assertRegex(
-            self.Popen.all_calls[-1].args[0],
+            mock_stream.call_args[0][0],
             rf"odoo-bin -d {self.create_database_name} --addons-path [a-z0-9. \-/,]+ --init base --stop-after-init",
-            "The odoo-bin executable should be run with the correct arguments.",
         )
 
     def test_03_create_from_template(self):
@@ -184,7 +183,9 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         database = LocalDatabase(self.create_database_name)
         self.assertFalse(database.exists)
 
-        stdout, _ = self.dispatch_command("create", self.create_database_name, "--version", "17.0", "--venv", self.venv.name)
+        stdout, _ = self.dispatch_command(
+            "create", self.create_database_name, "--version", "17.0", "--venv", self.venv.name
+        )
 
         database = LocalDatabase(self.create_database_name)
         self.assertTrue(database.exists)
@@ -197,15 +198,18 @@ class TestCommandDatabaseTest(OdevCommandTestCase):
 
     def test_01_test(self):
         """Command `odev test` should run tests on a database."""
-        stdout, _ = self.dispatch_command("test", self.database.name, "--modules", "base")
+        with self.patch("odev.common.bash", "stream", []) as mock_stream:
+            stdout, _ = self.dispatch_command("test", self.database.name, "--modules", "base")
 
         self.assertTrue(self.database.exists)
         self.assertRegex(stdout, rf"Created database '{self.database.name}_[a-z0-9]{{8}}'")
         self.assertIn("No failing tests", stdout)
         self.assertRegex(stdout, rf"Dropped database '{self.database.name}_[a-z0-9]{{8}}'")
+        mock_stream.assert_called_once()
         self.assertRegex(
-            self.Popen.all_calls[-1].args[0],
-            rf"odoo-bin -d {self.database.name}_[a-z0-9]{{8}} --addons-path [a-z0-9.\s\-/,]* --log-level info --stop-after-init --test-enable --init base",
+            mock_stream.call_args[0][0],
+            rf"odoo-bin -d {self.database.name}_[a-z0-9]{{8}} --addons-path [a-z0-9.\s\-/,]* --log-level info "
+            r"--stop-after-init --test-enable --init base",
         )
 
 
