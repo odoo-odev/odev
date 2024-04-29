@@ -2,9 +2,6 @@
 stacked on top of each other.
 """
 
-import re
-from glob import glob
-from pathlib import Path
 from typing import ClassVar, List, Optional
 
 from rich.console import RenderableType
@@ -23,6 +20,7 @@ from rich.style import StyleType
 
 from odev.common import string
 from odev.common.console import console
+from odev.common.debug import DEBUG_MODE
 from odev.common.logging import OdevRichHandler, logging
 
 
@@ -31,16 +29,6 @@ __all__ = ["Progress", "StackedStatus", "spinner"]
 
 logger = logging.getLogger(__name__)
 
-
-DEBUG_MODE: bool = False
-
-
-for python_file in map(Path, glob((Path(__file__).parents[1] / "**/*.py").as_posix(), recursive=True)):
-    with python_file.open() as file:
-        for position, line in enumerate(file.readlines()):
-            if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
-                logger.warning(f"Debugger found at {python_file.resolve().as_posix()}:{position + 1}")
-                DEBUG_MODE = True
 
 if DEBUG_MODE:
     logger.warning(

@@ -3,12 +3,15 @@ Utilities for working with the operating system and issue BASH-like commands to
 the subsystem.
 """
 
-from os import geteuid
+import os
+import pty
+import select
+import sys
+import termios
+import tty
 from shlex import quote
 from subprocess import (
     DEVNULL,
-    PIPE,
-    STDOUT,
     CalledProcessError,
     CompletedProcess,
     Popen,
@@ -74,7 +77,7 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
 # --- Public API ---------------------------------------------------------------
 
 
-def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Optional[CompletedProcess]:
+def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Optional[CompletedProcess[bytes]]:
     """Execute a command in the operating system and wait for it to complete.
     Output of the command will be captured and returned after the execution completes.
 
@@ -93,10 +96,10 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
         logger.debug(f"Running process: {quote(command)}")
         process_result = __run_command(command)
     except CalledProcessError as exception:
-        logger.debug(f"sudo: {sudo}, geteuid: {geteuid()}")
+        logger.debug(f"sudo: {sudo}, geteuid: {os.geteuid()}")
 
         # If already running as root, sudo will not work
-        if not sudo or not geteuid():
+        if not sudo or not os.geteuid():
             logger.debug(f"Process failed: {quote(command)}")
             __raise_or_log(exception, raise_on_error)
             return None
@@ -141,14 +144,48 @@ def detached(command: str) -> Popen[bytes]:
 
 def stream(command: str) -> Generator[str, None, None]:
     """Execute a command in the operating system and stream its output .
-
     :param str command: The command to execute.
     """
     logger.debug(f"Streaming process: {quote(command)}")
-    process = Popen(command, shell=True, stdout=PIPE, stderr=STDOUT)
+    original_tty = termios.tcgetattr(sys.stdin)
+    tty.setraw(sys.stdin.fileno())
+    master, slave = pty.openpty()
 
-    if process.stdout is None:
-        return
+    try:
+        process = Popen(
+            command,
+            shell=True,
+            stdout=slave,
+            stderr=slave,
+            stdin=slave,
+            start_new_session=True,
+            universal_newlines=True,
+        )
 
-    for line in iter(process.stdout.readline, b""):
-        yield line.rstrip().decode()
+        while process.poll() is None:
+            rlist, _, _ = select.select([sys.stdin, master], [], [], 0.1)
+
+            # Input received on STDIN, pass it to the child process
+            if sys.stdin in rlist:
+                char = os.read(sys.stdin.fileno(), 1024)
+
+                # Ignore characters other than CTRL+C, allow requesting
+                # the process to stop
+                if char == b"\x03":
+                    os.write(master, char)
+
+            # Output received from process, yield for further processing
+            if master in rlist:
+                received = os.read(master, 1024 * 512)
+
+                if received:
+                    lines = received.splitlines()
+
+                    for line in lines:
+                        yield line.decode()
+                        os.write(sys.stdout.fileno(), b"\r")
+
+    finally:
+        os.close(slave)
+        os.close(master)
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_tty)

@@ -125,21 +125,16 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             return self._database.venv
 
         if self.args.version:
-            return PythonEnv(self.args.version)
+            return PythonEnv(str(OdooVersion(self.args.version)))
 
         return PythonEnv(str(self._database.version))
 
     def odoobin_progress(self, line: str):
         """Beautify odoo logs on the fly."""
-        match = re.match(self._odoo_log_regex, line)
+        match = re.match(self._odoo_log_regex, re.sub(r"\x1b[^m]*m", "", line))
 
         if match is None:
-            color = (
-                RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
-                if self.last_level in ("warning", "error", "critical")
-                else Colors.BLACK
-            )
-            return self.print(string.stylize(line, color), highlight=False)
+            return self.print(line, highlight=False, soft_wrap=True)
 
         self.last_level = match.group("level").lower()
         level_color = (
@@ -154,6 +149,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             f"{string.stylize(match.group('database'), Colors.PURPLE)} "
             f"{string.stylize(match.group('logger'), Colors.BLACK)}: {match.group('description')}",
             highlight=False,
+            soft_wrap=True,
         )
 
 
