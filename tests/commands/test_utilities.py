@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from odev._version import __version__
-
 from tests.fixtures import OdevCommandTestCase
 
 
@@ -92,7 +91,7 @@ class TestCommandUtilitiesHelp(OdevCommandTestCase):
         """Run the command with the `--names-only` flag, display only the names of the available commands."""
         stdout, _ = self.dispatch_command("help", "--names-only")
         self.assertNotIn("The following commands are provided:", stdout)
-        
+
         for command in {c._name for c in self.odev.commands.values()}:
             self.assertIn(f"{command}\n", stdout)
 
@@ -271,7 +270,9 @@ class TestCommandUtilitiesVenv(OdevCommandTestCase):
     def test_02_python_command(self):
         """Run the command with a name valid argument and a python command."""
         stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "print('test')")
-        self.assertRegex(stdout, r"python[\d.?]*\s-c\s[\\'\"]+print[\\'\"\(]+test[\\'\"\)]+ in virtual environment \'test\'")
+        self.assertRegex(
+            stdout, r"python[\d.?]*\s-c\s[\\'\"]+print[\\'\"\(]+test[\\'\"\)]+ in virtual environment \'test\'"
+        )
 
     def test_03_pip_command(self):
         """Run the command with a pip command."""

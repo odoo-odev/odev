@@ -1,9 +1,9 @@
+import re
 import sys
 from io import StringIO
-import re
 
-from odev.common.logging import logging
 from odev.common.console import RICH_THEME
+from odev.common.logging import logging
 
 
 RE_STYLE_BLOCKS = rf"\[\/?({'|'.join([re.escape(style) for style in RICH_THEME.styles.keys()])})\]"
@@ -54,7 +54,7 @@ class CaptureOutput:
 
         assert self._stderr is not None
         assert self._stdout is not None
-        
+
         self._stdout_value = re.sub(RE_STYLE_BLOCKS, "", self._stdout.getvalue())
         self._stderr_value = re.sub(RE_STYLE_BLOCKS, "", self._stderr.getvalue())
         self._stdout.close()
