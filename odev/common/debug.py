@@ -34,7 +34,7 @@ def find_debuggers(root: Union[str, Path]) -> Generator[Tuple[Path, int], None, 
     for python_file in map(Path, glob(glob_pattern, recursive=True)):
         with python_file.open() as file:
             for position, line in enumerate(file.readlines()):
-                if re.search(r"(i?pu?db)\.set_trace\(", line.split("#", 1)[0]):
+                if re.search(r"((i?pu?db)\.set_trace\(|pu\.db)", line.split("#", 1)[0]):
                     yield python_file.resolve(), position + 1
 
 
