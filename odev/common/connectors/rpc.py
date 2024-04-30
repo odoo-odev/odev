@@ -119,7 +119,7 @@ class Model:
 
         return cached
 
-    def read(self, ids: Sequence[int], fields: Sequence[str] = None) -> RecordDataList:
+    def read(self, ids: Sequence[int], fields: Sequence[str] = None, load: str = None) -> RecordDataList:
         """Read the data of the records with the given ids.
         :param ids: The ids of the records to read
         :param fields: The fields to read, all fields by default
@@ -143,7 +143,7 @@ class Model:
             missing_fields = set(fields) - existing_fields
 
         if missing_ids or missing_fields:
-            records = cast(RecordDataList, self._model.read(list(missing_ids or ids), list(missing_fields), load=None))
+            records = cast(RecordDataList, self._model.read(list(missing_ids or ids), list(missing_fields), load=load))
 
             for record in records:
                 self.cache[cast(int, record["id"])] = record
@@ -171,6 +171,7 @@ class Model:
         limit: int = None,
         order: str = None,
         context: Mapping[str, Any] = None,
+        load: str = None,
     ) -> RecordDataList:
         """Search for records matching the given domain and return their data.
         :param domain: The domain to filter the records to export
@@ -186,7 +187,7 @@ class Model:
         if not ids:
             return []
 
-        return self.read(ids, fields=fields)
+        return self.read(ids, fields=fields, load=load)
 
     def read_group(
         self,
