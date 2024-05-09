@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 from odev._version import __version__
-from odev.commands.utilities.help import HelpCommand
+from odev.common.commands import Command
 from odev.common.odev import logger
 from tests.fixtures import CaptureOutput, OdevTestCase
 
@@ -66,13 +66,20 @@ class TestCommonOdev(OdevTestCase):
 
     def test_07_register_duplicate(self):
         """An error should be raised if two commands share the same name."""
+
+        class FirstCommand(Command):
+            _name = "duplicate"
+
+        class SecondCommand(Command):
+            _name = "duplicate"
+
         with (
             self.assertRaises(ValueError) as error,
-            self.patch(self.odev, "import_commands", return_value=[HelpCommand, HelpCommand]),
+            self.patch(self.odev, "import_commands", return_value=[FirstCommand, SecondCommand]),
         ):
             self.odev.register_commands()
 
-        self.assertEqual(error.exception.args[0], "Another command 'help' is already registered")
+        self.assertEqual(error.exception.args[0], "Another command 'duplicate' is already registered")
 
     def test_08_dispatch_command(self):
         """The command should be dispatched based on the given name."""

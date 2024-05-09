@@ -1,14 +1,12 @@
 """Fetch changes in local worktrees."""
 
-from typing import Generator, List, MutableMapping, Tuple
-
-from git import GitCommandError
+from functools import lru_cache
+from typing import Dict, List, Tuple
 
 from odev.common import args, progress, string
 from odev.common.commands import GitCommand
 from odev.common.console import Colors
 from odev.common.logging import logging
-from odev.common.version import OdooVersion
 
 
 logger = logging.getLogger(__name__)
@@ -19,59 +17,63 @@ class FetchCommand(GitCommand):
 
     _name = "fetch"
 
-    version = args.String(aliases=["-V", "--version"], description="Fetch changes for a specific Odoo version only.")
+    worktree = args.String(
+        aliases=["--worktree", "-w"],
+        description="Name of a specific worktree to fetch changes for.",
+        nargs="?",
+    )
 
     def run(self):
-        """Run the command."""
-        changes_by_version = self.pending_changes_by_version()
-        sorted_versions: List[str] = sorted(
-            changes_by_version.keys(),
-            key=lambda version: (int(version.partition(".")[0]) if version[0].isdigit() else float("inf"), version),
+        changes_by_worktree = self.grouped_changes()
+        sorted_worktree: List[str] = sorted(
+            changes_by_worktree.keys(),
+            key=lambda worktree: (
+                -int(worktree.partition(".")[0]) if worktree[0].isdigit() else -float("inf"),
+                worktree,
+            ),
         )
 
-        for version in sorted_versions:
-            self.print_table(
+        for worktree in sorted_worktree:
+            self.run_hook(worktree, changes_by_worktree[worktree])
+
+    def run_hook(self, worktree: str, changes: List[Tuple[str, int, int]]):
+        """Print a summary of the pending changes for a worktree."""
+        self.print_table(
+            [
                 [
-                    [
-                        repository,
-                        str(behind) if not behind else string.stylize(str(behind), Colors.RED),
-                        str(ahead) if not ahead else string.stylize(str(ahead), Colors.RED),
-                    ]
-                    for repository, behind, ahead in sorted(
-                        changes_by_version[version],
-                        key=lambda repository: repository[0],
-                    )
-                ],
-                version,
-            )
+                    repository,
+                    str(behind) if not behind else string.stylize(str(behind), Colors.RED),
+                    str(ahead) if not ahead else string.stylize(str(ahead), Colors.RED),
+                ]
+                for repository, behind, ahead in changes
+            ],
+            worktree,
+        )
 
-    def list_pending_changes(self) -> Generator[Tuple[str, str, int, int], None, None]:
-        """List pending changes in local repositories."""
-        for worktree in self.worktrees:
-            with progress.spinner(f"Fetching changes in {worktree.connector.name!r} for version {worktree.branch!r}"):
-                try:
-                    worktree.repository.remotes.origin.fetch()
-                    behind, ahead = worktree.pending_changes()
-                    yield worktree.connector.name, worktree.branch, behind, ahead
-                except GitCommandError as error:
-                    logger.error(
-                        f"Failed to fetch changes in {worktree.connector.name!r} for version {worktree.branch!r}"
-                        f":\n{error.args[2].decode()}"
-                    )
-                    continue
+    @lru_cache
+    def grouped_changes(self) -> Dict[str, List[Tuple[str, int, int]]]:
+        """Group changes by version."""
+        changes: Dict[str, List[Tuple[str, int, int]]] = {}
 
-            logger.info(f"Changes fetched in repository {worktree.connector.name!r} for version {worktree.branch!r}")
+        for name, worktrees in self.grouped_worktrees.items():
+            if self.args.worktree and self.args.worktree != name:
+                continue
 
-    def pending_changes_by_version(self) -> MutableMapping[str, List[Tuple[str, int, int]]]:
-        """List pending changes by version."""
-        changes: MutableMapping[str, List[Tuple[str, int, int]]] = {}
+            fetch_message = f"Fetching changes in worktree {name!r}"
 
-        for repository, branch, behind, ahead in self.list_pending_changes():
-            changes.setdefault(branch, []).append((repository, behind, ahead))
+            with progress.spinner(fetch_message):
+                for worktree in worktrees:
+                    if not worktree.detached:
+                        with progress.spinner(
+                            f"{fetch_message} of repository {worktree.connector.name!r} for version {worktree.branch!r}"
+                        ):
+                            worktree.repository.remotes.origin.fetch()
+
+                    changes.setdefault(name, []).append((worktree.connector.name, *worktree.pending_changes()))
 
         if not changes:
-            if self.args.version:
-                raise self.error(f"No worktrees found for version {str(OdooVersion(self.args.version))!r}")
+            if self.args.worktree:
+                raise self.error(f"Worktree with name {self.args.name!r} does not exist")
             raise self.error("No worktrees found")
 
         return changes

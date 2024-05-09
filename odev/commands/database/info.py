@@ -1,19 +1,13 @@
 """Display information about a local or remote database."""
 
 import re
-from typing import (
-    Any,
-    List,
-    MutableMapping,
-    Optional,
-    cast,
-)
+from typing import Any, List, Mapping, cast
 
 from odev.common import string
 from odev.common.commands import DatabaseCommand
 from odev.common.console import Colors
 from odev.common.databases import LocalDatabase
-from odev.common.logging import logging
+from odev.common.logging import logging, silence_loggers
 from odev.common.version import OdooVersion
 
 
@@ -24,11 +18,6 @@ DISPLAY_NA = "N/A"
 DISPLAY_NEVER = "Never"
 DISPLAY_TRUE = f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
 DISPLAY_FALSE = f"[bold {Colors.RED}]❌[bold {Colors.RED}]"
-
-TABLE_HEADERS: List[MutableMapping[str, Any]] = [
-    {"name": "", "style": "bold", "min_width": 15},
-    {"name": ""},
-]
 
 
 class InfoCommand(DatabaseCommand):
@@ -45,38 +34,19 @@ class InfoCommand(DatabaseCommand):
 
     def print_info(self):
         """Print information about the database."""
-
-        self.print_table(
-            self.info_table_rows_base(),
-            self._database.name.upper(),
-            style=f"bold {Colors.PURPLE}",
-        )
-
+        self.print_table(self.info_table_rows_base(), f"[color.purple]{self._database.name.upper()}[/color.purple]")
         self.print_table(self.info_table_rows_database(), "Database")
 
         if isinstance(self._database, LocalDatabase):
-            self.print_table(
-                self.info_table_rows_local(),
-                self._database.platform.display,
-            )
+            with silence_loggers("odev.common.connectors.git"):
+                self.print_table(self.info_table_rows_local(), self._database.platform.display)
 
-    def print_table(self, rows: List[List[str]], name: Optional[str] = None, style: Optional[str] = None):
-        """Print a table.
-        :param rows: The table rows.
-        :param name: The table name.
-        :type rows: List[List[str]]
-        """
-        self.print()
-
-        if name is not None:
-            if style is None:
-                style = f"bold {Colors.CYAN}"
-
-            rule_char: str = "─"
-            title: str = f"{rule_char} [{style}]{name}[/{style}]"
-            self.console.rule(title, align="left", style="", characters=rule_char)
-
-        self.table([{**header} for header in TABLE_HEADERS], rows, show_header=False, box=None)
+    @property
+    def table_headers(self) -> List[Mapping[str, Any]]:
+        return [
+            {"name": "", "style": "bold", "min_width": 15},
+            {"name": ""},
+        ]
 
     def info_table_rows_base(self) -> List[List[str]]:
         """Return the basic rows to be displayed in a table.
@@ -135,17 +105,19 @@ class InfoCommand(DatabaseCommand):
             if self._database.filestore is not None and self._database.filestore.path is not None
             else DISPLAY_NA
         )
-        venv_path: str = self._database.venv.path.as_posix() if not self._database.venv._global else DISPLAY_NA
+        venv: str = (
+            f"{self._database.venv} ({self._database.venv.path})" if not self._database.venv._global else DISPLAY_NA
+        )
         addons: List[str] = [DISPLAY_NA]
 
         if self._database.process is None:
             running = False
             process_id = DISPLAY_NA
-            worktree_path = DISPLAY_NA
+            worktree = DISPLAY_NA
         else:
             running = self._database.process.is_running
             process_id = str(self._database.process.pid)
-            worktree_path = self._database.process.odoo_path.parent.as_posix()
+            worktree = f"{self._database.worktree} ({self._database.process.odoo_path.parent})"
 
             if running:
                 addons_match = re.search(r"--addons-path(?:=|\s)([^\s]+)", cast(str, self._database.process.command))
@@ -156,8 +128,8 @@ class InfoCommand(DatabaseCommand):
         return [
             ["Last Used", last_used],
             ["Filestore Path", filestore_path],
-            ["Virtualenv Path", venv_path],
-            ["Worktree Path", worktree_path],
+            ["Virtualenv", venv],
+            ["Worktree", worktree],
             ["Whitelisted", DISPLAY_TRUE if self._database.whitelisted else DISPLAY_FALSE],
             ["Running", DISPLAY_TRUE if running else DISPLAY_FALSE],
             ["Odoo-Bin PID", process_id],

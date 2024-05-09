@@ -22,10 +22,9 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
 
     keep = args.List(
         aliases=["-k", "--keep"],
-        default=["template"],
+        default=[],
         description="""List of associated resources to keep, separated by commas. Possible values are:
         - filestore: keep the database filestore
-        - template: keep template databases associated to this one
         - venv: keep the virtual environment associated to the database
         - config: keep saved attributes for the database (i.e. whitelist, saved arguments,...)
         """,
@@ -108,12 +107,6 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         """Delete a single database and its resources.
         :param database: the database to delete.
         """
-        if "template" not in self.args.keep:
-            self.remove_template_databases(database)
-
-        if "venv" not in self.args.keep:
-            self.remove_venv(database)
-
         if "filestore" not in self.args.keep:
             self.remove_filestore(database)
 
@@ -123,16 +116,10 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         if database.exists:
             database.drop()
 
+        if "venv" not in self.args.keep:
+            self.remove_venv(database)
+
         logger.info(f"Dropped database {database.name!r}")
-
-    def remove_template_databases(self, database: LocalDatabase):
-        """Remove template databases associated to this database."""
-        # TODO: implement in a safe way, avoid deleting templates each time
-        # template = LocalDatabase(f"{database.name}:template")
-
-        # if template.exists:
-        #     template.drop()
-        #     logger.info(f"Dropped template database {template.name!r}")
 
     def remove_venv(self, database: LocalDatabase):
         """Remove the venv linked to this database if not used by any other database."""
@@ -151,10 +138,9 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
                 """
             )
 
-        if using_venv is not None and not isinstance(using_venv, bool) and using_venv[0][0] > 0:
-            return logger.info(f"Virtual environment {venv_path} is used by other databases, keeping it")
-
-        shutil.rmtree(venv_path, ignore_errors=True)
+        if using_venv is not None and not isinstance(using_venv, bool) and not using_venv[0][0]:
+            if self.console.confirm(f"Virtual environment {database.venv.name!r} is no longer used, remove it?"):
+                shutil.rmtree(venv_path, ignore_errors=True)
 
     def remove_filestore(self, database: LocalDatabase):
         """Remove the filestore linked to this database."""
