@@ -1,0 +1,165 @@
+"""Manage git worktrees used within odev."""
+
+from typing import Any, List, Mapping
+
+from odev.common import args, progress
+from odev.common.commands import GitCommand
+from odev.common.connectors.git import GitConnector
+from odev.common.logging import logging
+from odev.common.version import OdooVersion
+
+
+logger = logging.getLogger(__name__)
+
+
+class WorktreeCommand(GitCommand):
+    """Manage git worktrees used within odev."""
+
+    _name = "worktree"
+    _aliases = ["wt"]
+
+    _exclusive_arguments = [("list", "prune", "create", "remove", "checkout")]
+
+    action_list = args.Flag(name="list", aliases=["--list"], description="List worktrees and their properties.")
+    action_prune = args.Flag(
+        name="prune",
+        aliases=["--prune"],
+        description="Prune worktrees with issues reported by git.",
+    )
+    action_create = args.Flag(name="create", aliases=["--create"], description="Create a new worktree.")
+    action_remove = args.Flag(name="remove", aliases=["--remove"], description="Remove an existing worktree.")
+    action_checkout = args.Flag(
+        name="checkout",
+        aliases=["--checkout"],
+        description="Change the revisions used in an existing worktree.",
+    )
+    name = args.String(description="Name of the worktree to create, checkout or remove.", nargs="?")
+
+    def run(self):
+        """Run the command."""
+        if self.args.list:
+            self.list_worktrees()
+        if self.args.prune:
+            self.prune_worktrees()
+        if self.args.create:
+            self.create_worktree()
+        if self.args.remove:
+            self.remove_worktree()
+        if self.args.checkout:
+            self.checkout_worktree()
+
+    def list_worktrees(self):
+        """List worktrees and their properties."""
+        with progress.spinner("Listing worktrees"):
+            for name, worktrees in self.grouped_worktrees.items():
+                self.print_table(
+                    [
+                        [
+                            worktree.connector.name,
+                            "<detached>" if worktree.detached else worktree.branch,
+                            worktree.commit,
+                            "[color.green][bold]No[/color.green][/bold]"
+                            if not worktree.prunable
+                            else f"[color.red][bold]Yes[/color.red][/bold] ({worktree.prunable_reason})",
+                        ]
+                        for worktree in worktrees
+                    ],
+                    name=name,
+                )
+
+    def prune_worktrees(self):
+        """Prune worktrees."""
+        with progress.spinner("Looking for prunable worktrees"):
+            if not any(worktree.prunable for worktree in self.worktrees):
+                return logger.info("No worktrees to prune")
+
+        with progress.spinner("Pruning worktrees"):
+            for repository in self.repositories:
+                repository.prune_worktrees()
+
+    def create_worktree(self):
+        """Create a new worktree."""
+        self.__check_name()
+
+        if self.args.name in self.grouped_worktrees:
+            raise self.error(f"Worktree with name '{self.args.name}' already exists")
+
+        with progress.spinner(f"Creating worktree {self.args.name}"):
+            for repository in self.repositories:
+                revision = self.get_revision(repository)
+                repository.create_worktree(f"{self.args.name}/{repository.path.name}", revision)
+
+    def remove_worktree(self):
+        """Remove a worktree."""
+        self.__check_name()
+
+        if self.args.name not in self.grouped_worktrees:
+            raise self.error(f"Worktree with name '{self.args.name}' does not exist")
+
+        with progress.spinner(f"Removing worktree {self.args.name}"):
+            for repository in self.repositories:
+                repository.remove_worktree(f"{self.args.name}/{repository.path.name}")
+
+    def checkout_worktree(self):
+        """Change the revisions used in an existing worktree."""
+        self.__check_name()
+
+        for repository in self.repositories:
+            revision = self.get_revision(repository)
+            repository.checkout_worktree(f"{self.args.name}/{repository.path.name}", revision)
+
+        logger.info("Worktree revisions changed successfully")
+
+    def get_revision(self, repository: GitConnector) -> str:
+        """Get the revision to use for the new worktree."""
+        if self.args.version:
+            return str(OdooVersion(self.args.version))
+
+        def sort_key(s):
+            def version_to_float(v):
+                try:
+                    return -float("inf" if v == "master" else v)
+                except ValueError:
+                    return float("inf")
+
+            if s.startswith("saas-"):
+                return (1, version_to_float(s.split("-")[1]))
+            elif s.startswith("staging.saas-"):
+                return (3, version_to_float(s.split("-")[1]))
+            elif s.startswith("staging."):
+                return (2, version_to_float(s.split(".")[1]))
+            elif s.startswith("tmp.saas-"):
+                return (5, version_to_float(s.split("-")[1]))
+            elif s.startswith("tmp."):
+                return (4, version_to_float(s.split(".")[1]))
+            else:
+                return (0, version_to_float(s))
+
+        branches = sorted(repository.list_remote_branches(), key=sort_key)
+        ref = self.console.fuzzy(
+            f"Select a branch to track for {repository.name!r}:",
+            [("commit", "Specific commit"), *[(branch, branch) for branch in branches]],
+        )
+
+        if ref == "commit":
+            ref = self.console.text("Specific commit SHA to track:")
+
+        if not ref:
+            raise self.error("No branch or commit SHA specified")
+
+        return ref or repository.default_branch or "master"
+
+    def __check_name(self):
+        """Check if a name was properly given through CLI arguments."""
+        if not self.args.name:
+            raise self.error("No name specified, use `--name <name>` to provide one")
+
+    @property
+    def table_headers(self) -> List[Mapping[str, Any]]:
+        """Table headers used for printing commit behind and ahead."""
+        return [
+            {"name": "Repository", "justify": "left"},
+            {"name": "Branch", "justify": "left"},
+            {"name": "Commit", "justify": "left"},
+            {"name": "Prunable", "justify": "left"},
+        ]

@@ -2,6 +2,7 @@
 
 import re
 import shutil
+from functools import lru_cache
 from pathlib import Path
 from types import FrameType
 from typing import (
@@ -25,7 +26,7 @@ from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
-from odev.common.logging import logging
+from odev.common.logging import logging, silence_loggers
 from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
 
@@ -114,11 +115,11 @@ class GitWorktree:
         (?:
             (?:worktree\s)(?P<worktree>\/.+)?\n?
             (?:HEAD\s)(?P<commit>[a-f0-9]{40})?\n?
-            ((?:branch\s)(?P<ref>refs\/heads\/(?P<branch>.+)))?\n?
-            (?P<detached>detached)?\n?
-            |(?P<bare>bare)?\n?
-            |(?P<locked>locked)\s?(?P<locked_reason>.+)?\n?
-            |(?P<prunable>prunable)\s?(?P<prunable_reason>.+)?\n?
+            (?:(?:branch\s)(?P<ref>refs\/heads\/(?P<branch>.+))\n?)?
+            (?:(?P<detached>detached)\n?)?
+            (?:(?P<bare>bare)\n?)?
+            (?:(?P<locked>locked)\s?(?P<locked_reason>.+)?\n?)?
+            (?:(?P<prunable>prunable)\s?(?P<prunable_reason>.+)?\n?)?
         )
         """,
         re.VERBOSE | re.MULTILINE,
@@ -162,7 +163,12 @@ class GitWorktree:
         return isinstance(__o, GitWorktree) and self.path == __o.path
 
     def __repr__(self) -> str:
-        return f"GitWorktree({self.repository.working_dir} on {self.branch})"
+        return f"GitWorktree(name={self.name!r}, repository={self.connector.name!r}, revision='{self.branch or self.commit}')"
+
+    @property
+    def name(self):
+        """The name of the worktree."""
+        return self.path.parent.name if self.connector.odev.worktrees_path in self.path.parents else "master"
 
     @property
     def repository(self) -> Repo:
@@ -253,6 +259,12 @@ class GitConnector(Connector):
 
     def __repr__(self) -> str:
         return f"GitConnector({self.name!r})"
+
+    def __eq__(self, __o) -> bool:
+        return isinstance(__o, GitConnector) and self.name == __o.name
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
     @property
     def name(self) -> str:
@@ -403,20 +415,24 @@ class GitConnector(Connector):
         """
         bash.detached(f"cd {self.path} && git fetch")
 
-    def clone(self, branch: Optional[str] = None):
-        """Clone the repository locally."""
+    def clone(self, revision: Optional[str] = None):
+        """Clone the repository locally.
+        :param revision: The revision to checkout when cloning the repository.
+        """
         if self.path.exists():
-            if branch is not None:
-                self.checkout(branch)
+            if revision is not None:
+                self.checkout(revision)
 
             return logger.debug(f"Repository {self.name!r} already cloned to {self.path.as_posix()}")
 
         options = ["--recurse-submodules"]
 
-        if branch is not None:
-            options.extend(["--branch", branch])
+        if revision is not None:
+            options.extend(["--branch", revision])
 
-        logger.debug(f"Cloning repository {self.name!r} to {self.path}" + (f" on branch {branch!r}" if branch else ""))
+        logger.debug(
+            f"Cloning repository {self.name!r} to {self.path}" + (f" on revision {revision!r}" if revision else "")
+        )
 
         try:
             self._git_progress(Repo.clone_from, self.ssh_url, self.path, multi_options=options)
@@ -430,15 +446,17 @@ class GitConnector(Connector):
         else:
             logger.info(
                 f"Cloned repository {self.name!r} to {self.path.as_posix()}"
-                + (f" on branch {branch!r}" if branch else "")
+                + (f" on revision {revision!r}" if revision else "")
             )
 
     def pull(self, force: bool = False) -> None:
-        """Pull the latest modifications from the remote repository."""
+        """Pull the latest modifications from the remote repository.
+        :param force: Whether to force the pull operation.
+        """
         if self.repository is None or self.remote is None or not self.has_pending_changes():
             return
 
-        logger.info(f"Repository {self.name!r} has pending changes on branch {self.branch!r}")
+        logger.info(f"Repository {self.name!r} has pending changes on revision {self.branch!r}")
         self.check_requirements()
 
         if force or console.confirm("Pull changes now?", default=True):
@@ -453,25 +471,26 @@ class GitConnector(Connector):
 
                 raise ConnectorError(message, self) from error
 
-    def checkout(self, branch: Optional[str] = None, quiet: bool = False) -> None:
+    def checkout(self, revision: Optional[str] = None, quiet: bool = False) -> None:
         """Checkout a branch in the repository.
-        :param branch: The branch to checkout. Defaults to the main branch of the repository.
+        :param revision: The revision to checkout. Defaults to the main branch of the repository.
         :param quiet: Do not log checkout status.
         """
         self._check_repository()
+        assert self.repository is not None
 
-        if branch is None:
-            branch = self.default_branch
+        if revision is None:
+            revision = self.default_branch
 
-        if branch == self.branch:
-            return logger.debug(f"Branch {branch!r} already checked out in repository {self.name!r}")
+        if revision == self.branch:
+            return logger.debug(f"Revision {revision!r} already checked out in repository {self.name!r}")
 
-        logger.debug(f"Checking out branch {branch!r} in repository {self.name!r}")
+        logger.debug(f"Checking out revision {revision!r} in repository {self.name!r}")
 
         try:
-            self.repository.git.checkout(branch, quiet=True)
+            self.repository.git.checkout(revision, quiet=True)
         except GitCommandError as error:
-            message: str = f"Failed to checkout branch {branch!r} in repository {self.name!r}"
+            message: str = f"Failed to checkout revision {revision!r} in repository {self.name!r}"
 
             if error.stderr:
                 message += f": {error.stderr}"
@@ -479,7 +498,7 @@ class GitConnector(Connector):
             raise ConnectorError(message, self) from error
         else:
             if not quiet:
-                logger.info(f"Checked out branch {branch!r} in repository {self.name!r}")
+                logger.info(f"Checked out revision {revision!r} in repository {self.name!r}")
 
     def pending_changes(self) -> Tuple[int, int]:
         """Get the number of pending commits to be pulled and pushed.
@@ -588,59 +607,122 @@ class GitConnector(Connector):
         for worktree in [tree.strip() for tree in tree_list.split("\n" * 2) if tree and tree.startswith("worktree ")]:
             yield GitWorktree.parse(self, worktree)
 
-    def create_worktree(self, path: Union[Path, str], branch: Optional[str] = None):
-        """Create a new worktree for the repository based on a specific branch
-        or the default branch of the repository.
-
+    def _resolve_worktree_path(self, path: Union[Path, str]) -> Path:
+        """Resolve the path of a worktree.
         :param path: Path to the worktree.
-        :param branch: Branch to create the worktree from. Defaults to the main branch of the repository.
         """
-        self._check_repository()
-
-        self.prune_worktrees()
-
-        if branch is None:
-            branch = self.default_branch
-
         if isinstance(path, str):
             path = Path(path)
 
         if not path.is_absolute():
             path = (self.worktrees_path / path).resolve()
 
-        message = f"worktree {branch!r} for {self.name!r}"
+        return path
+
+    def create_worktree(self, path: Union[Path, str], revision: Optional[str] = None):
+        """Create a new worktree for the repository based on a specific revision or the default branch
+        of the repository.
+        :param path: Path to the worktree.
+        :param revision: Revision to create the worktree from (branch or commit SHA). Defaults to the main branch
+        of the repository.
+        """
+        self._check_repository()
+        assert self.repository is not None
+        path = self._resolve_worktree_path(path)
+
+        if revision is None:
+            revision = self.default_branch
+
+        if path.exists():
+            logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
+            self.repository.git.worktree("remove", path, "--force")
+            shutil.rmtree(path, ignore_errors=True)
+
+        message = f"worktree {path.parent.name!r} for {self.name!r} in version {revision!r}"
 
         with spinner(f"Creating {message}"):
+            logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {revision!r}")
             self.worktrees_path.mkdir(parents=True, exist_ok=True)
 
-            if path.exists():
-                logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
-                shutil.rmtree(path)
-
-            logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {branch!r}")
-
             try:
-                self.repository.git.worktree("add", path, branch or self.branch)
+                self.repository.git.worktree("add", path, revision or self.branch, "--force")
             except GitCommandError as error:
                 if "fatal: invalid reference" in error.stderr:
-                    logger.error(f"Git branch {branch!r} does not exist for repository {self.name!r}")
+                    logger.error(f"Git ref {revision!r} does not exist for repository {self.name!r}")
                     raise ConnectorError("Did you forget to use '--version master'?", self) from error
 
                 raise error
 
-        logger.info(f"Created {message}")
+        logger.info(f"Created {message} in {path.as_posix()}")
+
+    def remove_worktree(self, path: Union[Path, str]):
+        """Remove a worktree from the repository.
+        :param path: Path to the worktree.
+        """
+        self._check_repository()
+        assert self.repository is not None
+        path = self._resolve_worktree_path(path)
+
+        if not path.exists():
+            return logger.debug(f"Worktree {path!s} for repository {self.name!r} does not exist")
+
+        message = f"worktree {path.parent.name!r} for {self.name!r}"
+
+        with spinner(f"Removing {message}"):
+            logger.debug(f"Removing worktree {path!s} for repository {self.name!r}")
+            self.repository.git.worktree("remove", path, "--force")
+            shutil.rmtree(path, ignore_errors=True)
+
+        logger.info(f"Removed {message} in {path.as_posix()}")
+
+    def checkout_worktree(self, path: Union[Path, str], revision: Optional[str] = None):
+        """Checkout a specific revision in an existing worktree.
+        :param path: Path to the worktree.
+        :param revision: Revision to checkout in the worktree (branch or commit SHA). Defaults to the default branch
+        of the repository.
+        """
+        self._check_repository()
+        assert self.repository is not None
+        path = self._resolve_worktree_path(path)
+
+        if not path.exists():
+            return logger.debug(f"Worktree {path!s} for repository {self.name!r} does not exist")
+
+        worktree = next((worktree for worktree in self.worktrees() if worktree.name == path.parent.name), None)
+
+        if worktree is None:
+            raise ConnectorError(f"Worktree {path.parent.name!r} for repository {self.name!r} does not exist", self)
+
+        if revision in (worktree.branch, worktree.commit):
+            return logger.info(
+                f"Worktree {path.parent.name!r} in repository {self.name!r} is already on revision {revision!r}"
+            )
+
+        message = f"revision {revision!r} in worktree {path.parent.name!r} for {self.name!r}"
+
+        with spinner(f"Checking out {message}"), silence_loggers("odev.common.connectors.git"):
+            worktree.connector.remove_worktree(path)
+            worktree.connector.create_worktree(path, revision)
+
+        logger.info(f"Checked out {message} in {path.as_posix()}")
 
     def prune_worktrees(self):
         """Prune worktrees marked as prunable by git."""
         self._check_repository()
+        assert self.repository is not None
 
         if any(worktree.prunable for worktree in self.worktrees()):
-            logger.debug(f"Pruning worktrees for repository {self.name!r}")
+            prunable = [
+                f"{self.name!r} on branch {worktree.branch!r}: {worktree.prunable_reason or 'unknown reason'}"
+                for worktree in self.worktrees()
+                if worktree.prunable
+            ]
+
+            logger.warning(f"Pruning worktrees for repository {self.name!r}:\n{string.join_bullet(prunable)}")
             self.repository.git.worktree("prune")
 
     def _filter_worktrees(self, worktrees: Sequence[GitWorktree]) -> List[GitWorktree]:
         """Filter a list of worktrees based on the current repository.
-
         :param worktrees: A list of worktrees to filter.
         :return: A list of worktrees that belong to the current repository, filtered.
         :rtype: List[GitWorktree]
@@ -649,6 +731,29 @@ class GitConnector(Connector):
             return list(self.worktrees())
 
         return [worktree for worktree in self.worktrees() if worktree in worktrees]
+
+    @lru_cache
+    def _get_worktree(self, branch: str) -> Optional[GitWorktree]:
+        """Find a worktree based on a branch.
+        :param branch: Branch to find a worktree for.
+        :return: A worktree that belongs to the current repository and is based on the specified branch.
+        :rtype: Optional[GitWorktree]
+        """
+        for worktree in self.worktrees():
+            if worktree.branch == branch:
+                return worktree
+            elif worktree.path.parent.name == branch:
+                message = f"Worktree {self.name!r} for version {branch!r} "
+
+                if worktree.detached:
+                    message += f"is detached and points to commit {worktree.commit!r}"
+                else:
+                    message += f"is targeting another branch {worktree.branch!r}"
+
+                logger.warning(message)
+                return worktree
+
+        return None
 
     def get_worktree(self, branch: str, create: bool = True) -> Optional[GitWorktree]:
         """Find a worktree based on a branch and create it if needed.
@@ -659,21 +764,14 @@ class GitConnector(Connector):
         :rtype: Optional[GitWorktree]
         """
         self._check_repository()
+        assert self.repository is not None
+        worktree = self._get_worktree(branch)
 
-        for worktree in self.worktrees():
-            if not worktree.path.is_dir():
-                logger.debug(f"Worktree path {worktree.path!s} does not exist, removing references")
-                self.repository.git.worktree("remove", worktree.path)
-                continue
-
-            if worktree.branch == branch:
-                return worktree
-
-        if create:
+        if not worktree and create:
             self.create_worktree(f"{branch}/{self._repository}", branch)
             return self.get_worktree(branch, create=create)
 
-        return None
+        return worktree
 
     def fetch_worktrees(self, worktrees: Optional[Sequence[GitWorktree]] = None):
         """Fetch all worktrees of the repository.

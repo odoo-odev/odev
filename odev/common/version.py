@@ -79,7 +79,7 @@ class OdooVersion(_BaseVersion):
         return version
 
     def __repr__(self) -> str:
-        return f"<OdooVersion({str(self)})>"
+        return f"OdooVersion({str(self)})"
 
     def __bool__(self) -> bool:
         """Return True if the version is not empty."""

@@ -90,6 +90,7 @@ repos:
                 - types-paramiko==2.8.13
                 - types-psycopg2==2.9.6
                 - types-requests==2.27.9
+                - types-cachetools>=5.3,<6
 
     - repo: https://github.com/asottile/pyupgrade
       rev: v2.31.0

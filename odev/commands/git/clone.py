@@ -52,9 +52,9 @@ class CloneCommand(DatabaseCommand):
 
         if git.path.exists():
             logger.info(f"Repository {git.name!r} already cloned under {git.path.as_posix()}")
-            git.checkout(branch=self.args.branch or None)
+            git.checkout(revision=self.args.branch or None)
         else:
-            git.clone(branch=self.args.branch or None)
+            git.clone(revision=self.args.branch or None)
 
         if not git.path.exists():
             raise self.error(f"Failed to clone repository {git.name!r}")

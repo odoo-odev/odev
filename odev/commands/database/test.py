@@ -114,6 +114,7 @@ class TestCommand(OdoobinCommand):
         odoobin.with_version(self._database.version)
         odoobin.with_edition(self._database.edition)
         odoobin.with_venv(self.venv)
+        odoobin.with_worktree(self.worktree)
 
         odoobin.additional_addons_paths = cast(OdoobinProcess, self.odoobin).additional_addons_paths
 

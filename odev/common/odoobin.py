@@ -18,6 +18,8 @@ from typing import (
     cast,
 )
 
+from cachetools.func import ttl_cache
+
 from odev.common import bash, string
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.console import Colors
@@ -56,6 +58,18 @@ ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
 }
 
 
+def odoo_repositories(enterprise: bool = True) -> Generator[GitConnector, None, None]:
+    """List of Odoo repositories depending on the edition passed."""
+    repo_names: List[str] = [*ODOO_COMMUNITY_REPOSITORIES]
+
+    if enterprise:
+        for repo_name in ODOO_ENTERPRISE_REPOSITORIES:
+            repo_names.insert(1, repo_name)
+
+    for repo_name in repo_names:
+        yield GitConnector(repo_name)
+
+
 class OdoobinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
 
@@ -68,7 +82,13 @@ class OdoobinProcess(OdevFrameworkMixin):
     _force_enterprise: bool = False
     """Force using the enterprise version of Odoo."""
 
-    def __init__(self, database: "LocalDatabase", venv: Optional[str] = None, version: Optional[OdooVersion] = None):
+    def __init__(
+        self,
+        database: "LocalDatabase",
+        venv: Optional[str] = None,
+        worktree: Optional[str] = None,
+        version: Optional[OdooVersion] = None,
+    ):
         """Initialize the OdoobinProcess object."""
         super().__init__()
 
@@ -78,17 +98,33 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._version: Optional[OdooVersion] = self.database.version or version or OdooVersion("master")
         """Force the version of Odoo when running the process."""
 
+        odoo_branch = self._get_version()
+
         self._forced_venv_name: Optional[str] = venv
         """Forced name of the virtual environment to use."""
 
-        self._venv_name: str = str(self.version)
+        self._venv_name: str = odoo_branch
         """Name of the virtual environment to use."""
+
+        self._forced_worktree_name: Optional[str] = worktree
+        """Forced name of the worktree to use."""
+
+        self._worktree_name: str = odoo_branch
+        """Name of the worktree to use."""
 
         self.repository: GitConnector = GitConnector("odoo/odoo")
         """Github repository of Odoo."""
 
     def __repr__(self) -> str:
-        return f"OdoobinProcess(database={self.database.name!r}, version={self.version!r}, venv={self.venv!r}, pid={self.pid!r})"
+        return (
+            "OdoobinProcess("
+            f"database={self.database.name!r}, "
+            f"version={self.version!r}, "
+            f"venv={self.venv!r}, "
+            f"worktree={self.worktree!r}, "
+            f"pid={self.pid!r}"
+            ")"
+        )
 
     @property
     def venv(self) -> PythonEnv:
@@ -111,16 +147,19 @@ class OdoobinProcess(OdevFrameworkMixin):
             return self.database.version
 
     @property
+    def worktree(self) -> str:
+        """Name of the worktree used to run the Odoo database."""
+        return self._forced_worktree_name or self._worktree_name
+
+    @property
     def odoo_path(self) -> Path:
         """Path to the Odoo installation."""
-        odoo_branch = self._get_odoo_branch()
+        for worktree in self.odoo_worktrees:
+            if worktree.name == self.worktree and worktree.connector.name == ODOO_COMMUNITY_REPOSITORIES[0]:
+                return worktree.path
 
-        if odoo_branch is None:
-            return self.repository.path
-
-        worktree = self.repository.get_worktree(odoo_branch)
-        assert worktree is not None
-        return worktree.path
+        self.update_worktrees()
+        return self.odoo_path
 
     @property
     def odoobin_path(self) -> Path:
@@ -179,15 +218,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def odoo_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of Odoo repositories the current version."""
-        repo_names: List[str] = [*ODOO_COMMUNITY_REPOSITORIES]
-
-        with self.database:
-            if self.database.edition == "enterprise" or self._force_enterprise:
-                for repo_name in ODOO_ENTERPRISE_REPOSITORIES:
-                    repo_names.insert(1, repo_name)
-
-        for repo_name in repo_names:
-            yield GitConnector(repo_name)
+        return odoo_repositories(self.database.edition == "enterprise" or self._force_enterprise)
 
     @property
     def odoo_support_repository(self) -> GitConnector:
@@ -209,16 +240,16 @@ class OdoobinProcess(OdevFrameworkMixin):
     def additional_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of additional repositories linked to this database."""
         for path in self.additional_addons_paths:
-            if path.is_dir():
+            if path.is_dir() and self.check_addons_path(path):
                 yield GitConnector(f"{path.parent.name}/{path.name}")
 
     @property
     def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
         """Return the list of Odoo worktrees for the current version."""
-        branch = self._get_odoo_branch()
-
-        for repo in self.odoo_repositories:
-            yield cast(GitWorktree, repo.get_worktree(branch))
+        for repository in self.odoo_repositories:
+            for worktree in repository.worktrees():
+                if worktree.name == self.worktree:
+                    yield worktree
 
     @property
     def odoo_addons_paths(self) -> List[Path]:
@@ -272,10 +303,16 @@ class OdoobinProcess(OdevFrameworkMixin):
             version = OdooVersion("master")
 
         self._version = version
-        self._venv_name = str(version)
+        self._venv_name = self._worktree_name = str(version)
         self._venv = None
         return self
 
+    def with_worktree(self, worktree: str) -> "OdoobinProcess":
+        """Return the OdoobinProcess instance with the given worktree forced."""
+        self._forced_worktree_name = worktree
+        return self
+
+    @ttl_cache(ttl=1)
     def _get_ps_process(self) -> Optional[str]:
         """Return the process currently running odoo, if any.
         Grep-ed `ps aux` output.
@@ -301,7 +338,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             min(ODOO_PYTHON_VERSIONS, key=lambda v: abs(v - cast(OdooVersion, self.version).major)), None
         )
 
-    def _get_odoo_branch(self) -> str:
+    def _get_version(self) -> str:
         """Return the branch of the current Odoo installation."""
         if self.version is None:
             return "master"
@@ -356,10 +393,12 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.version is None:
             return logger.warning("No version specified, skipping environment setup")
 
-        self.clone_repositories()
-        self.prepare_npm()
-        self.update_worktrees()
-        self.prepare_venv()
+        with spinner(f"Preparing worktree {self.worktree!r}"):
+            self.update_worktrees()
+
+        with spinner(f"Preparing virtual environment {self.venv.name!r}"):
+            self.prepare_venv()
+            self.prepare_npm()
 
     def deploy(
         self,
@@ -432,7 +471,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             raise RuntimeError("Odoo is already running on this database")
 
         if prepare:
-            with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
+            with spinner(f"Preparing odoo-bin version {str(self.version)!r} for database {self.database.name!r}"):
                 self.prepare_odoobin()
 
         if stream and progress is not None:
@@ -462,6 +501,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             try:
                 with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
                     self.database.venv = self.venv
+                    self.database.worktree = self.worktree
                     process = self.venv.run_script(
                         self.odoobin_path,
                         odoobin_args,
@@ -532,6 +572,9 @@ class OdoobinProcess(OdevFrameworkMixin):
     def outdated_odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
         """Return the Odoo repositories with pending changes."""
         for worktree in self.odoo_worktrees:
+            if worktree.detached or worktree.branch not in worktree.repository.remotes[0].refs:
+                continue
+
             commits_behind, _ = worktree.pending_changes()
 
             if commits_behind:
@@ -539,9 +582,13 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def update_worktrees(self):
         """Update the worktrees of the Odoo repositories."""
+        self.clone_repositories()
+
         for repository in self.odoo_repositories:
             repository.prune_worktrees()
-            worktree = cast(GitWorktree, repository.get_worktree(self._get_odoo_branch()))
+
+            if len(list(self.odoo_repositories)) != len(list(self.odoo_worktrees)):
+                repository.create_worktree(f"{self.worktree}/{repository.path.name}", str(self.version or "master"))
 
         outdated_worktrees = list(self.outdated_odoo_worktrees())
 
@@ -551,7 +598,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             remote_name = f"{worktree.repository.remote().name}/{worktree.branch}"
 
             logger.info(
-                f"Repository {worktree.connector.name!r} on branch {worktree.branch!r} "
+                f"Repository {worktree.connector.name!r} in worktree {worktree.name!r} "
                 f"is {commits_behind} commits behind {remote_name!r}"
             )
 
@@ -559,7 +606,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 worktree.connector.pull_worktrees([worktree], force=True)
 
         elif outdated_worktrees:
-            logger.info(f"Multiple repositories have pending changes on branch {self._get_odoo_branch()!r}")
+            logger.info(f"Multiple repositories have pending changes in worktree {outdated_worktrees[0].name!r}")
             worktrees_to_pull: List[GitWorktree] = self.console.checkbox(
                 "Select the repositories to update:",
                 choices=[
@@ -572,14 +619,11 @@ class OdoobinProcess(OdevFrameworkMixin):
             for worktree in worktrees_to_pull:
                 worktree.connector.pull_worktrees(worktrees_to_pull, force=True)
 
-        for repository in self.odoo_repositories:
-            repository.fetch_worktrees([worktree])
-
     def clone_repositories(self):
         """Clone the missing Odoo repositories."""
         for repo in self.odoo_repositories:
             repo.clone()
-            repo.checkout(branch="master", quiet=True)
+            repo.checkout(revision="master", quiet=True)
 
     @classmethod
     def check_addons_path(cls, path: Path) -> bool:
@@ -634,7 +678,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
             self.prepare_odoobin()
-            self.odoo_support_repository.clone(branch="master")
+            self.odoo_support_repository.clone(revision="master")
 
             if any(self.venv.missing_requirements(self.odoo_support_repository.path)):
                 self.venv.install_requirements(self.odoo_support_repository.path)

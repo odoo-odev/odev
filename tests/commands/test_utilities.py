@@ -131,7 +131,7 @@ class TestCommandUtilitiesList(OdevCommandTestCase):
     def test_01_list_all(self):
         """Run the command, list all existing databases."""
         stdout, _ = self.dispatch_command("list", "--all")
-        self.assertRegex(stdout, r"Name\s+Vers")
+        self.assertRegex(stdout, r"^Listing databases")
         self.assertGreater(len(stdout.splitlines()), 7, "there should be at least 1 lines in the list")
 
     def test_02_names_only(self):
@@ -139,7 +139,7 @@ class TestCommandUtilitiesList(OdevCommandTestCase):
         with self.patch(POSTGRES_PATH, "query", [("test1",), ("test2",)]):
             stdout, _ = self.dispatch_command("list", "--all", "--names-only")
 
-        self.assertNotRegex(stdout, r"Name\s+Vers")
+        self.assertRegex(stdout, r"^Listing databases")
         self.assertIn("test1\ntest2\n", stdout)
 
     def test_03_no_result(self):

@@ -1,0 +1,63 @@
+from abc import ABC
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    List,
+    Mapping,
+    Optional,
+)
+
+from odev.common import args
+from odev.common.commands import Command
+from odev.common.connectors import GitConnector, GitWorktree
+from odev.common.odoobin import odoo_repositories
+from odev.common.version import OdooVersion
+
+
+class GitCommand(Command, ABC):
+    """Base command class for interacting with git repositories and worktrees."""
+
+    version = args.String(aliases=["-V", "--version"], description="Act on a specific Odoo version only.")
+
+    @property
+    def repositories(self) -> Generator[GitConnector, None, None]:
+        """Iterate over Odoo repositories."""
+        return odoo_repositories()
+
+    @property
+    def worktrees(self) -> Generator[GitWorktree, None, None]:
+        """Iterate over worktrees in Odoo repositories."""
+        for repository in self.repositories:
+            for worktree in repository.worktrees():
+                if not self.args.version or OdooVersion(worktree.branch) == OdooVersion(self.args.version):
+                    yield worktree
+
+    @property
+    def grouped_worktrees(self) -> Dict[str, List[GitWorktree]]:
+        """Group worktrees by name."""
+        worktrees: Dict[str, List[GitWorktree]] = {}
+        for worktree in self.worktrees:
+            worktrees.setdefault(worktree.name, []).append(worktree)
+        return worktrees
+
+    @property
+    def table_headers(self) -> List[Mapping[str, Any]]:
+        """Table headers used for printing commit behind and ahead."""
+        return [
+            {
+                "name": "Repositories",
+                "min_width": max(len(repository.name) for repository in self.repositories),
+            },
+            {"name": "Commits Behind", "justify": "right"},
+            {"name": "Commits Ahead", "justify": "right"},
+        ]
+
+    def print_table(self, rows: List[List[str]], name: Optional[str] = None):
+        """Print a table.
+        :param rows: The table rows.
+        :param name: The table name.
+        :type rows: List[List[str]]
+        """
+        self.print()
+        self.table([{**header} for header in self.table_headers], rows, title=name, show_header=True, box=None)

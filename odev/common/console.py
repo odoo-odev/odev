@@ -1,5 +1,7 @@
 """Interact with the terminal and the user."""
 
+import os
+import re
 from abc import ABC
 from contextlib import contextmanager
 from pathlib import Path
@@ -7,6 +9,7 @@ from typing import (
     Any,
     ClassVar,
     List,
+    MutableMapping,
     Optional,
     Sequence,
     Tuple,
@@ -20,11 +23,13 @@ from InquirerPy.base.simple import BaseSimplePrompt
 from InquirerPy.utils import get_style
 from InquirerPy.validator import EmptyInputValidator, NumberValidator, PathValidator
 from prompt_toolkit.validation import ValidationError
-from rich.console import Console as RichConsole
+from rich import box
+from rich.console import Console as RichConsole, RenderableType
 from rich.control import Control
 from rich.highlighter import ISO8601Highlighter, ReprHighlighter, _combine_regex
 from rich.segment import ControlType
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.theme import Theme
 
 from odev.common import string
@@ -251,18 +256,107 @@ class Console(RichConsole):
         for _ in range(count):
             self.control(CONTROL_LINE_UP, CONTROL_LINE_ERASE, CONTROL_CURSOR_RESET)
 
-    def print(self, *args, file: Optional[Path] = None, **kwargs):
-        """Print to the console, allowing passthrough to a file if provided."""
+    def _print_to_file(self, renderable: RenderableType, file: Path, *args: Any, **kwargs: Any) -> None:
+        """Print to a file.
+        :param renderable: The object to print.
+        :param file: The file to print to.
+        :param args: Additional arguments to pass to the print method.
+        :param kwargs: Additional keyword arguments to pass to the print method.
+        """
         console_file = self.file  # type: ignore [has-type]
+        file.parent.mkdir(parents=True, exist_ok=True)
+        self.file = file.open("wt", encoding="utf-8")
+        super().print(renderable, *args, **kwargs)
+        self.file = console_file
 
+    def print(
+        self,
+        renderable: RenderableType = "",
+        file: Optional[Path] = None,
+        auto_paginate: bool = True,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Print to the console, allowing passthrough to a file if provided.
+        :param renderable: The object to print.
+        :param file: An optional file to write to instead of the console.
+        :param auto_paginate: Automatically paginate the output if it doesn't fit the terminal.
+        :param args: Additional arguments to pass to the print method.
+        :param kwargs: Additional keyword arguments to pass to the print method.
+        """
         if file is not None:
-            file.parent.mkdir(parents=True, exist_ok=True)
-            self.file = file.open("wt", encoding="utf-8")
+            return self._print_to_file(renderable, file, *args, **kwargs)
 
-        super().print(*args, **kwargs)
+        if (
+            self.is_terminal
+            and isinstance(renderable, str)
+            and self.height < len(renderable.splitlines())
+            and auto_paginate
+        ):
+            pager = os.environ.get("PAGER", "")
+            less = os.environ.get("LESS", "")
 
-        if file is not None:
-            self.file = console_file
+            if pager != "less":
+                os.environ["PAGER"] = "less"
+
+            if not re.match(r"-\w*R", less):
+                os.environ["LESS"] = f"{less} -R"
+
+            with self.pager(styles=not self.is_dumb_terminal):
+                super().print(renderable, *args, **kwargs)
+
+            os.environ["PAGER"] = pager
+            os.environ["LESS"] = less
+        else:
+            super().print(renderable, *args, **kwargs)
+
+    def table(
+        self,
+        columns: Sequence[MutableMapping[str, Any]],
+        rows: Sequence[List[Any]],
+        total: Optional[List[Any]] = None,
+        file: Optional[Path] = None,
+        title: Optional[str] = None,
+        **kwargs,
+    ) -> None:
+        """Print a table to stdout with highlighting and theming.
+        :param columns: The headers of the table.
+        :param rows: The rows of the table.
+        :param total: The total row of the table.
+        :param kwargs: Additional keyword arguments to pass to the Rich Table.
+        """
+        if title is not None:
+            rule_char: str = "─"
+            self.rule(
+                f"{rule_char} [bold][color.cyan]{title}[/color.cyan][/bold]",
+                align="left",
+                style="",
+                characters=rule_char,
+            )
+            return self.table(columns, rows, show_header=True, box=None)
+
+        kwargs.setdefault("show_header", True)
+        kwargs.setdefault("header_style", "bold" if file is None else None)
+        kwargs.setdefault("box", box.HORIZONTALS)
+        table = Table(**kwargs)
+
+        for column in columns:
+            column.setdefault("justify", "left")
+            column_name = column.pop("name")
+            table.add_column(column_name, **column)
+
+        for row in rows:
+            if total and row == rows[-1]:
+                table.add_row(*row, end_section=True)
+            elif not row and table.rows:
+                table.rows[-1].end_section = True
+            else:
+                table.add_row(*row)
+
+        if total:
+            table.add_row(*total, style="bold" if file is None else None)
+
+        return self.print(table, file=file, crop=not file, overflow="ignore", no_wrap=True)
 
     def code(self, text: str, language: str = "python", file: Optional[Path] = None, **kwargs):
         """Display a code block.

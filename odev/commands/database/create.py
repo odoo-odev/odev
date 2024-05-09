@@ -174,6 +174,7 @@ class CreateCommand(OdoobinCommand):
         process.with_edition("enterprise" if self.args.enterprise else "community")
         process.with_version(self.version)
         process.with_venv(self.venv)
+        process.with_worktree(self.worktree)
 
         process.run(args=args, progress=self.odoobin_progress)
 
