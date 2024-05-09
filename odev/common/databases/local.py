@@ -13,6 +13,7 @@ from types import FrameType
 from typing import (
     IO,
     ClassVar,
+    Generator,
     List,
     Literal,
     Mapping,
@@ -24,7 +25,7 @@ from typing import (
 from zipfile import ZipFile
 
 from odev.common import bash, progress, string
-from odev.common.connectors import PostgresConnector
+from odev.common.connectors import GitWorktree, PostgresConnector
 from odev.common.console import Colors
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.logging import logging
@@ -69,6 +70,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     _venv: Optional[PythonEnv] = None
     """The path to the virtual environment of the database."""
+
+    _worktree: Optional[str] = None
+    """The name of the worktree used to run the database."""
 
     _process: Optional[OdoobinProcess] = None
     """The Odoo process running the database."""
@@ -122,6 +126,28 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         self._venv = value
         self.store.databases.set(self)
+
+    @property
+    def worktree(self) -> Optional[str]:
+        if self._worktree is None:
+            info = self.store.databases.get(self)
+
+            if info is not None:
+                self._worktree = info.worktree
+
+        return self._worktree
+
+    @worktree.setter
+    def worktree(self, value: str):
+        """Set the worktree name of the database."""
+        self._worktree = value
+        self.store.databases.set(self)
+
+    @property
+    def worktrees(self) -> Generator[GitWorktree, None, None]:
+        """Odoo worktrees for running the database."""
+        if self.process:
+            yield from self.process.odoo_worktrees
 
     @cached_property
     def version(self) -> Optional[OdooVersion]:  # type: ignore [override]
@@ -291,6 +317,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self._process = OdoobinProcess(
                 self,
                 (self.venv and self.venv.path.name) or str(self.version),
+                self.worktree or (str(self.version) if self.version else None),
                 self.version,
             )
 

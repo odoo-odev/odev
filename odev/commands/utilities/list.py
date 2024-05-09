@@ -131,6 +131,20 @@ TABLE_MAPPING: List[Mapped] = [
         format=lambda value: str(value or ""),
         total=False,
     ),
+    Mapped(
+        value=lambda database: database.worktree,
+        title="Worktree",
+        justify=None,
+        format=lambda value: str(value or ""),
+        total=False,
+    ),
+    Mapped(
+        value=lambda database: database.repository,
+        title="Custom Repository",
+        justify=None,
+        format=lambda value: value.full_name if value else "",
+        total=False,
+    ),
 ]
 
 ORDER_MAPPING: MutableMapping[str, str] = {

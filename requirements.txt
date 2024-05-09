@@ -1,5 +1,6 @@
 astunparse>=1.6,<2
 black>=20.8b1
+cachetools>=5.3,<6
 GitPython>=3,<4
 inquirerpy==0.3.4
 isort>=5.8,<6

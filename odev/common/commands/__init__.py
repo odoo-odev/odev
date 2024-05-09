@@ -12,6 +12,7 @@ from typing import TypeVar
 
 from .base import Command, CommandError
 from .database import DatabaseCommand, LocalDatabaseCommand, RemoteDatabaseCommand
+from .git import GitCommand
 from .odoobin import (
     OdoobinCommand,
     OdoobinShellCommand,

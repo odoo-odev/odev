@@ -12,11 +12,13 @@ from typing import (
     Mapping,
     MutableMapping,
     Optional,
+    Tuple,
     Union,
     cast,
 )
 
 import virtualenv
+from cachetools.func import ttl_cache
 from packaging import version
 
 from odev.common import bash, progress
@@ -70,6 +72,15 @@ class PythonEnv:
 
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.name!r}, version={self.version})"
+
+    def __key(self) -> Tuple[str, str, bool]:
+        return (self.path.resolve().as_posix(), self.version, self._global)
+
+    def __hash__(self) -> int:
+        return hash(self.__key())
+
+    def __eq__(self, __o) -> bool:
+        return isinstance(__o, PythonEnv) and __o.__key() == self.__key()
 
     @property
     def name(self) -> str:
@@ -173,19 +184,24 @@ class PythonEnv:
 
         progress.StackedStatus.resume_stack()
 
+    @ttl_cache(ttl=60)
+    def __pip_freeze_all(self) -> CompletedProcess:
+        """Run pip freeze to list all installed packages."""
+        packages = bash.execute(f"{self.pip} freeze --all")
+
+        if packages is None:
+            raise RuntimeError("Failed to run pip freeze")
+
+        return packages
+
     def installed_packages(self) -> Mapping[str, version.Version]:
         """Run pip freeze.
 
         :return: The result of the pip command execution.
         :rtype: CompletedProcess
         """
-        logger.debug(f"Running pip freeze in {self.path}")
-        result = bash.execute(f"{self.pip} freeze --all")
-
-        if result is None:
-            raise RuntimeError("Failed to run pip freeze")
-
-        packages = result.stdout.decode().splitlines()
+        freeze = self.__pip_freeze_all()
+        packages = freeze.stdout.decode().splitlines()
         installed: MutableMapping[str, version.Version] = {}
 
         for package in packages:

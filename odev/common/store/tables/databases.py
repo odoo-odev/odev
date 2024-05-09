@@ -12,7 +12,8 @@ class DatabaseInfo:
     name: str
     """The name of the database."""
 
-    platform: Literal["local", "saas", "paas"]
+    platform: Literal["local", "remote", "saas", "paas"]
+    """The platform of the database."""
 
     virtualenv: str
     """The path to the virtualenv of the database."""
@@ -29,6 +30,9 @@ class DatabaseInfo:
     branch: Optional[str]
     """Branch in the custom repository with the code for the database."""
 
+    worktree: str
+    """The name of the worktree of the database."""
+
 
 class DatabaseStore(PostgresTable):
     """A class for managing Odoo databases."""
@@ -44,6 +48,7 @@ class DatabaseStore(PostgresTable):
         "whitelisted": "BOOLEAN NOT NULL DEFAULT FALSE",
         "repository": "VARCHAR",
         "branch": "VARCHAR",
+        "worktree": "VARCHAR",
     }
     _constraints = {"databases_unique_name_platform": "UNIQUE(name, platform)"}
 
@@ -76,6 +81,9 @@ class DatabaseStore(PostgresTable):
             "whitelisted": str(not isinstance(database, LocalDatabase) or database._whitelisted),
             "repository": f"{database.repository.full_name!r}" if database.repository else "NULL",
             "branch": f"{database.branch.name!r}" if database.branch is not None and database.branch.name else "NULL",
+            "worktree": f"{database.worktree!r}"
+            if isinstance(database, LocalDatabase) and database.worktree
+            else "NULL",
         }
 
         self.database.query(

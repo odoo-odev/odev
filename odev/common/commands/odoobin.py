@@ -58,6 +58,13 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         If not specified, defaults to the common virtual environment for the current Odoo version.
         """,
     )
+    worktree_argument = args.String(
+        name="worktree",
+        aliases=["--worktree", "-w"],
+        description="""Name of the worktree to use when running this database.
+        If not specified, defaults to the common worktree for the current Odoo version.
+        """,
+    )
 
     # --------------------------------------------------------------------------
     # Properties
@@ -108,6 +115,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             if self.args.version is not None:
                 self.odoobin.with_version(OdooVersion(self.args.version))
 
+            if self.args.worktree is not None:
+                self.odoobin.with_worktree(self.args.worktree)
+
             self.odoobin.with_venv(self.venv.name)
 
     @property
@@ -128,6 +138,20 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             return PythonEnv(str(OdooVersion(self.args.version)))
 
         return PythonEnv(str(self._database.version))
+
+    @property
+    def worktree(self) -> str:
+        """The Git worktree associated with the odoo-bin process."""
+        if self.args.worktree:
+            return self.args.worktree
+
+        if self._database.worktree:
+            return self._database.worktree
+
+        if self.args.version:
+            return str(OdooVersion(self.args.version))
+
+        return str(self._database.version or "master")
 
     def odoobin_progress(self, line: str):
         """Beautify odoo logs on the fly."""

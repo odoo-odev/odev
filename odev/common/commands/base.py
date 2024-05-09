@@ -1,7 +1,6 @@
 """Odev base command class for CLI and programmatic use."""
 
 import inspect
-import os
 import re
 import sys
 from abc import ABC, abstractmethod
@@ -22,9 +21,7 @@ from typing import (
     cast,
 )
 
-from rich import box
 from rich.console import RenderableType
-from rich.table import Table
 
 from odev.common import args, string
 from odev.common.actions import ACTIONS_MAPPING
@@ -297,30 +294,22 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def cleanup(self) -> None:
         """Cleanup after the command execution."""
 
-    def print(self, renderable: RenderableType = "", auto_paginate: bool = True, *args: Any, **kwargs: Any) -> None:
-        """Print to stdout with highlighting and theming."""
-        if (
-            self.console.is_terminal
-            and isinstance(renderable, str)
-            and self.console.height < len(renderable.splitlines())
-            and auto_paginate
-        ):
-            pager = os.environ.get("PAGER", "")
-            less = os.environ.get("LESS", "")
-
-            if pager != "less":
-                os.environ["PAGER"] = "less"
-
-            if not re.match(r"-\w*R", less):
-                os.environ["LESS"] = f"{less} -R"
-
-            with self.console.pager(styles=not self.console.is_dumb_terminal):
-                self.console.print(renderable, *args, **kwargs)
-
-            os.environ["PAGER"] = pager
-            os.environ["LESS"] = less
-        else:
-            self.console.print(renderable, *args, **kwargs)
+    def print(
+        self,
+        renderable: RenderableType = "",
+        file: Optional[Path] = None,
+        auto_paginate: bool = True,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Print to the console, allowing passthrough to a file if provided.
+        :param renderable: The object to print.
+        :param file: An optional file to write to instead of the console.
+        :param auto_paginate: Automatically paginate the output if it doesn't fit the terminal.
+        :param args: Additional arguments to pass to the print method.
+        :param kwargs: Additional keyword arguments to pass to the print method.
+        """
+        self.console.print(renderable, file, auto_paginate, *args, **kwargs)
 
     def table(
         self,
@@ -328,37 +317,16 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         rows: Sequence[List[Any]],
         total: Optional[List[Any]] = None,
         file: Optional[Path] = None,
+        title: Optional[str] = None,
         **kwargs,
     ) -> None:
         """Print a table to stdout with highlighting and theming.
-
         :param columns: The headers of the table.
         :param rows: The rows of the table.
         :param total: The total row of the table.
         :param kwargs: Additional keyword arguments to pass to the Rich Table.
         """
-        kwargs.setdefault("show_header", True)
-        kwargs.setdefault("header_style", "bold" if file is None else None)
-        kwargs.setdefault("box", box.HORIZONTALS)
-        table = Table(**kwargs)
-
-        for column in columns:
-            column.setdefault("justify", "left")
-            column_name = column.pop("name")
-            table.add_column(column_name, **column)
-
-        for row in rows:
-            if total and row == rows[-1]:
-                table.add_row(*row, end_section=True)
-            elif not row and table.rows:
-                table.rows[-1].end_section = True
-            else:
-                table.add_row(*row)
-
-        if total:
-            table.add_row(*total, style="bold" if file is None else None)
-
-        self.console.print(table, file=file, crop=not file, overflow="ignore", no_wrap=True)
+        return self.console.table(columns, rows, total, file, title, **kwargs)
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""
