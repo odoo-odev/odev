@@ -5,7 +5,6 @@ from typing import (
     Generator,
     List,
     Mapping,
-    Optional,
 )
 
 from odev.common import args
@@ -52,12 +51,3 @@ class GitCommand(Command, ABC):
             {"name": "Commits Behind", "justify": "right"},
             {"name": "Commits Ahead", "justify": "right"},
         ]
-
-    def print_table(self, rows: List[List[str]], name: Optional[str] = None):
-        """Print a table.
-        :param rows: The table rows.
-        :param name: The table name.
-        :type rows: List[List[str]]
-        """
-        self.print()
-        self.table([{**header} for header in self.table_headers], rows, title=name, show_header=True, box=None)

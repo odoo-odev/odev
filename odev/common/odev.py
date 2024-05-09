@@ -448,13 +448,6 @@ class Odev(Generic[CommandType]):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
 
-                if (
-                    base_command_class is not None
-                    and any(name in command_names for name in self.commands.keys())
-                    and command_class.__bases__ == base_command_class.__bases__
-                ):
-                    continue  # Ignore base command import when used in python inheritance
-
                 if base_command_class is None or issubclass(base_command_class, command_class):
                     action = "Registering new command"
                 else:
@@ -652,7 +645,12 @@ class Odev(Generic[CommandType]):
         """
         from odev.common.commands.base import Command
 
-        return inspect.isclass(attribute) and issubclass(attribute, Command) and not attribute.is_abstract()
+        return (
+            inspect.isclass(attribute)
+            and issubclass(attribute, Command)
+            and not attribute.is_abstract()
+            and "." not in attribute.__module__
+        )
 
     def __git_branch_behind(self, repository: Repo) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.

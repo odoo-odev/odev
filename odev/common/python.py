@@ -3,6 +3,7 @@
 import re
 import shlex
 import sys
+from functools import lru_cache
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import (
@@ -19,7 +20,7 @@ from typing import (
 
 import virtualenv
 from cachetools.func import ttl_cache
-from packaging import version
+from packaging.version import Version, parse as parse_version
 
 from odev.common import bash, progress
 from odev.common.console import Colors, console
@@ -58,23 +59,20 @@ class PythonEnv:
         self.path: Path = path.resolve()
         """Path to the current environment."""
 
-        self.version: str = version or (".".join(sys.version.split(".")[:2]))
+        self._version: str = version or (".".join(sys.version.split(".")[:2]))
         """Python version used in the current environment."""
-
-        self.python: Path = self.path / "bin" / f"python{self.version if self._global else version or ''}"
-        """Path to the python interpreter in the current environment."""
-
-        self.pip: str = f"{self.python} -m pip"
-        """Base command to run pip in the current environment."""
 
         if not self.exists and self._global:
             raise FileNotFoundError(f"Python interpreter not found at {self.python}")
+
+    def __str__(self) -> str:
+        return f"{self.name} - Python {self.version}"
 
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.name!r}, version={self.version})"
 
     def __key(self) -> Tuple[str, str, bool]:
-        return (self.path.resolve().as_posix(), self.version, self._global)
+        return (self.path.resolve().as_posix(), self._version, self._global)
 
     def __hash__(self) -> int:
         return hash(self.__key())
@@ -88,9 +86,35 @@ class PythonEnv:
         return "GLOBAL" if self._global else self.path.name
 
     @property
+    def python(self) -> Path:
+        """The path to the python interpreter in the current environment."""
+        return self.path / "bin" / f"python{self._version}"
+
+    @property
+    def pip(self) -> str:
+        """Base command to run pip in the current environment."""
+        return f"{self.python} -m pip"
+
+    @property
+    def version(self) -> str:
+        """The python version used in the current environment."""
+        if self.exists:
+            version = self.get_version()
+            self._version = version
+
+        return self._version
+
+    @property
     def exists(self) -> bool:
         """Whether the python environment exists."""
         return self.python.is_file()
+
+    @lru_cache
+    def get_version(self) -> str:
+        """Get the python version used in the current environment."""
+        process = bash.execute(f"{self.python} --version")
+        assert process is not None
+        return ".".join(re.sub(r"[^\d\.]", "", process.stdout.decode()).split(".")[:2])
 
     def create_venv(self) -> None:
         """Create a new virtual environment."""
@@ -194,7 +218,7 @@ class PythonEnv:
 
         return packages
 
-    def installed_packages(self) -> Mapping[str, version.Version]:
+    def installed_packages(self) -> Mapping[str, Version]:
         """Run pip freeze.
 
         :return: The result of the pip command execution.
@@ -202,7 +226,7 @@ class PythonEnv:
         """
         freeze = self.__pip_freeze_all()
         packages = freeze.stdout.decode().splitlines()
-        installed: MutableMapping[str, version.Version] = {}
+        installed: MutableMapping[str, Version] = {}
 
         for package in packages:
             if "==" in package:
@@ -216,7 +240,7 @@ class PythonEnv:
             else:
                 raise ValueError(f"Invalid package spec {package}")
 
-            installed[package_name.strip().lower()] = cast(version.Version, version.parse(package_version.strip()))
+            installed[package_name.strip().lower()] = cast(Version, parse_version(package_version.strip()))
 
         return installed
 
@@ -297,7 +321,7 @@ class PythonEnv:
 
             version_locals = {
                 "installed_version": installed_version,
-                "package_version": version.parse(package_version),
+                "package_version": parse_version(package_version),
             }
 
             if not eval(f"installed_version {package_operator} package_version", version_locals):
@@ -384,8 +408,12 @@ class PythonEnv:
         :return: The result of the command execution.
         :rtype: CompletedProcess
         """
+        command = command.strip()
+
         if command.startswith("pip"):
             command = f"{self.python} -m {command}"
+        elif command.startswith("-"):
+            command = f"{self.python} {command}"
         else:
             command = f"{self.python} -c {shlex.quote(command)}"
 

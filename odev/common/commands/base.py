@@ -14,6 +14,7 @@ from typing import (
     ClassVar,
     Iterable,
     List,
+    Mapping,
     MutableMapping,
     Optional,
     Sequence,
@@ -50,7 +51,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     _aliases: ClassVar[Sequence[str]] = []
     """The aliases of the command associated with the class. Must be unique."""
 
-    _help: ClassVar[str]
+    _help: ClassVar[str] = ""
     """Optional help information on what the command does."""
 
     _description: ClassVar[str] = ""
@@ -331,3 +332,17 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""
         return CommandError(message, self, *args, **kwargs)
+
+    @property
+    def table_headers(self) -> List[Mapping[str, Any]]:
+        """Table headers used for printing commit behind and ahead."""
+        return []
+
+    def print_table(self, rows: List[List[str]], name: Optional[str] = None):
+        """Print a table.
+        :param rows: The table rows.
+        :param name: The table name.
+        :type rows: List[List[str]]
+        """
+        self.print()
+        self.table([{**header} for header in self.table_headers], rows, title=name, show_header=True, box=None)
