@@ -264,17 +264,17 @@ class TestCommandUtilitiesVenv(OdevCommandTestCase):
 
     def test_01_invalid_name(self):
         """Run the command with an invalid virtual environment name."""
-        _, stderr = self.dispatch_command("venv", "invalid", "print('test')")
+        _, stderr = self.dispatch_command("venv", "invalid", "--command", "print('test')")
         self.assertRegex(stderr, r"Virtual environment 'invalid' does not exist")
 
     def test_02_python_command(self):
         """Run the command with a name valid argument and a python command."""
-        stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "print('test')")
+        stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "--command", "print('test')")
         self.assertRegex(
             stdout, r"python[\d.?]*\s-c\s[\\'\"]+print[\\'\"\(]+test[\\'\"\)]+ in virtual environment \'test\'"
         )
 
     def test_03_pip_command(self):
         """Run the command with a pip command."""
-        stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "pip --version")
+        stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "--command", "pip --version")
         self.assertRegex(stdout, r"python[\d.?]*\s-m\spip\s--version\' in virtual environment \'test\'")

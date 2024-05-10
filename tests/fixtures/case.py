@@ -202,7 +202,7 @@ class OdevTestCase(TestCase):
     def __setup_environment(cls):
         """Setup the environment for the test case."""
         cls.venv = PythonEnv(cls.odev.venvs_path / "test")
-        cls.venv.create_venv()
+        cls.venv.create()
         cls.database = cls.create_odoo_database(cls.run_name)
 
     @classmethod

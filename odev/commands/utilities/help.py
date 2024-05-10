@@ -3,7 +3,6 @@
 import textwrap
 from typing import List, Tuple
 
-from rich.console import RenderableType
 from rich.markup import escape
 
 from odev.common import args, string
@@ -21,7 +20,7 @@ class HelpCommand(Command):
     """
 
     _name = "help"
-    _aliases = ["h", "man", "-h", "--help"]
+    _aliases = ["h", "-h", "--help"]
 
     command = args.String(
         nargs="?",
@@ -44,7 +43,7 @@ class HelpCommand(Command):
         else:
             help_text = self.all_commands_help()
 
-        self.print(help_text)
+        self.console.print(textwrap.dedent(help_text).strip(), highlight=False, auto_paginate=True)
 
     def single_command_help(self) -> str:
         """Return help about a single command.
@@ -166,11 +165,3 @@ class HelpCommand(Command):
         :rtype: str
         """
         return "\n".join(sorted(filter(lambda name: not name.startswith("-"), self.odev.commands.keys())))
-
-    def print(self, renderable: RenderableType = "", *args, **kwargs) -> None:
-        """Print a message to the standard output.
-
-        :param message: The message to print.
-        """
-        assert isinstance(renderable, str)
-        super().print(textwrap.dedent(renderable).strip(), highlight=False, *args, **kwargs)

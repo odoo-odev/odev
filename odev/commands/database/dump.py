@@ -13,7 +13,6 @@ class DumpCommand(DatabaseCommand):
     """Backup a database and save its dump file on the local filesystem."""
 
     _name = "dump"
-    _aliases = ["backup"]
 
     filestore = args.Flag(
         aliases=["-F", "--filestore"],

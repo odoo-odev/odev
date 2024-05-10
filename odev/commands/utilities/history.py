@@ -4,6 +4,7 @@ import sys
 
 from odev.common import args
 from odev.common.commands import Command
+from odev.common.console import TableHeader
 from odev.common.logging import logging
 
 
@@ -15,7 +16,7 @@ class HistoryCommand(Command):
 
     _name = "history"
 
-    command = args.String(aliases=["-c", "--command"], description="The command to check the history of.", nargs="?")
+    command = args.String(aliases=["-c", "--command"], description="The command to check the history of.")
     clear = args.Flag(aliases=["-C", "--clear"], description="Clear the history.")
 
     def run(self) -> None:
@@ -39,13 +40,15 @@ class HistoryCommand(Command):
             )
 
         headers = [
-            {"name": "ID", "justify": "right"},
-            {"name": "Command"},
-            {"name": "Date"},
+            TableHeader("ID", align="right"),
+            TableHeader("Command"),
+            TableHeader("Date"),
         ]
         rows = [
             [str(line.id), f"{sys.argv[0]} {line.command} {line.arguments}", line.date.strftime("%Y-%m-%d %X")]
             for line in history
         ]
 
-        self.table(headers, rows)
+        self.print()
+        self.table(headers, rows, title="Commands History")
+        self.console.clear_line()

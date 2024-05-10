@@ -1,10 +1,10 @@
 """Manage git worktrees used within odev."""
 
-from typing import Any, List, Mapping
 
-from odev.common import args, progress
+from odev.common import args, progress, string
 from odev.common.commands import GitCommand
 from odev.common.connectors.git import GitConnector
+from odev.common.console import TableHeader
 from odev.common.logging import logging
 from odev.common.version import OdooVersion
 
@@ -20,17 +20,17 @@ class WorktreeCommand(GitCommand):
 
     _exclusive_arguments = [("list", "prune", "create", "remove", "checkout")]
 
-    action_list = args.Flag(name="list", aliases=["--list"], description="List worktrees and their properties.")
+    action_list = args.Flag(name="list", aliases=["-l", "--list"], description="List worktrees and their properties.")
     action_prune = args.Flag(
         name="prune",
-        aliases=["--prune"],
+        aliases=["-p", "--prune"],
         description="Prune worktrees with issues reported by git.",
     )
-    action_create = args.Flag(name="create", aliases=["--create"], description="Create a new worktree.")
-    action_remove = args.Flag(name="remove", aliases=["--remove"], description="Remove an existing worktree.")
+    action_create = args.Flag(name="create", aliases=["-C", "--create"], description="Create a new worktree.")
+    action_remove = args.Flag(name="remove", aliases=["-r", "--remove"], description="Remove an existing worktree.")
     action_checkout = args.Flag(
         name="checkout",
-        aliases=["--checkout"],
+        aliases=["-c", "--checkout"],
         description="Change the revisions used in an existing worktree.",
     )
     name = args.String(description="Name of the worktree to create, checkout or remove.", nargs="?")
@@ -50,22 +50,34 @@ class WorktreeCommand(GitCommand):
 
     def list_worktrees(self):
         """List worktrees and their properties."""
+        headers = [
+            TableHeader("Repository", min_width=20),
+            TableHeader("Branch"),
+            TableHeader("Commit"),
+            TableHeader("Prunable"),
+        ]
+
+        self.print()
+
         with progress.spinner("Listing worktrees"):
             for name, worktrees in self.grouped_worktrees.items():
-                self.print_table(
+                self.table(
+                    headers,
                     [
                         [
                             worktree.connector.name,
                             "<detached>" if worktree.detached else worktree.branch,
                             worktree.commit,
-                            "[color.green][bold]No[/color.green][/bold]"
+                            string.stylize("No", "bold color.green")
                             if not worktree.prunable
-                            else f"[color.red][bold]Yes[/color.red][/bold] ({worktree.prunable_reason})",
+                            else f"{string.stylize('Yes', 'bold color.red')} ({worktree.prunable_reason})",
                         ]
                         for worktree in worktrees
                     ],
-                    name=name,
+                    title=name,
                 )
+
+        self.console.clear_line()
 
     def prune_worktrees(self):
         """Prune worktrees."""
@@ -152,14 +164,4 @@ class WorktreeCommand(GitCommand):
     def __check_name(self):
         """Check if a name was properly given through CLI arguments."""
         if not self.args.name:
-            raise self.error("No name specified, use `--name <name>` to provide one")
-
-    @property
-    def table_headers(self) -> List[Mapping[str, Any]]:
-        """Table headers used for printing commit behind and ahead."""
-        return [
-            {"name": "Repository", "justify": "left"},
-            {"name": "Branch", "justify": "left"},
-            {"name": "Commit", "justify": "left"},
-            {"name": "Prunable", "justify": "left"},
-        ]
+            raise self.error("No name specified, use '--name' to provide one")

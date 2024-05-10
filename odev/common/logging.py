@@ -110,7 +110,7 @@ class OdevRichHandler(RichHandler):
 
 logging.basicConfig(
     level=LOG_LEVEL,
-    format="%(message)s" if LOG_LEVEL != "DEBUG" else "(%(name)s) %(message)s",
+    format="%(message)s" if LOG_LEVEL != "DEBUG" else "[color.black](%(name)s)[/color.black] %(message)s",
     handlers=[
         OdevRichHandler(
             rich_tracebacks=True,

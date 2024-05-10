@@ -5,6 +5,7 @@ from typing import (
     Any,
     Callable,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Sequence,
@@ -14,7 +15,7 @@ from urllib.parse import urlparse
 
 from odev.common import args, progress, string
 from odev.common.commands import Command
-from odev.common.console import Colors
+from odev.common.console import TableHeader
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.mixins import ListLocalDatabasesMixin
@@ -33,7 +34,7 @@ class Mapped:
     title: Optional[str]
     """The title of the column in the table."""
 
-    justify: Optional[str]
+    justify: Optional[Literal["left", "center", "right"]]
     """The justification of the column in the table, one of "center", "left"
     or "right".
     """
@@ -54,7 +55,7 @@ TABLE_MAPPING: List[Mapped] = [
         value=lambda database: database.process.is_running if database.process is not None else "",
         title=None,
         justify=None,
-        format=lambda value: "[{color}]:{color}_circle:[/{color}]".format(color="green" if value else "red")
+        format=lambda value: string.stylize(":black_circle:", "color.green" if value else "color.red")
         if value is not None
         else "",
         total=False,
@@ -95,36 +96,6 @@ TABLE_MAPPING: List[Mapped] = [
         total=True,
     ),
     Mapped(
-        value=lambda database: database.last_date,
-        title="Last Use",
-        justify=None,
-        format=lambda value: value.strftime("%Y-%m-%d %X") if value else "",
-        total=False,
-    ),
-    Mapped(
-        value=lambda database: database.whitelisted,
-        title="Whitelisted",
-        justify="center",
-        format=lambda value: f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
-        if value
-        else f"[bold {Colors.RED}] ❌[bold {Colors.RED}]",
-        total=False,
-    ),
-    Mapped(
-        value=lambda database: database.process.pid if database.process is not None else "",
-        title="PID",
-        justify="right",
-        format=lambda value: str(value or ""),
-        total=False,
-    ),
-    Mapped(
-        value=lambda database: database.url,
-        title="URL",
-        justify=None,
-        format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
-        total=False,
-    ),
-    Mapped(
         value=lambda database: database.venv,
         title="Virtual Environment",
         justify=None,
@@ -145,6 +116,36 @@ TABLE_MAPPING: List[Mapped] = [
         format=lambda value: value.full_name if value else "",
         total=False,
     ),
+    Mapped(
+        value=lambda database: database.process.pid if database.process is not None else "",
+        title="PID",
+        justify="right",
+        format=lambda value: str(value or ""),
+        total=False,
+    ),
+    Mapped(
+        value=lambda database: database.url,
+        title="URL",
+        justify=None,
+        format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
+        total=False,
+    ),
+    Mapped(
+        value=lambda database: database.last_date,
+        title="Last Used On",
+        justify=None,
+        format=lambda value: value.strftime("%Y-%m-%d %X") if value else "",
+        total=False,
+    ),
+    Mapped(
+        value=lambda database: database.whitelisted,
+        title="Whitelisted",
+        justify="center",
+        format=lambda value: string.stylize("✔", "bold color.green")
+        if value
+        else string.stylize(" ❌", "bold color.red"),
+        total=False,
+    ),
 ]
 
 ORDER_MAPPING: MutableMapping[str, str] = {
@@ -153,6 +154,11 @@ ORDER_MAPPING: MutableMapping[str, str] = {
     "size": "Size (SQL)",
     "size_fs": "Size (FS)",
     "date": "Last Use",
+    "venv": "Virtual Environment",
+    "worktree": "Worktree",
+    "repository": "Custom Repository",
+    "pid": "PID",
+    "whitelisted": "Whitelisted",
 }
 
 
@@ -163,7 +169,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
     _aliases = ["ls"]
 
     names_only = args.Flag(
-        aliases=["-1", "--one-column", "--names-only"],
+        aliases=["-1", "--names-only"],
         description="List database names one per line - useful for parsing.",
     )
     expression = args.Regex(
@@ -175,7 +181,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         aliases=["-s", "--sort"],
         choices=list(ORDER_MAPPING.keys()),
         default="name",
-        description=f"""Sort databases by name, version, database size, filestore size or last use date.
+        description=f"""Sort databases by their value in one of the columns displayed.
         Possible values are {string.join_and(list(ORDER_MAPPING.keys()))}.
         """,
     )
@@ -200,18 +206,18 @@ class ListCommand(ListLocalDatabasesMixin, Command):
 
             data = self.get_table_data(databases)
 
-        self.table(*data)
+        self.print()
+        self.table(*data, box=None, title="All Databases" if self.args.show_all else "Odoo Databases")
+        self.console.clear_line()
 
-    def get_table_data(
-        self, databases: Sequence[str]
-    ) -> Tuple[List[MutableMapping[str, str]], List[List[Any]], List[str]]:
+    def get_table_data(self, databases: Sequence[str]) -> Tuple[List[TableHeader], List[List[Any]], List[str]]:
         """Get the table data for the list of databases."""
-        headers: List[MutableMapping[str, Any]] = []
+        headers: List[TableHeader] = []
         rows: List[List[Any]] = []
         totals: List[int] = []
 
         for mapped in TABLE_MAPPING:
-            headers.append({"name": mapped.title or "", "justify": mapped.justify or "left"})
+            headers.append(TableHeader(title=mapped.title or "", align=mapped.justify or "left"))
             totals.append(0)
 
         for database in databases:
@@ -229,7 +235,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
 
         if self.args.order != "name":
             column_index = next(
-                (index for index, header in enumerate(headers) if header["name"] == ORDER_MAPPING[self.args.order]), 1
+                (index for index, header in enumerate(headers) if header.title == ORDER_MAPPING[self.args.order]), 1
             )
             rows.sort(key=lambda row: row[column_index])
 

@@ -1,11 +1,5 @@
 from abc import ABC
-from typing import (
-    Any,
-    Dict,
-    Generator,
-    List,
-    Mapping,
-)
+from typing import Dict, Generator, List
 
 from odev.common import args
 from odev.common.commands import Command
@@ -39,15 +33,3 @@ class GitCommand(Command, ABC):
         for worktree in self.worktrees:
             worktrees.setdefault(worktree.name, []).append(worktree)
         return worktrees
-
-    @property
-    def table_headers(self) -> List[Mapping[str, Any]]:
-        """Table headers used for printing commit behind and ahead."""
-        return [
-            {
-                "name": "Repositories",
-                "min_width": max(len(repository.name) for repository in self.repositories),
-            },
-            {"name": "Commits Behind", "justify": "right"},
-            {"name": "Commits Ahead", "justify": "right"},
-        ]

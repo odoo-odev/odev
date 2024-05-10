@@ -16,12 +16,14 @@ class PluginCommand(Command):
     """Enable and disable plugins to add new features and commands."""
 
     _name = "plugin"
-    _aliases = ["addons"]
     _exclusive_arguments = [("enable", "disable", "show")]
 
-    enable = args.Flag(aliases=["--enable"], description="Download and enable an inactive plugin.")
-    disable = args.Flag(aliases=["--disable"], description="Disable an active plugin.")
-    show = args.Flag(aliases=["--show"], description="Show the state of a plugin and its description if available.")
+    enable = args.Flag(aliases=["-e", "--enable"], description="Download and enable an inactive plugin.")
+    disable = args.Flag(aliases=["-d", "--disable"], description="Disable an active plugin.")
+    show = args.Flag(
+        aliases=["-s", "--show"],
+        description="Show the state of a plugin and its description if available.",
+    )
     plugin = args.String(
         description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
@@ -68,14 +70,14 @@ class PluginCommand(Command):
 
         else:
             if plugin_name not in self.config.plugins.enabled:
-                logger.info(f"Plugin {plugin_name!r} is [color.red]disabled[/color.red]")
+                logger.info(f"Plugin {plugin_name!r} is {string.stylize('disabled', 'color.red')}")
             else:
                 plugin = self.__get_plugin(plugin_name)
                 logger.info(
                     string.normalize_indent(
-                        f"""Plugin {plugin.name!r} is [color.green]enabled[/color.green]
-                        [color.black]Version:[/color.black] [repr.version]{plugin.manifest['version']}[/repr.version]
-                        [color.black]Path:   [/color.black] {plugin.path.resolve()}
+                        f"""Plugin {plugin.name!r} is {string.stylize('enabled', 'color.green')}
+                        {string.stylize('Version:', 'color.black')} {string.stylize(plugin.manifest['version'], 'repr.version')}
+                        {string.stylize('Path:', 'color.black')}    {plugin.path.resolve()}
                         """
                     )
                 )

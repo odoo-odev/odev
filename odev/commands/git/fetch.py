@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 
 from odev.common import args, progress, string
 from odev.common.commands import GitCommand
-from odev.common.console import Colors
+from odev.common.console import TableHeader
 from odev.common.logging import logging
 
 
@@ -18,7 +18,7 @@ class FetchCommand(GitCommand):
     _name = "fetch"
 
     worktree = args.String(
-        aliases=["--worktree", "-w"],
+        aliases=["-w", "--worktree"],
         description="Name of a specific worktree to fetch changes for.",
         nargs="?",
     )
@@ -33,21 +33,30 @@ class FetchCommand(GitCommand):
             ),
         )
 
+        self.print()
+
         for worktree in sorted_worktree:
             self.run_hook(worktree, changes_by_worktree[worktree])
 
+        self.console.clear_line()
+
     def run_hook(self, worktree: str, changes: List[Tuple[str, int, int]]):
         """Print a summary of the pending changes for a worktree."""
-        self.print_table(
+        self.table(
+            [
+                TableHeader("Repository", min_width=max(len(repository.name) for repository in self.repositories)),
+                TableHeader("Behind", align="right"),
+                TableHeader("Ahead", align="right"),
+            ],
             [
                 [
                     repository,
-                    str(behind) if not behind else string.stylize(str(behind), Colors.RED),
-                    str(ahead) if not ahead else string.stylize(str(ahead), Colors.RED),
+                    str(behind) if not behind else string.stylize(str(behind), "color.red"),
+                    str(ahead) if not ahead else string.stylize(str(ahead), "color.red"),
                 ]
                 for repository, behind, ahead in changes
             ],
-            worktree,
+            title=worktree,
         )
 
     @lru_cache

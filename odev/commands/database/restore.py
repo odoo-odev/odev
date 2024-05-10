@@ -15,11 +15,10 @@ class RestoreCommand(DatabaseCommand):
     """
 
     _name = "restore"
-    _aliases = ["upload"]
 
     backup = args.Path(description="Path to the backup file to restore.")
     neutralize = args.Flag(
-        aliases=["--no-clean", "--no-neutralize"],
+        aliases=["--no-neutralize"],
         default=True,
         description="""Do not neutralize the database after the dump has been restored.
         Only used on local databases.
@@ -56,7 +55,7 @@ class RestoreCommand(DatabaseCommand):
                 if not self.console.confirm("Do you want to overwrite it?", default=True):
                     raise self.error("Dump restoration aborted")
 
-                if self._database.process.is_running:
+                if self._database.process and self._database.process.is_running:
                     with progress.spinner(f"Stopping database {self._database.process.pid}"):
                         self._database.process.kill()
 
