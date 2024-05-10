@@ -52,7 +52,7 @@ def short_help(name: str, description: str, indent_len: int = 0) -> str:
     :rtype: str
     """
     help_text = indent(description, indent_len + 4)[len(name) :]
-    return f"[bold]{name}[/bold]{help_text}"
+    return stylize(name, "bold") + help_text
 
 
 def format_options_list(elements: List[Tuple[str, str]], indent_len: int = 0, blanks: int = 0) -> str:
@@ -150,6 +150,9 @@ def stylize(value: str, style: str) -> str:
     :return: The stylized value.
     :rtype: str
     """
+    from odev.common.console import resolve_styles
+
+    style = resolve_styles(style)
     return f"[{style}]{value}[/{style}]"
 
 

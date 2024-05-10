@@ -2,6 +2,7 @@
 
 import re
 import shlex
+import shutil
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -22,9 +23,9 @@ import virtualenv
 from cachetools.func import ttl_cache
 from packaging.version import Version, parse as parse_version
 
-from odev.common import bash, progress
-from odev.common.console import Colors, console
-from odev.common.logging import LOG_LEVEL, logging, silence_loggers
+from odev.common import bash, progress, string
+from odev.common.console import console
+from odev.common.logging import logging, silence_loggers
 
 
 __all__ = ["PythonEnv"]
@@ -66,7 +67,10 @@ class PythonEnv:
             raise FileNotFoundError(f"Python interpreter not found at {self.python}")
 
     def __str__(self) -> str:
-        return f"{self.name} - Python {self.version}"
+        if self._global:
+            return "Global Interpreter"
+
+        return f"{self.name} - Python {self.version}" if self.exists else ""
 
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.name!r}, version={self.version})"
@@ -88,7 +92,12 @@ class PythonEnv:
     @property
     def python(self) -> Path:
         """The path to the python interpreter in the current environment."""
-        return self.path / "bin" / f"python{self._version}"
+        path = self.path / "bin" / "python"
+
+        if not path.exists():
+            path = Path(f"{path}{self._version}")
+
+        return path
 
     @property
     def pip(self) -> str:
@@ -116,97 +125,118 @@ class PythonEnv:
         assert process is not None
         return ".".join(re.sub(r"[^\d\.]", "", process.stdout.decode()).split(".")[:2])
 
-    def create_venv(self) -> None:
+    def create(self) -> None:
         """Create a new virtual environment."""
         if self._global:
             raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
 
-        logger.info(f"Creating virtual environment {self.name!r} with python version {self.version}")
-        logger.debug(f"Virtual environment stored at {self.path} using python version {self.version}")
+        venv_description = f"virtual environment {self.name!r} with python version {self.version}"
 
-        try:
-            with silence_loggers("root", "distlib.util", "filelock"):
-                virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
-        except RuntimeError as error:
-            if str(error).startswith("failed to find interpreter"):
-                logger.critical(
-                    f"Missing interpreter for python {self.version}, please install it using your distribution's "
-                    "package manager and try again"
-                )
-            raise error
+        with progress.spinner(f"Creating {venv_description}"):
+            try:
+                with silence_loggers("root", "distlib.util", "filelock"):
+                    virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
+            except RuntimeError as error:
+                if str(error).startswith("failed to find interpreter"):
+                    logger.critical(
+                        f"Missing interpreter for python {self.version}, please install it using your distribution's "
+                        "package manager and try again"
+                    )
+                raise error
+
+        logger.info(f"Created {venv_description}")
+
+    def remove(self) -> None:
+        """Remove the current virtual environment."""
+        if self._global:
+            return logger.error("Cannot remove the global python interpreter")
+
+        venv_description = f"virtual environment {self.name!r}"
+
+        with progress.spinner(f"Removing {venv_description}"):
+            shutil.rmtree(self.path, ignore_errors=True)
+
+        logger.info(f"Removed {venv_description}")
 
     def install_packages(self, packages: List[str]) -> None:
         """Install python packages.
-
         :param packages: a list of package specs to install.
         """
-        logger.info(f"Installing {len(packages)} python packages")
-        logger.debug("Installing python packages:\n" + "\n".join(packages))
-        bash.execute(f"{self.pip} install {' '.join(packages)}")
+        self.__pip_install_progress(
+            options=" ".join(packages),
+            message=f"Installing python packages:\n{string.join_bullet(packages)}",
+        )
 
     def install_requirements(self, path: Union[Path, str]):
         """Install packages from a requirements.txt file.
-
         :param path: Path to the requirements.txt file or the containing directory.
         """
         requirements_path = self.__check_requirements_path(path)
-        logger.info(f"Installing python packages from {requirements_path}")
-        re_package = re.compile(r"(?:[\s,](?P<name>[\w_-]+)(?:(?P<op>[<>=]+)(?P<version>[\d.]+))?)")
-        debug_mode = int(LOG_LEVEL != "DEBUG")
+        self.__pip_install_progress(
+            options=f"-r '{requirements_path}'",
+            message=f"Installing missing packages from {requirements_path}",
+        )
 
-        if debug_mode:
-            console.print()
+    def __pip_install_progress(self, options: str, message: str = "Installing packages"):
+        """Run pip install with a progress spinner.
+        :param options: The options to pass to `pip install` (packages or requirements file).
+        :param message: The initial message to display in the progress spinner.
+        """
+        logger.info(message)
 
-        buffer: List[str] = []
-        progress.StackedStatus.pause_stack()
+        with progress.spinner(message) as spinner:
+            re_package = re.compile(r"(?:[\s,](?P<name>[\w_-]+)(?:(?P<op>[<>=]+)(?P<version>[\d.]+))?)")
+            buffer: List[str] = []
+            packages: List[str] = []
 
-        for line in bash.stream(f"{self.pip} install -r '{requirements_path}' --no-color"):
-            if not line.strip() or line.startswith(" "):
-                buffer.append(line.strip())
-                continue
+            for line in bash.stream(f"{self.pip} install {options} --no-color"):
+                if not line.strip() or line.startswith(" "):
+                    buffer.append(line.strip())
 
-            if line.startswith("Collecting"):
-                match = re_package.search(line)
+                if line.startswith("Collecting"):
+                    buffer.clear()
+                    match = re_package.search(line)
 
-                if match is None:
-                    continue
+                    if match is None:
+                        continue
 
-                buffer.clear()
-                console.clear_line(debug_mode)
-                logger.info(
-                    "Collecting python package "
-                    f"[bold {Colors.PURPLE}]{match.group('name')}[/bold {Colors.PURPLE}]"
-                    f"{match.group('op') or ''}"
-                    f"[bold {Colors.CYAN}]{match.group('version') or ''}[/bold {Colors.CYAN}]"
-                )
+                    spinner.update(
+                        "Collecting python package "
+                        + string.stylize(match.group("name"), "bold color.purple")
+                        + f" {match.group('op') or ''} "
+                        + string.stylize(match.group("version"), "bold repr.version")
+                    )
 
-            elif line.startswith("Building wheels for collected packages:"):
-                buffer.clear()
-                console.clear_line(debug_mode)
-                packages = line.replace(",", "").split(" ")[5:]
-                logger.debug("Building python packages:\n" + "\n".join(packages))
-                logger.info(f"Building wheels for {len(packages)} python packages")
+                elif line.startswith("Building wheels for collected packages:"):
+                    buffer.clear()
+                    packages = line.replace(",", "").split(" ")[5:]
+                    spinner.update(f"Building wheels for {len(packages)} python packages")
 
-            elif line.startswith("Failed to build"):
-                console.clear_line(debug_mode)
-                logger.error("Failed to build python packages:\n" + "\n".join(buffer))
-                break
+                elif line.strip().startswith("Building wheel for"):
+                    buffer.clear()
+                    package = line.strip().split(" ")[3]
+                    spinner.update(f"Building wheels for {len(packages)} python packages ({package})")
 
-            elif line.startswith("Installing collected packages:"):
-                buffer.clear()
-                console.clear_line(debug_mode)
-                packages = line.replace(",", "").split(" ")[3:]
-                logger.debug("Installing python packages:\n" + "\n".join(packages))
-                logger.info(f"Installing {len(packages)} python packages")
+                elif line.startswith("Failed to build"):
+                    spinner.stop()
+                    logger.error("Failed to build python packages:\n" + "\n".join(buffer))
+                    break
 
-            elif line.startswith("Successfully installed"):
-                buffer.clear()
-                console.clear_line(debug_mode)
-                packages = line.split(" ")[2:]
-                logger.debug("Installed python packages:\n" + "\n".join(packages))
-                logger.info(f"Successfully installed {len(packages)} python packages")
+                elif line.startswith("Installing collected packages:"):
+                    buffer.clear()
+                    packages = line.replace(",", "").split(" ")[3:]
+                    spinner.update(f"Installing {len(packages)} python packages")
 
-        progress.StackedStatus.resume_stack()
+                elif line.startswith("Successfully installed"):
+                    buffer.clear()
+                    packages = line.split(" ")[2:]
+
+        logger.info(f"Successfully installed {len(packages)} python packages")
+        installed_packages = [
+            f"{string.stylize(name, 'bold color.purple')} == {string.stylize(version, 'bold color.cyan')}"
+            for name, version in (package.rsplit("-", 1) for package in packages)
+        ]
+        logger.debug(f"Installed python packages:\n{string.join_bullet(installed_packages)}")
 
     @ttl_cache(ttl=60)
     def __pip_freeze_all(self) -> CompletedProcess:

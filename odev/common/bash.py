@@ -9,6 +9,7 @@ import select
 import sys
 import termios
 import tty
+from io import UnsupportedOperation
 from shlex import quote
 from subprocess import (
     DEVNULL,
@@ -169,9 +170,9 @@ def stream(command: str) -> Generator[str, None, None]:
             if sys.stdin in rlist:
                 char = os.read(sys.stdin.fileno(), 1024)
 
-                # Ignore characters other than CTRL+C, allow requesting
+                # Ignore characters other than CTRL+C or CTRL+D, allow requesting
                 # the process to stop
-                if char == b"\x03":
+                if char in (b"\x03", b"\x04"):
                     os.write(master, char)
 
             # Output received from process, yield for further processing
@@ -183,7 +184,13 @@ def stream(command: str) -> Generator[str, None, None]:
 
                     for line in lines:
                         yield line.decode()
-                        os.write(sys.stdout.fileno(), b"\r")
+                        try:
+                            os.write(sys.stdout.fileno(), b"\r")
+                        except UnsupportedOperation:
+                            # sys.stdout is not ready for writing or is already used, probably because we used
+                            # the console or the logger to print something on the screen while processing
+                            # the current line
+                            pass
 
     finally:
         os.close(slave)

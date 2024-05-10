@@ -32,11 +32,11 @@ class PullCommand(FetchCommand):
                 raise self.error(f"Worktree {name!r} does not exist")
 
             if worktree.detached:
-                logger.debug(f"Worktree {name!r} is detached")
+                logger.info(f"Worktree {name!r} is detached")
                 continue
 
             if not behind:
-                logger.debug(
+                logger.info(
                     f"No pending changes for worktree {name!r} in {repository!r} for version {worktree.branch!r}"
                 )
                 continue
@@ -46,5 +46,3 @@ class PullCommand(FetchCommand):
             ):
                 worktree.connector.pull_worktrees([worktree], force=True)
                 logger.info(f"Pulled {behind} commits in {worktree.connector.name!r} for version {worktree.branch!r}")
-
-        return super().run_hook(name, changes)

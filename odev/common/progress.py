@@ -53,13 +53,13 @@ class Progress(RichProgress):
 
         columns = [
             TextColumn(
-                f"[logging.level.info]{log_info_symbol}[/logging.level.info] "
-                "[progress.description]{task.description}",
+                f"{string.stylize(log_info_symbol, 'logging.level.info')} "
+                f"{string.stylize('{task.description}', 'progress.description')} "
             ),
             BarColumn(),
             TaskProgressColumn(
-                text_format="[progress.percentage]{task.percentage:>6.2f}%",
-                text_format_no_percentage="[progress.percentage]  -.--%",
+                text_format=string.stylize("{task.percentage:>6.2f}%", "progress.percentage"),
+                text_format_no_percentage=string.stylize("  -.--%", "progress.percentage"),
             ),
             TimeRemainingColumn(),
             TimeElapsedColumn(),

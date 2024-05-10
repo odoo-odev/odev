@@ -7,7 +7,7 @@ from typing import List, MutableMapping, Optional, Sequence
 
 from odev.common import args, string
 from odev.common.commands import OdoobinCommand
-from odev.common.console import Colors
+from odev.common.console import TableHeader
 
 
 class ClocCommand(OdoobinCommand):
@@ -44,17 +44,18 @@ class ClocCommand(OdoobinCommand):
             raise self.error("Failed to fetch cloc result.")
 
         headers = [
-            {"name": "Module", "justify": "left"},
-            {"name": "All", "justify": "right"},
-            {"name": "Other", "justify": "right"},
-            {"name": "Code", "justify": "right", "style": Colors.PURPLE},
+            TableHeader("Module"),
+            TableHeader("All", align="right"),
+            TableHeader("Other", align="right"),
+            TableHeader("Code", align="right", style="bold color.purple"),
         ]
         lines, total = self.parse(process.stdout.decode())
 
-        if not self.args.csv:
-            return self.table(headers, lines, total)
-
-        return self.print(self.format_csv([header["name"] for header in headers], [*lines, total]))
+        if self.args.csv:
+            self.print(self.format_csv([header.title for header in headers], [*lines, total]))
+        else:
+            self.table(headers, lines, total, title="Custom Lines of Code")
+            self.console.clear_line()
 
     def format_csv(self, headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
         """Format the result as a csv string.
@@ -101,7 +102,7 @@ class ClocCommand(OdoobinCommand):
 
             if not line[0].startswith(" "):
                 last_module = line[0]
-                line[0] = f"[{Colors.CYAN}]{line[0]}[/{Colors.CYAN}]"
+                line[0] = string.stylize(line[0], "color.cyan")
             else:
                 line[0] = string.indent(re.sub(rf"^.*?/{last_module}/", "", line[0]).lstrip(), 2)
 

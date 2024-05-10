@@ -14,7 +14,6 @@ from typing import (
     ClassVar,
     Iterable,
     List,
-    Mapping,
     MutableMapping,
     Optional,
     Sequence,
@@ -26,6 +25,7 @@ from rich.console import RenderableType
 
 from odev.common import args, string
 from odev.common.actions import ACTIONS_MAPPING
+from odev.common.console import TableHeader
 from odev.common.errors import CommandError
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.meta import OrderedClassAttributes
@@ -299,7 +299,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         self,
         renderable: RenderableType = "",
         file: Optional[Path] = None,
-        auto_paginate: bool = True,
+        auto_paginate: bool = False,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -314,9 +314,9 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
     def table(
         self,
-        columns: Sequence[MutableMapping[str, Any]],
+        columns: Sequence[TableHeader],
         rows: Sequence[List[Any]],
-        total: Optional[List[Any]] = None,
+        totals: Optional[List[Any]] = None,
         file: Optional[Path] = None,
         title: Optional[str] = None,
         **kwargs,
@@ -327,22 +327,9 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         :param total: The total row of the table.
         :param kwargs: Additional keyword arguments to pass to the Rich Table.
         """
-        return self.console.table(columns, rows, total, file, title, **kwargs)
+        self.console.table(columns, rows, totals, file, title, **kwargs)
+        self.print()
 
     def error(self, message: str, *args: Any, **kwargs: Any) -> CommandError:
         """Build an instance of CommandError ready to be raised."""
         return CommandError(message, self, *args, **kwargs)
-
-    @property
-    def table_headers(self) -> List[Mapping[str, Any]]:
-        """Table headers used for printing commit behind and ahead."""
-        return []
-
-    def print_table(self, rows: List[List[str]], name: Optional[str] = None):
-        """Print a table.
-        :param rows: The table rows.
-        :param name: The table name.
-        :type rows: List[List[str]]
-        """
-        self.print()
-        self.table([{**header} for header in self.table_headers], rows, title=name, show_header=True, box=None)

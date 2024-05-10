@@ -138,14 +138,13 @@ class PostgresConnector(Connector):
             if DEBUG_SQL:
                 logger.debug(f"Returning cached PostgreSQL result for query against database {self.database!r}:")
                 console.code(string.indent(query, 4), "postgresql")
-                console.print(f"[color.black]{string.indent('─' * 80, 4)}[/color.black]")
+                console.print(string.stylize(string.indent("─" * (console.width - 4), 4), "color.black"))
                 console.code(string.indent(str(result), 4), "python")
             return result
 
         def signal_handler_cancel_statement(*args, **kwargs):
             """Cancel the SQL query currently running."""
             logger.warning("Aborting execution of SQL query")
-            logger.debug(f"Aborting query:\n{query}")
 
             if self.cr is not None:
                 self.cr.connection.cancel()

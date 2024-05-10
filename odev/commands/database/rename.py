@@ -17,7 +17,7 @@ class RenameCommand(LocalDatabaseCommand):
     """Rename a local database and move its filestore to the correct path."""
 
     _name = "rename"
-    _aliases = ["mv", "move"]
+    _aliases = ["mv"]
 
     new_name = args.String(name="name", description="New name for the database.")
 

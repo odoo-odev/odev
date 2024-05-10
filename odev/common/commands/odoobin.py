@@ -7,7 +7,6 @@ from typing import Optional
 
 from odev.common import args, string
 from odev.common.commands import LocalDatabaseCommand
-from odev.common.console import RICH_THEME_LOGGING, Colors
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoobin import OdoobinProcess
@@ -60,7 +59,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     )
     worktree_argument = args.String(
         name="worktree",
-        aliases=["--worktree", "-w"],
+        aliases=["-w", "--worktree"],
         description="""Name of the worktree to use when running this database.
         If not specified, defaults to the common worktree for the current Odoo version.
         """,
@@ -104,7 +103,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
                 if invalid_paths:
                     logger.warning(
                         "Some additional addons paths are invalid, they will be ignored:\n"
-                        + "\n".join(path.as_posix() for path in invalid_paths)
+                        + string.join_bullet([path.as_posix() for path in invalid_paths])
                     )
             else:
                 addons_paths = [Path().resolve()]
@@ -161,17 +160,13 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             return self.print(line, highlight=False, soft_wrap=True)
 
         self.last_level = match.group("level").lower()
-        level_color = (
-            f"bold {Colors.GREEN}"
-            if self.last_level == "info"
-            else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
-        )
+        level_color = "bold color.green" if self.last_level == "info" else f"logging.level.{self.last_level}"
 
         self.print(
-            f"{string.stylize(match.group('time'), Colors.BLACK)} "
+            f"{string.stylize(match.group('time'), 'color.black')} "
             f"{string.stylize(match.group('level'), level_color)} "
-            f"{string.stylize(match.group('database'), Colors.PURPLE)} "
-            f"{string.stylize(match.group('logger'), Colors.BLACK)}: {match.group('description')}",
+            f"{string.stylize(match.group('database'), 'color.purple')} "
+            f"{string.stylize(match.group('logger'), 'color.black')}: {match.group('description')}",
             highlight=False,
             soft_wrap=True,
         )

@@ -4,12 +4,14 @@ import os
 import re
 from abc import ABC
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     Any,
     ClassVar,
+    Dict,
     List,
-    MutableMapping,
+    Literal,
     Optional,
     Sequence,
     Tuple,
@@ -43,6 +45,43 @@ CONTROL_LINE_ERASE = Control((ControlType.ERASE_IN_LINE, 2))
 CONTROL_CURSOR_RESET = Control((ControlType.CURSOR_MOVE_TO_COLUMN, 0))
 
 
+def resolve_styles(styles: str) -> str:
+    """Resolve styles from the Rich theme, replacing highlights and named colors.
+    :param str styles: The styles string to resolve.
+    """
+    for style in styles.split():
+        if style in RICH_THEME.styles.keys():
+            styles = styles.replace(style, str(RICH_THEME.styles[style]))
+
+    return styles
+
+
+@dataclass
+class TableHeader:
+    """Table header definition."""
+
+    title: str = ""
+    """Title of the column."""
+
+    min_width: int = 0
+    """Minimum width of the column."""
+
+    align: Literal["left", "center", "right"] = "left"
+    """Alignment of the column."""
+
+    style: str = ""
+    """Style to apply on each element of the column."""
+
+    def dict(self) -> Dict[str, Any]:
+        """Return the table header as a dictionary."""
+        return {
+            "header": self.title,
+            "min_width": self.min_width,
+            "justify": self.align,
+            "style": resolve_styles(self.style),
+        }
+
+
 # --- Theme --------------------------------------------------------------------
 # Colors for logging levels and other objects rendered to the terminal.
 
@@ -52,6 +91,9 @@ class Colors(ABC):
 
     BLACK = "dim"
     """Dimmed text color from terminal settings."""
+
+    WHITE = "white"
+    """White text color."""
 
     CYAN = "#00afaf"
     """Odoo cyan (secondary) color."""
@@ -91,6 +133,7 @@ RICH_THEME_COLORS = {
     "color.purple": Colors.PURPLE,
     "color.red": Colors.RED,
     "color.yellow": Colors.YELLOW,
+    "color.white": Colors.WHITE,
 }
 
 RICH_THEME = Theme(
@@ -148,6 +191,7 @@ INQUIRER_STYLE = get_style(
     },
 )
 
+
 # --- Logging highlighter customization ----------------------------------------
 # This is not useful at all, but it's fun to have. I guess...
 
@@ -161,9 +205,7 @@ class OdevReprHighlighter(ReprHighlighter):
             *self.highlights[:-1],
             *ISO8601Highlighter.highlights,
             _combine_regex(
-                r"(?P<odev>odev)",
-                r"(?P<version>([0-9]+\.){2,}[0-9]+)",
-                r"(?:(?P<package_name>[\w_-]+)(?:(?P<package_op>[<>=]+)(?P<package_version>[\d.]+)))",
+                r"(?P<version>(?:[0-9]+\.){2,}[0-9]+)",
                 self.highlights[-1],
             ),
         ]
@@ -264,16 +306,19 @@ class Console(RichConsole):
         :param kwargs: Additional keyword arguments to pass to the print method.
         """
         console_file = self.file  # type: ignore [has-type]
-        file.parent.mkdir(parents=True, exist_ok=True)
-        self.file = file.open("wt", encoding="utf-8")
-        super().print(renderable, *args, **kwargs)
+        file.resolve().parent.mkdir(parents=True, exist_ok=True)
+
+        with file.open("wt", encoding="utf-8") as buffer:
+            self.file = buffer
+            super().print(renderable, *args, **kwargs)
+
         self.file = console_file
 
     def print(
         self,
         renderable: RenderableType = "",
         file: Optional[Path] = None,
-        auto_paginate: bool = True,
+        auto_paginate: bool = False,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -284,6 +329,12 @@ class Console(RichConsole):
         :param args: Additional arguments to pass to the print method.
         :param kwargs: Additional keyword arguments to pass to the print method.
         """
+        if isinstance(renderable, str):
+            renderable = resolve_styles(renderable)
+
+        if "style" in kwargs:
+            kwargs["style"] = resolve_styles(kwargs["style"])
+
         if file is not None:
             return self._print_to_file(renderable, file, *args, **kwargs)
 
@@ -312,9 +363,9 @@ class Console(RichConsole):
 
     def table(
         self,
-        columns: Sequence[MutableMapping[str, Any]],
+        headers: Sequence[TableHeader],
         rows: Sequence[List[Any]],
-        total: Optional[List[Any]] = None,
+        totals: Optional[List[Any]] = None,
         file: Optional[Path] = None,
         title: Optional[str] = None,
         **kwargs,
@@ -328,33 +379,33 @@ class Console(RichConsole):
         if title is not None:
             rule_char: str = "─"
             self.rule(
-                f"{rule_char} [bold][color.cyan]{title}[/color.cyan][/bold]",
+                f"{rule_char} {string.stylize(title, 'bold color.cyan')}",
                 align="left",
                 style="",
                 characters=rule_char,
             )
-            return self.table(columns, rows, show_header=True, box=None)
+            return self.table(headers, rows, totals, show_header=any(header.title for header in headers), box=None)
 
         kwargs.setdefault("show_header", True)
         kwargs.setdefault("header_style", "bold" if file is None else None)
         kwargs.setdefault("box", box.HORIZONTALS)
+        kwargs.setdefault("padding", (0, 3))
+        kwargs.setdefault("collapse_padding", True)
         table = Table(**kwargs)
 
-        for column in columns:
-            column.setdefault("justify", "left")
-            column_name = column.pop("name")
-            table.add_column(column_name, **column)
+        for header in headers:
+            table.add_column(**header.dict())
 
         for row in rows:
-            if total and row == rows[-1]:
+            if totals and row == rows[-1]:
                 table.add_row(*row, end_section=True)
             elif not row and table.rows:
                 table.rows[-1].end_section = True
             else:
                 table.add_row(*row)
 
-        if total:
-            table.add_row(*total, style="bold" if file is None else None)
+        if totals:
+            table.add_row(*totals, style="bold" if file is None else None)
 
         return self.print(table, file=file, crop=not file, overflow="ignore", no_wrap=True)
 
@@ -407,8 +458,8 @@ class Console(RichConsole):
                     answer: str = next(m for m in prompt_message if m[0] == "class:answer")[1].strip()
 
                     self.print(
-                        f"[bold {Colors.PURPLE}]{INQUIRER_MARK}[/bold {Colors.PURPLE}] "
-                        f"{question} [{Colors.PURPLE}]{answer}[/{Colors.PURPLE}]",
+                        f"{string.stylize(INQUIRER_MARK, 'bold color.purple')} "
+                        f"{question} {string.stylize(answer, 'color.purple')}",
                         highlight=False,
                     )
                     return kwargs[default_key]

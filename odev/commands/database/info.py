@@ -1,11 +1,11 @@
 """Display information about a local or remote database."""
 
 import re
-from typing import Any, List, Mapping, cast
+from typing import List, cast
 
 from odev.common import string
 from odev.common.commands import DatabaseCommand
-from odev.common.console import Colors
+from odev.common.console import TableHeader
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging, silence_loggers
 from odev.common.version import OdooVersion
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 DISPLAY_NA = "N/A"
 DISPLAY_NEVER = "Never"
-DISPLAY_TRUE = f"[bold {Colors.GREEN}]✔[bold {Colors.GREEN}]"
-DISPLAY_FALSE = f"[bold {Colors.RED}]❌[bold {Colors.RED}]"
+DISPLAY_TRUE = string.stylize("✔", "color.green")
+DISPLAY_FALSE = string.stylize("❌", "color.red")
 
 
 class InfoCommand(DatabaseCommand):
@@ -26,27 +26,31 @@ class InfoCommand(DatabaseCommand):
     _name = "info"
     _aliases = ["i"]
 
+    info_headers = [
+        TableHeader(style="bold", min_width=15),
+        TableHeader(),
+    ]
+
     def run(self):
         if not self._database.is_odoo:
             raise self.error(f"Database '{self._database.name}' is not an Odoo database")
 
-        return self.print_info()
+        self.print_info()
+        self.console.clear_line()
 
     def print_info(self):
         """Print information about the database."""
-        self.print_table(self.info_table_rows_base(), f"[color.purple]{self._database.name.upper()}[/color.purple]")
-        self.print_table(self.info_table_rows_database(), "Database")
+        self.print()
+        self.table(
+            self.info_headers,
+            self.info_table_rows_base(),
+            title=string.stylize(self._database.name.upper(), "color.purple"),
+        )
+        self.table(self.info_headers, self.info_table_rows_database(), title="Database")
 
         if isinstance(self._database, LocalDatabase):
             with silence_loggers("odev.common.connectors.git"):
-                self.print_table(self.info_table_rows_local(), self._database.platform.display)
-
-    @property
-    def table_headers(self) -> List[Mapping[str, Any]]:
-        return [
-            {"name": "", "style": "bold", "min_width": 15},
-            {"name": ""},
-        ]
+                self.table(self.info_headers, self.info_table_rows_local(), title=self._database.platform.display)
 
     def info_table_rows_base(self) -> List[List[str]]:
         """Return the basic rows to be displayed in a table.
@@ -56,8 +60,8 @@ class InfoCommand(DatabaseCommand):
         """
         database_version = cast(OdooVersion, self._database.version)
         database_edition = cast(str, self._database.edition).capitalize()
-        name: str = string.stylize(self._database.name, Colors.PURPLE)
-        version: str = string.stylize(f"{database_version.major}.{database_version.minor}", Colors.CYAN)
+        name: str = string.stylize(self._database.name, "color.purple")
+        version: str = string.stylize(f"{database_version.major}.{database_version.minor}", "color.cyan")
 
         return [
             ["Name", name],

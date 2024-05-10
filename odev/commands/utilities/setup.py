@@ -33,7 +33,6 @@ class SetupCommand(Command):
     """
 
     _name = "setup"
-    _aliases = ["reconfigure"]
 
     category = args.String(description="Run a specific part of the setup only.", nargs="?")
 
@@ -70,7 +69,7 @@ class SetupCommand(Command):
         cls._description += textwrap.dedent(
             f"""
 
-            [bold underline]Available categories:[/bold underline]
+            {string.stylize('Available categories:', 'bold underline')}
 
             {string.format_options_list(scripts, indent_len=len(max(script_names, key=len)) + 1, blanks=1)}
             """

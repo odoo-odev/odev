@@ -19,7 +19,7 @@ class CreateCommand(OdoobinCommand):
     """Create a new Odoo database locally, or copy an existing database template."""
 
     _name = "create"
-    _aliases = ["init"]
+    _aliases = ["cr"]
 
     template_argument = args.String(
         name="template",
@@ -36,7 +36,7 @@ class CreateCommand(OdoobinCommand):
         default=True,
     )
     bare = args.Flag(
-        aliases=["--bare", "--no-init"],
+        aliases=["--bare"],
         description="Do not initialize the database (create the PostgreSQL database then exit).",
     )
     version_argument = args.String(
@@ -177,6 +177,7 @@ class CreateCommand(OdoobinCommand):
         process.with_worktree(self.worktree)
 
         process.run(args=args, progress=self.odoobin_progress)
+        self.console.print()
 
         if process is None:
             raise self.error(f"Failed to initialize database {self._database.name!r}")

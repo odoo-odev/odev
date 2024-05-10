@@ -7,7 +7,7 @@ from typing import List, Mapping, MutableMapping, cast
 
 from odev.common import args, string
 from odev.common.commands import OdoobinCommand
-from odev.common.console import RICH_THEME_LOGGING, Colors
+from odev.common.console import RICH_THEME_LOGGING, TableHeader
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoobin import OdoobinProcess
@@ -141,25 +141,23 @@ class TestCommand(OdoobinCommand):
             color = (
                 RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
                 if self.last_level in problematic_test_levels
-                else Colors.BLACK
+                else "color.black"
             )
             return self.print(string.stylize(line, color), highlight=False)
 
         self.last_level = match.group("level").lower()
         level_color = (
-            f"bold {Colors.GREEN}"
-            if self.last_level == "info"
-            else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
+            "bold color.green" if self.last_level == "info" else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
         )
 
         if self.last_level in problematic_test_levels and match.group("database") == self.test_database.name:
             self.test_buffer.append(line)
 
         self.print(
-            f"{string.stylize(match.group('time'), Colors.BLACK)} "
+            f"{string.stylize(match.group('time'), 'color.black')} "
             f"{string.stylize(match.group('level'), level_color)} "
-            f"{string.stylize(match.group('database'), Colors.PURPLE)} "
-            f"{string.stylize(match.group('logger'), Colors.BLACK)}: {match.group('description')}",
+            f"{string.stylize(match.group('database'), 'color.purple')} "
+            f"{string.stylize(match.group('logger'), 'color.black')}: {match.group('description')}",
             highlight=False,
         )
 
@@ -245,11 +243,11 @@ class TestCommand(OdoobinCommand):
         self.print()
         self.table(
             [
-                {"name": "Status", "style": f"bold {Colors.RED}"},
-                {"name": "Class"},
-                {"name": "Method"},
-                {"name": "Module"},
-                {"name": "Path", "style": Colors.BLACK},
+                TableHeader("Status", style="bold color.red"),
+                TableHeader("Class"),
+                TableHeader("Method"),
+                TableHeader("Module"),
+                TableHeader("Path", style="color.black"),
             ],
             [
                 [
@@ -262,4 +260,4 @@ class TestCommand(OdoobinCommand):
             ],
         )
 
-        self.print(string.indent(test["traceback"].rstrip(), 2), style=Colors.RED, highlight=False, auto_paginate=False)
+        self.print(string.indent(test["traceback"].rstrip(), 2), style="color.red", highlight=False)

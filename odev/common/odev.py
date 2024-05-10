@@ -35,7 +35,7 @@ from packaging import version
 
 from odev._version import __version__
 from odev.commands.database.delete import DeleteCommand
-from odev.common import progress
+from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseCommand, DatabaseType
 from odev.common.config import Config
@@ -212,7 +212,7 @@ class Odev(Generic[CommandType]):
             return logger.debug("Framework already started")
 
         logger.debug(
-            f"Starting {self.name} version [repr.version]{self.version}[/repr.version] "
+            f"Starting {self.name} version {string.stylize(self.version, 'repr.version')} "
             f"{'in test mode' if self.in_test_mode else ''}".strip()
         )
 
@@ -441,7 +441,7 @@ class Odev(Generic[CommandType]):
         """Register all commands from the plugins directories."""
         for plugin in self.plugins:
             logger.debug(
-                f"Loading plugin {plugin.name!r} version [repr.version]{plugin.manifest['version']}[/repr.version]"
+                f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
 
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
@@ -491,7 +491,7 @@ class Odev(Generic[CommandType]):
 
             python = PythonEnv()
 
-            if list(python.missing_requirements(plugin_path, False)):
+            if any(python.missing_requirements(plugin_path, False)):
                 python.install_requirements(plugin_path)
 
         self._plugins_dependency_tree.cache_clear()

@@ -1,4 +1,5 @@
 from odev._version import __version__
+from odev.common import string
 from odev.common.commands import Command
 from odev.common.logging import logging
 
@@ -14,4 +15,4 @@ class VersionCommand(Command):
 
     def run(self):
         """Prints the current version of the application."""
-        logger.info(f"{self.odev.name.capitalize()} version [repr.version]{__version__}[/repr.version]")
+        logger.info(f"{self.odev.name.capitalize()} version {string.stylize(__version__, 'repr.version')}")

@@ -1,32 +1,18 @@
 """Find the shortest path between two models in a database using the BFS algorithm."""
 
 import ast
-from typing import (
-    Any,
-    List,
-    MutableMapping,
-    Optional,
-    Tuple,
-)
+from typing import List, Tuple
 
 from odev.common import args, string
 from odev.common.commands import OdoobinShellScriptCommand
-from odev.common.console import Colors
-
-
-TABLE_HEADERS: List[MutableMapping[str, Any]] = [
-    {"name": "Step", "justify": "right", "style": Colors.BLACK},
-    {"name": "Records", "min_width": 30},
-    {"name": "Model", "min_width": 30},
-    {"name": "Relation", "style": Colors.BLACK},
-]
+from odev.common.console import TableHeader
 
 
 class PathfinderCommand(OdoobinShellScriptCommand):
     """Find the shortest path between two models in a database using a BFS algorithm."""
 
     _name = "pathfinder"
-    _aliases = ["pf", "shortest_path", "sp"]
+    _aliases = ["pf"]
 
     origin = args.String(description="Model to start from.")
     destination = args.String(description="Model to end at.")
@@ -38,7 +24,12 @@ class PathfinderCommand(OdoobinShellScriptCommand):
     def run_script_handle_result(self, result: str):
         """Handle the result of the script execution."""
         paths: List[List[Tuple[str, str, str]]] = ast.literal_eval(result)
-        self.console.clear_line()
+        headers = [
+            TableHeader(align="right", style="color.black"),
+            TableHeader(min_width=30),
+            TableHeader(min_width=30),
+            TableHeader(style="color.black"),
+        ]
 
         for path in paths:
             chain: List[str] = []
@@ -62,21 +53,6 @@ class PathfinderCommand(OdoobinShellScriptCommand):
 
             cardinality: str = f"{cardinality_from}2{cardinality_to}".capitalize()
             details: str = string.stylize(f"─ {len(path) - 1} steps ─ {cardinality}", "default")
-            self.print_table(rows, name=f"{'.'.join(chain)} {details}")
+            self.table(headers, rows, title=f"{'.'.join(chain)} {details}")
 
-    def print_table(self, rows: List[List[str]], name: Optional[str] = None, style: Optional[str] = None):
-        """Print a table.
-        :param rows: The table rows.
-        :param name: The table name.
-        """
-        self.print()
-
-        if name is not None:
-            if style is None:
-                style = f"bold {Colors.CYAN}"
-
-            rule_char: str = "─"
-            title: str = f"{rule_char} [{style}]{name}[/{style}]"
-            self.console.rule(title, align="left", style="", characters=rule_char)
-
-        self.table([{**header} for header in TABLE_HEADERS], rows, show_header=False, box=None)
+        self.console.clear_line()

@@ -26,7 +26,6 @@ from zipfile import ZipFile
 
 from odev.common import bash, progress, string
 from odev.common.connectors import GitWorktree, PostgresConnector
-from odev.common.console import Colors
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
@@ -600,7 +599,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """
         filestore_size: int = sum(size for _, size in info)
         task_description: str = (
-            f"filestore from {string.stylize(f'{ARCHIVE_FILESTORE!r}', Colors.CYAN)} "
+            f"filestore from {string.stylize(f'{ARCHIVE_FILESTORE!r}', 'color.cyan')} "
             f"({string.bytes_size(filestore_size)})"
         )
         task_id = tracker.add_task(f"Extracting {task_description}", total=filestore_size)
@@ -618,7 +617,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             tracker.update(task_id, advance=size)
 
         tracker.remove_task(task_id)
-        logger.info(f"Extracted {string.stylize(string.bytes_size(filestore_size), Colors.CYAN)} of filestore data")
+        logger.info(f"Extracted {string.stylize(string.bytes_size(filestore_size), 'color.cyan')} of filestore data")
 
     def _restore_buffered_sql(
         self,
@@ -675,7 +674,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         with ZipFile(file, "r") as archive:
             if ARCHIVE_DUMP not in archive.namelist():
                 return logger.error(
-                    f"Invalid dump file {file.as_posix()}, missing {string.stylize(f'{ARCHIVE_DUMP!r}', Colors.CYAN)} file"
+                    f"Invalid dump file {file.as_posix()}, "
+                    f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
 
             if ARCHIVE_FILESTORE in archive.namelist():

@@ -22,7 +22,6 @@ from cachetools.func import ttl_cache
 
 from odev.common import bash, string
 from odev.common.connectors import GitConnector, GitWorktree
-from odev.common.console import Colors
 from odev.common.databases import Branch, Repository
 from odev.common.debug import find_debuggers
 from odev.common.logging import LOG_LEVEL, logging
@@ -228,6 +227,12 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def additional_addons_paths(self) -> List[Path]:
         """Return the list of additional addons paths."""
+        if self.database.repository:
+            repository = GitConnector(self.database.repository.full_name)
+
+            if repository.path not in self._additional_addons_paths:
+                self._additional_addons_paths.append(repository.path)
+
         return self._additional_addons_paths
 
     @additional_addons_paths.setter
@@ -378,7 +383,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         """
 
         odoo_bin_args: List[str] = []
-        odoo_bin_args.extend(["-d", self.database.name])
+        odoo_bin_args.extend(["--database", self.database.name])
         odoo_bin_args.extend(["--addons-path", ",".join(path.as_posix() for path in self.addons_paths)])
         odoo_bin_args.extend(["--log-level", LOG_LEVEL.lower()])
         odoo_bin_args.extend(args or [])
@@ -399,6 +404,41 @@ class OdoobinProcess(OdevFrameworkMixin):
         with spinner(f"Preparing virtual environment {self.venv.name!r}"):
             self.prepare_venv()
             self.prepare_npm()
+
+    def format_command(
+        self,
+        args: Optional[List[str]] = None,
+        subcommand: Optional[str] = None,
+        subcommand_input: Optional[str] = None,
+    ) -> str:
+        """Format the command to run the Odoo process.
+        :param args: Additional arguments to pass to odoo-bin
+        :param subcommand: Subcommand to pass to odoo-bin.
+        :param subcommand_input: Input to pipe to the subcommand.
+        """
+        line_separator = string.stylize("\\\n", "color.black")
+        odoobin_args = self.prepare_odoobin_args(args, subcommand)
+        formatted_args = "".join(
+            [
+                re.sub(r"(-+[\w-]+)(?:\s+|=)?(.*)", r"[color.black]\1[/color.black] \2", arg).strip()
+                + " "
+                + line_separator
+                for arg in re.split(r"\s(?=-{1,2}[^\d])", " ".join(odoobin_args[int(bool(subcommand)) :]))
+            ]
+        ).removesuffix(line_separator)
+
+        formatted_command = f"{self.venv.python} {self.odoobin_path}"
+
+        if subcommand:
+            formatted_command += f" {subcommand}"
+
+        formatted_command += f" {line_separator}{string.indent(formatted_args, 4)}"
+
+        if subcommand_input:
+            pipe = string.stylize("|", "color.black")
+            formatted_command = f"{subcommand_input} {pipe}{line_separator}{formatted_command}"
+
+        return formatted_command + "\n"
 
     def deploy(
         self,
@@ -432,10 +472,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         logger.info(f"{info_message} using command:")
         formatted_command = f"{self.venv.python} {self.odoobin_path} {' '.join(odoo_args)}"
-        self.console.print(
-            f"\n{string.stylize(formatted_command, Colors.CYAN)}\n",
-            soft_wrap=True,
-        )
+        self.console.print(f"\n{string.stylize(formatted_command, 'color.cyan')}\n", soft_wrap=True)
 
         with capture_signals():
             try:
@@ -475,7 +512,8 @@ class OdoobinProcess(OdevFrameworkMixin):
                 self.prepare_odoobin()
 
         if stream and progress is not None:
-            debuggers = [f"{file.as_posix()}:{line}" for file, line in self.addons_debuggers()]
+            with spinner("Looking for calls to interactive debuggers"):
+                debuggers = [f"{file.as_posix()}:{line}" for file, line in self.addons_debuggers()]
 
             if debuggers:
                 logger.warning(f"Interactive debuggers detected in addons:\n{string.join_bullet(debuggers)}")
@@ -484,19 +522,12 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
-            info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
-
+            formatted_command = self.format_command(args, subcommand, subcommand_input)
+            info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
             logger.info(f"{info_message} using command:")
-            formatted_command = f"{self.venv.python} {self.odoobin_path} {' '.join(odoobin_args)}"
-
-            if subcommand_input is not None:
-                formatted_command = f"{subcommand_input} | {formatted_command}"
-
-            self.console.print(
-                f"\n{string.stylize(formatted_command, Colors.CYAN)}\n",
-                soft_wrap=True,
-            )
+            self.console.print()
+            self.console.print(formatted_command, soft_wrap=True, highlight=False)
 
             try:
                 with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
@@ -558,7 +589,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             raise RuntimeError("Database does not exist")
 
         if not self.venv.exists:
-            self.venv.create_venv()
+            self.venv.create()
 
         for path in self.addons_requirements:
             if any(self.venv.missing_requirements(path)):

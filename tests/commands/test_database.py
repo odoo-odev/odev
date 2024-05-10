@@ -30,11 +30,11 @@ class TestCommandDatabaseCloc(OdevCommandTestCase):
             stdout, _ = self.dispatch_command("cloc", self.database.name)
 
         self.assertIn("test_module_01", stdout)
-        self.assertEqual(len(stdout.splitlines()), 10)
+        self.assertEqual(len(stdout.splitlines()), 8)
 
         totals = (0, 0, 0)
 
-        for line in stdout.splitlines()[:~2]:
+        for line in stdout.splitlines()[:~1]:
             numbers_match = re.search(r"\s+(\d+) +(\d+) +(\d+)", line)
             if not numbers_match:
                 continue
@@ -106,7 +106,8 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         mock_stream.assert_called_once()
         self.assertRegex(
             mock_stream.call_args[0][0],
-            rf"odoo-bin -d {self.create_database_name} --addons-path [a-z0-9. \-/,]+ --init base --stop-after-init",
+            rf"odoo-bin --database {self.create_database_name} "
+            r"--addons-path [a-z0-9. \-/,]+ --init base --stop-after-init",
         )
 
     def test_03_create_from_template(self):
@@ -222,8 +223,8 @@ class TestCommandDatabaseTest(OdevCommandTestCase):
         mock_stream.assert_called_once()
         self.assertRegex(
             mock_stream.call_args[0][0],
-            rf"odoo-bin -d {self.database.name}_[a-z0-9]{{8}} --addons-path [a-z0-9.\s\-/,]* --log-level info "
-            r"--stop-after-init --test-enable --init base",
+            rf"odoo-bin --database {self.database.name}_[a-z0-9]{{8}} "
+            r"--addons-path [a-z0-9.\s\-/,]* --log-level info --stop-after-init --test-enable --init base",
         )
 
 
