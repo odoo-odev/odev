@@ -245,7 +245,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def additional_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of additional repositories linked to this database."""
         for path in self.additional_addons_paths:
-            if path.is_dir() and self.check_addons_path(path):
+            if (path / ".git").exists() and self.check_addons_path(path):
                 yield GitConnector(f"{path.parent.name}/{path.name}")
 
     @property
