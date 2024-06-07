@@ -1,4 +1,5 @@
 import os
+from bdb import BdbQuit
 from signal import SIGINT, SIGTERM, signal
 from time import monotonic
 
@@ -41,6 +42,10 @@ def main():
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)
+
+    except BdbQuit:
+        logger.error("Debugger execution interrupted")
+        exit(1)
 
     except Exception:
         logger.exception("Execution failed due to an unhandled exception")

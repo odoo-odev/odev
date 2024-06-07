@@ -32,7 +32,7 @@ class TestCommand(OdoobinCommand):
         """,
     )
     modules = args.List(
-        aliases=["-m", "--modules"],
+        aliases=["-i", "--init"],
         default=["all"],
         description="Comma-separated list of modules to install for testing. If not set, install all modules.",
     )
@@ -132,7 +132,7 @@ class TestCommand(OdoobinCommand):
             raise self.error("Debugger detected in odoo-bin output, remove breakpoints and try again")
 
         problematic_test_levels = ("warning", "error", "critical")
-        match = re.match(self._odoo_log_regex, line)
+        match = re.match(self._odoo_log_regex, re.sub(r"\x1b[^m]*m", "", line))
 
         if match is None:
             if self.last_level in problematic_test_levels:

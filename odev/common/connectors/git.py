@@ -31,6 +31,10 @@ from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
 
 
+GITHUB_DOMAIN = "github.com"
+"""The domain of the GitHub API."""
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -214,9 +218,6 @@ class GitConnector(Connector):
     _connection: Optional[Github] = None
     """The connection to the Github API."""
 
-    _token_vault_key: str = "github.com:token"
-    """The key to use to store the Github API token in the vault."""
-
     _organization: str
     """The organization to which the repository belongs."""
 
@@ -284,12 +285,12 @@ class GitConnector(Connector):
     @property
     def url(self) -> str:
         """The URL to the repository."""
-        return f"https://github.com/{self.name}"
+        return f"https://{GITHUB_DOMAIN}/{self.name}"
 
     @property
     def ssh_url(self) -> str:
         """The SSH URL to the repository."""
-        return f"git@github.com:{self.name}.git"
+        return f"git@{GITHUB_DOMAIN}:{self.name}.git"
 
     @property
     def repository(self) -> Optional[Repo]:
@@ -376,9 +377,10 @@ class GitConnector(Connector):
         """Connect to the Github API."""
         if self._token is None:
             self._token = self.store.secrets.get(
-                key=self._token_vault_key,
-                fields=("password",),
-                prompt_format="Please enter your Github API token:",
+                GITHUB_DOMAIN,
+                scope="api",
+                fields=["password"],
+                prompt_format="GitHub API token:",
             ).password
 
         if not self.connected:
@@ -386,7 +388,7 @@ class GitConnector(Connector):
 
         if not self.authenticated:
             logger.warning("Failed to connect to Github API, please check your token is valid")
-            self.store.secrets.invalidate(self._token_vault_key)
+            self.store.secrets.invalidate(GITHUB_DOMAIN, scope="api")
             self._disconnect()
             return self.connect()
 

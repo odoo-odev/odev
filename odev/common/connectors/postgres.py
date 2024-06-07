@@ -212,6 +212,7 @@ class PostgresConnector(Connector):
             """
         )
 
+        self.query("RESET ROLE")
         self.query(
             f"""
             SELECT pg_terminate_backend(pid)

@@ -48,7 +48,7 @@ class QuickStartCommand(DatabaseCommand):
         else:
             self.odev.run_command(
                 "dump",
-                *([*passthrough_args, "--filestore"] if self.args.filestore else passthrough_args),
+                *(passthrough_args + (["--filestore"] if self.args.filestore else [])),
                 database=self._database,
             )
             self.odev.run_command(

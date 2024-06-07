@@ -172,7 +172,9 @@ class PostgresTable(ABC):
             else:
                 if missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
                     for column in missing_columns:
-                        logger.debug(f"Adding column {column!r} to table {self.name!r} in database {self.database!r}")
+                        logger.debug(
+                            f"Adding column {column!r} to table {self.name!r} in database {self.database.name!r}"
+                        )
                         self.database.create_column(self.name, column, self._columns[column])
 
         if self._constraints is not None:

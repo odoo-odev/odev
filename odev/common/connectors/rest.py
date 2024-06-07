@@ -10,15 +10,15 @@ from types import FrameType
 from typing import (
     Any,
     ClassVar,
-    List,
     Literal,
     MutableMapping,
     Optional,
     Sequence,
+    Set,
     Union,
     cast,
 )
-from urllib.parse import ParseResult, quote, urlparse
+from urllib.parse import ParseResult, urlencode, urlparse
 
 from requests import Response, Session
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -28,16 +28,9 @@ from odev._version import __version__
 from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
-from odev.common.logging import LOG_LEVEL, logging
+from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 from odev.common.progress import Progress
 from odev.common.signal_handling import capture_signals
-
-
-ODOO_DOMAINS: List[str] = ["accounts.odoo.com", "www.odoo.sh", "odoo.com"]
-"""The domains to use for storing Odoo session cookies in the secrets vault."""
-
-ODOO_SESSION_COOKIES: List[str] = ["session_id", "td_id"]
-"""The names of the Odoo session cookies."""
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +44,9 @@ class RestConnector(Connector, ABC):
 
     _cache: ClassVar[MutableMapping[str, Any]] = {}
     """Cache for storing the results of HTTP requests against the endpoints."""
+
+    _bypass_cache: ClassVar[bool] = False
+    """Whether to bypass the cache for the current request."""
 
     def __init__(self, url: str):
         """Initialize the connector.
@@ -87,35 +83,87 @@ class RestConnector(Connector, ABC):
         return f"Odev/{__version__} ({python}; {system})"
 
     @property
-    def user_agent_totp(self) -> str:
-        """Build and return a credible User-Agent string to use in HTTP requests
-        but spoof an existing browser implementation as Odoo Oauth crashes
-        on unknown browsers and platforms during device registration.
-        """
-        return (
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-            f"Chrome/112.0.0.0 Safari/537.36; {self.user_agent} (TOTP)"
-        )
-
-    @property
     def name(self) -> str:
         """Return the name of the endpoint."""
-        return self.parsed_url.netloc.split(".", 1)[0]
+        return self.parsed_url.netloc
 
     @abstractproperty
     def exists(self) -> bool:
         """Return whether the endpoint exists."""
         raise NotImplementedError
 
-    @abstractproperty
     def login(self) -> str:
         """Login for authenticating to the endpoint."""
-        raise NotImplementedError
+        return self.store.secrets.get(self.name, scope="user", fields=["login"]).login
 
-    @abstractproperty
-    def password(self):
+    def password(self) -> str:
         """Password or API key for authenticating to the endpoint."""
-        raise NotImplementedError
+        return self.store.secrets.get(self.name, scope="user", fields=["password"]).password
+
+    @property
+    def session_cookie(self) -> str:
+        """Return the session cookie for the endpoint."""
+        return self.store.secrets.get(
+            self.parsed_url.netloc,
+            scope="session_id",
+            fields=["password"],
+            ask_missing=False,
+        ).password
+
+    @property
+    def session_domains(self) -> Set[str]:
+        """Domains to store session cookies for."""
+        return {
+            self.parsed_url.netloc,
+        }
+
+    @property
+    def session_cookies(self) -> Set[str]:
+        """Session cookies to store."""
+        return {
+            "session_id",
+        }
+
+    def _load_cookies(self):
+        """Load session cookies from the secrets vault."""
+        if self._connection is None:
+            return
+
+        with silence_loggers("odev.common.store.tables.secrets"):
+            for domain in self.session_domains:
+                for key in self.session_cookies:
+                    cookie = self.store.secrets.get(domain, fields=["password"], scope=key, ask_missing=False).password
+
+                    if cookie:
+                        self._connection.cookies.set(key, cookie, domain=domain)
+
+    def _save_cookies(self):
+        """Save session cookies to the secrets vault."""
+        if self._connection is None:
+            return
+
+        for domain in self.session_domains:
+            for key in self.session_cookies:
+                cookie = self._connection.cookies.get(key, domain=domain)
+
+                if cookie:
+                    self.store.secrets.set(domain, "", cookie, scope=key)
+
+    def _clear_cookies(self):
+        """Clear the cookies for the given domain, recursively going up to the parent domain if no cookies exist
+        for the given one.
+        """
+        if self._connection is None:
+            return
+
+        for domain in self.session_domains:
+            for scope in self.session_cookies:
+                self.store.secrets.invalidate(domain, scope=scope)
+
+            try:
+                self._connection.cookies.clear(domain=domain)
+            except KeyError:
+                pass
 
     def connect(self):
         """Open a session to the endpoint."""
@@ -123,29 +171,22 @@ class RestConnector(Connector, ABC):
             return
 
         self._connection = Session()  # type: ignore [assignment]
-
-        for domain in {*ODOO_DOMAINS, self.parsed_url.netloc}:
-            for key in ODOO_SESSION_COOKIES:
-                cookie = self.store.secrets.get(
-                    f"{domain}:{key}",
-                    fields=("password",),
-                    ask_missing=False,
-                ).password
-
-                if cookie:
-                    self._connection.cookies.set(key, cookie, domain=domain)
+        self._load_cookies()
 
     def disconnect(self):
         """Disconnect from the endpoint and invalidate the current session."""
         if self._connection is not None:
-            self.store.secrets.set(
-                f"{self.parsed_url.netloc}:cookie",
-                "",
-                self._connection.cookies.get("session_id", domain=self.parsed_url.netloc),
-            )
-
+            self._save_cookies()
             self._connection.close()
             del self._connection
+
+    def invalidate_session(self):
+        """Clear the session cookies."""
+        if self._connection is None:
+            return
+
+        logger.debug("Invalidating session cookies")
+        self._clear_cookies()
 
     def cache(self, key: str, value: Optional[Response] = None) -> Optional[Response]:
         """Get the cached value for the specified key.
@@ -154,18 +195,21 @@ class RestConnector(Connector, ABC):
         :param value: The value to set.
         :return: The cached value.
         """
-        if value is not None:
-            self.__class__._cache[key] = value
+        if RestConnector._bypass_cache:
+            return None
 
-        return self.__class__._cache.get(key)
+        if value is not None:
+            RestConnector._cache[key] = value
+
+        return RestConnector._cache.get(key)
 
     @contextmanager
     def nocache(self):
         """Context manager to disable caching of HTTP requests."""
-        cache = self.__class__._cache
-        self.__class__._cache = {}
+        bypass_cache = RestConnector._bypass_cache
+        RestConnector._bypass_cache = True
         yield
-        self.__class__._cache = cache
+        RestConnector._bypass_cache = bypass_cache
 
     def _request(
         self,
@@ -182,6 +226,8 @@ class RestConnector(Connector, ABC):
         :param obfuscate_params: The parameters to obfuscate,
             can be used to hide passwords and other sensitive information for log messages
             and cached requests.
+        :param raise_for_status: Whether to raise an exception if the request fails.
+        :param retry_on_error: Whether to retry the request if it fails.
         :param kwargs: Additional keyword arguments to pass to the request.
         :return: The response from the REST endpoint.
         :rtype: requests.Response
@@ -204,7 +250,6 @@ class RestConnector(Connector, ABC):
         params = kwargs.pop("params", {})
         obfuscate_params = obfuscate_params or []
         obfuscated = {k: "xxxxx" for k in obfuscate_params if k in params}
-
         cache_key = f"{method}:{url}:{json.dumps(obfuscated, sort_keys=True)}"
         cached = self.cache(cache_key)
 
@@ -213,21 +258,20 @@ class RestConnector(Connector, ABC):
 
         logger_message = f"{method} {url}"
 
-        if method == "GET" and params:
-            logger_message += (
-                f"?{'&'.join(f'{key}={quote(str(value))}' for key, value in {**params, **obfuscated}.items())}"
-            )
-            params = {"params": params}
-        elif method == "POST" and params and "json" not in kwargs:
-            params = {"json": {"params": params}}
-
-        logger.debug(logger_message)
+        if params:
+            logger_message += f"?{urlencode(params | obfuscated)}"
 
         if not self._connection.headers["User-Agent"]:
             self._connection.headers.update({"User-Agent": self.user_agent})
 
         try:
-            response = self._connection.request(method, url, **params, **kwargs)
+            logger.debug(logger_message)
+            response = self._connection.request(method, url, params=params or None, **kwargs)
+            console.clear_line(int(LOG_LEVEL == "DEBUG"))
+            logger.debug(
+                logger_message
+                + f" -> [{response.status_code}] {response.reason} ({response.elapsed.total_seconds():.3f} seconds)"
+            )
         except RequestsConnectionError as error:
             if retry_on_error:
                 logger.debug(error)
@@ -245,22 +289,8 @@ class RestConnector(Connector, ABC):
         if raise_for_status:
             response.raise_for_status()
 
-        console.clear_line(int(LOG_LEVEL == "DEBUG"))
-        logger.debug(
-            logger_message
-            + f" -> [{response.status_code}] {response.reason} ({response.elapsed.total_seconds():.3f} seconds)"
-        )
-
         self.cache(cache_key, response)
-
-        for cookie in self._connection.cookies:
-            if cookie.name in ODOO_SESSION_COOKIES:
-                self.store.secrets.set(
-                    f"{cookie.domain}:{cookie.name}",
-                    "",
-                    cookie.value or "",
-                )
-
+        self._save_cookies()
         return response
 
     @abstractmethod
@@ -328,7 +358,9 @@ class RestConnector(Connector, ABC):
             raise KeyboardInterrupt
 
         try:
-            with capture_signals(handler=signal_handler_progress), self.get(path, **kwargs, stream=True) as response:
+            with capture_signals(handler=signal_handler_progress), self.get(
+                path, **kwargs, stream=True, authenticate=False
+            ) as response:
                 progress.start()
                 content_length = int(response.headers.get("content-length", 0))
                 progress.update(task, total=content_length)
