@@ -33,8 +33,8 @@ class TestCommand(OdoobinCommand):
     )
     modules = args.List(
         aliases=["-i", "--init"],
-        default=["all"],
-        description="Comma-separated list of modules to install for testing. If not set, install all modules.",
+        default=["base"],
+        description="Comma-separated list of modules to install for testing. If not set, install the base module.",
     )
 
     def __init__(self, *args, **kwargs) -> None:
@@ -99,10 +99,7 @@ class TestCommand(OdoobinCommand):
         if self.test_tags:
             args.extend(["--test-tags", ",".join(self.test_tags)])
 
-        if self.args.modules:
-            args.extend(["--init", ",".join(self.args.modules)])
-        else:
-            args.extend(["--init", "base"])
+        args.extend(["--init", ",".join(self.args.modules)])
 
         if self.args.odoo_args:
             args.extend(self.args.odoo_args)
