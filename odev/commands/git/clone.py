@@ -1,12 +1,11 @@
 """Clone the Git repository for a database."""
 
-from typing import cast
 
 from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.commands.database import DatabaseType
 from odev.common.connectors import GitConnector
-from odev.common.databases import DummyDatabase, Repository
+from odev.common.databases import DummyDatabase
 from odev.common.logging import logging
 
 
@@ -48,7 +47,7 @@ class CloneCommand(DatabaseCommand):
 
     def _clone_repository(self):
         """Find and clone the correct repository."""
-        git = GitConnector(self.args.repository or cast(Repository, self._database.repository).full_name)
+        git = GitConnector(self.args.repository or self._database.repository.name)
 
         if git.path.exists():
             logger.info(f"Repository {git.name!r} already cloned under {git.path.as_posix()}")

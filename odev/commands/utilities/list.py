@@ -11,7 +11,6 @@ from typing import (
     Sequence,
     Tuple,
 )
-from urllib.parse import urlparse
 
 from odev.common import args, progress, string
 from odev.common.commands import Command
@@ -114,20 +113,6 @@ TABLE_MAPPING: List[Mapped] = [
         title="Custom Repository",
         justify=None,
         format=lambda value: value.full_name if value else "",
-        total=False,
-    ),
-    Mapped(
-        value=lambda database: database.process.pid if database.process is not None else "",
-        title="PID",
-        justify="right",
-        format=lambda value: str(value or ""),
-        total=False,
-    ),
-    Mapped(
-        value=lambda database: database.url,
-        title="URL",
-        justify=None,
-        format=lambda value: value and f"[link={value}/web?debug=1]{urlparse(value).netloc}[/link]" or "",
         total=False,
     ),
     Mapped(

@@ -107,6 +107,9 @@ class Odev(Generic[CommandType]):
     _started: bool = False
     """Whether the framework has been started."""
 
+    _command_stack: List[CommandType] = []
+    """Stack of current commands being executed. Last command in list is the one currently running."""
+
     def __init__(self, test: bool = False):
         """Initialize the framework.
         :param test: Whether the framework is being initialized for testing purposes
@@ -597,8 +600,10 @@ class Odev(Generic[CommandType]):
 
             command._argv = cli_args
 
-            logger.debug(f"Dispatching {command!r}")
+            logger.debug(f"Running {command!r}")
+            self._command_stack.append(command)
             command.run()
+            self._command_stack.pop()
         except OdevError as exception:
             command_errored = True
             logger.error(str(exception))

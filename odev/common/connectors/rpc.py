@@ -244,15 +244,6 @@ class RpcConnector(Connector):
         return urlparse(self.database.url, scheme="https").netloc.partition(":")[0]
 
     @property
-    def credentials_key(self) -> str:
-        """Return the key to the credentials to use to reach the external service.
-        Combines the database name to the URL to the external service to avoid
-        conflicts between databases on different systems having the same name,
-        and between local databases having the same URL.
-        """
-        return f"{self.database.name}:{self.url}:rpc"
-
-    @property
     def port(self) -> int:
         """Return the port to the external service."""
         return self.database.rpc_port
@@ -271,10 +262,18 @@ class RpcConnector(Connector):
                     self,
                 )
 
-            credentials_prompt = f"{self.database.platform.display} database '{self.database.name}' {{field}}:"
+            credentials_prompt = f"{{field}} for {self.database.platform.display} database {self.database.name!r}:"
+            credentials_key = self.database.name if self.database.platform.name == "local" else self.url
+            credentials_platform = self.database.platform.name if self.database.platform.name == "local" else "remote"
+            credentials_scope = "user"
 
             try:
-                credentials = self.store.secrets.get(self.credentials_key, prompt_format=credentials_prompt)
+                credentials = self.store.secrets.get(
+                    credentials_key,
+                    platform=credentials_platform,
+                    scope=credentials_scope,
+                    prompt_format=credentials_prompt,
+                )
                 self._connection = odoolib.get_connection(
                     hostname=self.url,
                     database=self.database.name,
@@ -289,7 +288,13 @@ class RpcConnector(Connector):
                     f"Invalid credentials for {self.database.platform.display} "
                     f"database {self.database.name!r} ({self.database.url})"
                 )
-                self.store.secrets.get(self.credentials_key, prompt_format=credentials_prompt, force_ask=True)
+                credentials = self.store.secrets.get(
+                    credentials_key,
+                    platform=credentials_platform,
+                    scope=credentials_scope,
+                    prompt_format=credentials_prompt,
+                    force_ask=True,
+                )
                 self._connection = None
                 return self.connect()
 

@@ -18,6 +18,7 @@ from typing import (
     Literal,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Union,
     cast,
@@ -27,6 +28,7 @@ from zipfile import ZipFile
 from odev.common import bash, progress, string
 from odev.common.connectors import GitWorktree, PostgresConnector
 from odev.common.databases import Branch, Database, Filestore, Repository
+from odev.common.databases.base import DatabaseInfoSection
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoobin import OdoobinProcess
@@ -154,7 +156,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return None
 
         with self:
-            result = self.is_odoo and cast(PostgresConnector, self.connector).query(
+            assert self.connector is not None
+            result = self.is_odoo and self.connector.query(
                 """
                 SELECT latest_version
                 FROM ir_module_module
@@ -163,7 +166,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 """
             )
 
-        return None if not result or isinstance(result, bool) else OdooVersion(result[0][0])
+        if result and not isinstance(result, bool):
+            version = result[0][0]
+
+            if version is not None:
+                return OdooVersion(version)
+
+        return None
 
     @cached_property
     def edition(self) -> Optional[Literal["community", "enterprise"]]:  # type: ignore [override]
@@ -435,16 +444,23 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     def neutralize(self):
         """Neutralize the database."""
-        assert self.process is not None
-        installed_modules: List[str] = self.installed_modules
-        scripts: List[Path] = [self.odev.static_path / "neutralize-pre.sql"]
+        assert self.process is not None, "Database process is not set"
+        assert self.version is not None, "Database version is not set"
+
+        self.process.with_venv(str(self.version))
+        self.process.with_worktree(str(self.version))
 
         if self.process.supports_subcommand("neutralize"):
             self.process.run(["-d", self.name], subcommand="neutralize")
             self.console.print()
 
+        installed_modules: Set[str] = set(self.installed_modules) & {
+            path.name for path in self.process.additional_addons_paths
+        }
+        scripts: List[Path] = [self.odev.static_path / "neutralize-pre.sql"]
+
         with progress.spinner(f"Looking up neutralization scripts in {len(installed_modules)} installed modules"):
-            for addon in self.process.addons_paths:
+            for addon in self.process.additional_addons_paths:
                 for module in installed_modules:
                     neutralize_path: Path = addon / module / "data" / "neutralize.sql"
 
@@ -452,9 +468,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                         scripts.append(neutralize_path)
 
         scripts.append(self.odev.static_path / "neutralize-post.sql")
-
-        if self.version is None:
-            raise ValueError("Database version is not set")
 
         if self.version.major < 15:
             scripts.append(self.odev.static_path / "neutralize-post-before-15.0.sql")
@@ -538,8 +551,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             else:
                 logger.error(f"Unrecognized extension {file.suffix!r} for dump {file}")
 
-        self = LocalDatabase(self.name)
         tracker.stop()
+
+        if self.connector is not None:
+            self.connector.invalidate_cache()
 
     def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile):
         """Restore the filestore from a zip archive.
@@ -770,3 +785,20 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def query(self, query: str):
         """Execute a query on the database."""
         return cast(PostgresConnector, self.connector).query(query)
+
+    def _info_git(self) -> DatabaseInfoSection:
+        return super()._info_git() | {
+            worktree.path.name: f"{worktree.connector.name} ({worktree.branch or worktree.commit})"
+            for worktree in self.worktrees
+        }
+
+    def _info_backend(self) -> DatabaseInfoSection:
+        """Return information about the backend of the database."""
+        return super()._info_backend() | {
+            "date_usage": self.last_date.strftime("%Y-%m-%d %X") if self.last_date else "Never",
+            "filestore": f"{self.filestore.path.name} ({self.filestore.path.as_posix()})",
+            "venv": f"{self.venv} ({self.venv.path})" if not self.venv._global else "N/A",
+            "worktree": f"{self.worktree} ({self.process.odoo_path.parent})" if self.process else "N/A",
+            "pid": str(self.process.pid) if self.process and self.running else "N/A (not running)",
+            "addons": string.join_bullet(list(map(str, self.process.addons_paths))) if self.process else "N/A",
+        }

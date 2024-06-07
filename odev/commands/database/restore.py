@@ -37,9 +37,7 @@ class RestoreCommand(DatabaseCommand):
 
     def restore_backup(self):
         """Restore the backup to the selected database."""
-        action: str = (
-            f"file {self.args.backup.name!r} to {self._database.platform.display} database {self._database.name!r}"
-        )
+        action: str = f"file {self.args.backup.name!r} to local database {self._database.name!r}"
 
         with progress.spinner(f"Restoring {action}"):
             self._database.restore(file=self.args.backup)

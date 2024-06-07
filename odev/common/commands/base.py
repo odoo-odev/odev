@@ -90,6 +90,12 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
     # --------------------------------------------------------------------------
 
+    def __new__(cls, *args: Any, **kwargs: Any):
+        """Initialize the command class."""
+        instance = super().__new__(cls)
+        instance._bypass_prompt_orig = False
+        return instance
+
     def __init__(self, arguments: Namespace):
         """
         Initialize the command runner.
@@ -97,7 +103,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         """
         self.args: Namespace = arguments
         self.args.log_level = LOG_LEVEL
-        self._bypass_prompt_orig: bool = self.console.bypass_prompt
+        self._bypass_prompt_orig = self.console.bypass_prompt
         self.console.bypass_prompt = self.args.bypass_prompt
 
     def __del__(self):

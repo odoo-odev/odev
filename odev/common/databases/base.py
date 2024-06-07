@@ -4,8 +4,9 @@ from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar, Literal, Optional
+from typing import ClassVar, Dict, Literal, Optional
 
+from odev.common import string
 from odev.common.connectors.rpc import RpcConnector
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.version import OdooVersion
@@ -68,6 +69,10 @@ class Repository:
     def url(self) -> str:
         """Return the URL of the repository."""
         return f"https://github.com/{self.full_name}"
+
+
+DatabaseInfoSection = Dict[str, str]
+DatabaseInfo = Dict[str, DatabaseInfoSection]
 
 
 class Database(OdevFrameworkMixin, ABC):
@@ -251,6 +256,47 @@ class Database(OdevFrameworkMixin, ABC):
         suffix = f".{suffix}" if suffix else ""
         extension = extension if extension is not None else "zip" if filestore else "sql"
         return f"{prefix}-{self.name}.dump{suffix}.{extension}"
+
+    def info(self) -> DatabaseInfo:
+        """Return information about the database."""
+        if not self.is_odoo:
+            return {}
+
+        return {
+            "hosting": self._info_hosting(),
+            "backend": self._info_backend(),
+            "git": self._info_git(),
+        }
+
+    def _info_hosting(self) -> DatabaseInfoSection:
+        """Return information about the hosting of the database."""
+        return {
+            "name": self.name,
+            "version": str(self.version) if self.version else "N/A",
+            "edition": self.edition.capitalize() if self.edition else "N/A",
+            "platform": self.platform.display,
+        }
+
+    def _info_backend(self) -> DatabaseInfoSection:
+        """Return information about the backend of the database."""
+        return {
+            "running": "Yes" if self.running else "No",
+            "url": f"{self.url}/web?debug=1" if self.url else "N/A (not running)",
+            "rpc_port": str(self.rpc_port) if self.rpc_port else "N/A (not running)",
+            "date_expire": self.expiration_date.strftime("%Y-%m-%d %X") if self.expiration_date else "Never",
+            "uuid": self.uuid or "N/A",
+            "size_sql": string.bytes_size(self.size),
+            "size_filestore": string.bytes_size(self.filestore.size if self.filestore else 0),
+        }
+
+    def _info_git(self) -> DatabaseInfoSection:
+        """Return information about the Git repository of the database."""
+        return {
+            "custom": f"{self.repository.full_name} ({self.branch.name})" if self.repository and self.branch else "N/A",
+            "odoo": "N/A",
+            "enterprise": "N/A",
+            "design-themes": "N/A",
+        }
 
 
 class DummyDatabase(Database):

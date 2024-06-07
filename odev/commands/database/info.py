@@ -1,14 +1,13 @@
 """Display information about a local or remote database."""
 
 import re
-from typing import List, cast
+from typing import Dict, List
 
-from odev.common import string
+from odev.common import progress, string
 from odev.common.commands import DatabaseCommand
 from odev.common.console import TableHeader
 from odev.common.databases import LocalDatabase
-from odev.common.logging import logging, silence_loggers
-from odev.common.version import OdooVersion
+from odev.common.logging import logging
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +17,7 @@ DISPLAY_NA = "N/A"
 DISPLAY_NEVER = "Never"
 DISPLAY_TRUE = string.stylize("✔", "color.green")
 DISPLAY_FALSE = string.stylize("❌", "color.red")
+EMPTY_LINE = ["", ""]
 
 
 class InfoCommand(DatabaseCommand):
@@ -27,9 +27,16 @@ class InfoCommand(DatabaseCommand):
     _aliases = ["i"]
 
     info_headers = [
-        TableHeader(style="bold", min_width=15),
+        TableHeader(style="bold", min_width=17),
         TableHeader(),
     ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        with progress.spinner("Gathering database information"):
+            self.info = self._database.info()
+            """The database information."""
 
     def run(self):
         if not self._database.is_odoo:
@@ -43,103 +50,80 @@ class InfoCommand(DatabaseCommand):
         self.print()
         self.table(
             self.info_headers,
-            self.info_table_rows_base(),
+            self.info_hosting(),
             title=string.stylize(self._database.name.upper(), "color.purple"),
         )
-        self.table(self.info_headers, self.info_table_rows_database(), title="Database")
+
+        self.table(self.info_headers, self.info_backend(), title="Database Information")
+        self.table(self.info_headers, self.info_git(), title="Git Revisions")
 
         if isinstance(self._database, LocalDatabase):
-            with silence_loggers("odev.common.connectors.git"):
-                self.table(self.info_headers, self.info_table_rows_local(), title=self._database.platform.display)
+            self.table(self.info_headers, self.info_local_process(), title="Local Process")
 
-    def info_table_rows_base(self) -> List[List[str]]:
-        """Return the basic rows to be displayed in a table.
-        :param info: The database info.
-        :return: The rows.
-        :rtype: List[List[str]]
+    def _stylized_info_section(self, section: str) -> Dict[str, str]:
+        """Return the stylized information about the database.
+        :param section: The section name.
         """
-        database_version = cast(OdooVersion, self._database.version)
-        database_edition = cast(str, self._database.edition).capitalize()
-        name: str = string.stylize(self._database.name, "color.purple")
-        version: str = string.stylize(f"{database_version.major}.{database_version.minor}", "color.cyan")
+        info = self.info[section].copy()
+        re_parenthesis = re.compile(r"\([^\)]+\)")
+
+        for key, value in info.items():
+            if value.startswith(DISPLAY_NA) or value == DISPLAY_NEVER:
+                info[key] = string.stylize(value, "color.black")
+            elif value == "Yes":
+                info[key] = DISPLAY_TRUE
+            elif value == "No":
+                info[key] = DISPLAY_FALSE
+
+            info[key] = re_parenthesis.sub(string.stylize(r"\g<0>", "color.black"), info[key])
+
+        return info
+
+    def info_hosting(self) -> List[List[str]]:
+        """Return the rows to be displayed in a table about the hosting of the database."""
+        info = self.info["hosting"]
 
         return [
-            ["Name", name],
-            ["Version", version],
-            ["Edition", database_edition],
-            ["Hosting", self._database.platform.display],
+            ["Name", string.stylize(info["name"], "color.purple")],
+            ["Version", string.stylize(info["version"], "color.cyan")],
+            ["Edition", info["edition"]],
+            ["Hosting", info["platform"]],
         ]
 
-    def info_table_rows_database(self) -> List[List[str]]:
-        """Return the common rows to be displayed in a table.
-        :param info: The database info.
-        :return: The rows.
-        :rtype: List[List[str]]
-        """
-        url: str = f"{self._database.url}/web?debug=1" if self._database.url else DISPLAY_NA
-        port: str = str(self._database.rpc_port) if self._database.rpc_port else DISPLAY_NA
-        expiration_date: str = (
-            self._database.expiration_date.strftime("%Y-%m-%d %X")
-            if self._database.expiration_date is not None
-            else DISPLAY_NEVER
-        )
-        filestore_size: int = self._database.filestore.size if self._database.filestore is not None else 0
+    def info_backend(self) -> List[List[str]]:
+        """Return the rows to be displayed in a table about the backend of the database."""
+        info = self._stylized_info_section("backend")
 
         return [
-            ["Backend URL", url],
-            ["RPC Port", port],
-            ["Expiration Date", expiration_date],
-            ["Database UUID", self._database.uuid or DISPLAY_NA],
-            ["Database Size", string.bytes_size(self._database.size)],
-            ["Filestore Size", string.bytes_size(filestore_size)],
+            ["Backend URL", info["url"]],
+            ["RPC Port", info["rpc_port"]],
+            ["Database UUID", info["uuid"]],
+            ["Expiration Date", info["date_expire"]],
+            ["Last Usage Date", info["date_usage"]] if "date_usage" in info else [],
+            ["Filestore", info["filestore"]] if "filestore" in info else [],
+            ["Filestore Size", info["size_filestore"]],
+            ["Database Size", info["size_sql"]],
         ]
 
-    def info_table_rows_local(self) -> List[List[str]]:
-        """Return the local-specific rows to be displayed in a table.
-        :param info: The database info.
-        :return: The rows.
-        :rtype: List[List[str]]
-        """
-        assert isinstance(self._database, LocalDatabase)
-        last_used: str = (
-            self._database.last_date.strftime("%Y-%m-%d %X") if self._database.last_date is not None else DISPLAY_NEVER
-        )
-        filestore_path: str = (
-            self._database.filestore.path.as_posix()
-            if self._database.filestore is not None and self._database.filestore.path is not None
-            else DISPLAY_NA
-        )
-        venv: str = (
-            f"{self._database.venv} ({self._database.venv.path})" if not self._database.venv._global else DISPLAY_NA
-        )
-        addons: List[str] = [DISPLAY_NA]
-
-        if self._database.process is None:
-            running = False
-            process_id = DISPLAY_NA
-            worktree = DISPLAY_NA
-        else:
-            running = self._database.process.is_running
-            process_id = str(self._database.process.pid)
-            worktree = f"{self._database.worktree} ({self._database.process.odoo_path.parent})"
-
-            if running:
-                addons_match = re.search(r"--addons-path(?:=|\s)([^\s]+)", cast(str, self._database.process.command))
-
-                if addons_match is not None:
-                    addons = addons_match.group(1).split(",")
+    def info_local_process(self) -> List[List[str]]:
+        """Return the rows to be displayed in a table about the local process of the database."""
+        info = self._stylized_info_section("backend")
 
         return [
-            ["Last Used", last_used],
-            ["Filestore Path", filestore_path],
-            ["Virtualenv", venv],
-            ["Worktree", worktree],
-            ["Whitelisted", DISPLAY_TRUE if self._database.whitelisted else DISPLAY_FALSE],
-            ["Running", DISPLAY_TRUE if running else DISPLAY_FALSE],
-            ["Odoo-Bin PID", process_id],
-            ["Addons Paths", "\n".join(addons)],
-            ["Repository", self._database.repository.full_name if self._database.repository else DISPLAY_NA],
-            ["Repository URL", self._database.repository.url if self._database.repository else DISPLAY_NA],
-            ["Branch", self._database.branch.name if self._database.branch else DISPLAY_NA],
-            ["Branch URL", self._database.branch.url if self._database.branch else DISPLAY_NA],
+            ["Running", info["running"]],
+            ["Process ID", info["pid"]],
+            ["Virtualenv", info["venv"]],
+            ["Worktree", info["worktree"]],
+            ["Addons Paths", info["addons"]],
+        ]
+
+    def info_git(self) -> List[List[str]]:
+        """Return the rows to be displayed in a table about the git information of the database."""
+        info = self._stylized_info_section("git")
+
+        return [
+            ["Odoo", info["odoo"]],
+            ["Enterprise", info["enterprise"]],
+            ["Design Themes", info["design-themes"]],
+            ["Custom", info["custom"]],
         ]
