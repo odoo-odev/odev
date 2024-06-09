@@ -2,6 +2,7 @@
 
 import re
 from contextlib import nullcontext
+from datetime import datetime, timedelta
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
@@ -621,6 +622,17 @@ class OdoobinProcess(OdevFrameworkMixin):
             if len(list(self.odoo_repositories)) != len(list(self.odoo_worktrees)):
                 repository.create_worktree(f"{self.worktree}/{repository.path.name}", str(self.version or "master"))
 
+        # Pull changes once per week, on Monday (or a later day if odev was not run)
+        pull_date = self.odev.config.repositories.date
+        next_monday = pull_date + timedelta(days=(7 - pull_date.weekday()))
+        next_monday = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+        today = datetime.today()
+
+        if next_monday > today:
+            return logger.debug(
+                f"Skipping worktree update, next pull scheduled in {(next_monday - today).days + 1} days"
+            )
+
         outdated_worktrees = list(self.outdated_odoo_worktrees())
 
         if len(outdated_worktrees) == 1:
@@ -649,6 +661,8 @@ class OdoobinProcess(OdevFrameworkMixin):
 
             for worktree in worktrees_to_pull:
                 worktree.connector.pull_worktrees(worktrees_to_pull, force=True)
+
+        self.odev.config.repositories.date = today
 
     def clone_repositories(self):
         """Clone the missing Odoo repositories."""
