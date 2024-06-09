@@ -181,6 +181,21 @@ class PruningSection(Section):
         self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
 
 
+class RepositoriesSection(Section):
+    """Repositories configuration."""
+
+    @property
+    def date(self) -> datetime:
+        """Last time repositories were pulled from GitHub.
+        You should not have to modify this value as it is updated automatically.
+        """
+        return datetime.strptime(cast(str, self.get("date", datetime.now().strftime(DATETIME_FORMAT))), DATETIME_FORMAT)
+
+    @date.setter
+    def date(self, value: Union[str, datetime]):
+        self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -206,6 +221,9 @@ class Config:
 
         self.pruning: PruningSection = PruningSection("pruning", self)
         """Configuration for odev pruning of databases."""
+
+        self.repositories: RepositoriesSection = RepositoriesSection("repositories", self)
+        """Configuration for Odoo repositories."""
 
         self.load()
         self.fill_defaults()
