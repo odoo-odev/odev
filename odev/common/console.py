@@ -305,14 +305,23 @@ class Console(RichConsole):
         :param args: Additional arguments to pass to the print method.
         :param kwargs: Additional keyword arguments to pass to the print method.
         """
+        pause_live = self.is_live
+
+        if pause_live:
+            self.pause_live()
+
         console_file = self.file  # type: ignore [has-type]
         file.resolve().parent.mkdir(parents=True, exist_ok=True)
+        kwargs["highlight"] = False
 
         with file.open("wt", encoding="utf-8") as buffer:
             self.file = buffer
             super().print(renderable, *args, **kwargs)
 
         self.file = console_file
+
+        if pause_live:
+            self.resume_live()
 
     def print(
         self,
