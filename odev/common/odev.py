@@ -699,7 +699,7 @@ class Odev(Generic[CommandType]):
         requirements_file = Path(repository.working_dir) / "requirements.txt"
         remote_branch = repository.active_branch.tracking_branch()
         tracking_ref = remote_branch.name if remote_branch is not None else "HEAD"
-        diff = repository.git.diff("--name-only", tracking_ref, requirements_file).strip()
+        diff = repository.git.diff("--name-only", tracking_ref, "--", requirements_file).strip()
 
         if diff == requirements_file.as_posix():
             logger.debug("Repository requirements have changed since last version")
