@@ -235,7 +235,7 @@ class Odev(Generic[CommandType]):
         :param upgrade: Whether to force the upgrade process.
         """
         logger.debug(f"Checking for updates in {self.name!r}")
-        upgrade |= self._update(self.path, f"{self.name!r}")
+        upgrade |= self._update(self.path, self.name)
 
         logger.debug("Checking for updates in plugins")
         upgrade |= any(self._update(path, f"plugin {plugin!r}") for plugin, path, _ in self.plugins)
