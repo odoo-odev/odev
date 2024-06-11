@@ -3,9 +3,9 @@
 Migrate existing secrets to the new table structure.
 
 Before:
-id | name      | login    | cipher
-------------------------------------
-1  | url:scope | username | password
+name      | login    | cipher
+-------------------------------
+url:scope | username | password
 
 After:
 id | name | scope | platform | login    | cipher
@@ -28,15 +28,25 @@ def run(odev: Odev) -> None:
         """
     )
 
-    secrets = odev.store.query(
+    odev.store.query("CREATE TABLE IF NOT EXISTS secrets_backup AS TABLE secrets")
+    odev.store.query("DROP TABLE secrets")
+    odev.store.query(
         """
-        SELECT id, name
-        FROM secrets
-        """,
+        CREATE TABLE IF NOT EXISTS secrets (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            scope VARCHAR,
+            platform VARCHAR,
+            login VARCHAR,
+            cipher TEXT NOT NULL
+        )
+        """
     )
 
+    secrets = odev.store.query("SELECT name, login, cipher FROM secrets_backup")
+
     for secret in secrets:
-        _id, name = secret
+        name, login, cipher = secret
 
         if name == "odoo.com:pass":
             name, scope, platform = "accounts.odoo.com", "user", ""
@@ -51,11 +61,14 @@ def run(odev: Odev) -> None:
         elif name.endswith(":session_id") or name.endswith(":td_id"):
             platform = ""
             name, scope = name.split(":")
+        else:
+            name, scope, platform = name, "", ""
 
         odev.store.query(
             f"""
-            UPDATE secrets
-            SET name = '{name}', scope = '{scope}', platform = '{platform}'
-            WHERE id = {_id}
+            INSERT INTO secrets (name, scope, platform, login, cipher)
+            VALUES ({name!r}, {scope!r}, {platform!r}, {login!r}, {cipher!r})
             """,
         )
+
+    odev.store.query("DROP TABLE secrets_backup")
