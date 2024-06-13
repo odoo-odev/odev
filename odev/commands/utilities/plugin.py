@@ -32,7 +32,8 @@ class PluginCommand(Command):
 
     def run(self):
         """Enable or disable a plugin."""
-        plugin_name = GitConnector(self.args.plugin).name
+        plugin_git = GitConnector(self.args.plugin)
+        plugin_name = plugin_git.name
 
         if self.args.enable:
             self.__add_plugin_to_config(plugin_name)
@@ -75,8 +76,10 @@ class PluginCommand(Command):
                 plugin = self.__get_plugin(plugin_name)
                 logger.info(
                     string.normalize_indent(
-                        f"""Plugin {plugin.name!r} is {string.stylize('enabled', 'color.green')}
+                        f"""
+                        Plugin {plugin.name!r} is {string.stylize('enabled', 'color.green')}
                         {string.stylize('Version:', 'color.black')} {string.stylize(plugin.manifest['version'], 'repr.version')}
+                        {string.stylize('Branch:', 'color.black')}  {string.stylize(cast(str, plugin_git.branch), 'color.cyan')}
                         {string.stylize('Path:', 'color.black')}    {plugin.path.resolve()}
                         """
                     )
