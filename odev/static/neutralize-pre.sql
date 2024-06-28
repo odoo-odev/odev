@@ -59,10 +59,12 @@ WHERE id IN (
     LIMIT 1
 );
 
--- reset password of all other users to 'odoo
+-- reset password of first 50 other users to 'odoo'.
+-- We are not doing all users because in some cases a module update will rehash all
+-- passwords to pbkdf2 if they are not hashed, which is incredibly slow with many users
 UPDATE res_users
 SET password = 'odoo'
-WHERE login != 'admin';
+WHERE login != 'admin' AND id <= 53;
 
 -- reset 2FA for all users
 DO $$
