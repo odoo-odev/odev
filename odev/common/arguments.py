@@ -35,6 +35,7 @@ class Argument(ABC):
             "store_regex",
             "store_eval",
         ] = "store",
+        **kwargs: Any,
     ) -> None:
         """Initialize the argument and converts it to a mapping that can be fed to the command's
         `prepare_arguments`method.
@@ -59,6 +60,8 @@ class Argument(ABC):
             - `store_path` to store the value as a path (see `pathlib.Path`).
             - `store_regex` to store the value as a compiled regular expression (see `re.compile`).
             - `store_eval` to store the value as the result of evaluating it as a (literal) Python expression.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         self.name = name
         self.aliases = aliases
@@ -67,12 +70,14 @@ class Argument(ABC):
         self.nargs = nargs
         self.action = action
         self.choices = choices
+        self.kwargs = kwargs
 
     def to_dict(self, name: str) -> MutableMapping[str, Any]:
         """Dictionary representation of the argument to feed into the parser.
         :param name: The name of the argument, will be used if the `name` attribute is not set.
         """
         arg_dict: MutableMapping[str, Any] = {
+            **self.kwargs,
             "name": self.name or name,
             "help": self.description,
             "action": self.action or "store",
@@ -104,6 +109,7 @@ class String(Argument):
         default: Optional[str] = None,
         choices: Optional[ListType[str]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        **kwargs: Any,
     ) -> None:
         """Add a string argument to the command class.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
@@ -116,6 +122,8 @@ class String(Argument):
             - `+` for one or more values.
             - `?` for zero or one value.
             - `*...` for the remainder values that are not consumed by the previous arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         super().__init__(
             name=name,
@@ -125,6 +133,7 @@ class String(Argument):
             nargs=nargs,
             choices=choices,
             action="store",
+            **kwargs,
         )
 
 
@@ -139,6 +148,7 @@ class Integer(Argument):
         default: Optional[int] = None,
         choices: Optional[ListType[int]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        **kwargs: Any,
     ) -> None:
         """Add an integer argument to the command class.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
@@ -151,6 +161,8 @@ class Integer(Argument):
             - `+` for one or more values.
             - `?` for zero or one value.
             - `*...` for the remainder values that are not consumed by the previous arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         super().__init__(
             name=name,
@@ -160,6 +172,7 @@ class Integer(Argument):
             nargs=nargs,
             choices=choices,
             action="store_int",
+            **kwargs,
         )
 
 
@@ -172,6 +185,7 @@ class Flag(Argument):
         aliases: Optional[ListType[str]] = None,
         description: Optional[str] = None,
         default: Optional[bool] = None,
+        **kwargs: Any,
     ) -> None:
         """Add a flag that has a boolean value which depends on whether it was passed in the command line.
         The default value is inverted if the flag is set.
@@ -180,12 +194,15 @@ class Flag(Argument):
         :param description: A description for the argument, will be displayed in the `help` command.
         :param default: The default value for the argument; a default value of `False` will result in the argument
         being set to `True` if present in the CLI arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         super().__init__(
             name=name,
             aliases=aliases,
             description=description,
             action="store_false" if default is True else "store_true",
+            **kwargs,
         )
 
 
@@ -199,6 +216,7 @@ class List(Argument):
         description: Optional[str] = None,
         default: Optional[ListType[Any]] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        **kwargs: Any,
     ) -> None:
         """Add a comma-separated list of values argument to the command class.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
@@ -211,6 +229,8 @@ class List(Argument):
             - `+` for one or more values.
             - `?` for zero or one value.
             - `*...` for the remainder values that are not consumed by the previous arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         super().__init__(
             name=name,
@@ -219,6 +239,7 @@ class List(Argument):
             default=default,
             nargs=nargs,
             action="store_list",
+            **kwargs,
         )
 
 
@@ -232,6 +253,7 @@ class Path(Argument):
         description: Optional[str] = None,
         default: Optional[pathlib.Path] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        **kwargs: Any,
     ) -> None:
         """Add a path argument to the command class, stored as a `pathlib.Path` object.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
@@ -243,6 +265,8 @@ class Path(Argument):
             - `+` for one or more values.
             - `?` for zero or one value.
             - `*...` for the remainder values that are not consumed by the previous arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         super().__init__(
             name=name,
@@ -251,6 +275,7 @@ class Path(Argument):
             default=default,
             nargs=nargs,
             action="store_path",
+            **kwargs,
         )
 
 
@@ -264,6 +289,7 @@ class Regex(Argument):
         description: Optional[str] = None,
         default: Optional[re.Pattern] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        **kwargs: Any,
     ) -> None:
         """Add a path argument to the command class, evaluated and stored as a regular expression.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
@@ -275,6 +301,8 @@ class Regex(Argument):
             - `+` for one or more values.
             - `?` for zero or one value.
             - `*...` for the remainder values that are not consumed by the previous arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
         super().__init__(
             name=name,
@@ -283,6 +311,7 @@ class Regex(Argument):
             default=default,
             nargs=nargs,
             action="store_regex",
+            **kwargs,
         )
 
 
@@ -296,6 +325,7 @@ class Eval(Argument):
         description: Optional[str] = None,
         default: Optional[Any] = None,
         nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        **kwargs: Any,
     ) -> None:
         """Add a python literal argument to the command class, evaluated by `ast.literal_eval()`.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
@@ -315,4 +345,5 @@ class Eval(Argument):
             default=default,
             nargs=nargs,
             action="store_eval",
+            **kwargs,
         )
