@@ -1,6 +1,7 @@
 """Module to manage Odoo processes."""
 
 import re
+import shlex
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,6 +25,7 @@ from cachetools.func import ttl_cache
 from odev.common import bash, string
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
+from odev.common.databases.remote import RemoteDatabase
 from odev.common.debug import find_debuggers
 from odev.common.logging import LOG_LEVEL, logging
 from odev.common.mixins.framework import OdevFrameworkMixin
@@ -451,11 +453,29 @@ class OdoobinProcess(OdevFrameworkMixin):
         :param args: Additional arguments to pass to odoo-bin.
         :param url: URL of the database to which import the module.
         """
-        if not self.database.is_odoo:
-            raise RuntimeError("Cannot deploy onto a non-odoo database")
-
         if args is None:
             args = []
+
+        database: Union[LocalDatabase, RemoteDatabase]
+
+        if url is None:
+            database = self.database
+        else:
+            database = RemoteDatabase(url)
+
+            if "--db" not in args:
+                args.extend(["--db", database.name])
+
+            secret = self.odev.store.secrets.get(database.url, scope="user", platform="remote")
+
+            if "--login" not in args:
+                args.extend(["--login", shlex.quote(secret.login)])
+
+            if "--password" not in args:
+                args.extend(["--password", shlex.quote(secret.password)])
+
+        if not database.is_odoo:
+            raise RuntimeError("Cannot deploy onto a non-odoo database")
 
         odoo_subcommand: str = "deploy"
         odoo_command: str = f"odoo-bin {odoo_subcommand}"
@@ -463,16 +483,17 @@ class OdoobinProcess(OdevFrameworkMixin):
             odoo_subcommand,
             *args,
             module.as_posix(),
-            url if url else cast(str, self.database.url),
+            cast(str, database.url),
         ]
 
         info_message: str = (
-            f"Running {odoo_command!r} in version {self.version!s} "
-            f"on {self.database.platform.display} database {self.database.name!r}"
+            f"Running {odoo_command!r} in version {database.version!s} "
+            f"on {database.platform.display} database {database.name!r}"
         )
 
         logger.info(f"{info_message} using command:")
-        formatted_command = f"{self.venv.python} {self.odoobin_path} {' '.join(odoo_args)}"
+        sanitized_args = re.sub(r"--password\s[^\s]+", "--password *****", " ".join(odoo_args))
+        formatted_command = f"{self.venv.python} {self.odoobin_path} {sanitized_args}"
         self.console.print(f"\n{string.stylize(formatted_command, 'color.cyan')}\n", soft_wrap=True)
 
         with capture_signals():
