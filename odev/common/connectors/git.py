@@ -637,7 +637,15 @@ class GitConnector(Connector):
 
         if path.exists():
             logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
-            self.repository.git.worktree("remove", path, "--force")
+
+            try:
+                self.repository.git.worktree("remove", path, "--force")
+            except GitCommandError:
+                logger.debug(
+                    f"Failed to remove worktree {path!s} for repository {self.name!r}: "
+                    "directory exists but is not registered as a worktree"
+                )
+
             shutil.rmtree(path, ignore_errors=True)
 
         message = f"worktree {path.parent.name!r} for {self.name!r} in version {revision!r}"
