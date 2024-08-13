@@ -16,12 +16,11 @@ from typing import (
     Optional,
     Tuple,
     Union,
-    cast,
 )
 
 import virtualenv
 from cachetools.func import ttl_cache
-from packaging.version import Version, parse as parse_version
+from packaging.version import InvalidVersion, Version, parse as parse_version
 
 from odev.common import bash, progress, string
 from odev.common.console import console
@@ -248,29 +247,48 @@ class PythonEnv:
 
         return packages
 
-    def installed_packages(self) -> Mapping[str, Version]:
-        """Run pip freeze.
+    def __package_spec(self, package: str) -> Tuple[str, str]:
+        """Get the name and version of a package spec.
+        :param package: The package spec to parse.
+        :return: A tuple with the package name and version.
+        """
+        if "==" in package:
+            package_name, package_version = package.split("==")
+        elif " @ " in package:
+            # With a line in requirements.txt as follows:
+            #   odoo_upgrade @ git+https://github.com/odoo/upgrade-util@aaa1f0fee6870075e25cb5e6744e4c589bb32b46
+            # Consider:
+            #   Package name:   odoo_upgrade
+            #   Version:        aaa1f0fee6870075e25cb5e6744e4c589bb32b46
+            package_name, package_version = package.split(" @ ")
 
+            if "@" in package_version:
+                package_version = package_name.split("@")[-1]
+            else:
+                package_version = "1.0.0"
+        else:
+            raise ValueError(f"Invalid package specification {package!r}")
+
+        return package_name.strip().lower(), package_version.strip()
+
+    def installed_packages(self) -> Mapping[str, Union[Version, str]]:
+        """Run pip freeze.
         :return: The result of the pip command execution.
         :rtype: CompletedProcess
         """
         freeze = self.__pip_freeze_all()
         packages = freeze.stdout.decode().splitlines()
-        installed: MutableMapping[str, Version] = {}
+        installed: MutableMapping[str, Union[Version, str]] = {}
 
         for package in packages:
-            if "==" in package:
-                package_name, package_version = package.split("==")
-            elif " @ " in package:
-                # ie: odoo_upgrade @ git+https://github.com/odoo/upgrade-util@aaa1f0fee6870075e25cb5e6744e4c589bb32b46
-                # git+https://github.com/odoo/upgrade-util is what is in requirements.txt
-                _, package_name = package.split(" @ ")
-                package_name, _ = package_name.split("@")
-                package_version = "1.0.0"
-            else:
-                raise ValueError(f"Invalid package spec {package}")
+            package_name, package_version = self.__package_spec(package)
 
-            installed[package_name.strip().lower()] = cast(Version, parse_version(package_version.strip()))
+            try:
+                package_version = parse_version(package_version.strip())
+            except InvalidVersion:
+                logger.debug(f"Invalid version number format for python package {package_name!r}: {package_version!r}")
+
+            installed[package_name.strip().lower()] = package_version
 
         return installed
 
@@ -317,11 +335,20 @@ class PythonEnv:
                 continue
 
             if "git+" in line:
-                package_name, _ = line.split("@")
+                package_name, package_version = self.__package_spec(line)
                 installed_version = installed_packages.get(package_name)
+
                 if installed_version is None:
-                    logger.debug(f"Missing git python package {package_name}")
+                    logger.debug(f"Missing git python package {package_name!r}")
                     yield line
+
+                elif installed_version != package_version:
+                    logger.debug(
+                        f"Incorrect git python package version {package_name!r} "
+                        f"({installed_version!r} != {package_version!r})"
+                    )
+                    yield line
+
                 continue
 
             match = re_package.search(line)
@@ -338,6 +365,10 @@ class PythonEnv:
                 logger.debug(f"Missing python package {match.group('name')}")
                 yield line
                 continue
+
+            assert isinstance(
+                installed_version, Version
+            ), f"Invalid version {installed_version!r} for python package {match.group('name')}"
 
             if match.group("version") is None and match.group("op") is None:
                 continue
