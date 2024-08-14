@@ -156,6 +156,13 @@ def stylize(value: str, style: str) -> str:
     return f"[{style}]{value}[/{style}]"
 
 
+def strip_ansi_colors(text: str) -> str:
+    """Strip ANSI colors from a text.
+    :param text: The text to strip color codes from.
+    """
+    return re.sub(r"\x1b[^m]*m", "", text)
+
+
 def join(parts: Sequence[str], last_delimiter: Optional[str] = None) -> str:
     """Join parts, optionally adding a last delimiter between the last two items.
     :param parts: Parts to join.

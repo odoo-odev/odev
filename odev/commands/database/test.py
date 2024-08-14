@@ -7,7 +7,7 @@ from typing import List, Mapping, MutableMapping, cast
 
 from odev.common import args, string
 from odev.common.commands import OdoobinCommand
-from odev.common.console import RICH_THEME_LOGGING, TableHeader
+from odev.common.console import TableHeader
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoobin import OdoobinProcess
@@ -129,34 +129,21 @@ class TestCommand(OdoobinCommand):
             raise self.error("Debugger detected in odoo-bin output, remove breakpoints and try again")
 
         problematic_test_levels = ("warning", "error", "critical")
-        match = re.match(self._odoo_log_regex, re.sub(r"\x1b[^m]*m", "", line))
+        match = self._parse_progress_log_line(line)
 
         if match is None:
             if self.last_level in problematic_test_levels:
                 self.test_buffer.append(line)
 
-            color = (
-                RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
-                if self.last_level in problematic_test_levels
-                else "color.black"
-            )
-            return self.print(string.stylize(line, color), highlight=False)
+            color = f"logging.level.{self.last_level}" if self.last_level in problematic_test_levels else "color.black"
+            return self.print(string.stylize(line, color), highlight=False, soft_wrap=False)
 
         self.last_level = match.group("level").lower()
-        level_color = (
-            "bold color.green" if self.last_level == "info" else RICH_THEME_LOGGING[f"logging.level.{self.last_level}"]
-        )
 
         if self.last_level in problematic_test_levels and match.group("database") == self.test_database.name:
             self.test_buffer.append(line)
 
-        self.print(
-            f"{string.stylize(match.group('time'), 'color.black')} "
-            f"{string.stylize(match.group('level'), level_color)} "
-            f"{string.stylize(match.group('database'), 'color.purple')} "
-            f"{string.stylize(match.group('logger'), 'color.black')}: {match.group('description')}",
-            highlight=False,
-        )
+        self._print_progress_log_line(match)
 
     def run(self):
         """Run the command."""
