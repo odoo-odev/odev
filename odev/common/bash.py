@@ -89,14 +89,13 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
     :param str command: The command to execute.
     :param bool sudo: Whether to execute the command with elevated privileges.
     :param bool raise_on_error: Whether to raise an exception if the command fails.
-    :return: The result of the command execution, or None of an error was encountered.
-    :rtype: CompletedProcess
+    :return: The result of the command execution, or None if an error was encountered and `raise_on_error` is `False`.
+    :rtype: Optional[CompletedProcess]
     """
     try:
         logger.debug(f"Running process: {quote(command)}")
         process_result = __run_command(command)
     except CalledProcessError as exception:
-        logger.debug(f"sudo: {sudo}, geteuid: {os.geteuid()}")
 
         # If already running as root, sudo will not work
         if not sudo or not os.geteuid():
@@ -107,7 +106,7 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
         global sudo_password
         sudo_password = sudo_password or console.secret("Session password:")
 
-        if sudo_password is None:
+        if not sudo_password:
             __raise_or_log(exception, raise_on_error)
             return None
 
