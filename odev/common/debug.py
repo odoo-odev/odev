@@ -1,12 +1,11 @@
 """Shared method for debugging odev or interacting with debuggers."""
 
-import re
+import subprocess
 from functools import lru_cache
-from glob import glob
 from pathlib import Path
 from typing import Generator, Tuple, Union
 
-from odev.common import string
+from odev.common import bash, string
 from odev.common.logging import logging
 
 
@@ -29,13 +28,15 @@ def find_debuggers(root: Union[str, Path]) -> Generator[Tuple[Path, int], None, 
     if not root.is_dir():
         raise NotADirectoryError(f"{root} is not a directory")
 
-    glob_pattern = (root / "**/*.py").as_posix()
+    try:
+        grep = bash.execute(rf"""grep -rnE "((i?pu?db)\.set_trace\(|pu\.db)" {root.as_posix()} --include='*.py'""")
+        output = grep.stdout.decode() if grep is not None else ""
+    except subprocess.CalledProcessError:
+        output = ""
 
-    for python_file in map(Path, glob(glob_pattern, recursive=True)):
-        with python_file.open() as file:
-            for position, line in enumerate(file.readlines()):
-                if re.search(r"((i?pu?db)\.set_trace\(|pu\.db)", line.split("#", 1)[0]):
-                    yield python_file.resolve(), position + 1
+    for line in output.splitlines():
+        file, position, _ = line.split(":", 2)
+        yield Path(file), int(position)
 
 
 # ------------------------------------------------------------------------------
