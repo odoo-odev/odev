@@ -11,7 +11,7 @@ from typing import cast
 from typing import TypeVar
 
 from .base import Command, CommandError
-from .database import DatabaseCommand, LocalDatabaseCommand, RemoteDatabaseCommand
+from .database import DatabaseCommand, LocalDatabaseCommand, RemoteDatabaseCommand, DatabaseOrRepositoryCommand
 from .git import GitCommand
 from .odoobin import (
     OdoobinCommand,

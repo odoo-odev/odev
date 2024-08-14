@@ -248,9 +248,12 @@ class GitConnector(Connector):
                 "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
                 + string.join_bullet(
                     [
-                        "organization/repository",
-                        "https://github.com/organization/repository",
-                        "git@github.com:organization/repository.git",
+                        string.stylize(url, "color.purple")
+                        for url in (
+                            "organization/repository",
+                            "https://github.com/organization/repository",
+                            "git@github.com:organization/repository.git",
+                        )
                     ],
                 ),
                 self,

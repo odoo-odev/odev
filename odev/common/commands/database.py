@@ -182,3 +182,22 @@ class RemoteDatabaseCommand(DatabaseCommand, ABC):
 
     _database: RemoteDatabase  # type: ignore [assignment]
     _database_allowed_platforms = ["remote", "paas", "saas"]
+
+
+class DatabaseOrRepositoryCommand(DatabaseCommand, ABC):
+    """Base class for commands that require a database or a repository to work, the first argument is interchangeable
+    and we automatically infer whether the user entered a git repository or a database.
+    """
+
+    _database_arg_required = False
+    _database_exists_required = False
+
+    repository = args.String(description="GitHub URL or name of a repository.", nargs="?")
+
+    def infer_database_instance(self) -> DatabaseType:
+        if any(char in self.args.database for char in "@:/"):
+            self.args.repository = self.args.database
+            self.args.database = None
+            return DummyDatabase()
+
+        return super().infer_database_instance()
