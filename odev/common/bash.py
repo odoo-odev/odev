@@ -9,7 +9,6 @@ import select
 import sys
 import termios
 import tty
-from io import UnsupportedOperation
 from shlex import quote
 from subprocess import (
     DEVNULL,
@@ -144,7 +143,7 @@ def detached(command: str) -> Popen[bytes]:
 
 
 def stream(command: str) -> Generator[str, None, None]:
-    """Execute a command in the operating system and stream its output .
+    """Execute a command in the operating system and stream its output line by line.
     :param str command: The command to execute.
     """
     logger.debug(f"Streaming process: {quote(command)}")
@@ -163,12 +162,14 @@ def stream(command: str) -> Generator[str, None, None]:
             universal_newlines=True,
         )
 
+        received_buffer: bytes = b""
+
         while process.poll() is None:
             rlist, _, _ = select.select([sys.stdin, master], [], [], 0.1)
 
             # Input received on STDIN, pass it to the child process
             if sys.stdin in rlist:
-                char = os.read(sys.stdin.fileno(), 1024)
+                char = os.read(sys.stdin.fileno(), 1)
 
                 # Ignore characters other than CTRL+C or CTRL+D, allow requesting
                 # the process to stop
@@ -177,20 +178,19 @@ def stream(command: str) -> Generator[str, None, None]:
 
             # Output received from process, yield for further processing
             if master in rlist:
-                received = os.read(master, 1024 * 512)
+                received = os.read(master, 1)
 
-                if received:
-                    lines = received.splitlines()
+                if not received:
+                    continue
 
-                    for line in lines:
-                        yield line.decode()
-                        try:
-                            os.write(sys.stdout.fileno(), b"\r")
-                        except UnsupportedOperation:
-                            # sys.stdout is not ready for writing or is already used, probably because we used
-                            # the console or the logger to print something on the screen while processing
-                            # the current line
-                            pass
+                if received != b"\n":
+                    received_buffer += received
+                    continue
+
+                received_buffer = received_buffer.strip()
+                yield received_buffer.decode()
+                received_buffer = b""
+                os.write(sys.stdout.fileno(), b"\r")
 
     finally:
         os.close(slave)

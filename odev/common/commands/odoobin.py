@@ -154,14 +154,17 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
     def odoobin_progress(self, line: str):
         """Beautify odoo logs on the fly."""
-        match = re.match(self._odoo_log_regex, re.sub(r"\x1b[^m]*m", "", line))
+        match = self._parse_progress_log_line(line)
 
         if match is None:
-            return self.print(line, highlight=False, soft_wrap=True)
+            return self.print(line, highlight=False, soft_wrap=False)
 
         self.last_level = match.group("level").lower()
-        level_color = "bold color.green" if self.last_level == "info" else f"logging.level.{self.last_level}"
+        self._print_progress_log_line(match)
 
+    def _print_progress_log_line(self, match: re.Match):
+        """Print a line of odoo-bin output when streamed through the odoobin_progress handler."""
+        level_color = "bold color.green" if self.last_level == "info" else f"logging.level.{self.last_level}"
         self.print(
             f"{string.stylize(match.group('time'), 'color.black')} "
             f"{string.stylize(match.group('level'), level_color)} "
@@ -170,6 +173,10 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             highlight=False,
             soft_wrap=True,
         )
+
+    def _parse_progress_log_line(self, line: str) -> Optional[re.Match]:
+        """Parse a line of odoo-bin output."""
+        return re.match(self._odoo_log_regex, string.strip_ansi_colors(line))
 
 
 class OdoobinShellCommand(OdoobinCommand, ABC):
