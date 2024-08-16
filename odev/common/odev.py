@@ -234,6 +234,8 @@ class Odev(Generic[CommandType]):
         :param restart: Whether to restart the framework after updating.
         :param upgrade: Whether to force the upgrade process.
         """
+        upgrade |= self.check_upgrade()
+
         logger.debug(f"Checking for updates in {self.name!r}")
         upgrade |= self._update(self.path, self.name)
 
@@ -321,6 +323,7 @@ class Odev(Generic[CommandType]):
         for script in scripts:
             logger.debug(f"Running upgrade script [{current_version} -> {script.parent.name}]")
             self.__run_upgrade_script(script)
+            current_version = script.parent.name
 
         self.config.update.version = self.version
 

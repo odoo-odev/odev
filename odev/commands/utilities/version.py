@@ -15,4 +15,9 @@ class VersionCommand(Command):
 
     def run(self):
         """Prints the current version of the application."""
-        logger.info(f"{self.odev.name.capitalize()} version {string.stylize(__version__, 'repr.version')}")
+        logger.info(
+            f"{self.odev.name.capitalize()} version {string.stylize(self.odev.config.update.version, 'repr.version')}"
+        )
+
+        if self.odev.config.update.version != __version__:
+            logger.warning(f"A newer version is available, consider running '{self.odev.name} update'")

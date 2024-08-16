@@ -174,6 +174,7 @@ def stream(command: str) -> Generator[str, None, None]:
                 # the process to stop
                 if char in (b"\x03", b"\x04"):
                     os.write(master, char)
+                    os.write(master, b"\n")
 
             # Output received from process, yield for further processing
             if master in rlist:
