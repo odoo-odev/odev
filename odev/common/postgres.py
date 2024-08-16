@@ -4,6 +4,8 @@ from abc import ABC
 from contextlib import nullcontext
 from typing import Mapping, MutableMapping, Optional
 
+from psycopg2.errors import InvalidTableDefinition
+
 from odev.common.connectors import PostgresConnector
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
@@ -172,10 +174,7 @@ class PostgresTable(ABC):
             else:
                 if missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
                     for column in missing_columns:
-                        logger.debug(
-                            f"Adding column {column!r} to table {self.name!r} in database {self.database.name!r}"
-                        )
-                        self.database.create_column(self.name, column, self._columns[column])
+                        self.__add_missing_column(column)
 
         if self._constraints is not None:
             for name, definition in self._constraints.items():
@@ -185,3 +184,24 @@ class PostgresTable(ABC):
     def clear(self):
         """Clear the table."""
         self.database.query(f"DELETE FROM {self.name}")
+
+    def __add_missing_column(self, column: str):
+        """Add a missing column to an existing table."""
+        assert self._columns is not None
+        logger.debug(f"Adding column {column!r} to table {self.name!r} in database {self.database.name!r}")
+
+        try:
+            self.database.create_column(self.name, column, self._columns[column])
+        except RuntimeError as error:
+            if isinstance(error.__cause__, InvalidTableDefinition):
+                logger.debug(f"Error adding column {column!r} to table {self.name!r}: {error.__cause__}")
+
+                # When changing the definition of an existing table and renaming the column containing the primary key,
+                # we need to drop the existing constraint before proceeding with the creation of the new column.
+                # Since, by design, the tables for the datastore are initialized before the upgrade scripts are run,
+                # we need to handle this case here
+                if "multiple primary keys for table" in str(error.__cause__):
+                    self.database.query(f"ALTER TABLE {self.name} DROP CONSTRAINT IF EXISTS {self.name}_pkey")
+                    self.database.create_column(self.name, column, self._columns[column])
+            else:
+                raise
