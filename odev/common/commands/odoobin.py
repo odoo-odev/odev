@@ -3,7 +3,7 @@ import shlex
 from abc import ABC
 from argparse import Namespace
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional, Union
 
 from odev.common import args, string
 from odev.common.commands import LocalDatabaseCommand
@@ -69,7 +69,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     # Properties
     # --------------------------------------------------------------------------
 
-    _odoo_log_regex: re.Pattern = re.compile(
+    ODOO_LOG_REGEX: re.Pattern = re.compile(
         r"""
             (?:
                 (?P<date>\d{4}-\d{2}-\d{2})\s
@@ -86,6 +86,23 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         re.VERBOSE | re.IGNORECASE,
     )
     """Regular expression to match the output of odoo-bin."""
+
+    ODOO_LOG_WERKZEUG_REGEX: re.Pattern = re.compile(
+        r"""
+            (?:
+                (?P<ip>(?:\d{1,3}\.){3}\d{1,3}).+?\]\s\"
+                (?P<verb>\w+)\s
+                (?P<url>.+?(?=\s))\s
+                (?P<http>.+?(?=\"))\"\s
+                (?P<code>\d+)\s-\s
+                (?P<count_query>\d+)\s
+                (?P<time_query>[\d\.]+)\s
+                (?P<time_remaining>[\d\.]+)
+            )
+        """,
+        re.VERBOSE | re.IGNORECASE,
+    )
+    """Regular expression to match the output of odoo-bin Werkzeug-specific logs."""
 
     last_level: str = "INFO"
     """Log-level level of the last line printed by the odoo-bin process."""
@@ -165,18 +182,75 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     def _print_progress_log_line(self, match: re.Match):
         """Print a line of odoo-bin output when streamed through the odoobin_progress handler."""
         level_color = "bold color.green" if self.last_level == "info" else f"logging.level.{self.last_level}"
+        logger = match.group("logger")
+        description = match.group("description")
+
+        if logger == "werkzeug" and (http_match := re.match(self.ODOO_LOG_WERKZEUG_REGEX, description)):
+            dash = string.stylize("-", "color.black")
+            code = http_match.group("code")
+
+            match code[0]:
+                case "4":
+                    code = string.stylize(code, "color.yellow")
+                case "5":
+                    code = string.stylize(code, "color.red")
+                case _:
+                    code = string.stylize(code, "color.black")
+
+            time_query_num = float(http_match.group("time_query"))
+            time_python_num = float(http_match.group("time_remaining"))
+            time_total_num = time_query_num + time_python_num
+
+            thresholds = {0.3: "color.yellow", 1.0: "color.red"}
+            time_total = self._colorize_duration_by_threshold(time_total_num, thresholds)
+
+            thresholds = {key: f"{value} dim" for key, value in thresholds.items()}
+            time_query = self._colorize_duration_by_threshold(time_query_num, thresholds)
+            time_python = self._colorize_duration_by_threshold(time_python_num, thresholds)
+
+            description = (
+                f"{string.stylize(http_match.group('ip'), 'color.black')} {dash} "
+                f"{http_match.group('verb')} {http_match.group('url')} ({code}) {dash} "
+                f"{time_total} "
+                + string.stylize(
+                    f"[SQL: {time_query} ({http_match.group('count_query')} queries), Python: {time_python}]",
+                    "color.black",
+                )
+            )
+
         self.print(
             f"{string.stylize(match.group('time'), 'color.black')} "
             f"{string.stylize(match.group('level'), level_color)} "
             f"{string.stylize(match.group('database'), 'color.purple')} "
-            f"{string.stylize(match.group('logger'), 'color.black')}: {match.group('description')}",
+            f"{string.stylize(logger, 'color.black')}: {description}",
             highlight=False,
             soft_wrap=True,
         )
 
     def _parse_progress_log_line(self, line: str) -> Optional[re.Match]:
         """Parse a line of odoo-bin output."""
-        return re.match(self._odoo_log_regex, string.strip_ansi_colors(line))
+        return re.match(self.ODOO_LOG_REGEX, string.strip_ansi_colors(line))
+
+    def _colorize_duration_by_threshold(self, time: Union[str, float], thresholds: Mapping[float, str]) -> str:
+        """Colorize the textual representation of a duration according to thresholds.
+        :param time: The duration to colorize.
+        :param thresholds: A list of tuples containing a threshold and a color.
+        :return: The colorized duration.
+
+        Example:
+        >>> self._colorize_duration_by_threshold(
+        >>>     time=2.51,
+        >>>     thresholds={
+        >>>         0.0: "color.green",
+        >>>         0.3: "color.yellow",
+        >>>         1.0: "color.red",
+        >>>     },
+        >>> )
+        "[color.red]2.510[/color.red]"
+        """
+        time = float(time)
+        style = thresholds.get(max(filter(lambda x: x < time, thresholds.keys()), default=0.0))
+        return string.stylize(f"{time:.3f}", style) if style else f"{time:.3f}"
 
 
 class OdoobinShellCommand(OdoobinCommand, ABC):
