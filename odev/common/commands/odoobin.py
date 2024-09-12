@@ -44,7 +44,8 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         description="Force running the database without enterprise addons.",
         default=True,
     )
-    version = args.String(
+    version_argument = args.String(
+        name="version",
         aliases=["-V", "--version"],
         description="""The Odoo version to use for running the database.
         If not specified, defaults to the latest version of the base module installed in the database.
@@ -142,6 +143,17 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         return self._database.process
 
     @property
+    def version(self) -> OdooVersion:
+        """The Odoo version associated with the odoo-bin process."""
+        if self.args.version:
+            return OdooVersion(self.args.version)
+
+        if self._database.version:
+            return self._database.version
+
+        return OdooVersion("master")
+
+    @property
     def venv(self) -> PythonEnv:
         """The Python virtual environment associated with the odoo-bin process."""
         if self.args.venv:
@@ -150,10 +162,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         if not self._database.venv._global:
             return self._database.venv
 
-        if self.args.version:
-            return PythonEnv(str(OdooVersion(self.args.version)))
-
-        return PythonEnv(str(self._database.version))
+        return PythonEnv(str(self.version))
 
     @property
     def worktree(self) -> str:

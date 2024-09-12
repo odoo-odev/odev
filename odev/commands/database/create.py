@@ -56,6 +56,7 @@ class CreateCommand(OdoobinCommand):
             raise self.error("The arguments `template` and `new_template` are mutually exclusive")
 
         if self.args.new_template:
+            self.args.template = self.args.database
             self.args.database += TEMPLATE_SUFFIX
             self._database = LocalDatabase(self.args.database)
 
@@ -68,18 +69,21 @@ class CreateCommand(OdoobinCommand):
         else:
             self.template = None
 
-        version = self.args.version and OdooVersion(self.args.version) or None
+    @property
+    def version(self) -> OdooVersion:
         """Odoo version to use for the new database."""
+        if self.args.version:
+            return OdooVersion(self.args.version)
 
-        if version is None and self.template is not None:
+        if self.template:
             with self.template:
-                version = self.template.version
+                if self.template.version:
+                    return self.template.version
 
-        if version is None:
-            version = OdooVersion("master")
+        if self._database.version:
+            return self._database.version
 
-        self.version: OdooVersion = version
-        """Odoo version to use for the new database."""
+        return OdooVersion("master")
 
     def run(self):
         """Create a new database locally."""

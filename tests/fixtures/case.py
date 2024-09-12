@@ -1,7 +1,9 @@
+import importlib
 import shutil
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     ClassVar,
     List,
     Optional,
@@ -11,10 +13,11 @@ from unittest import TestCase
 from unittest.mock import PropertyMock, _patch, patch
 
 from testfixtures import Replacer
-from testfixtures.popen import MockPopen
 
+from odev.common import odev
+from odev.common.config import Config
+from odev.common.connectors.git import GitConnector
 from odev.common.databases.local import LocalDatabase
-from odev.common.odev import Odev
 from odev.common.odoobin import OdoobinProcess
 from odev.common.python import PythonEnv
 from odev.common.string import suid
@@ -49,7 +52,7 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.odev = Odev(test=True)
+        cls.odev = odev.Odev(test=True)
         cls.run_id = suid()
         cls.run_name = f"{cls.odev.name}-{cls.run_id}"
         cls.run_path = Path(f"/tmp/{cls.run_name}")
@@ -61,9 +64,13 @@ class OdevTestCase(TestCase):
         cls.addClassCleanup(cls.tearDownClass)
         cls.odev.start()
 
+        if not isinstance(cls, OdevCommandRunDatabaseTestCase):
+            cls.__setup_database()
+
     @classmethod
     def tearDownClass(cls):
         cls.__cleanup_environment()
+        cls.__cleanup_database()
         cls.__unpatch_all()
         cls.replacer.restore()
         cls.odev.commands.clear()
@@ -101,6 +108,45 @@ class OdevTestCase(TestCase):
         if isinstance(target, str):
             return patch(f"{target}.{attribute}", new_callable=PropertyMock, return_value=value, **kwargs)
         return patch.object(target, attribute, new_callable=PropertyMock, return_value=value, **kwargs)
+
+    @classmethod
+    def wrap(cls, target: Any, attribute: str, wrapper: Optional[Callable[..., Any]] = None, **kwargs):
+        """Wrap an object's attribute with a function, making it registering calls during tests while keeping
+        its original behavior.
+        :param target: The object to wrap.
+        :param attribute: The name of the attribute to wrap.
+        :param wrapper: The function to wrap the attribute with.
+        """
+        if wrapper is None:
+            wrapper = cls._import_dotted_path(f"{target if isinstance(target, str) else target.__module__}.{attribute}")
+
+            if not callable(wrapper):
+                raise ValueError("Wrapper must be a callable")
+
+        return cls.patch(target, attribute, side_effect=wrapper, **kwargs)
+
+    @classmethod
+    def _import_dotted_path(cls, path: str) -> Any:
+        """Import an object from a dotted path."""
+        attributes: List[str] = []
+        max_iterations = path.count(".")
+
+        while len(attributes) <= max_iterations:
+            try:
+                imported = importlib.import_module(path)
+
+                for attribute in attributes[::-1]:
+                    if not hasattr(imported, attribute):
+                        raise AttributeError(f"Attribute {attribute} not found in path {path}")
+
+                    imported = getattr(imported, attribute)
+
+                return imported
+
+            except ModuleNotFoundError:
+                parts = path.split(".")
+                path = ".".join(parts[:-1])
+                attributes += parts[-1:]
 
     @classmethod
     def create_odoo_database(cls, name: str) -> LocalDatabase:
@@ -182,8 +228,10 @@ class OdevTestCase(TestCase):
     @classmethod
     def __patch_odev(cls):
         """Patch framework low-level features that could conflict with the tests execution."""
+        odev.HOME_PATH = cls.run_path
+
         cls._patch_object(
-            Odev,
+            odev.Odev,
             [
                 ("prune_databases", None),
                 ("_update", False),
@@ -193,8 +241,6 @@ class OdevTestCase(TestCase):
                 ("upgrades_path", cls.odev.tests_path / "resources" / "upgrades"),
                 ("setup_path", cls.odev.tests_path / "resources" / "setup"),
                 ("scripts_path", cls.odev.tests_path / "resources" / "scripts"),
-                ("dumps_path", cls.run_path / "dumps"),
-                ("venvs_path", cls.run_path / "virtualenvs"),
             ],
         )
 
@@ -203,13 +249,22 @@ class OdevTestCase(TestCase):
         """Setup the environment for the test case."""
         cls.venv = PythonEnv(cls.odev.venvs_path / "test")
         cls.venv.create()
+
+    @classmethod
+    def __setup_database(cls):
+        """Setup the database for the test case."""
         cls.database = cls.create_odoo_database(cls.run_name)
 
     @classmethod
     def __cleanup_environment(cls):
         """Teardown the environment after the test case."""
         shutil.rmtree(cls.run_path.as_posix(), ignore_errors=True)
-        cls.database.drop()
+
+    @classmethod
+    def __cleanup_database(cls):
+        """Teardown the database after the test case."""
+        if cls.database.exists:
+            cls.database.drop()
 
     def __check_test_mode(self):
         self.assertTrue(self.odev.in_test_mode, "Odev is not in test mode, failing test to prevent accidental damage")
@@ -228,43 +283,21 @@ class OdevTestCase(TestCase):
 class OdevCommandTestCase(OdevTestCase):
     """Extended test case to run commands in test mode."""
 
-    odev: ClassVar[Odev]
+    odev: ClassVar[odev.Odev]
     """The Odev instance to use for testing."""
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.__patch_popen()
-        cls.__patch_odoobin()
+        cls.__patch_odoobin_prep()
+        cls.create_odoo_database(cls.run_name)
 
     @classmethod
-    def __patch_popen(cls):
-        """Patch the Popen call to use the MockPopen class."""
-        cls.Popen = MockPopen()
-        cls.Popen.set_default(stdout=b"")
-        cls.replacer.replace("subprocess.Popen", cls.Popen)
-        cls.replacer.replace("odev.common.bash.Popen", cls.Popen)
-        cls.replacer.replace("odev.common.bash.stream", lambda _: [])
-
-    @classmethod
-    def __patch_odoobin(cls):
-        """Patch the OdoobinProcess class to avoid running the Odoo server."""
-        odoobin_path = cls.run_path / "odoo-bin"
-        odoobin_path.parent.mkdir(parents=True, exist_ok=True)
-        odoobin_path.touch(exist_ok=True)
-
-        cls._patch_object(
-            OdoobinProcess,
-            [
-                ("clone_repositories", None),
-                ("prepare_odoobin", None),
-            ],
-            [
-                ("odoo_addons_paths", []),
-                ("odoobin_path", odoobin_path),
-                ("odoo_path", cls.run_path),
-            ],
-        )
+    def __patch_odoobin_prep(cls):
+        """Patch methods to allow the preparation of odoo-bin in the test environment."""
+        cls.odev.config.paths.repositories = Config().paths.repositories
+        cls._patch_object(GitConnector, [("_get_clone_options", ["--depth", "1", "--no-single-branch"])])
+        cls._patch_object(OdoobinProcess, [], [("odoo_repositories", [GitConnector("odoo/odoo")])])
 
     def dispatch_command(self, command: str, *arguments: str) -> Tuple[str, str]:
         """Run a command with arguments.
@@ -276,3 +309,53 @@ class OdevCommandTestCase(OdevTestCase):
             self.odev.dispatch([self.odev.name, command, *arguments])
 
         return output.stdout, output.stderr
+
+    def assert_database(
+        self,
+        name: str,
+        exists: Optional[bool] = None,
+        is_odoo: Optional[bool] = None,
+        version: Optional[str] = None,
+    ):
+        """Assert the state of a database.
+
+        :param name: The name of the database to check.
+        :param exists: Whether the database should exist or not.
+        :param is_odoo: Whether the database should be an Odoo database or not.
+        :param version: The expected version of the database.
+        """
+        database = LocalDatabase(name)
+
+        with database.psql(self.odev.name) as connector:
+            connector.invalidate_cache(database.name)
+
+            if exists is not None:
+                self.assertEqual(database.exists, exists, f"Database {name} {'does not exist' if exists else 'exists'}")
+
+            if is_odoo is not None:
+                self.assertEqual(
+                    database.is_odoo, is_odoo, f"Database {name} {'is not' if is_odoo else 'is'} an Odoo database"
+                )
+
+            if version is not None:
+                self.assertEqual(
+                    str(database.version),
+                    version,
+                    f"Database {name} has version {database.version}, expected {version}",
+                )
+
+            if database.exists:
+                connector.revoke_database(database.name)
+
+
+class OdevCommandRunDatabaseTestCase(OdevCommandTestCase):
+    """Extended test case to run commands in test mode with an actual Odoo database that needs to run with odoo-bin."""
+
+    @classmethod
+    def create_odoo_database(cls, name: str) -> LocalDatabase:
+        """Create a new database for the test case."""
+        if (database := LocalDatabase(name)).exists:
+            database.drop()
+
+        cls.odev.run_command("create", name, "--version", "17.0", "--without-demo", "all", "--community")
+        return LocalDatabase(name)
