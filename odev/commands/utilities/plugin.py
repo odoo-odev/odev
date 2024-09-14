@@ -16,6 +16,7 @@ class PluginCommand(Command):
     """Enable and disable plugins to add new features and commands."""
 
     _name = "plugin"
+    _aliases = ["plugins"]
     _exclusive_arguments = [("enable", "disable", "show")]
 
     enable = args.Flag(aliases=["-e", "--enable"], description="Download and enable an inactive plugin.")
@@ -27,67 +28,89 @@ class PluginCommand(Command):
     plugin = args.String(
         description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
+        If `--show` is used and no plugin is provided, show the state of all plugins.
         """,
+        nargs="?",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if not self.args.plugin and not self.args.show:
+            raise self.error("Missing argument: plugin")
 
     def run(self):
         """Enable or disable a plugin."""
-        plugin_git = GitConnector(self.args.plugin)
-        plugin_name = plugin_git.name
-
-        if self.args.enable:
-            self.__add_plugin_to_config(plugin_name)
-
-            try:
-                self.odev.load_plugins()
-                plugin = self.__get_plugin(plugin_name)
-                dependencies = plugin.manifest["depends"]
-
-                for dependency in dependencies:
-                    self.__add_plugin_to_config(dependency)
-
-                self.odev.load_plugins()
-                logger.info(
-                    f"Enabled plugin {plugin.name!r}"
-                    + (f" and {len(dependencies)} dependencies" if dependencies else "")
-                )
-            except Exception as error:
-                self.__remove_plugin_from_config(plugin_name)
-                raise error
-
-        elif self.args.disable:
-            self.__remove_plugin_from_config(plugin_name)
-            plugin = self.__get_plugin(plugin_name)
-
-            try:
-                if plugin.path is not None:
-                    plugin.path.unlink(missing_ok=True)
-
-                self.odev.load_plugins()
-                logger.info(f"Disabled plugin {plugin_name!r}")
-            except Exception as error:
-                self.__add_plugin_to_config(plugin_name)
-                raise error
+        if self.args.show and not self.args.plugin:
+            for plugin in self.odev.plugins:
+                self.__show_plugin_info(plugin.name)
+                self.console.print()
 
         else:
-            if plugin_name not in self.config.plugins.enabled:
-                logger.info(f"Plugin {plugin_name!r} is {string.stylize('disabled', 'color.red')}")
-            else:
-                plugin = self.__get_plugin(plugin_name)
-                logger.info(
-                    string.normalize_indent(
-                        f"""
-                        Plugin {plugin.name!r} is {string.stylize('enabled', 'color.green')}
-                        {string.stylize('Version:', 'color.black')} {string.stylize(plugin.manifest['version'], 'repr.version')}
-                        {string.stylize('Branch:', 'color.black')}  {string.stylize(cast(str, plugin_git.branch), 'color.cyan')}
-                        {string.stylize('Path:', 'color.black')}    {plugin.path.resolve()}
-                        """
-                    )
-                )
+            plugin_git = GitConnector(self.args.plugin)
+            plugin_name = plugin_git.name
 
-                if plugin.manifest["description"]:
-                    self.console.print()
-                    self.console.print(string.indent(cast(str, plugin.manifest["description"]), 4))
+            if self.args.enable:
+                self.__add_plugin_to_config(plugin_name)
+
+                try:
+                    self.odev.load_plugins()
+                    plugin = self.__get_plugin(plugin_name)
+                    dependencies = plugin.manifest["depends"]
+
+                    for dependency in dependencies:
+                        self.__add_plugin_to_config(dependency)
+
+                    self.odev.load_plugins()
+                    logger.info(
+                        f"Enabled plugin {plugin.name!r}"
+                        + (f" and {len(dependencies)} dependencies" if dependencies else "")
+                    )
+                except Exception as error:
+                    self.__remove_plugin_from_config(plugin_name)
+                    raise error
+
+            elif self.args.disable:
+                self.__remove_plugin_from_config(plugin_name)
+                plugin = self.__get_plugin(plugin_name)
+
+                try:
+                    if plugin.path is not None:
+                        plugin.path.unlink(missing_ok=True)
+
+                    self.odev.load_plugins()
+                    logger.info(f"Disabled plugin {plugin_name!r}")
+                except Exception as error:
+                    self.__add_plugin_to_config(plugin_name)
+                    raise error
+
+            else:
+                self.__show_plugin_info(plugin_name)
+
+    def __show_plugin_info(self, plugin_name: str):
+        """Show the plugin information.
+
+        :param plugin_name: The name of the plugin to show information for.
+        """
+        if plugin_name not in self.config.plugins.enabled:
+            logger.info(f"Plugin {plugin_name!r} is {string.stylize('disabled', 'color.red')}")
+        else:
+            plugin = self.__get_plugin(plugin_name)
+            plugin_git = GitConnector(plugin_name)
+            logger.info(
+                string.normalize_indent(
+                    f"""
+                    Plugin {plugin.name!r} is {string.stylize('enabled', 'color.green')}
+                    {string.stylize('Version:', 'color.black')} {string.stylize(plugin.manifest['version'], 'repr.version')}
+                    {string.stylize('Branch:', 'color.black')}  {string.stylize(cast(str, plugin_git.branch), 'color.cyan')}
+                    {string.stylize('Path:', 'color.black')}    {plugin.path.resolve()}
+                    """
+                )
+            )
+
+            if plugin.manifest["description"]:
+                self.console.print()
+                self.console.print(string.indent(cast(str, plugin.manifest["description"]), 4).rstrip("\n"))
 
     def __add_plugin_to_config(self, repository: str):
         """Add the given plugin to the config."""
