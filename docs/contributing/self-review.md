@@ -10,4 +10,5 @@ For content changes make sure that you:
         working as expected.
 -   [x] Review the entire pull request for typos in comments and doctrings.
 -   [x] If there are any failing checks in your PR, troubleshoot them until they are all passing.
--   [x] Make sure the version number in `odev/_version.py` has been incremented.
+-   [x] Make sure the version number in `odev/_version.py` has been incremented according to
+        [semantic versioning standards](https://semver.org/).
