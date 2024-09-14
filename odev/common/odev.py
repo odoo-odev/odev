@@ -37,7 +37,7 @@ from odev._version import __version__
 from odev.commands.database.delete import DeleteCommand
 from odev.common import progress, string
 from odev.common.commands import CommandType
-from odev.common.commands.database import DatabaseCommand, DatabaseType
+from odev.common.commands.database import DatabaseType
 from odev.common.config import Config
 from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
@@ -413,7 +413,9 @@ class Odev(Generic[CommandType]):
 
     def register_commands(self) -> None:
         """Register all commands from the commands directory."""
-        for command_class in self.import_commands(self.commands_path.iterdir()):
+        for command_class in self.import_commands(self.commands_path.iterdir()) + self.import_commands(
+            [self.commands_path]
+        ):
             logger.debug(f"Registering command {command_class._name!r}")
             command_names = [command_class._name] + (list(command_class._aliases) or [])
 
@@ -597,7 +599,7 @@ class Odev(Generic[CommandType]):
                 arguments = self.parse_arguments(command_cls, *cli_args)
 
                 if "database" in inspect.getfullargspec(command_cls.__init__).args:
-                    command = cast(Type[DatabaseCommand], command_cls)(arguments, database=database)
+                    command = command_cls(arguments, database=database)  # type: ignore [call-arg]
                 else:
                     command = command_cls(arguments)
 
@@ -615,6 +617,7 @@ class Odev(Generic[CommandType]):
                 self.store.history.set(command)
         finally:
             try:
+                logger.debug(f"Cleaning up after {command!r}")
                 command.cleanup()  # type: ignore [unbound-variable]
             except UnboundLocalError:
                 pass

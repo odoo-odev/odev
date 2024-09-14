@@ -170,7 +170,11 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         cls._framework = framework
         cls._name = (cls._name or cls.__name__).lower()
         cls._help = string.normalize_indent(
-            cls.__dict__.get("help") or cls.__doc__ or cls._help or sys.modules[cls.__module__].__doc__ or ""
+            cls.__dict__.get("help")
+            or cls.__doc__
+            or cls._help
+            or (cls.__module__ in sys.modules and sys.modules[cls.__module__].__doc__)
+            or ""
         )
         cls._description = string.normalize_indent(cls._description or cls._help)
         cls.convert_arguments()
@@ -230,7 +234,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         for argument in cls._arguments.values():
             params = dict(argument)
             params.pop("name")
-            aliases: Sequence[str] = params.pop("aliases")
+            aliases: List[str] = sorted(params.pop("aliases", []), key=lambda alias: (alias.startswith("--"), alias))
 
             if params.get("nargs") == "*...":
                 cls._unknown_arguments_dest = aliases[0]
