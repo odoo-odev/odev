@@ -15,8 +15,10 @@ from .database import DatabaseCommand, LocalDatabaseCommand, RemoteDatabaseComma
 from .git import GitCommand
 from .odoobin import (
     OdoobinCommand,
+    OdoobinTemplateCommand,
     OdoobinShellCommand,
     OdoobinShellScriptCommand,
+    TEMPLATE_SUFFIX,
 )
 
 

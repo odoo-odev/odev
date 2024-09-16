@@ -351,6 +351,12 @@ class OdevCommandTestCase(OdevTestCase):
 class OdevCommandRunDatabaseTestCase(OdevCommandTestCase):
     """Extended test case to run commands in test mode with an actual Odoo database that needs to run with odoo-bin."""
 
+    def tearDown(self):
+        template = LocalDatabase(f"{self.run_name}:template")
+
+        if template.exists:
+            template.drop()
+
     @classmethod
     def create_odoo_database(cls, name: str) -> LocalDatabase:
         """Create a new database for the test case."""

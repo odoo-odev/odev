@@ -17,6 +17,9 @@ from odev.common.version import OdooVersion
 logger = logging.getLogger(__name__)
 
 
+TEMPLATE_SUFFIX = ":template"
+
+
 class OdoobinCommand(LocalDatabaseCommand, ABC):
     """Base class for commands that interact with an odoo-bin process."""
 
@@ -260,6 +263,39 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         time = float(time)
         style = thresholds.get(max(filter(lambda x: x < time, thresholds.keys()), default=0.0))
         return string.stylize(f"{time:.3f}", style) if style else f"{time:.3f}"
+
+
+class OdoobinTemplateCommand(OdoobinCommand):
+    """Handle template databases through command line arguments."""
+
+    from_template = args.String(
+        aliases=["-t", "--from-template"],
+        description="Name of an existing PostgreSQL database to copy.",
+        nargs="?",
+        default="",
+    )
+
+    def infer_template_instance(self):
+        """Infer the template database from the command line arguments."""
+
+        # Command called with --from-template and no value: append the suffix to the database name
+        if self.args.from_template is None:
+            template_name = self._database.name + TEMPLATE_SUFFIX
+            self._template = LocalDatabase(template_name)
+
+        # Command called with --from-template and a value: use the provided template as the base database
+        elif self.args.from_template:
+            self._template = LocalDatabase(self.args.from_template)
+
+            if not self._template.exists and not self._template.name.endswith(TEMPLATE_SUFFIX):
+                self._template = LocalDatabase(self.args.from_template + TEMPLATE_SUFFIX)
+
+        # Command called without --from-template: no template database
+        else:
+            self._template = None
+
+        if self._template and not self._template.exists:
+            raise self.error(f"Template database {self._template.name!r} does not exist")
 
 
 class OdoobinShellCommand(OdoobinCommand, ABC):
