@@ -23,7 +23,7 @@ class TestCommand(OdoobinCommand):
     _aliases = ["tests"]
 
     tests = args.List(
-        aliases=["-F", "--filters"],
+        aliases=["-t", "--tags"],
         default=[],
         description="""
         Comma-separated list of files or tags to run specific tests.
@@ -107,7 +107,7 @@ class TestCommand(OdoobinCommand):
         if not self.test_database.exists:
             self.create_test_database()
 
-        odoobin = cast(OdoobinProcess, self.test_database.process)
+        odoobin = self.test_database.process or OdoobinProcess(self.test_database)
         odoobin.with_version(self._database.version)
         odoobin.with_edition(self._database.edition)
         odoobin.with_venv(self.venv)

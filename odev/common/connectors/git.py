@@ -420,6 +420,17 @@ class GitConnector(Connector):
         """
         bash.detached(f"cd {self.path} && git fetch")
 
+    def _get_clone_options(self, revision: Optional[str] = None) -> List[str]:
+        """Get the options to use when cloning the repository, passed through to git.
+        :param revision: The revision to checkout when cloning the repository.
+        """
+        options = ["--recurse-submodules"]
+
+        if revision is not None:
+            options.extend(["--branch", revision])
+
+        return options
+
     def clone(self, revision: Optional[str] = None):
         """Clone the repository locally.
         :param revision: The revision to checkout when cloning the repository.
@@ -430,17 +441,17 @@ class GitConnector(Connector):
 
             return logger.debug(f"Repository {self.name!r} already cloned to {self.path.as_posix()}")
 
-        options = ["--recurse-submodules"]
-
-        if revision is not None:
-            options.extend(["--branch", revision])
-
         logger.debug(
             f"Cloning repository {self.name!r} to {self.path}" + (f" on revision {revision!r}" if revision else "")
         )
 
         try:
-            self._git_progress(Repo.clone_from, self.ssh_url, self.path, multi_options=options)
+            self._git_progress(
+                Repo.clone_from,
+                self.ssh_url,
+                self.path,
+                multi_options=self._get_clone_options(revision),
+            )
         except GitCommandError as error:
             message: str = f"Failed to clone repository {self.name!r} to {self.path}"
 
@@ -634,9 +645,7 @@ class GitConnector(Connector):
         self._check_repository()
         assert self.repository is not None
         path = self._resolve_worktree_path(path)
-
-        if revision is None:
-            revision = self.default_branch
+        revision = revision or self.default_branch or self.branch
 
         if path.exists():
             logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
@@ -658,10 +667,14 @@ class GitConnector(Connector):
             self.worktrees_path.mkdir(parents=True, exist_ok=True)
 
             try:
-                self.repository.git.worktree("add", path, revision or self.branch, "--force")
+                self.repository.git.worktree("add", path, revision, "--force")
             except GitCommandError as error:
                 if "fatal: invalid reference" in error.stderr:
-                    logger.error(f"Git ref {revision!r} does not exist for repository {self.name!r}")
+                    logger.warning(f"Git ref {revision!r} does not exist for repository {self.name!r}")
+
+                    if revision and not revision.startswith("origin/"):
+                        return self.create_worktree(path, f"origin/{revision}")
+
                     raise ConnectorError("Did you forget to use '--version master'?", self) from error
 
                 raise error

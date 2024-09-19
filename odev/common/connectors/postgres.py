@@ -100,12 +100,12 @@ class PostgresConnector(Connector):
             self._connection.close()
             del self._connection
 
-    def invalidate_cache(self, database: Optional[str] = None):
+    def invalidate_cache(self, database_name: Optional[str] = None):
         """Invalidate the cache for a given database."""
-        database = database or self.database
-        logger.debug(f"Invalidating SQL cache for database {database!r}")
+        database_name = database_name or self.database
+        logger.debug(f"Invalidating SQL cache for database {database_name!r}")
         PostgresConnector._query_cache = {
-            key: value for key, value in self.__class__._query_cache.items() if key[0] != database
+            key: value for key, value in self.__class__._query_cache.items() if key[0] != database_name
         }
 
     @contextmanager
@@ -181,15 +181,18 @@ class PostgresConnector(Connector):
         """Create a database.
 
         :param database: The name of the database to create.
+        :param template: The template database to use.
         :return: Whether the database was created.
         :rtype: bool
         """
-        self.invalidate_cache(database="postgres")
+        template = template or "template0"
+        self.revoke_database(template)
+
         return bool(
             self.query(
                 f"""
                 CREATE DATABASE "{database}"
-                    WITH TEMPLATE "{template or 'template0'}"
+                    WITH TEMPLATE "{template}"
                     LC_COLLATE 'C'
                     ENCODING 'unicode'
                 """,
@@ -197,14 +200,12 @@ class PostgresConnector(Connector):
             )
         )
 
-    def drop_database(self, database: str) -> bool:
-        """Drop a database.
+    def revoke_database(self, database: str):
+        """Revoke all connections to a database.
 
-        :param database: The name of the database to drop.
-        :return: Whether the database was dropped.
-        :rtype: bool
+        :param database: The name of the database to disconnect.
         """
-        self.invalidate_cache(database="postgres")
+        self.invalidate_cache("postgres")
         self.query(
             f"""
             REVOKE CONNECT ON DATABASE "{database}"
@@ -225,6 +226,15 @@ class PostgresConnector(Connector):
             """
         )
 
+    def drop_database(self, database: str) -> bool:
+        """Drop a database.
+
+        :param database: The name of the database to drop.
+        :return: Whether the database was dropped.
+        :rtype: bool
+        """
+        self.revoke_database(database)
+
         res = bool(
             self.query(
                 f"""
@@ -233,7 +243,7 @@ class PostgresConnector(Connector):
                 transaction=False,
             )
         )
-        self.invalidate_cache(database=database)
+        self.invalidate_cache(database)
         return res
 
     def database_exists(self, database: str) -> bool:
