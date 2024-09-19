@@ -130,6 +130,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
                 addons_paths = [Path().resolve()]
 
             self.odoobin.additional_addons_paths = addons_paths
+            self.odoobin.save_database_repository()
             self.odoobin.with_edition("enterprise" if self.args.enterprise else "community")
 
             if self.args.version is not None:

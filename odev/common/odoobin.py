@@ -230,7 +230,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def additional_addons_paths(self) -> List[Path]:
         """Return the list of additional addons paths."""
-        if self.database.repository:
+        if not self._additional_addons_paths and self.database.repository:
             repository = GitConnector(self.database.repository.full_name)
 
             if repository.path not in self._additional_addons_paths:
@@ -242,7 +242,6 @@ class OdoobinProcess(OdevFrameworkMixin):
     def additional_addons_paths(self, value: List[Path]):
         """Set the list of additional addons paths."""
         self._additional_addons_paths = value
-        self.set_database_repository()
 
     @property
     def additional_repositories(self) -> Generator[GitConnector, None, None]:
@@ -722,8 +721,10 @@ class OdoobinProcess(OdevFrameworkMixin):
             for debugger in find_debuggers(addon):
                 yield debugger
 
-    def set_database_repository(self):
-        """Link the database to the first repository in additional addons-paths."""
+    def save_database_repository(self):
+        """Link the database to the first repository in additional addons-paths, allowing for reusing it in subsequent
+        runs of an odoo-bin process using this database.
+        """
         repository = next(self.additional_repositories, None)
 
         if repository is None:
@@ -731,8 +732,48 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         info = self.database.store.databases.get(self.database)
 
-        if info is not None and info.repository == repository.name:
-            return
+        if info is not None and info.repository is not None:
+            if info.repository == repository.name:
+                return
+
+            logger.warning(
+                f"""Your are running the database {self.database.name!r} with the repository {repository.name!r}
+                but it is already linked to another repository {info.repository!r}
+                """
+            )
+
+            choice = self.console.select(
+                "What do you want to do?",
+                [
+                    (
+                        "keep_and_use_old",
+                        f"Keep the existing repository linked and use it (run with {info.repository!r})",
+                    ),
+                    (
+                        "keep_and_use_new",
+                        f"Keep the existing repository linked but use the new one temporarily "
+                        f"(run with {repository.name!r})",
+                    ),
+                    (
+                        "replace",
+                        f"Replace the existing repository with the new one and use it (run with {repository.name!r})",
+                    ),
+                ],
+                default="keep_and_use_old",
+            )
+
+            if choice == "keep_and_use_old":
+                self.additional_addons_paths = [
+                    path for path in self.additional_addons_paths if path != repository.path
+                ]
+
+            elif choice == "keep_and_use_new":
+                self.additional_addons_paths = [
+                    path for path in self.additional_addons_paths if path != GitConnector(info.repository).path
+                ]
+
+            if choice != "replace":
+                return
 
         self.database.repository = Repository(repository._repository, repository._organization)
 
