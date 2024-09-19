@@ -4,12 +4,15 @@ Automate common tasks relative to working with Odoo development databases.
 
 <!-- TOC depthFrom:2 -->
 
--   [About](#about)
--   [Installation](#installation)
--   [Contributing](#contributing)
--   [Features](#features)
-    -   [Commands](#commands)
-    -   [Credentials](#credentials)
+-   [ODEV](#odev)
+    -   [About](#about)
+    -   [Installation](#installation)
+    -   [Contributing](#contributing)
+    -   [Features](#features)
+        -   [Commands](#commands)
+        -   [Plugins](#plugins)
+            -   [Known Plugins](#known-plugins)
+        -   [Credentials](#credentials)
 
 <!-- /TOC -->
 
@@ -83,7 +86,7 @@ Plugins can be enabled with the predefined command `odev plugin --enable <plugin
 
 | Name                                                                                          | Description                                                                                                  |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [odoo-odev/odev-plugin-hosted](https://github.com/odoo-odev/odev-plugin-hosted)               | Interact with PaaS (odoo.sh) and SaaS (Odoo Online) databases, requires Odoo Technical Support access level. |
+| [odoo-ps/odev-plugin-hosted](https://github.com/odoo-ps/odev-plugin-hosted)                   | Interact with PaaS (odoo.sh) and SaaS (Odoo Online) databases, requires Odoo Technical Support access level. |
 | [odoo-odev/odev-plugin-editor-vscode](https://github.com/odoo-odev/odev-plugin-editor-vscode) | Interact with VSCode, open a debugger session and configure workspaces.                                      |
 | [odoo-odev/odev-plugin-export](https://github.com/odoo-odev/odev-plugin-export)               | Export customizations from a database and convert Studio to code.                                            |
 
