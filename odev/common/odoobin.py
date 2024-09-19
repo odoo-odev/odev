@@ -2,6 +2,7 @@
 
 import re
 import shlex
+from ast import literal_eval
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -709,6 +710,49 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         globs = (path.glob(f"*/__{manifest}__.py") for manifest in ["manifest", "openerp"])
         return path.is_dir() and any(manifest for glob in globs for manifest in glob)
+
+    @classmethod
+    def version_from_addons(cls, path: Path) -> Optional[OdooVersion]:
+        """Find the Odoo version of the addons in a directory, if this is an addons directory.
+
+        :param path: Path to the addons directory.
+        """
+        if not cls.check_addons_path(path):
+            return None
+
+        for addon in path.iterdir():
+            for manifest_name in ["__manifest__.py", "__openerp__.py"]:
+                manifest_path = addon / manifest_name
+
+                if not manifest_path.exists():
+                    continue
+
+                manifest = cls.read_manifest(manifest_path)
+
+                if manifest is None:
+                    continue
+
+                version = manifest.get("version", None)
+
+                if isinstance(version, str):
+                    return OdooVersion(version)
+
+        return None
+
+    @classmethod
+    def read_manifest(cls, path: Path) -> Optional[Mapping[str, Union[str, List[Union[str, int, bool]]]]]:
+        """Read the manifest file of an Odoo module.
+
+        :param path: Path to the manifest file.
+        """
+        with path.open("r") as manifest:
+            content = manifest.read()
+
+        try:
+            value = literal_eval(content)
+            return value if isinstance(value, dict) else None
+        except SyntaxError:
+            return None
 
     def addons_debuggers(self) -> Generator[Tuple[Path, int], None, None]:
         """Find all calls to interactive debuggers in the addons paths for the current Odoo version.
