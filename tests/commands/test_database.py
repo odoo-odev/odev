@@ -126,7 +126,7 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         self.assert_database(self.create_database_name, exists=False)
 
         with self.wrap("odev.common.bash", "stream") as stream:
-            self.dispatch_command("create", self.create_database_name, "--template", template_database.name)
+            self.dispatch_command("create", self.create_database_name, "--from-template", template_database.name)
             stream.assert_not_called()
 
         self.assert_database(self.create_database_name, version=str(template_database.version))
@@ -274,6 +274,61 @@ class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
 
         self.assert_database(self.database.name, is_odoo=True)
         self.assertIn(f"Running 'odoo-bin' in version '17.0' on database '{self.database.name}'", stdout)
+
+    def test_02_run_from_template(self):
+        """Command `odev run` should run Odoo in a database from a template."""
+        self.assert_database(self.database.name, is_odoo=True)
+        self.dispatch_command("create", self.database.name, "--create-template")
+        template_name = f"{self.database.name}:template"
+        self.assert_database(template_name, is_odoo=True)
+        self.database.query("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
+        self.assertTrue(self.database.table_exists("test_table"))
+
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command(
+                "run", self.database.name, "--stop-after-init", "--from-template", template_name
+            )
+            stream.assert_called_with(OdoobinMatch(self.database.name, ["--stop-after-init"]))
+
+        self.assert_database(self.database.name, is_odoo=True)
+        self.assertFalse(self.database.table_exists("test_table"))
+        self.assertIn(f"Running 'odoo-bin' in version '17.0' on database '{self.database.name}'", stdout)
+        LocalDatabase(template_name).drop()
+
+    def test_03_run_from_template_no_value(self):
+        """Command `odev run` should run Odoo in a database from a template, taking the current database name if
+        no value given.
+        """
+        self.assert_database(self.database.name, is_odoo=True)
+        template_name = f"{self.database.name}:template"
+        self.assert_database(template_name, exists=False)
+        self.dispatch_command("create", self.database.name, "--create-template")
+        self.assert_database(template_name, is_odoo=True)
+        self.database.query("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
+        self.assertTrue(self.database.table_exists("test_table"))
+
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command("run", self.database.name, "--stop-after-init", "--from-template")
+            stream.assert_called_with(OdoobinMatch(self.database.name, ["--stop-after-init"]))
+
+        self.assert_database(self.database.name, is_odoo=True)
+        self.assertFalse(self.database.table_exists("test_table"))
+        self.assertIn(f"Running 'odoo-bin' in version '17.0' on database '{self.database.name}'", stdout)
+        LocalDatabase(template_name).drop()
+
+    def test_04_run_from_invalid_template(self):
+        """Command `odev run` should not delete the existing database if the template does not exist."""
+        self.assert_database(self.database.name, is_odoo=True)
+        template_name = f"{self.database.name}:template"
+        self.assert_database(template_name, exists=False)
+        self.database.query("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
+        self.assertTrue(self.database.table_exists("test_table"))
+        stdout, _ = self.dispatch_command(
+            "run", self.database.name, "--stop-after-init", "--from-template", template_name
+        )
+        self.assert_database(self.database.name, is_odoo=True)
+        self.assertTrue(self.database.table_exists("test_table"))
+        self.assertNotIn(f"Running 'odoo-bin' in version '17.0' on database '{self.database.name}'", stdout)
 
 
 class TestCommandDatabaseKill(OdevCommandRunDatabaseTestCase):
