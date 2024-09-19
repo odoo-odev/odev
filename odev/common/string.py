@@ -156,8 +156,41 @@ def stylize(value: str, style: str) -> str:
     return f"[{style}]{value}[/{style}]"
 
 
+def strip_styles(text: str) -> str:
+    """Strip Rich styles from a text, returning its raw content without markup.
+    :param text: The text to strip styles from.
+    """
+    return re.sub(r"\[(\w+(\.\w+)*(\s+\w+)*)\](.*?)\[\/\1\]", r"\4", text)
+
+
+def resolve_styles(text: str) -> str:
+    """Resolve markup styles from a text, replacing aliased styles by their proper value usable by Rich.
+    :param text: The text to resolve styles from.
+    """
+    from odev.common.console import resolve_styles
+
+    def replace_tag(match: re.Match) -> str:
+        tag = f"{match.group(1)} {replacement} {match.group(2)}".strip()
+        return stylize(match.group(3), tag)
+
+    for style in list_styles(text):
+        replacement = resolve_styles(style)
+        tag = re.escape(style)
+        text = re.sub(rf"\[(.*?)(?:{tag})(.*?)\](.*?)\[\/\1(?:{tag})\2\]", replace_tag, text)
+
+    return text
+
+
+def list_styles(text: str) -> List[str]:
+    """Extract Rich styles from a text and returns the list of tags in their order of appearance.
+    Only lists unique opening tags, closing tags are ignored. Nested tags are supported.
+    :param text: The text to list styles from.
+    """
+    return re.findall(r"\[(?!\/)([\w\.]+(?:\s+[\w\.]+)*)\]", text)
+
+
 def strip_ansi_colors(text: str) -> str:
-    """Strip ANSI colors from a text.
+    """Strip ANSI colors from a text, leave other control characters and escape codes.
     :param text: The text to strip color codes from.
     """
     return re.sub(r"\x1b[^m]*m", "", text)

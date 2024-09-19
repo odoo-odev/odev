@@ -339,7 +339,7 @@ class Console(RichConsole):
         :param kwargs: Additional keyword arguments to pass to the print method.
         """
         if isinstance(renderable, str):
-            renderable = resolve_styles(renderable)
+            renderable = string.resolve_styles(renderable)
 
         if "style" in kwargs:
             kwargs["style"] = resolve_styles(kwargs["style"])
