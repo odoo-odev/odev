@@ -205,7 +205,11 @@ def stream(command: str) -> Generator[str, None, None]:
 
                 yield received_buffer.decode()
                 received_buffer = b""
-                sys.stdout.buffer.write(b"\r")
+
+                try:
+                    os.write(sys.stdout.fileno(), b"\r")
+                except OSError:
+                    sys.stdout.buffer.write(b"\r")
 
     finally:
         os.close(slave)
