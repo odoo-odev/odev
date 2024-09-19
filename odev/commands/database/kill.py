@@ -46,7 +46,7 @@ class KillCommand(LocalDatabaseCommand):
                 sleep(0.2 * retries)
 
             if self.odoobin.is_running:
-                logger.warn(
+                logger.warning(
                     f"Database {self._database.name!r} (pid: {self.odoobin.pid}) is still running, force-killing it"
                 )
                 self.odoobin.kill(hard=True)

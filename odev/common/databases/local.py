@@ -113,9 +113,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             info = self.store.databases.get(self)
 
             if info is None:
-                return PythonEnv()
+                if self.version is None:
+                    return PythonEnv()
 
-            self._venv = PythonEnv(info.virtualenv)
+                self._venv = PythonEnv(str(self.version))
+            else:
+                self._venv = PythonEnv(info.virtualenv)
 
         return self._venv
 
@@ -157,7 +160,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         with self:
             assert self.connector is not None
-            result = self.is_odoo and self.connector.query(
+            result = self.connector.query(
                 """
                 SELECT latest_version
                 FROM ir_module_module
@@ -172,7 +175,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             if version is not None:
                 return OdooVersion(version)
 
-        return None
+        return OdooVersion("master")
 
     @cached_property
     def edition(self) -> Optional[Literal["community", "enterprise"]]:  # type: ignore [override]
@@ -321,7 +324,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     @property
     def process(self) -> Optional[OdoobinProcess]:
-        if self._process is None and self.exists:
+        if self._process is None and self.is_odoo:
             self._process = OdoobinProcess(
                 self,
                 (self.venv and self.venv.path.name) or str(self.version),
