@@ -2,29 +2,26 @@
 
 import re
 import shutil
-from typing import List, Optional, cast
+from typing import List, cast
 
 from odev.common import args, progress
-from odev.common.commands import OdoobinCommand
+from odev.common.commands import TEMPLATE_SUFFIX, OdoobinTemplateCommand
 from odev.common.databases import LocalDatabase
 from odev.common.odev import logger
 from odev.common.odoobin import OdoobinProcess
 from odev.common.version import OdooVersion
 
 
-TEMPLATE_SUFFIX = ":template"
-
-
-class CreateCommand(OdoobinCommand):
+class CreateCommand(OdoobinTemplateCommand):
     """Create a new Odoo database locally, or copy an existing database template."""
 
     _name = "create"
     _aliases = ["cr"]
 
-    template_argument = args.String(
-        name="template",
-        aliases=["-t", "--template"],
-        description="Name of an existing PostgreSQL database to copy.",
+    from_template = args.String(
+        description="""Name of an existing PostgreSQL database to copy instead of initializing a new Odoo database.
+        If passed without a value, search for a template database with the same name as the new database.
+        """
     )
     new_template = args.Flag(
         aliases=["-T", "--create-template"],
@@ -52,22 +49,15 @@ class CreateCommand(OdoobinCommand):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        if self.args.template and self.args.new_template:
-            raise self.error("The arguments `template` and `new_template` are mutually exclusive")
+        if self.args.from_template and self.args.new_template:
+            raise self.error("The arguments `from_template` and `new_template` are mutually exclusive")
 
         if self.args.new_template:
-            self.args.template = self.args.database
+            self.args.from_template = self.args.database
             self.args.database += TEMPLATE_SUFFIX
             self._database = LocalDatabase(self.args.database)
 
-        if self.args.template:
-            self.template: Optional[LocalDatabase] = LocalDatabase(self.args.template + TEMPLATE_SUFFIX)
-            """Template database to copy."""
-
-            if not self.template.exists:
-                self.template = LocalDatabase(self.args.template)
-        else:
-            self.template = None
+        self.infer_template_instance()
 
     @property
     def version(self) -> OdooVersion:
@@ -75,10 +65,10 @@ class CreateCommand(OdoobinCommand):
         if self.args.version:
             return OdooVersion(self.args.version)
 
-        if self.template:
-            with self.template:
-                if self.template.version:
-                    return self.template.version
+        if self._template:
+            with self._template:
+                if self._template.version:
+                    return self._template.version
 
         if self._database.version:
             return self._database.version
@@ -89,10 +79,10 @@ class CreateCommand(OdoobinCommand):
         """Create a new database locally."""
         self.create_database()
 
-        if self.args.copy_filestore and self.template is not None:
+        if self.args.copy_filestore and self._template is not None:
             self.copy_template_filestore()
 
-        if self.args.bare or self.template is not None:
+        if self.args.bare or self._template is not None:
             return
 
         self.initialize_database()
@@ -111,18 +101,20 @@ class CreateCommand(OdoobinCommand):
 
     def ensure_template_exists(self):
         """Ensure the template database exists."""
-        if self.template is None:
+        if self._template is None:
             return
 
-        if not self.template.exists:
-            raise self.error(f"Template database {self.template.name!r} does not exist")
+        if not self._template.exists:
+            raise self.error(f"Template database {self._template.name!r} does not exist")
 
-        if self.template.process is not None and self.template.process.is_running:
-            raise self.error(f"Cannot copy template {self.template.name!r} while it is running, shut it down and retry")
+        if self._template.process is not None and self._template.process.is_running:
+            raise self.error(
+                f"Cannot copy template {self._template.name!r} while it is running, shut it down and retry"
+            )
 
     def copy_template_filestore(self):
         """Copy the template filestore to the new database."""
-        fs_template = cast(LocalDatabase, self.template).filestore.path
+        fs_template = cast(LocalDatabase, self._template).filestore.path
         fs_database = self._database.filestore.path
 
         if fs_template is not None and fs_template.exists() and fs_database is not None:
@@ -146,11 +138,11 @@ class CreateCommand(OdoobinCommand):
         self.ensure_database_not_exists()
         self.ensure_template_exists()
 
-        template = self.template.name if self.template else None
+        template = self._template.name if self._template else None
         message = f"database {self._database.name!r}" + (f" from template {template!r}" if template else "")
 
-        if self.template and self.template.connector:
-            self.template.connector.disconnect()
+        if self._template and self._template.connector:
+            self._template.connector.disconnect()
 
         with progress.spinner(f"Creating {message}"):
             created = self._database.create(template=template) & self._database.unaccent()
@@ -162,8 +154,8 @@ class CreateCommand(OdoobinCommand):
 
     def initialize_database(self) -> None:
         """Initialize the database."""
-        if self.template:
-            logger.debug(f"Initializing database {self._database.name!r} from template {self.template.name!r}")
+        if self._template:
+            logger.debug(f"Initializing database {self._database.name!r} from template {self._template.name!r}")
 
         args: List[str] = self.args.odoo_args
         joined_args = " ".join(args)
