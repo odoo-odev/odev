@@ -187,7 +187,6 @@ def stream(command: str) -> Generator[str, None, None]:
                     received_buffer += received
                     continue
 
-                received_buffer = received_buffer.strip()
                 yield received_buffer.decode()
                 received_buffer = b""
                 os.write(sys.stdout.fileno(), b"\r")

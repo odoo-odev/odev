@@ -167,7 +167,7 @@ class TestCommand(OdoobinCommand):
         if not self.test_buffer:
             return logger.info("No failing tests, congratulations!")
 
-        if self._odoo_log_regex.match(self.test_buffer.pop()) is None:
+        if self.ODOO_LOG_REGEX.match(self.test_buffer.pop()) is None:
             return self.error("Cannot fetch tests results, check the odoo-bin output for more information")
 
         for test in self.__tests_details():
@@ -182,7 +182,7 @@ class TestCommand(OdoobinCommand):
         trace: List[str] = []
 
         for line in self.test_buffer:
-            match = self._odoo_log_regex.match(line)
+            match = self.ODOO_LOG_REGEX.match(line)
 
             if match is None:  # This is part of a traceback or a line printed outside of the logger
                 trace.append(line)
