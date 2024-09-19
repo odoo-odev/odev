@@ -384,10 +384,12 @@ class OdoobinProcess(OdevFrameworkMixin):
         :return: List of arguments to pass to odoo-bin.
         :rtype: List[str]
         """
+        home_path = Path("~").expanduser().as_posix()
+        addons_paths = ",".join(re.sub(rf"^{home_path}", "~", path.as_posix()) for path in self.addons_paths)
 
         odoo_bin_args: List[str] = []
         odoo_bin_args.extend(["--database", self.database.name])
-        odoo_bin_args.extend(["--addons-path", ",".join(path.as_posix() for path in self.addons_paths)])
+        odoo_bin_args.extend(["--addons-path", addons_paths])
         odoo_bin_args.extend(["--log-level", LOG_LEVEL.lower()])
         odoo_bin_args.extend(args or [])
 
@@ -546,7 +548,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
             formatted_command = self.format_command(args, subcommand, subcommand_input)
-            info_message = f"Running {odoo_command!r} in version {self.version!s} on database {self.database.name!r}"
+            info_message = f"Running {odoo_command!r} in version '{self.version!s}' on database {self.database.name!r}"
             logger.info(f"{info_message} using command:")
             self.console.print()
             self.console.print(formatted_command, soft_wrap=True, highlight=False)
@@ -565,6 +567,10 @@ class OdoobinProcess(OdevFrameworkMixin):
             except CalledProcessError as error:
                 if not stream:
                     self.console.print(error.stderr.decode())
+
+                if self.odev.in_test_mode:
+                    logger.debug(f"STDOUT: {error.stdout.decode()}")
+                    logger.error(f"STDERR: {error.stderr.decode()}")
 
                 logger.error("Odoo exited with an error, check the output above for more information")
                 return None

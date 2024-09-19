@@ -1,9 +1,13 @@
 import re
-from subprocess import CompletedProcess
+import shlex
+from pathlib import Path
+from subprocess import CompletedProcess, Popen
+from time import sleep
 
 from odev.common import string
 from odev.common.databases import LocalDatabase
-from tests.fixtures import OdevCommandTestCase
+from tests.fixtures import OdevCommandRunDatabaseTestCase, OdevCommandTestCase
+from tests.fixtures.matchers import OdoobinMatch
 
 
 ODOOBIN_PATH = "odev.common.odoobin.OdoobinProcess"
@@ -70,142 +74,124 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.create_database_name = f"{cls.run_name}-create"
+        cls.template_database_name = f"{cls.create_database_name}:template"
 
     def tearDown(self):
         super().tearDown()
 
-        for name in (self.create_database_name, f"{self.create_database_name}:template"):
+        for name in (self.create_database_name, self.template_database_name):
             database = LocalDatabase(name)
+
+            if database.venv.exists and not database.venv._global:
+                database.venv.remove()
+
+            for worktree in database.worktrees:
+                worktree.connector.remove_worktree(worktree.path)
 
             if database.exists:
                 database.drop()
 
     def test_01_create_bare(self):
         """Command `odev create --bare` should create a new database but should not initialize it with Odoo."""
-        database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
+        self.assert_database(self.create_database_name, exists=False)
 
-        self.dispatch_command("create", self.create_database_name, "--bare")
+        with self.wrap("odev.common.bash", "stream") as stream:
+            self.dispatch_command("create", self.create_database_name, "--bare")
+            stream.assert_not_called()
 
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertFalse(database.is_odoo)
-        self.assertIsNone(self.odev.store.databases.get(database))
+        self.assert_database(self.create_database_name, exists=True, is_odoo=False)
 
     def test_02_create_odoo(self):
         """Command `odev create` should create a new database and initialize it with Odoo."""
-        database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
+        self.assert_database(self.create_database_name, exists=False)
 
-        with self.patch("odev.common.bash", "stream", []) as mock_stream:
-            stdout, _ = self.dispatch_command("create", self.create_database_name)
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command(
+                "create", self.create_database_name, "--version", "17.0", "--without-demo", "all"
+            )
+            stream.assert_called_with(
+                OdoobinMatch(
+                    self.create_database_name,
+                    ["--without-demo", "all", "--init", "base", "--stop-after-init"],
+                )
+            )
 
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertIn("Running 'odoo-bin' in version master on database", stdout)
-        mock_stream.assert_called_once()
-        self.assertRegex(
-            mock_stream.call_args[0][0],
-            rf"odoo-bin --database {self.create_database_name} "
-            r"--addons-path [a-z0-9. \-/,]+ --init base --stop-after-init",
-        )
+        self.assertIn("Running 'odoo-bin' in version '17.0' on database", stdout)
+        self.assert_database(self.create_database_name, version="17.0")
 
     def test_03_create_from_template(self):
         """Command `odev create` should create a new database from an existing template."""
-        template_database = self.create_odoo_database(f"{self.create_database_name}:template")
-        self.assertTrue(template_database.exists)
-        self.assertTrue(template_database.is_odoo)
+        template_database = self.create_odoo_database(self.template_database_name)
+        self.assert_database(template_database.name, is_odoo=True)
+        self.assert_database(self.create_database_name, exists=False)
 
-        database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
-
-        if template_database.connector:
-            template_database.connector.disconnect()
-
-        with self.patch(ODOOBIN_PATH, "run") as mock_odoobin_run:
+        with self.wrap("odev.common.bash", "stream") as stream:
             self.dispatch_command("create", self.create_database_name, "--template", template_database.name)
+            stream.assert_not_called()
 
-        mock_odoobin_run.assert_not_called()
-
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertTrue(database.is_odoo)
+        self.assert_database(self.create_database_name, version=str(template_database.version))
 
     def test_04_create_new_template(self):
         """Command `odev create` should create a new template database."""
-        database = self.create_odoo_database(f"{self.create_database_name}")
-        self.assertTrue(database.exists)
-        self.assertTrue(database.is_odoo)
+        database = self.create_odoo_database(self.create_database_name)
+        self.assert_database(database.name, is_odoo=True)
+        self.assert_database(self.template_database_name, exists=False)
 
-        template_database = LocalDatabase(f"{self.create_database_name}:template")
-        self.assertFalse(template_database.exists)
+        with self.wrap("odev.common.bash", "stream") as stream:
+            self.dispatch_command("create", self.create_database_name, "--create-template")
+            stream.assert_not_called()
 
-        self.dispatch_command("create", self.create_database_name, "--create-template")
-
-        template_database = LocalDatabase(f"{self.create_database_name}:template")
-        self.assertTrue(template_database.exists)
+        self.assert_database(self.template_database_name, version=str(database.version))
 
     def test_05_overwrite(self):
         """Command `odev create` should overwrite an existing database."""
         database = self.create_odoo_database(self.create_database_name)
-        self.assertTrue(database.exists)
+        database_version = database.version
+        self.assert_database(database.name, is_odoo=True)
 
-        stdout, _ = self.dispatch_command("create", self.create_database_name, "--force")
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command(
+                "create", self.create_database_name, "--force", "--version", "16.0", "--without-demo", "all"
+            )
+            stream.assert_called_with(
+                OdoobinMatch(
+                    self.create_database_name,
+                    ["--without-demo", "all", "--init", "base", "--stop-after-init"],
+                )
+            )
 
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
+        self.assert_database(database.name, is_odoo=True)
+        self.assertNotEqual(database_version, LocalDatabase(database.name).version)
         self.assertIn(f"Database '{self.create_database_name}' already exists", stdout)
 
     def test_06_with_venv(self):
         """Command `odev create` should create a new database with a specific virtual environment."""
-        database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
-
-        self.dispatch_command("create", self.create_database_name, "--venv", self.venv.name)
-
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertEqual(database.venv.name, self.venv.name)
+        self.assert_database(self.create_database_name, is_odoo=False)
+        self.dispatch_command(
+            "create", self.create_database_name, "--venv", self.venv.name, "--version", "17.0", "--without-demo", "all"
+        )
+        self.assert_database(self.create_database_name, is_odoo=True)
+        self.assertEqual(LocalDatabase(self.create_database_name).venv.name, self.venv.name)
 
     def test_07_with_version(self):
         """Command `odev create` should create a new database with a specific Odoo version."""
+        self.assert_database(self.create_database_name, is_odoo=False)
+        self.dispatch_command("create", self.create_database_name, "--version", "17.0", "--without-demo", "all")
+        self.assert_database(self.create_database_name, is_odoo=True, version="17.0")
         database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
-
-        stdout, _ = self.dispatch_command("create", self.create_database_name, "--version", "17.0")
-
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertIn("Running 'odoo-bin' in version 17.0 on database", stdout)
         self.assertEqual(database.venv.name, "17.0")
+        self.assertTrue(Path(database.venv.path).is_dir())
 
     def test_08_with_worktree(self):
         """Command `odev create` should create a new database with a specific worktree."""
-        database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
-
-        stdout, _ = self.dispatch_command(
-            "create", self.create_database_name, "--worktree", f"{self.run_name}-worktree"
+        self.assert_database(self.create_database_name, is_odoo=False)
+        self.dispatch_command(
+            "create", self.create_database_name, "--worktree", "test", "--version", "17.0", "--without-demo", "all"
         )
-
+        self.assert_database(self.create_database_name, is_odoo=True)
         database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertIn("Running 'odoo-bin' in version master on database", stdout)
-        self.assertEqual(database.worktree, f"{self.run_name}-worktree")
-
-    def test_09_with_version_and_venv(self):
-        """Command `odev create` should create a new database with a specific Odoo version and virtual environment."""
-        database = LocalDatabase(self.create_database_name)
-        self.assertFalse(database.exists)
-
-        stdout, _ = self.dispatch_command(
-            "create", self.create_database_name, "--version", "17.0", "--venv", self.venv.name
-        )
-
-        database = LocalDatabase(self.create_database_name)
-        self.assertTrue(database.exists)
-        self.assertIn("Running 'odoo-bin' in version 17.0 on database", stdout)
-        self.assertEqual(database.venv.name, self.venv.name)
+        self.assertEqual(database.worktree, "test")
+        self.assertTrue(Path(self.odev.worktrees_path / (database.worktree or "")).is_dir())
 
 
 class TestCommandDatabaseTest(OdevCommandTestCase):
@@ -213,19 +199,19 @@ class TestCommandDatabaseTest(OdevCommandTestCase):
 
     def test_01_test(self):
         """Command `odev test` should run tests on a database."""
-        with self.patch("odev.common.bash", "stream", []) as mock_stream:
-            stdout, _ = self.dispatch_command("test", self.database.name, "--modules", "base")
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command("test", self.database.name, "--tags", ":TestSafeEval.test_expr")
+            stream.assert_called_with(
+                OdoobinMatch(
+                    self.database.name,
+                    ["--stop-after-init", "--test-enable", "--test-tags", ":TestSafeEval.test_expr", "--init", "base"],
+                )
+            )
 
-        self.assertTrue(self.database.exists)
+        self.assert_database(self.database.name, is_odoo=True)
         self.assertRegex(stdout, rf"Created database '{self.database.name}_[a-z0-9]{{8}}'")
         self.assertIn("No failing tests", stdout)
         self.assertRegex(stdout, rf"Dropped database '{self.database.name}_[a-z0-9]{{8}}'")
-        mock_stream.assert_called_once()
-        self.assertRegex(
-            mock_stream.call_args[0][0],
-            rf"odoo-bin --database {self.database.name}_[a-z0-9]{{8}} "
-            r"--addons-path [a-z0-9.\s\-/,]* --log-level info --stop-after-init --test-enable --init base",
-        )
 
 
 class TestCommandDatabaseDelete(OdevCommandTestCase):
@@ -243,39 +229,69 @@ class TestCommandDatabaseDelete(OdevCommandTestCase):
 
     def test_01_delete_database(self):
         """Command `odev delete` should delete a database if a name is provided."""
-        self.assertTrue(self.delete_database.exists)
-
+        self.assert_database(self.delete_database.name, exists=True)
         stdout, _ = self.dispatch_command("delete", self.delete_database.name)
-
-        self.assertFalse(self.delete_database.exists)
         self.assertIn(f"Dropped database '{self.delete_database.name}'", stdout)
+        self.assert_database(self.delete_database.name, exists=False)
 
     def test_02_delete_non_existent(self):
         """Command `odev delete` should display an error message when trying to delete a non-existent database."""
         self.delete_database.drop()
-        self.assertFalse(self.delete_database.exists)
-
+        self.assert_database(self.delete_database.name, exists=False)
         _, stderr = self.dispatch_command("delete", self.delete_database.name)
-
-        self.assertFalse(self.delete_database.exists)
+        self.assert_database(self.delete_database.name, exists=False)
         self.assertIn(f"No non-whitelisted database found named '{self.delete_database.name}'", stderr)
 
     def test_03_delete_no_filter(self):
         """Command `odev delete` should not delete databases if no filter (database or expression) are provided."""
-        self.assertTrue(self.delete_database.exists)
-
+        self.assert_database(self.delete_database.name, exists=True)
         _, stderr = self.dispatch_command("delete")
-
-        self.assertTrue(self.delete_database.exists)
+        self.assert_database(self.delete_database.name, exists=True)
         self.assertIn("Arguments database and expression are mutually exclusive and at least one is required", stderr)
 
     def test_04_delete_expression(self):
         """Command `odev delete` should delete databases matching a regular expression."""
-        self.assertTrue(self.delete_database.exists)
+        self.assert_database(self.delete_database.name, exists=True)
 
         with self.patch("odev.common.console.Console", "confirm", True):
             stdout, _ = self.dispatch_command("delete", "-e", ".*-delete$")
 
-        self.assertFalse(self.delete_database.exists)
+        self.assert_database(self.delete_database.name, exists=False)
         self.assertIn(f"You are about to delete the following databases: '{self.delete_database.name}'", stdout)
         self.assertIn("Deleted 1 databases", stdout)
+
+
+class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
+    """Command `odev run` should run Odoo in a database."""
+
+    def test_01_run(self):
+        """Command `odev run` should run Odoo in a database."""
+        self.assert_database(self.database.name, is_odoo=True)
+
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command("run", self.database.name, "--stop-after-init")
+            stream.assert_called_with(OdoobinMatch(self.database.name, ["--stop-after-init"]))
+
+        self.assert_database(self.database.name, is_odoo=True)
+        self.assertIn(f"Running 'odoo-bin' in version '17.0' on database '{self.database.name}'", stdout)
+
+
+class TestCommandDatabaseKill(OdevCommandRunDatabaseTestCase):
+    """Command `odev kill` should kill Odoo processes in a database."""
+
+    def test_01_kill(self):
+        """Command `odev kill` should kill Odoo processes in a database."""
+        self.assert_database(self.database.name, is_odoo=True)
+        assert self.database.process is not None
+        command = string.strip_styles(self.database.process.format_command().replace("\\\n", " "))
+        Popen(shlex.split(command), start_new_session=True)
+
+        seconds, elapsed = 2, 0
+        while not self.database.running and elapsed < 30:
+            sleep(seconds)
+            elapsed += seconds
+
+        self.assertTrue(self.database.running)
+        self.dispatch_command("kill", self.database.name)
+        self.assert_database(self.database.name, is_odoo=True)
+        self.assertFalse(self.database.running)

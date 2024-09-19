@@ -6,10 +6,10 @@ the subsystem.
 import os
 import pty
 import select
+import shlex
 import sys
 import termios
 import tty
-from shlex import quote
 from subprocess import (
     DEVNULL,
     CalledProcessError,
@@ -28,6 +28,7 @@ __all__ = ["execute", "detached", "stream"]
 
 logger = logging.getLogger(__name__)
 
+CTRL_C, CTRL_D = b"\x03", b"\x04"
 
 global sudo_password
 sudo_password: Optional[str] = None
@@ -51,7 +52,7 @@ def __run_command(command: str, capture: bool = True, sudo_password: Optional[st
 
     if sudo_password is not None:
         command = f"sudo -Sks {command}"
-        sudo_password = quote(f"{sudo_password}\n")
+        sudo_password = shlex.quote(f"{sudo_password}\n")
 
     return run_subprocess(
         command,
@@ -71,7 +72,8 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
     if do_raise:
         raise exception
 
-    logger.error(exception)
+    logger.debug(exception.stdout.decode())
+    logger.error(exception.stderr.decode())
 
 
 # --- Public API ---------------------------------------------------------------
@@ -93,13 +95,12 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
     :rtype: Optional[CompletedProcess]
     """
     try:
-        logger.debug(f"Running process: {quote(command)}")
+        logger.debug(f"Running process: {shlex.quote(command)}")
         process_result = __run_command(command)
     except CalledProcessError as exception:
 
         # If already running as root, sudo will not work
         if not sudo or not os.geteuid():
-            logger.debug(f"Process failed: {quote(command)}")
             __raise_or_log(exception, raise_on_error)
             return None
 
@@ -113,7 +114,6 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
         try:
             process_result = __run_command(command, sudo_password=sudo_password)
         except CalledProcessError as exception:
-            logger.debug(f"Process failed with elevated privileges: {quote(command)}")
             sudo_password = None
             __raise_or_log(exception, raise_on_error)
             return None
@@ -128,7 +128,7 @@ def run(command: str) -> CompletedProcess:
 
     :param str command: The command to execute.
     """
-    logger.debug(f"Running process: {quote(command)}")
+    logger.debug(f"Running process: {shlex.quote(command)}")
     return __run_command(command, capture=False)
 
 
@@ -137,7 +137,7 @@ def detached(command: str) -> Popen[bytes]:
 
     :param str command: The command to execute.
     """
-    logger.debug(f"Running detached process: {quote(command)}")
+    logger.debug(f"Running detached process: {shlex.quote(command)}")
     return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)
 
 
@@ -145,15 +145,28 @@ def stream(command: str) -> Generator[str, None, None]:
     """Execute a command in the operating system and stream its output line by line.
     :param str command: The command to execute.
     """
-    logger.debug(f"Streaming process: {quote(command)}")
+    logger.debug(f"Streaming process: {shlex.quote(command)}")
+
+    if not sys.stdin.isatty():
+        logger.warning("STDIN is not a TTY, running command in non-interactive mode")
+        exec_process = execute(command)
+
+        if not exec_process:
+            yield ""
+            return
+
+        for line in exec_process.stdout.decode().splitlines():
+            yield line
+
+        return
+
     original_tty = termios.tcgetattr(sys.stdin)
     tty.setraw(sys.stdin.fileno())
     master, slave = pty.openpty()
 
     try:
         process = Popen(
-            command,
-            shell=True,
+            shlex.split(command),
             stdout=slave,
             stderr=slave,
             stdin=slave,
@@ -168,11 +181,14 @@ def stream(command: str) -> Generator[str, None, None]:
 
             # Input received on STDIN, pass it to the child process
             if sys.stdin in rlist:
+                # Ignore characters other than CTRL+C or CTRL+D, allow requesting
+                # the process to stop or exiting interactive debuggers
                 char = os.read(sys.stdin.fileno(), 1)
 
-                # Ignore characters other than CTRL+C or CTRL+D, allow requesting
-                # the process to stop
-                if char in (b"\x03", b"\x04"):
+                if char == CTRL_C:
+                    process.terminate()
+
+                if char in (CTRL_C, CTRL_D):
                     os.write(master, char)
                     os.write(master, b"\n")
 
@@ -189,7 +205,7 @@ def stream(command: str) -> Generator[str, None, None]:
 
                 yield received_buffer.decode()
                 received_buffer = b""
-                os.write(sys.stdout.fileno(), b"\r")
+                sys.stdout.buffer.write(b"\r")
 
     finally:
         os.close(slave)
