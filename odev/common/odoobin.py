@@ -16,6 +16,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
     Union,
     cast,
@@ -713,29 +714,41 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     @classmethod
     def version_from_addons(cls, path: Path) -> Optional[OdooVersion]:
-        """Find the Odoo version of the addons in a directory, if this is an addons directory.
+        """Find the highest Odoo version of the addons in a directory, if this is an addons directory.
 
         :param path: Path to the addons directory.
         """
         if not cls.check_addons_path(path):
             return None
 
-        for addon in path.iterdir():
-            for manifest_name in ["__manifest__.py", "__openerp__.py"]:
-                manifest_path = addon / manifest_name
+        versions = cast(Set[OdooVersion], {cls.version_from_manifest(addon) for addon in path.iterdir()} - {None})
 
-                if not manifest_path.exists():
-                    continue
+        if not versions:
+            return None
 
-                manifest = cls.read_manifest(manifest_path)
+        return max(versions)
 
-                if manifest is None:
-                    continue
+    @classmethod
+    def version_from_manifest(cls, addon: Path) -> Optional[OdooVersion]:
+        """Find the Odoo version of an addon from its manifest file.
 
-                version = manifest.get("version", None)
+        :param addon: Path to the addon directory.
+        """
+        for manifest_name in ["__manifest__.py", "__openerp__.py"]:
+            manifest_path = addon / manifest_name
 
-                if isinstance(version, str):
-                    return OdooVersion(version)
+            if not manifest_path.exists():
+                continue
+
+            manifest = cls.read_manifest(manifest_path)
+
+            if not manifest:
+                continue
+
+            version = manifest.get("version", None)
+
+            if isinstance(version, str):
+                return OdooVersion(version)
 
         return None
 
