@@ -5,6 +5,7 @@ import os
 import pkgutil
 import re
 import sys
+from collections import defaultdict
 from datetime import datetime, timezone
 from functools import lru_cache
 from importlib.abc import Loader
@@ -21,6 +22,7 @@ from typing import (
     Iterator,
     List,
     Literal,
+    Mapping,
     MutableMapping,
     NamedTuple,
     Optional,
@@ -276,15 +278,14 @@ class Odev(Generic[CommandType]):
         if not self.__update_prompt(prompt_name):
             return False
 
-        with progress.spinner(f"Updating {prompt_name!r}"):
-            logger.debug(
-                f"Pulling latest changes from {git.name!r} "
-                f"on branch '{git.repository.active_branch.tracking_branch()}'"
-            )
+        with progress.spinner(f"Updating {prompt_name}"):
+            current_branch = git.repository.active_branch.name
+            logger.debug(f"Pulling latest changes from {git.name!r} on branch {current_branch!r}")
             install_requirements = self.__requirements_changed(git.repository)
+            head_commit = git.repository.commit().hexsha
 
             with Stash(git.repository):
-                repository.remotes.origin.pull()
+                repository.git.pull(repository.remote().name, current_branch)
 
             if install_requirements:
                 logger.debug(f"Installing new package requirements for {prompt_name!r}")
@@ -293,6 +294,12 @@ class Odev(Generic[CommandType]):
             self._load_plugin_manifest.cache_clear()
             manifest = self._load_plugin_manifest(path)
             self.config.plugins.enabled = {*self.config.plugins.enabled, *manifest["depends"]}
+            notes = self.__release_notes(git.repository, head_commit)
+
+            if notes:
+                sections = "\n".join(notes.values())
+                logger.info(f"Updated {prompt_name}:\n\n{sections}")
+                self.console.print()
 
         return True
 
@@ -695,6 +702,38 @@ class Odev(Generic[CommandType]):
             return False
 
         return bool(commits_behind)
+
+    def __release_notes(self, repository: Repo, from_commit: str) -> Mapping[str, str]:
+        """Retrieve the release notes of the latest version of the repository.
+        :param repository: Git repository to retrieve release notes from
+        :param from_commit: Commit hash to start retrieving release notes from
+        :return: Release notes grouped by type
+        :rtype: Mapping[str, str]
+        """
+        logs = repository.git.log("--oneline", "--no-decorate", f"{from_commit}..").strip().splitlines()
+        re_note = re.compile(r"^(?P<hash>[0-9a-f]+)\s\[(?P<tag>[A-Z]{3,})\]\s?(?:(?P<files>[^:]*?):)?\s?(?P<note>.+)$")
+        grouped = defaultdict(list)
+
+        for line in logs:
+            match = re_note.match(line)
+
+            if not match or not match.groups():
+                continue
+
+            groups = match.groupdict()
+            grouped[groups["tag"].lower()].append(groups["note"])
+
+        subtitles = {
+            "add": string.stylize(":sparkles: New Features", "bold"),
+            "imp": string.stylize(":arrow_double_up: Improvements", "bold"),
+            "fix": string.stylize(":bug: Bug Fixes", "bold"),
+        }
+
+        return {
+            key: f"{subtitles[key]}\n{join_bullet([note[0].upper() + note[1:] for note in grouped[key]])}\n"
+            for key in subtitles.keys()
+            if key in grouped
+        }
 
     def __requirements_changed(self, repository: Repo) -> bool:
         """Assess whether the requirements.txt file was modified.
