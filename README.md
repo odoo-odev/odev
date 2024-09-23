@@ -89,6 +89,7 @@ Plugins can be enabled with the predefined command `odev plugin --enable <plugin
 | [odoo-ps/odev-plugin-hosted](https://github.com/odoo-ps/odev-plugin-hosted)                   | Interact with PaaS (odoo.sh) and SaaS (Odoo Online) databases, requires Odoo Technical Support access level. |
 | [odoo-odev/odev-plugin-editor-vscode](https://github.com/odoo-odev/odev-plugin-editor-vscode) | Interact with VSCode, open a debugger session and configure workspaces.                                      |
 | [odoo-odev/odev-plugin-export](https://github.com/odoo-odev/odev-plugin-export)               | Export customizations from a database and convert Studio to code.                                            |
+| [odoo-odev/odev-plugin-project](https://github.com/odoo-odev/odev-plugin-project)             | Follow-up on projects and setup working directories for creating new Odoo modules.                           |
 
 ### Credentials
 
