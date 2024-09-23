@@ -181,8 +181,6 @@ class PythonEnv:
         :param options: The options to pass to `pip install` (packages or requirements file).
         :param message: The initial message to display in the progress spinner.
         """
-        logger.info(message)
-
         with progress.spinner(message) as spinner:
             re_package = re.compile(r"(?:[\s,](?P<name>[\w_-]+)(?:(?P<op>[<>=]+)(?P<version>[\d.]+))?)")
             buffer: List[str] = []
@@ -230,12 +228,13 @@ class PythonEnv:
                     buffer.clear()
                     packages = line.split(" ")[2:]
 
-        logger.info(f"Successfully installed {len(packages)} python packages")
-        installed_packages = [
-            f"{string.stylize(name, 'bold color.purple')} == {string.stylize(version, 'bold color.cyan')}"
-            for name, version in (package.rsplit("-", 1) for package in packages)
-        ]
-        logger.debug(f"Installed python packages:\n{string.join_bullet(installed_packages)}")
+        if packages:
+            logger.info(f"Successfully installed {len(packages)} python packages")
+            installed_packages = [
+                f"{string.stylize(name, 'bold color.purple')} == {string.stylize(version, 'bold color.cyan')}"
+                for name, version in (package.rsplit("-", 1) for package in packages)
+            ]
+            logger.debug(f"Installed python packages:\n{string.join_bullet(installed_packages)}")
 
     @ttl_cache(ttl=60)
     def __pip_freeze_all(self) -> CompletedProcess:
