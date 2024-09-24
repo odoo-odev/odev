@@ -93,7 +93,7 @@ class DatabaseStore(PostgresTable):
             "worktree": f"{database.worktree!r}"
             if isinstance(database, LocalDatabase) and database.worktree
             else "NULL",
-            "url": f"{database.url!r}",
+            "url": f"{database.url!r}" if database.url else "NULL",
         }
 
         self.database.query(

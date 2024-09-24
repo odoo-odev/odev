@@ -275,6 +275,14 @@ class RpcConnector(Connector):
         """Return the protocol to use to reach the external service."""
         return "jsonrpcs" if self.port == 443 else "jsonrpc"
 
+    @property
+    def user_id(self) -> int:
+        """Return the user ID of the current connection."""
+        if not self._connection:
+            raise ConnectorError("Cannot fetch user_id without an established connection", self)
+
+        return cast(int, self._connection.user_id)
+
     def connect(self) -> odoolib.Connection:
         """Open a connection to the external service."""
         if not self.connected:
