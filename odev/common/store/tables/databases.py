@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional
 
 from odev.common.databases import Database, LocalDatabase
 from odev.common.postgres import PostgresTable
@@ -33,13 +33,16 @@ class DatabaseInfo:
     worktree: str
     """The name of the worktree of the database."""
 
+    url: str
+    """The URL of the database."""
+
 
 class DatabaseStore(PostgresTable):
     """A class for managing Odoo databases."""
 
     name = "databases"
 
-    _columns = {
+    _columns: Mapping[str, str] = {
         "id": "SERIAL PRIMARY KEY",
         "platform": "VARCHAR NOT NULL",
         "name": "VARCHAR NOT NULL",
@@ -49,14 +52,20 @@ class DatabaseStore(PostgresTable):
         "repository": "VARCHAR",
         "branch": "VARCHAR",
         "worktree": "VARCHAR",
+        "url": "VARCHAR",
     }
-    _constraints = {"databases_unique_name_platform": "UNIQUE(name, platform)"}
+
+    _constraints = {
+        "databases_unique_name_platform": "UNIQUE(name, platform)",
+        "databases_unique_name_url": "UNIQUE(name, url)",
+    }
 
     def get(self, database: Database) -> Optional[DatabaseInfo]:
         """Get the saved values of a database."""
+        keys = ", ".join([key for key in self._columns.keys() if key != "id"])
         result = self.database.query(
             f"""
-            SELECT * FROM {self.name}
+            SELECT {keys} FROM {self.name}
             WHERE name = {database.name!r}
                 AND platform = {database.platform.name!r}
             LIMIT 1
@@ -67,7 +76,7 @@ class DatabaseStore(PostgresTable):
         if not result:
             return None
 
-        return DatabaseInfo(*result[0][1:])
+        return DatabaseInfo(*result[0])
 
     def set(self, database: Database, arguments: Optional[str] = None):
         """Save values for a database."""
@@ -84,6 +93,7 @@ class DatabaseStore(PostgresTable):
             "worktree": f"{database.worktree!r}"
             if isinstance(database, LocalDatabase) and database.worktree
             else "NULL",
+            "url": f"{database.url!r}",
         }
 
         self.database.query(

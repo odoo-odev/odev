@@ -34,9 +34,12 @@ class RemoteDatabase(Database):
     _branch: Optional[Branch] = None
     """The branch of the repository containing custom code for the database."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, name: Optional[str] = None) -> None:
         super().__init__(url)
         self._name, self._url = self.get_name_from_url(url)
+
+        if name:
+            self._name = name
 
     def __enter__(self):
         self.rpc.__enter__()
@@ -124,6 +127,10 @@ class RemoteDatabase(Database):
     @property
     def url(self) -> str:
         return self._url
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def rpc_port(self) -> int:

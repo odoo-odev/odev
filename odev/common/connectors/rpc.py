@@ -54,6 +54,11 @@ class Model:
 
     def __init__(self, connector: "RpcConnector", model: str):
         self._connector = connector
+
+        if not self._connector.connected:
+            self._connector.connect()
+
+        assert self._connector._connection is not None
         self._model = self._connector._connection.get_model(model)
         RPC_DATA_CACHE.setdefault(self._name, {})
         RPC_FIELDS_CACHE.setdefault(self._name, {})
@@ -110,7 +115,7 @@ class Model:
 
         return cached
 
-    def default_get(self, fields_list: list = None) -> FieldsGetMapping:
+    def default_get(self, fields_list: Optional[list] = None) -> FieldsGetMapping:
         """Return the default value for all models fields."""
         cached = RPC_DEFAULT_CACHE[self._name]
 
@@ -119,7 +124,9 @@ class Model:
 
         return cached
 
-    def read(self, ids: Sequence[int], fields: Sequence[str] = None, load: str = None) -> RecordDataList:
+    def read(
+        self, ids: Sequence[int], fields: Optional[Sequence[str]] = None, load: Optional[str] = None
+    ) -> RecordDataList:
         """Read the data of the records with the given ids.
         :param ids: The ids of the records to read
         :param fields: The fields to read, all fields by default
@@ -151,7 +158,12 @@ class Model:
         return [self.cache[id_] for id_ in ids]
 
     def search(
-        self, domain: Domain, offset: int = 0, limit: int = None, order: str = None, context: Mapping[str, Any] = None
+        self,
+        domain: Domain,
+        offset: int = 0,
+        limit: Optional[int] = None,
+        order: Optional[str] = None,
+        context: Optional[Mapping[str, Any]] = None,
     ) -> List[int]:
         """Search for records matching the given domain and return their ids.
         :param domain: The domain to filter the records to export
@@ -166,12 +178,12 @@ class Model:
     def search_read(
         self,
         domain: Domain,
-        fields: Sequence[str] = None,
+        fields: Optional[Sequence[str]] = None,
         offset: int = 0,
-        limit: int = None,
-        order: str = None,
-        context: Mapping[str, Any] = None,
-        load: str = None,
+        limit: Optional[int] = None,
+        order: Optional[str] = None,
+        context: Optional[Mapping[str, Any]] = None,
+        load: Optional[str] = None,
     ) -> RecordDataList:
         """Search for records matching the given domain and return their data.
         :param domain: The domain to filter the records to export
@@ -192,12 +204,12 @@ class Model:
     def read_group(
         self,
         domain: Domain,
-        fields: Sequence[str] = None,
-        groupby: Union[str, Sequence[str]] = None,
+        fields: Optional[Sequence[str]] = None,
+        groupby: Optional[Union[str, Sequence[str]]] = None,
         offset: int = 0,
-        limit: int = None,
-        order: str = None,
-        context: Mapping[str, Any] = None,
+        limit: Optional[int] = None,
+        order: Optional[str] = None,
+        context: Optional[Mapping[str, Any]] = None,
     ):
         """Get the aggregated data of the records matching the given domain, grouped by the groupby clause.
         :param domain: The domain to filter the records to export
@@ -241,11 +253,21 @@ class RpcConnector(Connector):
     @property
     def url(self) -> str:
         """Return the URL to the external service."""
+        if not self.database.url:
+            raise ConnectorError(
+                f"URL not set for {self.database.platform.display} database {self.database.name!r}", self
+            )
+
         return urlparse(self.database.url, scheme="https").netloc.partition(":")[0]
 
     @property
     def port(self) -> int:
         """Return the port to the external service."""
+        if not self.database.rpc_port:
+            raise ConnectorError(
+                f"RPC port not set for {self.database.platform.display} database {self.database.name!r}", self
+            )
+
         return self.database.rpc_port
 
     @property
@@ -280,7 +302,7 @@ class RpcConnector(Connector):
                     login=credentials.login,
                     password=credentials.password,
                     protocol=self.protocol,
-                    port=self.port,
+                    port=self.port,  # type: ignore [arg-type]
                 )
                 self._connection.check_login()
             except odoolib.AuthenticationError:
@@ -298,6 +320,7 @@ class RpcConnector(Connector):
                 self._connection = None
                 return self.connect()
 
+        assert self._connection is not None, "Failed to establish RPC connection"
         self.__patch_odoolib_send()
         return self._connection
 
@@ -317,6 +340,7 @@ class RpcConnector(Connector):
         """Monkey patch calls to `execute_kw` to log RPC calls from the connector to a database
         and catch exceptions thrown by the connector for better handling of errors.
         """
+        assert self._connection is not None
         logger.debug(f"Connected to {self.database.platform.display} database {self.database.name!r}'s RPC API")
         original_send = self._connection.connector.send
 
