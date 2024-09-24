@@ -181,28 +181,24 @@ class PythonEnv:
         :param options: The options to pass to `pip install` (packages or requirements file).
         :param message: The initial message to display in the progress spinner.
         """
+        logger.info(message)
+
         with progress.spinner(message) as spinner:
-            re_package = re.compile(r"(?:[\s,](?P<name>[\w_-]+)(?:(?P<op>[<>=]+)(?P<version>[\d.]+))?)")
             buffer: List[str] = []
+            entire_buffer: List[str] = []
             packages: List[str] = []
+            installed_packages: List[str] = []
+            collected_packages_count = 0
 
             for line in bash.stream(f"{self.pip} install {options} --no-color"):
                 if not line.strip() or line.startswith(" "):
                     buffer.append(line.strip())
+                    entire_buffer.append(line)
 
                 if line.startswith("Collecting"):
                     buffer.clear()
-                    match = re_package.search(line)
-
-                    if match is None:
-                        continue
-
-                    spinner.update(
-                        "Collecting python package "
-                        + string.stylize(match.group("name"), "bold color.purple")
-                        + f" {match.group('op') or ''} "
-                        + string.stylize(match.group("version"), "bold repr.version")
-                    )
+                    collected_packages_count += 1
+                    spinner.update(f"Collecting {collected_packages_count} python packages")
 
                 elif line.startswith("Building wheels for collected packages:"):
                     buffer.clear()
@@ -226,15 +222,23 @@ class PythonEnv:
 
                 elif line.startswith("Successfully installed"):
                     buffer.clear()
-                    packages = line.split(" ")[2:]
+                    installed_packages = line.split(" ")[2:]
 
-        if packages:
-            logger.info(f"Successfully installed {len(packages)} python packages")
+        if installed_packages:
             installed_packages = [
-                f"{string.stylize(name, 'bold color.purple')} == {string.stylize(version, 'bold color.cyan')}"
-                for name, version in (package.rsplit("-", 1) for package in packages)
+                f"{string.stylize(name, 'color.purple')} == {string.stylize(version, 'color.cyan')}"
+                for name, version in (package.rsplit("-", 1) for package in installed_packages)
             ]
-            logger.debug(f"Installed python packages:\n{string.join_bullet(installed_packages)}")
+            logger.info(
+                f"Successfully installed {len(packages)} python packages:\n{string.join_bullet(installed_packages)}"
+            )
+        else:
+            if any("ERROR:" in line for line in entire_buffer):
+                logger.error("Failed to install python packages:")
+                console.print()
+                console.print("\n".join(entire_buffer), highlight=False)
+            else:
+                logger.info("All python packages are already installed and up-to-date")
 
     @ttl_cache(ttl=60)
     def __pip_freeze_all(self) -> CompletedProcess:
