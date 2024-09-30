@@ -23,7 +23,9 @@ class GitCommand(Command, ABC):
         """Iterate over worktrees in Odoo repositories."""
         for repository in self.repositories:
             for worktree in repository.worktrees():
-                if not self.args.version or OdooVersion(worktree.branch) == OdooVersion(self.args.version):
+                if not worktree.detached and (
+                    not self.args.version or OdooVersion(worktree.branch) == OdooVersion(self.args.version)
+                ):
                     yield worktree
 
     @property
