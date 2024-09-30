@@ -559,7 +559,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if self.connector is not None:
             self.connector.invalidate_cache()
 
-    def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile):
+    def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile) -> Optional[Thread]:
         """Restore the filestore from a zip archive.
         :param archive: The archive to restore the filestore from.
         :param tracker: An instance of Progress to track the restore process.
@@ -574,7 +574,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 info.append((file_match, archive_info.file_size))
 
         if not info:
-            return logger.debug("No filestore found in archive")
+            logger.debug("No filestore found in archive")
+            return None
 
         logger.debug("Filestore found in archive, restoring")
 
@@ -594,7 +595,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             )
 
             if overwrite_mode == "keep":
-                return logger.debug("Keeping existing filestore")
+                logger.debug("Keeping existing filestore")
+                return None
 
             tracker.start()
 
@@ -603,6 +605,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         thread = Thread(target=self._restore_zip_filestore_threaded, args=(tracker, archive, info))
         thread.start()
+        return thread
 
     def _restore_zip_filestore_threaded(
         self,
@@ -627,14 +630,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         for match, size in info:
             dirname: str = match.group("dirname")
             filename: str = match.group("filename")
-            filestore_file_path: Path = self.filestore.path / dirname / filename
+            filepath = Path(dirname) / filename
+            filestore_file_path: Path = self.filestore.path / filepath
 
             if not filestore_file_path.exists():
+                archive.getinfo(match.string).filename = filepath.as_posix()
                 archive.extract(match.string, self.filestore.path)
 
             tracker.update(task_id, advance=size)
 
-        tracker.remove_task(task_id)
         logger.info(f"Extracted {string.stylize(string.bytes_size(filestore_size), 'color.cyan')} of filestore data")
 
     def _restore_buffered_sql(
@@ -643,7 +647,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         dump: Union[gzip.GzipFile, bz2.BZ2File, IO[bytes]],
         bytes_count: int,
         mode: Literal["sql", "dump"] = "sql",
-    ):
+    ) -> Thread:
         """Restore SQL data from a buffered dump file.
         :param tracker: An instance of Progress to track the restore process.
         :param dump: The dump file to restore SQL data from.
@@ -672,8 +676,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.update(extract_task_id, advance=1)
         psql_process.stdin.close()
 
-        thread.join()
-        tracker.stop()
+        return thread
 
     def _restore_zip_sql_threaded(self, process: Popen[bytes]):
         """Thread to monitor the restore process of a zipped dump file and update the progress tracker.
@@ -696,11 +699,21 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                     f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
 
+            threads: List[Thread] = []
+
             if ARCHIVE_FILESTORE in archive.namelist():
-                self._restore_zip_filestore(tracker, archive)
+                filestore_thread = self._restore_zip_filestore(tracker, archive)
+
+                if filestore_thread:
+                    threads.append(filestore_thread)
 
             with archive.open(ARCHIVE_DUMP) as dump:
-                self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size)
+                threads.append(self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size))
+
+            for thread in threads:
+                thread.join()
+
+            tracker.stop()
 
     def _restore_buffer(self, tracker: progress.Progress, dump: Union[gzip.GzipFile, bz2.BZ2File, IO[bytes]]):
         """Restore a database from a stream containing a dump file and optionally a filestore.
