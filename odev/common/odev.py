@@ -459,6 +459,8 @@ class Odev(Generic[CommandType]):
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
 
+            self._install_plugin_requirements(plugin.path)
+
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
@@ -504,12 +506,19 @@ class Odev(Generic[CommandType]):
                 logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
                 plugin_path.symlink_to(repository.path, target_is_directory=True)
 
-            python = PythonEnv()
-
-            if any(python.missing_requirements(plugin_path, False)):
-                python.install_requirements(plugin_path)
+            self._install_plugin_requirements(plugin_path)
 
         self._plugins_dependency_tree.cache_clear()
+
+    def _install_plugin_requirements(self, plugin_path: Path) -> None:
+        """Install the requirements of a plugin.
+
+        :param plugin_path: Path to the plugin to install requirements for
+        """
+        python = PythonEnv()
+
+        if any(python.missing_requirements(plugin_path, False)):
+            python.install_requirements(plugin_path)
 
     @lru_cache
     def _load_plugin_manifest(self, plugin_path: Path) -> Manifest:

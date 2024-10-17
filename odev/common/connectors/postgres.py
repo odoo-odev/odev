@@ -206,12 +206,16 @@ class PostgresConnector(Connector):
         :param database: The name of the database to disconnect.
         """
         self.invalidate_cache("postgres")
-        self.query(
-            f"""
-            REVOKE CONNECT ON DATABASE "{database}"
-            FROM PUBLIC
-            """
-        )
+
+        try:
+            self.query(
+                f"""
+                REVOKE CONNECT ON DATABASE "{database}"
+                FROM PUBLIC
+                """
+            )
+        except RuntimeError:
+            logger.debug(f"Failed to revoke connections to database {database!r}")
 
         self.query("RESET ROLE")
         self.query(
