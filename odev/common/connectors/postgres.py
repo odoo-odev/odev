@@ -214,10 +214,10 @@ class PostgresConnector(Connector):
                 FROM PUBLIC
                 """
             )
+            self.query("RESET ROLE")
         except RuntimeError:
             logger.debug(f"Failed to revoke connections to database {database!r}")
 
-        self.query("RESET ROLE")
         self.query(
             f"""
             SELECT pg_terminate_backend(pid)

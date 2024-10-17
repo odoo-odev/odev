@@ -209,7 +209,10 @@ def stream(command: str) -> Generator[str, None, None]:
                 try:
                     os.write(sys.stdout.fileno(), b"\r")
                 except OSError:
-                    sys.stdout.buffer.write(b"\r")
+                    if hasattr(sys.stdout, "buffer"):
+                        sys.stdout.buffer.write(b"\r")
+                    else:
+                        sys.stdout.write("\r")
 
     finally:
         os.close(slave)
