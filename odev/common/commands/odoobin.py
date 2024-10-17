@@ -5,6 +5,8 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Mapping, Optional, Union
 
+from rich import markup
+
 from odev.common import args, string
 from odev.common.commands import LocalDatabaseCommand
 from odev.common.databases import LocalDatabase
@@ -67,6 +69,11 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         description="""Name of the worktree to use when running this database.
         If not specified, defaults to the common worktree for the current Odoo version.
         """,
+    )
+    pretty = args.Flag(
+        aliases=["--no-pretty"],
+        description="Do not pretty print the output of odoo-bin but rather display logs as output by the subprocess.",
+        default=True,
     )
 
     # --------------------------------------------------------------------------
@@ -186,8 +193,8 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         """Beautify odoo logs on the fly."""
         match = self._parse_progress_log_line(line)
 
-        if match is None:
-            return self.print(line, highlight=False, soft_wrap=False)
+        if match is None or not self.args.pretty:
+            return self.print(markup.escape(line), highlight=False, soft_wrap=False)
 
         self.last_level = match.group("level").lower()
         self._print_progress_log_line(match)
