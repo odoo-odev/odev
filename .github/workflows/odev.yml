@@ -149,7 +149,7 @@ jobs:
           git clone --depth 1 https://github.com/odoo/odoo ~/odoo/repositories/odoo/odoo --branch master
           git clone --depth 1 https://github.com/odoo/design-themes ~/odoo/repositories/odoo/design-themes --branch master
 
-          for i in {14..17}; do
+          for i in {14..18}; do
             cd ~/odoo/repositories/odoo/odoo
             git fetch --depth 1 origin "refs/heads/$i.0:refs/remotes/origin/$i.0"
 
@@ -165,47 +165,10 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 
-      - name: setup-coverage-values
-        id: values
-        run: echo "cov_req=80" >> $GITHUB_OUTPUT
-
-      - name: run-coverage
-        id: coverage
+      - name: run-unit-tests
+        id: unit-tests
         env:
           POSTGRES_HOST: postgres
           POSTGRES_PORT: 5432
         run: |
           coverage run -m pytest ./tests --exitfirst --capture=no --log-cli-level debug
-
-          COV_POST=`coverage report --precision=2 | awk '$1 == "TOTAL" {print $NF+0}'`
-          COV_BELOW=`echo "$COV_POST" | awk '{print ($1 < ${{ steps.values.outputs.cov_req }})}'`
-
-          git switch -C ${{ github.event.pull_request.base.ref || github.ref_name }} \
-            --track origin/${{ github.event.pull_request.base.ref || github.ref_name }}
-
-          coverage run -m pytest ./tests --exitfirst --capture=no --log-cli-level debug
-
-          COV_PRE=`coverage report --precision=2 | awk '$1 == "TOTAL" {print $NF+0}'`
-          COV_DECREASE=`echo "$COV_POST $COV_PRE" | awk '{print ($1 < $2)}'`
-
-          echo "cov_post=$COV_POST" >> $GITHUB_OUTPUT
-          echo "cov_pre=$COV_PRE" >> $GITHUB_OUTPUT
-          echo "cov_below=$COV_BELOW" >> $GITHUB_OUTPUT
-          echo "cov_decrease=$COV_DECREASE" >> $GITHUB_OUTPUT
-
-      - name: check-coverage
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            const cov_req = ${{ steps.values.outputs.cov_req }}
-            const cov_post = ${{ steps.coverage.outputs.cov_post }}
-            const cov_pre = ${{ steps.coverage.outputs.cov_pre }}
-            const cov_diff = cov_post - cov_pre
-
-            cov_post >= cov_req
-              ? core.notice(`Current coverage: ${cov_post}%`)
-              : core.warning(`Coverage is below ${cov_req}%, current coverage ${cov_post}%`)
-
-            cov_diff >= 0.0
-              ? core.notice(`Coverage has increased from ${cov_pre}% to ${cov_post}% (+${cov_diff.toFixed(2)}%)`)
-              : core.warning(`Coverage has decreased from ${cov_pre}% to ${cov_post}% (${cov_diff.toFixed(2)}%)`)

@@ -205,26 +205,29 @@ class PostgresConnector(Connector):
 
         :param database: The name of the database to disconnect.
         """
-        self.invalidate_cache("postgres")
-        self.query(
-            f"""
-            REVOKE CONNECT ON DATABASE "{database}"
-            FROM PUBLIC
-            """
-        )
 
-        self.query("RESET ROLE")
-        self.query(
-            f"""
-            SELECT pg_terminate_backend(pid)
-            FROM pg_stat_activity
-            WHERE
-                -- don't kill my own connection!
-                pid <> pg_backend_pid()
-                -- don't kill the connections to other databases
-                AND datname = '{database}'
-            """
-        )
+        try:
+            self.invalidate_cache("postgres")
+            self.query(
+                f"""
+                REVOKE CONNECT ON DATABASE "{database}"
+                FROM PUBLIC
+                """
+            )
+            self.query("RESET ROLE")
+            self.query(
+                f"""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE
+                    -- don't kill my own connection!
+                    pid <> pg_backend_pid()
+                    -- don't kill the connections to other databases
+                    AND datname = '{database}'
+                """
+            )
+        except RuntimeError:
+            logger.debug(f"Failed to revoke connections to database {database!r}")
 
     def drop_database(self, database: str) -> bool:
         """Drop a database.
