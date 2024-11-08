@@ -46,20 +46,23 @@ class QuickStartCommand(DatabaseCommand):
         if self.args.version:
             self.odev.run_command("create", "--version", self.args.version, database=self._database)
         else:
-            self.odev.run_command(
+            self.odev.run_command("clone", *passthrough_args, database=self._database)
+            dumped = self.odev.run_command(
                 "dump",
                 *(passthrough_args + (["--filestore"] if self.args.filestore else [])),
                 database=self._database,
             )
+
+            dump_file = self.odev.dumps_path / self._database._get_dump_filename(**self.get_dump_filename_kwargs())
+
+            if not dumped or not dump_file.exists():
+                raise self.error(f"Database {self._database.name!r} could not be restored")
+
             self.odev.run_command(
                 "restore",
-                (
-                    self.odev.dumps_path / self._database._get_dump_filename(**self.get_dump_filename_kwargs())
-                ).as_posix(),
+                dump_file.as_posix(),
                 database=LocalDatabase(self.args.name or self._database.name),
             )
-
-            self.odev.run_command("clone", *passthrough_args, database=self._database)
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
         """Return the keyword arguments to pass to Database.get_dump_filename()."""
