@@ -45,6 +45,6 @@ class RunCommand(OdoobinTemplateCommand):
                 with progress.spinner(f"Reset database {self._database.name!r} from template {self._template.name!r}"):
                     self._database.drop()
 
-            self.odev.run_command("create", self._database.name, "--from-template", self._template.name)
+            self.odev.run_command("create", "--from-template", self._template.name, self._database.name)
 
         self.odoobin.run(args=self.args.odoo_args, progress=self.odoobin_progress)

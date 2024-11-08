@@ -279,26 +279,18 @@ class OdoobinTemplateCommand(OdoobinCommand):
     from_template = args.String(
         aliases=["-t", "--from-template"],
         description="Name of an existing PostgreSQL database to copy.",
-        nargs="?",
-        default="",
     )
 
     def infer_template_instance(self):
         """Infer the template database from the command line arguments."""
-
-        # Command called with --from-template and no value: append the suffix to the database name
-        if self.args.from_template is None:
-            template_name = self._database.name + TEMPLATE_SUFFIX
-            self._template = LocalDatabase(template_name)
-
-        # Command called with --from-template and a value: use the provided template as the base database
-        elif self.args.from_template:
+        if self.args.from_template:
             self._template = LocalDatabase(self.args.from_template)
 
             if not self._template.exists and not self._template.name.endswith(TEMPLATE_SUFFIX):
                 self._template = LocalDatabase(self.args.from_template + TEMPLATE_SUFFIX)
-
-        # Command called without --from-template: no template database
+        elif self.args.from_template is not None:
+            template_name = self._database.name + TEMPLATE_SUFFIX
+            self._template = LocalDatabase(template_name)
         else:
             self._template = None
 

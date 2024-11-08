@@ -102,7 +102,7 @@ jobs:
     runs-on: ${{ matrix.os }}-latest
 
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os:
           - ubuntu

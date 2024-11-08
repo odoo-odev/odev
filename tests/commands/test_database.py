@@ -50,7 +50,7 @@ class TestCommandDatabaseCloc(OdevCommandTestCase):
     def test_02_cloc_csv(self):
         """Command `odev cloc --csv` should display line of codes count by module in csv format."""
         with self.patch(ODOOBIN_PATH, "run", CompletedProcess(args=["cloc"], returncode=0, stdout=self.CLOC_RESULT)):
-            stdout, _ = self.dispatch_command("cloc", self.database.name, "--csv")
+            stdout, _ = self.dispatch_command("cloc", "--csv", self.database.name)
 
         self.assertIn("test_module_01", stdout)
         self.assertEqual(len(stdout.strip().splitlines()), 6)
@@ -96,7 +96,7 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         self.assert_database(self.create_database_name, exists=False)
 
         with self.wrap("odev.common.bash", "stream") as stream:
-            self.dispatch_command("create", self.create_database_name, "--bare")
+            self.dispatch_command("create", "--bare", self.create_database_name)
             stream.assert_not_called()
 
         self.assert_database(self.create_database_name, exists=True, is_odoo=False)
@@ -107,7 +107,12 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
 
         with self.wrap("odev.common.bash", "stream") as stream:
             stdout, _ = self.dispatch_command(
-                "create", self.create_database_name, "--version", "17.0", "--without-demo", "all"
+                "create",
+                "--version",
+                "17.0",
+                self.create_database_name,
+                "--without-demo",
+                "all",
             )
             stream.assert_called_with(
                 OdoobinMatch(
@@ -126,7 +131,12 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         self.assert_database(self.create_database_name, exists=False)
 
         with self.wrap("odev.common.bash", "stream") as stream:
-            self.dispatch_command("create", self.create_database_name, "--from-template", template_database.name)
+            self.dispatch_command(
+                "create",
+                "--from-template",
+                template_database.name,
+                self.create_database_name,
+            )
             stream.assert_not_called()
 
         self.assert_database(self.create_database_name, version=str(template_database.version))
@@ -138,7 +148,7 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         self.assert_database(self.template_database_name, exists=False)
 
         with self.wrap("odev.common.bash", "stream") as stream:
-            self.dispatch_command("create", self.create_database_name, "--create-template")
+            self.dispatch_command("create", "--create-template", self.create_database_name)
             stream.assert_not_called()
 
         self.assert_database(self.template_database_name, version=str(database.version))
@@ -151,7 +161,13 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
 
         with self.wrap("odev.common.bash", "stream") as stream:
             stdout, _ = self.dispatch_command(
-                "create", self.create_database_name, "--force", "--version", "16.0", "--without-demo", "all"
+                "create",
+                "--force",
+                "--version",
+                "16.0",
+                self.create_database_name,
+                "--without-demo",
+                "all",
             )
             stream.assert_called_with(
                 OdoobinMatch(
@@ -168,7 +184,14 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         """Command `odev create` should create a new database with a specific virtual environment."""
         self.assert_database(self.create_database_name, is_odoo=False)
         self.dispatch_command(
-            "create", self.create_database_name, "--venv", self.venv.name, "--version", "17.0", "--without-demo", "all"
+            "create",
+            "--venv",
+            self.venv.name,
+            "--version",
+            "17.0",
+            self.create_database_name,
+            "--without-demo",
+            "all",
         )
         self.assert_database(self.create_database_name, is_odoo=True)
         self.assertEqual(LocalDatabase(self.create_database_name).venv.name, self.venv.name)
@@ -176,7 +199,14 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
     def test_07_with_version(self):
         """Command `odev create` should create a new database with a specific Odoo version."""
         self.assert_database(self.create_database_name, is_odoo=False)
-        self.dispatch_command("create", self.create_database_name, "--version", "17.0", "--without-demo", "all")
+        self.dispatch_command(
+            "create",
+            "--version",
+            "17.0",
+            self.create_database_name,
+            "--without-demo",
+            "all",
+        )
         self.assert_database(self.create_database_name, is_odoo=True, version="17.0")
         database = LocalDatabase(self.create_database_name)
         self.assertEqual(database.venv.name, "17.0")
@@ -186,7 +216,14 @@ class TestCommandDatabaseCreate(OdevCommandTestCase):
         """Command `odev create` should create a new database with a specific worktree."""
         self.assert_database(self.create_database_name, is_odoo=False)
         self.dispatch_command(
-            "create", self.create_database_name, "--worktree", "test", "--version", "17.0", "--without-demo", "all"
+            "create",
+            "--worktree",
+            "test",
+            "--version",
+            "17.0",
+            self.create_database_name,
+            "--without-demo",
+            "all",
         )
         self.assert_database(self.create_database_name, is_odoo=True)
         database = LocalDatabase(self.create_database_name)
@@ -200,7 +237,7 @@ class TestCommandDatabaseTest(OdevCommandTestCase):
     def test_01_test(self):
         """Command `odev test` should run tests on a database."""
         with self.wrap("odev.common.bash", "stream") as stream:
-            stdout, _ = self.dispatch_command("test", self.database.name, "--tags", ":TestSafeEval.test_expr")
+            stdout, _ = self.dispatch_command("test", "--tags", ":TestSafeEval.test_expr", self.database.name)
             stream.assert_called_with(
                 OdoobinMatch(
                     self.database.name,
@@ -278,7 +315,7 @@ class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
     def test_02_run_from_template(self):
         """Command `odev run` should run Odoo in a database from a template."""
         self.assert_database(self.database.name, is_odoo=True)
-        self.dispatch_command("create", self.database.name, "--create-template")
+        self.dispatch_command("create", "--create-template", self.database.name)
         template_name = f"{self.database.name}:template"
         self.assert_database(template_name, is_odoo=True)
         self.database.query("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
@@ -286,7 +323,11 @@ class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
 
         with self.wrap("odev.common.bash", "stream") as stream:
             stdout, _ = self.dispatch_command(
-                "run", self.database.name, "--stop-after-init", "--from-template", template_name
+                "run",
+                "--from-template",
+                template_name,
+                self.database.name,
+                "--stop-after-init",
             )
             stream.assert_called_with(OdoobinMatch(self.database.name, ["--stop-after-init"]))
 
@@ -302,13 +343,13 @@ class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
         self.assert_database(self.database.name, is_odoo=True)
         template_name = f"{self.database.name}:template"
         self.assert_database(template_name, exists=False)
-        self.dispatch_command("create", self.database.name, "--create-template")
+        self.dispatch_command("create", "--create-template", self.database.name)
         self.assert_database(template_name, is_odoo=True)
         self.database.query("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
         self.assertTrue(self.database.table_exists("test_table"))
 
         with self.wrap("odev.common.bash", "stream") as stream:
-            stdout, _ = self.dispatch_command("run", self.database.name, "--stop-after-init", "--from-template")
+            stdout, _ = self.dispatch_command("run", "--from-template", "", self.database.name, "--stop-after-init")
             stream.assert_called_with(OdoobinMatch(self.database.name, ["--stop-after-init"]))
 
         self.assert_database(self.database.name, is_odoo=True)
@@ -324,7 +365,11 @@ class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
         self.database.query("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
         self.assertTrue(self.database.table_exists("test_table"))
         stdout, _ = self.dispatch_command(
-            "run", self.database.name, "--stop-after-init", "--from-template", template_name
+            "run",
+            "--from-template",
+            template_name,
+            self.database.name,
+            "--stop-after-init",
         )
         self.assert_database(self.database.name, is_odoo=True)
         self.assertTrue(self.database.table_exists("test_table"))

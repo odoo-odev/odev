@@ -238,7 +238,11 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
             if params.get("nargs") == "*...":
                 cls._unknown_arguments_dest = aliases[0]
-                params["nargs"] = "*"
+
+                # A bug in standard library argparse before python 3.12.7 causes `...` to not work as expected
+                # when used in conjunction with positional and optional arguments.
+                # See: https://github.com/python/cpython/issues/59317
+                params["nargs"] = "*" if sys.version_info < (3, 12, 7) else "..."
 
             if "action" in params:
                 params["action"] = ACTIONS_MAPPING.get(params["action"], params["action"])
@@ -281,7 +285,11 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                     arguments = parser.parse_args(argv)
                 else:
                     arguments, unknown = parser.parse_known_args(argv)
-                    setattr(arguments, cls._unknown_arguments_dest, unknown)
+                    setattr(
+                        arguments,
+                        cls._unknown_arguments_dest,
+                        getattr(arguments, cls._unknown_arguments_dest, []) + unknown,
+                    )
             except SystemExit as exception:
                 error_message = stderr.getvalue()
                 error = re.search(rf"{cls._name}: error: (.*)$", error_message, re.MULTILINE)

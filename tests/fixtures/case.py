@@ -363,5 +363,5 @@ class OdevCommandRunDatabaseTestCase(OdevCommandTestCase):
         if (database := LocalDatabase(name)).exists:
             database.drop()
 
-        cls.odev.run_command("create", name, "--version", "17.0", "--without-demo", "all", "--community")
+        cls.odev.run_command("create", "--version", "17.0", "--community", name, "--without-demo", "all")
         return LocalDatabase(name)
