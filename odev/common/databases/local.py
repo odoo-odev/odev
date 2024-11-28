@@ -449,6 +449,21 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Neutralize the database."""
         assert self.process is not None, "Database process is not set"
         assert self.version is not None, "Database version is not set"
+        admin = self._db_user_admin()
+
+        if not admin["active"]:
+            logger.warning(
+                "The administrator account is archived in this database, this will cause issues during neutralization\n"
+                "Reactivating the administrator account now, please verify the database configuration "
+                "after neutralization and compare it to the original database"
+            )
+            self.query(
+                f"""
+                UPDATE res_users
+                SET active = true
+                WHERE id = {admin["id"]}
+                """
+            )
 
         self.process.with_venv(str(self.version))
         self.process.with_worktree(str(self.version))
@@ -818,3 +833,19 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             "pid": str(self.process.pid) if self.process and self.running else "N/A (not running)",
             "addons": string.join_bullet(list(map(str, self.process.addons_paths))) if self.process else "N/A",
         }
+
+    def _db_user_admin(self) -> Mapping[str, str]:
+        uid, active = self.query(
+            """
+            SELECT id, active
+            FROM res_users
+            WHERE id IN (
+                SELECT res_id
+                FROM ir_model_data
+                WHERE model = 'res.users'
+                    AND (module, name) = ('base', 'user_admin')
+            )
+            """
+        )[0]
+
+        return {"id": uid, "active": active}
