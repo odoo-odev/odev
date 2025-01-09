@@ -11,7 +11,7 @@ jobs:
 
   version-bump:
     name: version-bump
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: checkout-repository
         uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
 
   pre-commit:
     name: pre-commit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: checkout-repository
         uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
 
   upgrade:
     name: upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: checkout-repository
         uses: actions/checkout@v4
@@ -99,13 +99,13 @@ jobs:
 
   unit-tests:
     name: unit-tests-${{ matrix.os }}-python${{ matrix.python-version }}
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
         os:
-          - ubuntu
+          - ubuntu-22.04
           # - macos
         python-version:
           - "3.10"
@@ -116,13 +116,15 @@ jobs:
       - name: setup-python
         uses: actions/setup-python@v5.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: |
+            3.10
+            ${{ matrix.python-version }}
           architecture: x64
 
       - name: setup-system-dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: postgresql postgresql-client python3-pip libldap2-dev libpq-dev libsasl2-dev
+          packages: postgresql postgresql-client python3-pip libldap2-dev libpq-dev libsasl2-dev build-essential python3-dev libffi-dev
           version: 1.1
 
       - name: setup-postgresql
@@ -149,7 +151,7 @@ jobs:
           git clone --depth 1 https://github.com/odoo/odoo ~/odoo/repositories/odoo/odoo --branch master
           git clone --depth 1 https://github.com/odoo/design-themes ~/odoo/repositories/odoo/design-themes --branch master
 
-          for i in {14..18}; do
+          for i in {16..17}; do
             cd ~/odoo/repositories/odoo/odoo
             git fetch --depth 1 origin "refs/heads/$i.0:refs/remotes/origin/$i.0"
 
@@ -160,8 +162,6 @@ jobs:
       - name: setup-python-requirements
         run: |
           python -m ensurepip --upgrade
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 

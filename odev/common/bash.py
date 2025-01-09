@@ -69,11 +69,14 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
     :param CalledProcessError exception: The exception to raise or log.
     :param bool do_raise: Whether to raise the exception or log it.
     """
+    if stdout := exception.stdout.decode().strip():
+        logger.debug(stdout)
+
+    if stderr := exception.stderr.decode().strip():
+        logger.error(stderr)
+
     if do_raise:
         raise exception
-
-    logger.debug(exception.stdout.decode())
-    logger.error(exception.stderr.decode())
 
 
 # --- Public API ---------------------------------------------------------------
