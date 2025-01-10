@@ -185,7 +185,7 @@ class PostgresConnector(Connector):
         :return: Whether the database was created.
         :rtype: bool
         """
-        template = template or "template0"
+        template = template or "template1"
         self.revoke_database(template)
 
         return bool(
