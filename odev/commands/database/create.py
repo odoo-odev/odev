@@ -134,6 +134,7 @@ class CreateCommand(OdoobinTemplateCommand):
     def create_database(self):
         """Create the database and copy the template if needed.
         Enable unaccent extension on the new database.
+        Enable pg_trgm extension on the new database.
         """
         self.ensure_database_not_exists()
         self.ensure_template_exists()
@@ -145,7 +146,7 @@ class CreateCommand(OdoobinTemplateCommand):
             self._template.connector.disconnect()
 
         with progress.spinner(f"Creating {message}"):
-            created = self._database.create(template=template) & self._database.unaccent()
+            created = self._database.create(template=template) & self._database.unaccent() & self._database.pg_trgm()
 
             if created is False:
                 raise self.error(f"Failed to create database {self._database.name!r}")

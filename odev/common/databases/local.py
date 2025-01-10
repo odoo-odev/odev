@@ -803,6 +803,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return res
 
     @ensure_connected
+    def pg_trgm(self):
+        """Install the pg_trgm extension on the database."""
+        pg_trgm_query = "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+        return self.query(pg_trgm_query)
+
+    @ensure_connected
     def table_exists(self, table: str) -> bool:
         """Check if a table exists in the database."""
         return cast(PostgresConnector, self.connector).table_exists(table)
