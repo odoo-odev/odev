@@ -366,9 +366,9 @@ class Odev(Generic[CommandType]):
                 action = self.console.select(
                     "What do you want to do?",
                     choices=[
-                        ("delete", "Delete all databases"),
-                        ("review", "Review databases and whitelist some of them"),
                         ("skip", "Do nothing and keep all databases for now"),
+                        ("review", "Review databases and whitelist some of them"),
+                        ("delete", "Delete all databases"),
                     ],
                     default="Skip",
                 )
@@ -378,7 +378,7 @@ class Odev(Generic[CommandType]):
 
                 if action == "review":
                     whitelisted = self.console.checkbox(
-                        "Select databases to whitelist",
+                        "Select databases to whitelist\n    SPACE to whitelist\n    ENTER to validate",
                         choices=[(database, database) for database in databases],
                     )
 
