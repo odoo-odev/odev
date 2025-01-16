@@ -667,6 +667,7 @@ class GitConnector(Connector):
             self.worktrees_path.mkdir(parents=True, exist_ok=True)
 
             try:
+                self.repository.git.fetch("origin", revision)
                 self.repository.git.worktree("add", path, revision, "--force")
             except GitCommandError as error:
                 if "fatal: invalid reference" in error.stderr:
