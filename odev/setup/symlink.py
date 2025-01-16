@@ -1,8 +1,10 @@
 """Setup symlinks to odev for using it as a shell command."""
 
 import stat
+from os import getenv
 from pathlib import Path
 
+from odev.common import bash
 from odev.common.console import console
 from odev.common.logging import logging
 from odev.common.odev import Odev
@@ -22,7 +24,9 @@ def setup(odev: Odev) -> None:
     :param config: Odev configuration
     """
     main_path = Path(__file__).parents[2] / "main.py"
-    link_path = Path("~/.local/bin/odev").expanduser()
+    known_env_paths = getenv("PATH", "").split(":")
+    local_path = Path("~/.local/bin").expanduser()
+    link_path = (local_path if str(local_path) in known_env_paths else Path("/usr/local/bin")) / "odev"
 
     if not link_path.parent.exists():
         logger.debug(f"Directory {link_path.parent} does not exist, creating it")
@@ -33,11 +37,12 @@ def setup(odev: Odev) -> None:
 
         if console.confirm("Would you like to overwrite it?"):
             logger.debug(f"Removing symlink path {link_path}")
-            link_path.unlink(missing_ok=True)
+            bash.execute(f"rm {link_path}", sudo=True)
 
     if not link_path.exists() and not link_path.is_symlink():
         logger.debug(f"Creating symlink from {link_path} to {main_path}")
-        link_path.symlink_to(main_path)
+        bash.execute(f"ln -s {main_path} {link_path}", sudo=True)
+        logger.info("Symlink created")
 
     for path in (main_path, link_path):
         logger.debug(f"Checking execute permissions for {path}")

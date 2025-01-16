@@ -33,6 +33,24 @@ __all__ = ["PythonEnv"]
 logger = logging.getLogger(__name__)
 
 
+RE_PACKAGE = re.compile(
+    r"""
+    (?:
+        (?P<name>[\w_-]+)
+        (?:
+            (?P<op>[~<>=]+)
+            (?P<version>[\d.*]+)
+        )?
+        (?:
+            \s*;\s*
+            (?P<conditional>.*)
+        )?
+    )
+    """,
+    re.VERBOSE | re.IGNORECASE,
+)
+
+
 class PythonEnv:
     """Object representation of a local python environment, this could be the global python interpreter or
     a virtual environment.
@@ -157,13 +175,13 @@ class PythonEnv:
 
         logger.info(f"Removed {venv_description}")
 
-    def install_packages(self, packages: List[str]) -> None:
+    def install_packages(self, packages: List[str], options: Optional[List[str]] = None) -> None:
         """Install python packages.
         :param packages: a list of package specs to install.
         """
         self.__pip_install_progress(
-            options=" ".join(packages),
-            message=f"Installing python packages:\n{string.join_bullet(packages)}",
+            options=" ".join([*(options or []), *[shlex.quote(package) for package in packages]]),
+            message=f"Installing python packages:\n{string.join_bullet(self.__format_packages(packages))}",
         )
 
     def install_requirements(self, path: Union[Path, str]):
@@ -176,6 +194,23 @@ class PythonEnv:
             message=f"Installing missing packages from {requirements_path}",
         )
 
+    def __format_packages(self, packages: List[str]) -> List[str]:
+        """Format a list of package specs for display."""
+        formatted_packages = []
+
+        for package in packages:
+            match = RE_PACKAGE.search(package)
+
+            if match is None:
+                continue
+
+            formatted_packages.append(
+                f"{string.stylize(match.group('name'), 'color.purple')} "
+                f"{match.group('op') or ''} {string.stylize(match.group('version') or '', 'color.cyan')}"
+            )
+
+        return formatted_packages
+
     def __pip_install_progress(self, options: str, message: str = "Installing packages"):
         """Run pip install with a progress spinner.
         :param options: The options to pass to `pip install` (packages or requirements file).
@@ -183,7 +218,7 @@ class PythonEnv:
         """
         logger.info(message)
 
-        with progress.spinner(message) as spinner:
+        with progress.spinner("Installing packages") as spinner:
             buffer: List[str] = []
             entire_buffer: List[str] = []
             packages: List[str] = []
@@ -314,22 +349,6 @@ class PythonEnv:
         logger.debug(f"Checking missing python packages from {requirements_path}")
         installed_packages = self.installed_packages()
         required_packages = requirements_path.read_text().splitlines()
-        re_package = re.compile(
-            r"""
-            (?:
-                (?P<name>[\w_-]+)
-                (?:
-                    (?P<op>[~<>=]+)
-                    (?P<version>[\d.*]+)
-                )?
-                (?:
-                    \s*;\s*
-                    (?P<conditional>.*)
-                )?
-            )
-            """,
-            re.VERBOSE | re.IGNORECASE,
-        )
 
         for line in required_packages:
             line = line.split("#", 1)[0].strip()
@@ -354,7 +373,7 @@ class PythonEnv:
 
                 continue
 
-            match = re_package.search(line)
+            match = RE_PACKAGE.search(line)
 
             if match is None:
                 continue
