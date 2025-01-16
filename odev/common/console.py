@@ -159,6 +159,7 @@ RICH_THEME = Theme(
         "repr.call": Colors.CYAN,
         "repr.ellipsis": Colors.GRAY,
         "repr.filename": Colors.PURPLE,
+        "repr.ipv4": Colors.CYAN,
         "repr.none": f"italic {Colors.CYAN}",
         "repr.number_complex": Colors.CYAN,
         "repr.number": Colors.CYAN,

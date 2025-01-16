@@ -619,21 +619,18 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         if not self.venv.exists:
             self.venv.create()
-            self.venv.install_packages(["wheel", "setuptools", "pip", "'cython<3.0.0'"])
-            self.venv.run("pip install --no-build-isolation 'pyyaml==5.4.1'")
-
-            python_version = tuple(int(part) for part in self.venv.version.split("."))
-
-            if python_version <= (3, 10):
-                gevent_version = "21.8.0"
-            elif python_version >= (3, 10) and python_version < (3, 12):
-                gevent_version = "22.10.2"
-            else:
-                gevent_version = "24.2.1"
-
-            self.venv.run(f"pip install --no-build-isolation 'gevent=={gevent_version}'")
+            self.venv.install_packages(["wheel", "setuptools", "pip", "cython<3.0.0"])
+            self.venv.install_packages(["pyyaml==5.4.1"], ["--no-build-isolation"])
 
         for path in self.addons_requirements:
+            missing_gevent = next(
+                (line for line in self.venv.missing_requirements(path) if line.startswith("gevent")),
+                None,
+            )
+
+            if missing_gevent:
+                self.venv.install_packages([missing_gevent.split(" ;")[0]], ["--no-build-isolation"])
+
             if any(self.venv.missing_requirements(path)):
                 self.venv.install_requirements(path)
 
