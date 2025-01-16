@@ -379,6 +379,18 @@ class GitConnector(Connector):
     def connect(self):
         """Connect to the Github API."""
         if self._token is None:
+            logger.info(
+                """Connection to your GitHub account is necessary to pursue this operation, please configure a Personal
+                Access Token (classic) on https://github.com/settings/tokens with the following permissions:
+
+                - repo:
+                    - repo:status
+                    - public_repo
+                - user:
+                    - read:user
+                    - user:email
+                """
+            )
             self._token = self.store.secrets.get(
                 GITHUB_DOMAIN,
                 scope="api",
