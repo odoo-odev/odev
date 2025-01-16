@@ -52,7 +52,7 @@ def __run_command(command: str, capture: bool = True, sudo_password: Optional[st
 
     if sudo_password is not None:
         command = f"sudo -Sks {command}"
-        sudo_password = shlex.quote(f"{sudo_password}\n")
+        sudo_password = f"{sudo_password}\n"
 
     return run_subprocess(
         command,
