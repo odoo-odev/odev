@@ -252,6 +252,17 @@ def seconds_to_time(seconds: int) -> str:
     return str(datetime.timedelta(seconds=seconds))
 
 
+def float_to_hours(value: float) -> str:
+    """Convert a float to a human readable time.
+    :param value: The float to convert.
+    :return: The human readable time.
+    :rtype: str
+    """
+    h = int(value)
+    m = abs(int(value - h) * 60)
+    return f"{h}:{m:02d}"
+
+
 def ago(date: datetime.datetime) -> str:
     """Return a human readable representation of a datetime to show how long ago it was.
     :param date: The datetime to convert.
