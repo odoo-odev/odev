@@ -634,11 +634,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param info: A list of tuples containing the filestore file path and size.
         """
         filestore_size: int = sum(size for _, size in info)
-        task_description: str = (
-            f"filestore from {string.stylize(f'{ARCHIVE_FILESTORE!r}', 'color.cyan')} "
-            f"({string.bytes_size(filestore_size)})"
-        )
-        task_id = tracker.add_task(f"Extracting {task_description}", total=filestore_size)
+        task_id = tracker.add_task("Extracting filestore from archive", total=filestore_size)
         tracker.start_task(task_id)
         tracker.start()
 
@@ -654,7 +650,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
             tracker.update(task_id, advance=size)
 
-        logger.info(f"Extracted {string.stylize(string.bytes_size(filestore_size), 'color.cyan')} of filestore data")
+        logger.info(f"Extracted filestore to {self.filestore.path}")
+        tracker.remove_task(task_id)
 
     def _restore_buffered_sql(
         self,
@@ -714,19 +711,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                     f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
 
-            threads: List[Thread] = []
-
             if ARCHIVE_FILESTORE in archive.namelist():
-                filestore_thread = self._restore_zip_filestore(tracker, archive)
-
-                if filestore_thread:
-                    threads.append(filestore_thread)
+                self._restore_zip_filestore(tracker, archive).join()
 
             with archive.open(ARCHIVE_DUMP) as dump:
-                threads.append(self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size))
-
-            for thread in threads:
-                thread.join()
+                self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size).join()
 
             tracker.stop()
 
