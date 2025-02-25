@@ -712,7 +712,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 )
 
             if ARCHIVE_FILESTORE in archive.namelist():
-                self._restore_zip_filestore(tracker, archive).join()
+                if restore_thread := self._restore_zip_filestore(tracker, archive):
+                    restore_thread.join()
 
             with archive.open(ARCHIVE_DUMP) as dump:
                 self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size).join()
