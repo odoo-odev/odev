@@ -42,7 +42,7 @@ if __log_level:
     remove_index = sys.argv.index(remove[0])
     del sys.argv[remove_index : remove_index + len(remove)]
 
-    if LOG_LEVEL not in ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "DEBUG_SQL"):
+    if LOG_LEVEL not in ("CRITICAL", "ERROR", "WARN", "INFO", "DEBUG", "DEBUG_SQL"):
         raise ValueError(f"Invalid log level {LOG_LEVEL!r}")
 
     if LOG_LEVEL == "DEBUG_SQL":
