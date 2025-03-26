@@ -44,6 +44,9 @@ class RestoreCommand(DatabaseCommand):
             with self._database.connector.nocache():
                 neutralized: bool = False
 
+                while not self._database.process:
+                    sleep(0.2)
+
                 while not neutralized and (retries := 0) < 5:
                     try:
                         neutralized = self.odev.run_command("neutralize", database=self._database, history=False)
