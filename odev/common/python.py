@@ -151,14 +151,27 @@ class PythonEnv:
 
         with progress.spinner(f"Creating {venv_description}"):
             try:
-                with silence_loggers("root", "distlib.util", "filelock"):
+                with silence_loggers("distlib.util", "filelock", "virtualenv"):
                     virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
             except RuntimeError as error:
-                if str(error).startswith("failed to find interpreter"):
-                    logger.critical(
-                        f"Missing interpreter for python {self.version}, please install it using your distribution's "
-                        "package manager and try again"
+                if str(error).startswith("failed to find interpreter") and not self._global:
+                    default_version = PythonEnv().get_version()
+
+                    if tuple(map(int, self.version.split("."))) >= tuple(map(int, default_version.split("."))):
+                        raise InvalidVersion(
+                            f"Missing interpreter for python {self.version}, and the default installed python version "
+                            f"({default_version}) is not compatible with the requested version\n"
+                            "Please install the correct python version and re-create the virtual environment"
+                        ) from error
+
+                    logger.warning(
+                        f"Missing interpreter for python {self.version}, falling back to the default installed "
+                        f"python version ({default_version})\n"
+                        "If you notice compatibility issues, please install the correct python version "
+                        "and re-create the virtual environment"
                     )
+                    self._version = default_version
+                    return self.create()
                 raise error
 
         logger.info(f"Created {venv_description}")
