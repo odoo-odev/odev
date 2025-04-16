@@ -36,7 +36,7 @@ repos:
                 - --settings=.
 
     - repo: https://github.com/myint/autoflake
-      rev: v1.4
+      rev: v2.3.1
       hooks:
           - id: autoflake
             args:
@@ -100,7 +100,7 @@ repos:
                 - --keep-percent-format
 
     - repo: https://github.com/PyCQA/pylint
-      rev: v2.15.8
+      rev: v3.3.6
       hooks:
           - id: pylint
             exclude: /static/util\.py$
@@ -113,7 +113,7 @@ repos:
           - id: python-safety-dependencies-check
 
     - repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v4.5.0
+      rev: v5.0.0
       hooks:
           - id: check-added-large-files
           - id: check-ast
