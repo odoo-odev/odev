@@ -50,6 +50,24 @@ RE_PACKAGE = re.compile(
     re.VERBOSE | re.IGNORECASE,
 )
 
+OS_PACKAGES = {
+    "dnf": [
+        "gcc",
+        "libpq-devel",
+        "openldap-devel",
+        "python{version}-devel",
+        "python{version}",
+    ],
+    "apt": [
+        "gcc",
+        "libldap2-dev",
+        "libpq-dev",
+        "libsasl2-dev",
+        "python{version}-dev",
+        "python{version}",
+    ],
+}
+
 
 class PythonEnv:
     """Object representation of a local python environment, this could be the global python interpreter or
@@ -155,23 +173,13 @@ class PythonEnv:
                     virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
             except RuntimeError as error:
                 if str(error).startswith("failed to find interpreter") and not self._global:
-                    default_version = PythonEnv().get_version()
-
-                    if tuple(map(int, self.version.split("."))) >= tuple(map(int, default_version.split("."))):
-                        raise InvalidVersion(
-                            f"Missing interpreter for python {self.version}, and the default installed python version "
-                            f"({default_version}) is not compatible with the requested version\n"
-                            "Please install the correct python version and re-create the virtual environment"
-                        ) from error
-
                     logger.warning(
-                        f"Missing interpreter for python {self.version}, falling back to the default installed "
-                        f"python version ({default_version})\n"
-                        "If you notice compatibility issues, please install the correct python version "
-                        "and re-create the virtual environment"
+                        f"Missing interpreter for python {self.version}, attempting automatic installation "
+                        "of missing system packages"
                     )
-                    self._version = default_version
+                    self.install_system_packages()
                     return self.create()
+
                 raise error
 
         logger.info(f"Created {venv_description}")
@@ -187,6 +195,35 @@ class PythonEnv:
             shutil.rmtree(self.path, ignore_errors=True)
 
         logger.info(f"Removed {venv_description}")
+
+    def install_system_packages(self) -> None:
+        """Install system packages for the current python version."""
+        if self._global:
+            raise RuntimeError("Cannot install system packages for the global python interpreter")
+
+        logger.info(f"Installing system packages for python {self.version}")
+
+        with progress.spinner("Installing system packages"):
+            package_manager = next((pkg for pkg in OS_PACKAGES if shutil.which(pkg)), None)
+
+            if not package_manager:
+                raise RuntimeError(
+                    f"Neither {string.join_or(list(OS_PACKAGES.keys()))} package managers found on the system, "
+                    "cannot install packages"
+                )
+
+            packages = " ".join([pkg.format(version=self.version) for pkg in OS_PACKAGES[package_manager]])
+            bash.execute(f"{package_manager} install -y {packages}", sudo=True)
+
+            if package_manager == "dnf":
+                lldap_r = Path("/usr/lib64/libldap_r.so")
+                lldap = Path("/usr/lib64/libldap.so")
+
+                if not lldap_r.exists() and lldap.exists():
+                    logger.debug(f"Creating symlink {lldap} -> {lldap_r}")
+                    bash.execute(f"ln -s {lldap} {lldap_r}", sudo=True)
+
+        logger.info(f"Installed system packages for python {self.version}")
 
     def install_packages(self, packages: List[str], options: Optional[List[str]] = None) -> None:
         """Install python packages.
