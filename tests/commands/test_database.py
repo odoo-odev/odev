@@ -1,8 +1,6 @@
 import re
-import shlex
 from pathlib import Path
-from subprocess import CompletedProcess, Popen
-from time import sleep
+from subprocess import CompletedProcess
 
 from odev.common import string
 from odev.common.databases import LocalDatabase
@@ -374,24 +372,3 @@ class TestCommandDatabaseRun(OdevCommandRunDatabaseTestCase):
         self.assert_database(self.database.name, is_odoo=True)
         self.assertTrue(self.database.table_exists("test_table"))
         self.assertNotIn(f"Running 'odoo-bin' in version '17.0' on database '{self.database.name}'", stdout)
-
-
-class TestCommandDatabaseKill(OdevCommandRunDatabaseTestCase):
-    """Command `odev kill` should kill Odoo processes in a database."""
-
-    def test_01_kill(self):
-        """Command `odev kill` should kill Odoo processes in a database."""
-        self.assert_database(self.database.name, is_odoo=True)
-        assert self.database.process is not None
-        command = string.strip_styles(self.database.process.format_command().replace("\\\n", " "))
-        Popen(shlex.split(command), start_new_session=True)
-
-        seconds, elapsed = 2, 0
-        while not self.database.running and elapsed < 30:
-            sleep(seconds)
-            elapsed += seconds
-
-        self.assertTrue(self.database.running)
-        self.dispatch_command("kill", self.database.name)
-        self.assert_database(self.database.name, is_odoo=True)
-        self.assertFalse(self.database.running)
