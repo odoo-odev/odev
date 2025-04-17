@@ -9,6 +9,7 @@ from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from subprocess import PIPE, Popen
+from time import sleep
 from types import FrameType
 from typing import (
     IO,
@@ -153,7 +154,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if self.process:
             yield from self.process.odoo_worktrees
 
-    @cached_property
+    @property
     def version(self) -> Optional[OdooVersion]:  # type: ignore [override]
         if not self.is_odoo:
             return None
@@ -325,12 +326,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def process(self) -> Optional[OdoobinProcess]:
         if self._process is None and self.is_odoo:
-            self._process = OdoobinProcess(
-                self,
-                (self.venv and self.venv.path.name) or str(self.version),
-                self.worktree or (str(self.version) if self.version else None),
-                self.version,
-            )
+            self._process = self._get_process_instance()
 
         return self._process
 
@@ -418,6 +414,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         return [module[0] for module in modules]
 
+    def _get_process_instance(self) -> OdoobinProcess:
+        """Get the Odoo process for the database."""
+        return OdoobinProcess(
+            self,
+            (self.venv and self.venv.path.name) or str(self.version),
+            self.worktree or (str(self.version) if self.version else None),
+            self.version,
+        )
+
     def create(self, template: Optional[str] = None) -> bool:
         """Create the database.
 
@@ -447,8 +452,17 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     def neutralize(self):
         """Neutralize the database."""
-        assert self.process is not None, "Database process is not set"
-        assert self.version is not None, "Database version is not set"
+        with self.connector.nocache():
+            # Artificially wait for SQL transaction to be committed and for the process to be ready
+            # before running the neutralize command
+            # This is not clean but it works, I guess
+            while not self.process and (retries := 0) < 5:
+                retries += 1
+                sleep(0.2)
+
+            assert self.process is not None
+            assert self.version is not None
+
         admin = self._db_user_admin()
 
         if not admin["active"]:
