@@ -386,7 +386,7 @@ class GitConnector(Connector):
                     scope="api",
                     fields=["password"],
                     prompt_format="GitHub API token:",
-                    ask_missing=False,
+                    ask_missing=prompt,
                 ).password
 
             token = get_token(prompt=False)
