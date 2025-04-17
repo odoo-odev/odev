@@ -1,6 +1,5 @@
 """Restore a backup of a database."""
 
-from time import sleep
 
 from odev.common import args, progress
 from odev.common.commands import DatabaseCommand
@@ -36,23 +35,9 @@ class RestoreCommand(DatabaseCommand):
         self.neutralize_backup()
 
     def neutralize_backup(self):
-        """Neutralize the database after the dump has been restored.
-        A race conditions exists where some transactions might still be running and not committed after the dump
-        has been restored, hence the need for a retrying loop on the neutralize sub-command.
-        """
-        if isinstance(self._database, LocalDatabase) and self.args.neutralize and self._database.connector:
-            with self._database.connector.nocache():
-                neutralized: bool = False
-
-                while not neutralized and (retries := 0) < 5:
-                    try:
-                        neutralized = self.odev.run_command("neutralize", database=self._database, history=False)
-                    except RuntimeError:
-                        retries += 1
-                        logger.debug(
-                            f"Neutralization failed, likely because of uncommitted transactions (retry {retries})"
-                        )
-                        sleep(0.2)
+        """Neutralize the database after the dump has been restored."""
+        if isinstance(self._database, LocalDatabase) and self.args.neutralize:
+            self.odev.run_command("neutralize", database=self._database, history=False)
 
     def restore_backup(self):
         """Restore the backup to the selected database."""
