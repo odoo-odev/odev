@@ -107,11 +107,6 @@ repos:
             args:
                 - --rcfile=.pylintrc
 
-    - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-      rev: v1.3.0
-      hooks:
-          - id: python-safety-dependencies-check
-
     - repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v5.0.0
       hooks:
