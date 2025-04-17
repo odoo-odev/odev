@@ -342,13 +342,13 @@ class PythonEnv:
         """
         if "==" in package:
             package_name, package_version = package.split("==")
-        elif " @ " in package:
+        elif " @ " in package or package.startswith("git+"):
             # With a line in requirements.txt as follows:
             #   odoo_upgrade @ git+https://github.com/odoo/upgrade-util@aaa1f0fee6870075e25cb5e6744e4c589bb32b46
             # Consider:
             #   Package name:   odoo_upgrade
             #   Version:        aaa1f0fee6870075e25cb5e6744e4c589bb32b46
-            package_name, package_version = package.split(" @ ")
+            package_name, package_version = package.split(" @ ") if " @ " in package else (package, package)
 
             if "@" in package_version:
                 package_version = package_name.split("@")[-1]
