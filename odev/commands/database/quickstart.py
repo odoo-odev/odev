@@ -2,7 +2,7 @@ from typing import Any, MutableMapping
 
 from odev.common import args
 from odev.common.commands import DatabaseCommand
-from odev.common.databases import LocalDatabase
+from odev.common.databases import LocalDatabase, Repository
 
 
 class QuickStartCommand(DatabaseCommand):
@@ -58,11 +58,10 @@ class QuickStartCommand(DatabaseCommand):
             if not dumped or not dump_file.exists():
                 raise self.error(f"Database {self._database.name!r} could not be restored")
 
-            self.odev.run_command(
-                "restore",
-                dump_file.as_posix(),
-                database=LocalDatabase(self.args.name or self._database.name),
-            )
+            new_database = LocalDatabase(self.args.name or self._database.name)
+            self.odev.run_command("restore", dump_file.as_posix(), database=new_database)
+            repo_org, repo_name = self._database.repository.name.split("/")
+            new_database.repository = Repository(repo_name, repo_org)
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
         """Return the keyword arguments to pass to Database.get_dump_filename()."""
