@@ -91,6 +91,10 @@ class CreateCommand(OdoobinTemplateCommand):
         """Drop the database if it exists."""
         with self._database.psql().nocache():
             if self._database.exists:
+
+                if self._database.running:
+                    raise self.error(f"Database {self._database.name!r} is running, stop it and try again")
+
                 logger.warning(f"Database {self._database.name!r} already exists")
 
                 if not self.console.confirm("Overwrite it?", default=True):
