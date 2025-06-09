@@ -29,14 +29,13 @@ class RunCommand(OdoobinTemplateCommand):
         super().__init__(*args, **kwargs)
         self.infer_template_instance()
 
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return not bool(self.from_template)
+
     def run(self):
         """Run the odoo-bin process for the selected database locally."""
-        if not self.odoobin:
-            raise self.error(f"Could not spawn process for database {self._database.name!r}")
-
-        if self.odoobin.is_running:
-            raise self.error(f"Database {self._database.name!r} is already running")
-
         if self._template:
             if not self._template.exists:
                 raise self.error(f"Template database {self._template.name!r} does not exist")
@@ -46,5 +45,11 @@ class RunCommand(OdoobinTemplateCommand):
                     self._database.drop()
 
             self.odev.run_command("create", "--from-template", self._template.name, self._database.name)
+
+        if not self.odoobin:
+            raise self.error(f"Could not spawn process for database {self._database.name!r}")
+
+        if self.odoobin.is_running:
+            raise self.error(f"Database {self._database.name!r} is already running")
 
         self.odoobin.run(args=self.args.odoo_args, progress=self.odoobin_progress)

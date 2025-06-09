@@ -38,7 +38,11 @@ class QuickStartCommand(DatabaseCommand):
     )
 
     _database_allowed_platforms = []
-    _database_exists_required = False
+
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return False
 
     def run(self):
         passthrough_args = ["--branch", self.args.branch] if self.args.branch else []
