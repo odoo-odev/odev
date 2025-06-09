@@ -26,8 +26,12 @@ class RestoreCommand(DatabaseCommand):
         """,
     )
 
-    _database_exists_required = False
     _database_allowed_platforms = ["local"]
+
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return False
 
     def run(self):
         self.check_database()
