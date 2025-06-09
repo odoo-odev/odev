@@ -36,9 +36,6 @@ class DatabaseCommand(Command, ABC):
     _database_arg_required: ClassVar[bool] = True
     """Whether the command requires a database to be specified or not in its arguments."""
 
-    _database_exists_required: ClassVar[bool] = True
-    """Whether the database must exist before running the command."""
-
     _database_platforms: ClassVar[Mapping[str, type[DatabaseType]]] = {
         "local": LocalDatabase,
         "remote": RemoteDatabase,
@@ -94,6 +91,11 @@ class DatabaseCommand(Command, ABC):
                 raise self.error("No database specified")
             if not self._database.exists:
                 raise self.error(f"Database {self._database.name!r} does not exist")
+
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return True
 
     @classmethod
     def prepare_command(cls, *args, **kwargs) -> None:
@@ -190,9 +192,13 @@ class DatabaseOrRepositoryCommand(DatabaseCommand, ABC):
     """
 
     _database_arg_required = False
-    _database_exists_required = False
 
     repository = args.String(description="GitHub URL or name of a repository.", nargs="?")
+
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return False
 
     def infer_database_instance(self) -> DatabaseType:
         if any(char in self.args.database for char in "@:/"):

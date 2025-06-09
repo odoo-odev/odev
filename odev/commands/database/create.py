@@ -44,8 +44,6 @@ class CreateCommand(OdoobinTemplateCommand):
         """,
     )
 
-    _database_exists_required = False
-
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -58,6 +56,11 @@ class CreateCommand(OdoobinTemplateCommand):
             self._database = LocalDatabase(self.args.database)
 
         self.infer_template_instance()
+
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return False
 
     @property
     def version(self) -> OdooVersion:
