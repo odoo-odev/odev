@@ -41,8 +41,12 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     )
 
     _database_arg_required = False
-    _database_exists_required = False
     _exclusive_arguments = [("database", "expression")]
+
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return False
 
     def run(self):
         if self._database.exists:
