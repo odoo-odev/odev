@@ -4,7 +4,7 @@ import re
 
 from odev.common import args
 from odev.common.commands import DatabaseCommand
-from odev.common.databases import LocalDatabase
+from odev.common.databases import LocalDatabase, RemoteDatabase
 from odev.common.logging import logging
 from odev.common.odoobin import OdoobinProcess
 
@@ -35,8 +35,10 @@ class DeployCommand(DatabaseCommand):
             else OdoobinProcess(LocalDatabase(self.odev.name), version=self._database.version)
         )
 
+        url = self._database.url if isinstance(self._database, RemoteDatabase) else None
+
         process = odoobin.deploy(
-            url=self._database.url,
+            url=url,
             module=self.args.module,
             args=self.args.odoo_args,
         )
