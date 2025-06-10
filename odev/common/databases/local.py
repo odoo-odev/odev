@@ -725,12 +725,19 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                     f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
 
+            neuter_filestore = False
             if ARCHIVE_FILESTORE in archive.namelist():
                 if restore_thread := self._restore_zip_filestore(tracker, archive):
                     restore_thread.join()
+                else:
+                    neuter_filestore = True
 
             with archive.open(ARCHIVE_DUMP) as dump:
                 self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size).join()
+
+            if neuter_filestore:
+                self.neuter_filestore()
+                logger.info("Neutered filestore")
 
             tracker.stop()
 
@@ -811,6 +818,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Install the pg_trgm extension on the database."""
         pg_trgm_query = "CREATE EXTENSION IF NOT EXISTS pg_trgm"
         return self.query(pg_trgm_query)
+
+    @ensure_connected
+    def neuter_filestore(self):
+        """Neuter the filestore. Intended to be call only when the database is fetched without filestore."""
+        neuter_fs_query = "UPDATE ir_attachment SET store_fname='' WHERE type='binary' AND store_fname IS NOT NULL;"
+        return self.query(neuter_fs_query)
 
     @ensure_connected
     def table_exists(self, table: str) -> bool:
