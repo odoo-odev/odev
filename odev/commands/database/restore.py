@@ -34,8 +34,12 @@ class RestoreCommand(DatabaseCommand):
         return False
 
     def run(self):
+        file = self.args.backup
+        if not file.is_file():
+            return logger.error(f"Invalid dump file {file}")
+
         self.check_database()
-        self.restore_backup()
+        self.restore_backup(file)
         self.neutralize_backup()
 
     def neutralize_backup(self):
@@ -43,12 +47,12 @@ class RestoreCommand(DatabaseCommand):
         if isinstance(self._database, LocalDatabase) and self.args.neutralize:
             self.odev.run_command("neutralize", database=self._database, history=False)
 
-    def restore_backup(self):
+    def restore_backup(self, file):
         """Restore the backup to the selected database."""
-        action: str = f"file {self.args.backup.name!r} to local database {self._database.name!r}"
+        action: str = f"file {file.name!r} to local database {self._database.name!r}"
 
         with progress.spinner(f"Restoring {action}"):
-            self._database.restore(file=self.args.backup)
+            self._database.restore(file)
 
         logger.info(f"Restored {action}")
 
