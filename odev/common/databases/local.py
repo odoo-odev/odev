@@ -551,9 +551,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return file
 
     def restore(self, file: Path):
-        if not file.is_file():
-            return logger.error(f"Invalid dump file {file}")
-
         tracker = progress.Progress(download=True)
 
         def signal_handler_progress(
