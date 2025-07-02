@@ -1,10 +1,13 @@
 from base64 import b64decode, b64encode
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence, Tuple
 
+from paramiko.agent import Agent as SSHAgent, AgentKey
+from paramiko.ssh_exception import SSHException
 from ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt
 
 from odev.common.console import console
+from odev.common.errors import OdevError
 from odev.common.logging import logging
 from odev.common.postgres import PostgresTable
 
@@ -59,13 +62,34 @@ class SecretStore(PostgresTable):
     _constraints = {"secrets_unique_name_login_scope_platform": "UNIQUE(name, login, scope, platform)"}
 
     @classmethod
+    def _list_ssh_keys(cls) -> Tuple[AgentKey, ...]:
+        """List all SSH keys available in the ssh-agent."""
+        keys = SSHAgent().get_keys()
+
+        if not keys:
+            raise OdevError("No SSH keys found in ssh-agent, or ssh-agent is not running.")
+
+        return keys
+
+    @classmethod
     def encrypt(cls, plaintext: str) -> str:
         """Symmetrically encrypt a string using ssh-agent.
         :param plaintext: The string to encrypt.
         :return: The encrypted string.
         :rtype: str
         """
-        return b64encode(ssh_encrypt(plaintext)).decode() if plaintext else ""
+        ciphered: Optional[str] = None
+
+        for key in cls._list_ssh_keys():
+            try:
+                ciphered = str(b64encode(ssh_encrypt(plaintext, ssh_key=key)).decode()) if plaintext else ""
+            except SSHException as e:
+                logger.debug(f"Failed to encrypt with key {key.name}: {e}")
+
+        if ciphered is None:
+            raise OdevError("Encryption failed, no key could be used for signing.")
+
+        return ciphered
 
     @classmethod
     def decrypt(cls, ciphertext: str) -> str:
@@ -74,7 +98,22 @@ class SecretStore(PostgresTable):
         :return: The decrypted string.
         :rtype: str
         """
-        return str(ssh_decrypt(b64decode(ciphertext.encode()).decode())) if ciphertext else ""
+        deciphered: Optional[str] = None
+
+        for key in cls._list_ssh_keys():
+            try:
+                deciphered = (
+                    str(ssh_decrypt(b64decode(ciphertext.encode()).decode(), ssh_key=key)) if ciphertext else ""
+                )
+            except SSHException as e:
+                logger.debug(f"Failed to decrypt with key {key.name}: {e}")
+            except UnicodeDecodeError as e:
+                logger.debug(f"Failed to decode decrypted string with key {key.name}: {e}")
+
+        if deciphered is None:
+            raise OdevError("Decryption failed, no key could be used")
+
+        return str(deciphered)
 
     def get(
         self,
