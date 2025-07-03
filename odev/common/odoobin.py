@@ -290,7 +290,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 + [worktree.path for worktree in self.odoo_worktrees]
             )
         )
-        return (path for glob in globs for path in glob)
+        return (path for glob in globs for path in glob if not re.search(r"/iot.*/requirements.txt$", str(path)))
 
     def with_edition(self, edition: Optional[Literal["community", "enterprise"]] = None) -> "OdoobinProcess":
         """Return the OdoobinProcess instance with the given edition forced."""
