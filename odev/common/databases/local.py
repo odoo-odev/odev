@@ -45,6 +45,8 @@ logger = logging.getLogger(__name__)
 ARCHIVE_DUMP = "dump.sql"
 ARCHIVE_FILESTORE = "filestore/"
 
+SQL_DUMP_IGNORE_LINES: Set[str] = {"GRANT CREATE ON SCHEMA public TO odoo;"}
+
 
 class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
@@ -456,7 +458,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             # Artificially wait for SQL transaction to be committed and for the process to be ready
             # before running the neutralize command
             # This is not clean but it works, I guess
-            while not self.process and (retries := 0) < 5:
+            while (not self.process or not self.version) and (retries := 0) < 5:
                 retries += 1
                 sleep(0.2)
 
@@ -567,6 +569,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             raise KeyboardInterrupt
 
         with capture_signals(handler=signal_handler_progress):
+            self.unaccent()
+
             if file.suffix == ".sql":
                 self._restore_sql(file, tracker)
             elif file.suffix == ".dump":
@@ -683,7 +687,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.start()
 
         if mode == "dump":
-            command = f"pg_restore --dbname {self.name} --single-transaction --disable-triggers --no-owner"
+            command = (
+                f"pg_restore --dbname {self.name} --single-transaction --disable-triggers --no-owner --no-privileges"
+            )
         else:
             command = f"psql --dbname {self.name} --single-transaction"
 
@@ -693,7 +699,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         thread.start()
 
         for line in dump:
-            psql_process.stdin.write(line)
+            if line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
+                psql_process.stdin.write(line)
+
             tracker.update(extract_task_id, advance=len(line))
 
         tracker.update(extract_task_id, advance=1)
@@ -722,13 +730,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                     f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
 
+            threads: List[Thread] = []
+
             if ARCHIVE_FILESTORE in archive.namelist():
-                if restore_thread := self._restore_zip_filestore(tracker, archive):
-                    restore_thread.join()
+                threads.append(self._restore_zip_filestore(tracker, archive))
 
             with archive.open(ARCHIVE_DUMP) as dump:
-                self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size).join()
+                threads.append(self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size))
 
+            [thread.join() for thread in threads if thread is not None]
             tracker.stop()
 
     def _restore_buffer(self, tracker: progress.Progress, dump: Union[gzip.GzipFile, bz2.BZ2File, IO[bytes]]):
