@@ -569,8 +569,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             raise KeyboardInterrupt
 
         with capture_signals(handler=signal_handler_progress):
-            self.unaccent()
-
             if file.suffix == ".sql":
                 self._restore_sql(file, tracker)
             elif file.suffix == ".dump":
@@ -583,6 +581,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 self._restore_bzip(file, tracker)
             else:
                 logger.error(f"Unrecognized extension {file.suffix!r} for dump {file}")
+
+            self.unaccent()
 
         tracker.stop()
 
