@@ -735,10 +735,17 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             if ARCHIVE_FILESTORE in archive.namelist():
                 threads.append(self._restore_zip_filestore(tracker, archive))
 
+            neuter_filestore = None in threads
+
             with archive.open(ARCHIVE_DUMP) as dump:
                 threads.append(self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size))
 
             [thread.join() for thread in threads if thread is not None]
+
+            if neuter_filestore:
+                self.neuter_filestore()
+                logger.info("Neutered filestore")
+
             tracker.stop()
 
     def _restore_buffer(self, tracker: progress.Progress, dump: Union[gzip.GzipFile, bz2.BZ2File, IO[bytes]]):
@@ -818,6 +825,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Install the pg_trgm extension on the database."""
         pg_trgm_query = "CREATE EXTENSION IF NOT EXISTS pg_trgm"
         return self.query(pg_trgm_query)
+
+    @ensure_connected
+    def neuter_filestore(self):
+        """Neuter the filestore. Intended to be called only when the database is fetched without filestore.
+        As there is a NOT NULL constraint on name and several ON DELETE RESTRICT constraints on the table, we set
+        store_fname to ''.
+        """
+        neuter_fs_query = "UPDATE ir_attachment SET store_fname='' WHERE type='binary' AND store_fname IS NOT NULL"
+        return self.query(neuter_fs_query)
 
     @ensure_connected
     def table_exists(self, table: str) -> bool:
