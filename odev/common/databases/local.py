@@ -569,8 +569,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             raise KeyboardInterrupt
 
         with capture_signals(handler=signal_handler_progress):
-            self.unaccent()
-
             if file.suffix == ".sql":
                 self._restore_sql(file, tracker)
             elif file.suffix == ".dump":
@@ -686,12 +684,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         extract_task_id = tracker.add_task("Restoring dump from archive", total=bytes_count + 1)
         tracker.start()
 
-        if mode == "dump":
-            command = (
-                f"pg_restore --dbname {self.name} --single-transaction --disable-triggers --no-owner --no-privileges"
-            )
-        else:
-            command = f"psql --dbname {self.name} --single-transaction"
+        command = "psql" if mode != "dump" else "pg_restore --disable-triggers --no-owner --no-privileges"
+        command += f" --dbname {self.name} --single-transaction"
 
         psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, bufsize=-1)
         assert psql_process.stdin is not None
@@ -699,14 +693,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         thread.start()
 
         for line in dump:
-            if line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
+            if mode == "dump" or line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
                 psql_process.stdin.write(line)
 
             tracker.update(extract_task_id, advance=len(line))
 
         tracker.update(extract_task_id, advance=1)
         psql_process.stdin.close()
-
         return thread
 
     def _restore_zip_sql_threaded(self, process: Popen[bytes]):

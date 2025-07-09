@@ -66,7 +66,12 @@ class QuickStartCommand(DatabaseCommand):
             self.odev.run_command("restore", dump_file.as_posix(), database=new_database)
 
             if self._database.repository:
-                repo_org, repo_name = self._database.repository.name.split("/")
+                if isinstance(self._database.repository, Repository):
+                    repo_org = self._database.repository.organization
+                    repo_name = self._database.repository.name
+                else:
+                    repo_org, repo_name = self._database.repository.name.split("/")
+
                 new_database.repository = Repository(repo_name, repo_org)
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
