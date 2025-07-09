@@ -109,6 +109,8 @@ class SecretStore(PostgresTable):
                 logger.debug(f"Failed to decrypt with key {key.name}: {e}")
             except UnicodeDecodeError as e:
                 logger.debug(f"Failed to decode decrypted string with key {key.name}: {e}")
+            except Exception:
+                logger.warning(f"Unexpected error when trying to handle SSH key {key.name}", exc_info=True)
 
         if deciphered is None:
             raise OdevError("Decryption failed, no key could be used")
