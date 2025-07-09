@@ -699,7 +699,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         thread.start()
 
         for line in dump:
-            if line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
+            if mode == "dump" or line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
                 psql_process.stdin.write(line)
 
             tracker.update(extract_task_id, advance=len(line))
