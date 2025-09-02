@@ -687,6 +687,18 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         command = "psql" if mode != "dump" else "pg_restore --disable-triggers --no-owner --no-privileges"
         command += f" --dbname {self.name} --single-transaction"
 
+        # In the event the SQL dump doesn't set the unaccent function as immutable, we need to force it on the database
+        # ourselves. The creation of the function should be around the 50th line in the SQL file, we crawl up to
+        # the 100th to make sure we don't miss it
+        if mode == "sql":
+            for index, line in enumerate(dump):
+                if index >= 100 or "LANGUAGE sql IMMUTABLE" in line.decode():
+                    break
+            else:
+                self.unaccent()
+
+            dump.seek(0)
+
         psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, bufsize=-1)
         assert psql_process.stdin is not None
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
