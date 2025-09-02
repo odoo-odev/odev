@@ -4,6 +4,7 @@ import re
 from abc import ABC, abstractmethod
 from argparse import Action as BaseAction, ArgumentParser, Namespace
 from ast import literal_eval
+from collections.abc import Iterable
 from pathlib import Path
 from typing import (
     Any,
@@ -56,10 +57,10 @@ class Action(BaseAction, ABC):
             return values
 
         try:
-            if isinstance(values, str):
-                return self._transform_one(values)
+            if isinstance(values, Iterable) and not isinstance(values, str):
+                return [self._transform_one(value) for value in values]
 
-            return [self._transform_one(value) for value in values]
+            return self._transform_one(values)
         except Exception as e:
             raise ValueError(f"Invalid value(s) for {self.dest}: {values}") from e
 
@@ -72,15 +73,15 @@ class Action(BaseAction, ABC):
 class IntAction(Action):
     """Converter for command line arguments passed as a string that should be converted to an int."""
 
-    def _transform_one(self, value: str) -> int:
+    def _transform_one(self, value: Union[str, int]) -> int:
         return int(value)
 
 
 class ListAction(Action):
     """Converter for command line arguments passed as comma-separated lists of values."""
 
-    def _transform_one(self, value: str) -> List[str]:
-        return value.split(",")
+    def _transform_one(self, value: Union[str, List]) -> List[str]:
+        return value.split(",") if isinstance(value, str) else value
 
 
 class RegexAction(Action):
@@ -93,7 +94,7 @@ class RegexAction(Action):
 class PathAction(Action):
     """Converter for command line arguments passed as a string that should be converted to a Path."""
 
-    def _transform_one(self, value: str) -> Path:
+    def _transform_one(self, value: Union[str, Path]) -> Path:
         return Path(value).expanduser().resolve()
 
 
