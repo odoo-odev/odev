@@ -116,6 +116,11 @@ class WorktreeCommand(GitCommand):
         """Change the revisions used in an existing worktree."""
         self.__check_name()
 
+        if self.args.name not in self.grouped_worktrees:
+            raise self.error(
+                f"Worktree with name '{self.args.name}' does not exist, use the create option to add a new worktree"
+            )
+
         for repository in self.repositories:
             revision = self.get_revision(repository)
             repository.checkout_worktree(f"{self.args.name}/{repository.path.name}", revision)
