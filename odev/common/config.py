@@ -1,4 +1,6 @@
+import glob
 import inspect
+import sys
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +15,7 @@ from typing import (
 )
 
 from odev._version import __version__
+from odev.common.errors import OdevError
 
 
 __all__ = ["Config"]
@@ -210,21 +213,7 @@ class Config:
         self.parser: ConfigParser = ConfigParser()
         """Config parser implementation."""
 
-        self.paths: PathsSection = PathsSection("paths", self)
-        """Paths to filesystem directories or files used by odev."""
-
-        self.update: UpdateSection = UpdateSection("update", self)
-        """Configuration for odev auto-updates."""
-
-        self.plugins: PluginsSection = PluginsSection("plugins", self)
-        """Configuration for odev plugins."""
-
-        self.pruning: PruningSection = PruningSection("pruning", self)
-        """Configuration for odev pruning of databases."""
-
-        self.repositories: RepositoriesSection = RepositoriesSection("repositories", self)
-        """Configuration for Odoo repositories."""
-
+        self.__init_sections()
         self.load()
         self.fill_defaults()
 
@@ -235,6 +224,36 @@ class Config:
     def path(self) -> Path:
         """Path to the file containing configuration options, inferred from the name."""
         return CONFIG_DIR / f"{self.name}.cfg"
+
+    def __init_sections(self):
+        """Initialize all section attribute, including from plugins if enabled."""
+        import importlib.util
+
+        modules = [inspect.getmodule(self)]
+
+        # Find all odev/plugins/*/config.py files and import their Section subclasses
+        plugins_config_paths = glob.glob(str(Path(__file__).parent.parent / "plugins" / "*" / "config.py"))
+
+        for config_path in plugins_config_paths:
+            module_name = f"odev.plugins.{Path(config_path).parent.name}.config"
+            spec = importlib.util.spec_from_file_location(module_name, config_path)
+
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+                modules.append(module)
+
+        for module in modules:
+            for _, cls in inspect.getmembers(
+                module, lambda member: inspect.isclass(member) and issubclass(member, Section) and member is not Section
+            ):
+                section = cls(getattr(cls, "_name", cls.__name__.replace("Section", "").lower()), self)
+
+                if hasattr(self, section.name):
+                    raise OdevError(f"Config already has a section named {section.name!r}, cannot add {cls!r}")
+
+                setattr(self, section.name, section)
 
     def load(self):
         """Load the content of the config file, creating it if need be."""
