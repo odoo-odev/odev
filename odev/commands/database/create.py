@@ -183,6 +183,9 @@ class CreateCommand(OdoobinTemplateCommand):
         process.run(args=args, progress=self.odoobin_progress)
         self.console.print()
 
+        if not self._database.is_odoo:
+            self._database.drop()
+            process = None
         if process is None:
             raise self.error(f"Failed to initialize database {self._database.name!r}")
 
