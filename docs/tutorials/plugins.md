@@ -150,6 +150,55 @@ class InfoCommand(BaseInfoCommand):
 
     def run(self):
         super().run()
-        self.print("Mom look, I extended a command!)
+        self.print("Mom look, I extended a command!")
 
+```
+
+### Adding config parameters
+
+It is often a great choice to let users choose between different options, and your plugins should act accordingly. But
+the user experience could be impacted negatively if the same question is asked again and again without a reason. To
+counter this, we use configuration files that will store the values your user chose.
+
+That configuration file is already handled for you, but you still have to define the possible values. We do that with
+getters and setters in a new config's `Section` class.
+
+Create a new file `config.py` at the root of your plugin.
+
+```python
+from odev.common.config import Section
+
+
+class TestSection(Section):
+    _name = "test"
+
+    @property
+    def test(self) -> str:
+        """Test config parameter."""
+        return self.get("test", "TEST")
+
+    @test.setter
+    def test(self, value: str):
+        self.set("test", value.upper())
+
+```
+
+Let's break this down: the section has a `_name` and, in this example, a property. The name will be used as a container
+for all the parameters in this section. You can add as many sections as you want, with the sole condition that its name
+remains unique across all plugins.
+
+To add a config parameter, add a new property in that section. The name of the property will serve as the config
+parameter within the Odev framework. To fetch the information stored in the configuration file, we'll use `self.get()`
+with two arguments: the key of the option in the file and and default value. The configuration file stores data as a
+single-line string, and that is what `self.get()` will return, but the property can return anything of any type so don't
+hesitate to transform the value before returning it.
+
+To allow Odev writing a new value, add a setter for that same property. It can take any value of any type but must
+transform it into a single-line string before passing it to `self.set()`.
+
+From within odev, you can fetch or set a value from the configuration at any time through the config object.
+
+```python
+value = odev.config.test.test  # -> "TEST"
+odev.config.test.test = "New Value"  # -> "NEW VALUE"
 ```

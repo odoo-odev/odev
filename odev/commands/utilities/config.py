@@ -50,20 +50,20 @@ class ConfigCommand(Command):
 
         for config_section in config:
             self.config.check_attribute(config_section, key)
-            self.table(
-                headers,
+
+            options = [
                 [
-                    [
-                        config_key,
-                        config_value,
-                        string.normalize_indent(
-                            getattr(getattr(self.config, config_section).__class__, config_key).__doc__
-                        ),
-                    ]
-                    for config_key, config_value in config[config_section].items()
-                    if key is None or config_key == key
-                ],
-                title=config_section,
-            )
+                    config_key,
+                    config_value,
+                    string.normalize_indent(
+                        getattr(getattr(self.config, config_section).__class__, config_key).__doc__
+                    ),
+                ]
+                for config_key, config_value in config[config_section].items()
+                if hasattr(self.config, config_section) and (key is None or config_key == key)
+            ]
+
+            if options:
+                self.table(headers, options, title=config_section)
 
         self.console.clear_line()

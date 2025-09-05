@@ -511,6 +511,7 @@ class Odev(Generic[CommandType]):
                 plugin_path.symlink_to(repository.path, target_is_directory=True)
 
             self._install_plugin_requirements(plugin_path)
+            self.__class__.config = Config(self.name)  # Reload config to load plugin sections
 
         self._plugins_dependency_tree.cache_clear()
 
