@@ -501,7 +501,7 @@ class PythonEnv:
         stream: bool = False,
         progress: Optional[Callable[[str], None]] = None,
         script_input: Optional[str] = None,
-    ) -> Optional[CompletedProcess]:
+    ) -> CompletedProcess:
         """Run a python script.
 
         :param path: Path to the python script to run.
@@ -533,7 +533,7 @@ class PythonEnv:
         for line in bash.stream(command):
             progress(line)
 
-        return None
+        return CompletedProcess(command, 0)
 
     def run(self, command: str) -> Optional[CompletedProcess]:
         """Run a python command.
