@@ -221,3 +221,5 @@ def stream(command: str) -> Generator[str, None, None]:
         os.close(slave)
         os.close(master)
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_tty)
+        if process.returncode:
+            raise CalledProcessError(process.returncode, command)

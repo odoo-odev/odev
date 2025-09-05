@@ -7,6 +7,7 @@ from typing import List, cast
 from odev.common import args, progress
 from odev.common.commands import TEMPLATE_SUFFIX, OdoobinTemplateCommand
 from odev.common.databases import LocalDatabase
+from odev.common.errors.odev import OdevError
 from odev.common.odev import logger
 from odev.common.odoobin import OdoobinProcess
 from odev.common.version import OdooVersion
@@ -180,10 +181,14 @@ class CreateCommand(OdoobinTemplateCommand):
         process.with_venv(self.venv)
         process.with_worktree(self.worktree)
 
-        process.run(args=args, progress=self.odoobin_progress)
-        self.console.print()
+        try:
+            run_process = process.run(args=args, progress=self.odoobin_progress)
+            self.console.print()
+        except OdevError:
+            run_process = None
 
-        if process is None:
-            raise self.error(f"Failed to initialize database {self._database.name!r}")
+        if run_process is None:
+            self._database.drop()
+            raise self.error(f"Failed to initialize database {self._database.name!r}, it was deleted")
 
         logger.info(f"Initialized database {self._database.name!r}")
