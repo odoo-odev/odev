@@ -87,7 +87,10 @@ class GitWorktree:
     """The ref of the worktree."""
 
     branch: str
-    """The branch the worktree is attached to."""
+    """The remote branch the worktree is attached to."""
+
+    local_branch: str
+    """The local branch the worktree is attached to."""
 
     commit: str
     """The commit the worktree is on."""
@@ -154,7 +157,8 @@ class GitWorktree:
         self.connector = connector
         self.path = Path(worktree)
         self.ref = ref
-        self.branch = branch
+        self.local_branch = branch
+        self.branch = branch.split("-odev-", 1)[0] if "-odev-" in branch else branch
         self.commit = commit
         self.bare = bare
         self.detached = detached
@@ -426,18 +430,31 @@ class GitConnector(Connector):
         self._token = None
         del self._connection
 
-    def _check_repository(self):
+    def _check_repository(self, force_clone: bool = False):
         """Check whether the repository exists locally."""
         if self.repository is None:
-            raise ConnectorError(f"Repository {self.name!r} does not exist", self)
+            logger.error(f"Repository {self.name!r} does not exist")
 
-    def fetch(self):
+            if force_clone or console.confirm("Do you want to clone it now?", default=True):
+                return self.clone("master")
+
+            raise ConnectorError("Repository does not exist", self)
+
+    def fetch(self, detached: bool = True):
         """Fetch changes from the remote in a detached process.
-        Doesn't wait for the fetch to end so pulling right after calling this method
+        If detached is `True`, doesn't wait for the fetch to end so pulling right after calling this method
         may result in changes not being downloaded.
         Attention: Do not call right before `pull` as both git processes might enter into conflict.
+
+        :param detached: Whether to run the fetch in a detached process.
         """
-        bash.detached(f"cd {self.path} && git fetch")
+        if detached:
+            bash.detached(f"cd {self.path} && git fetch")
+        else:
+            with progress.spinner(f"Fetching changes in repository {self.name!r}"):
+                self.repository.git.fetch("--all")
+
+            logger.info(f"Fetched changes in repository {self.name!r}")
 
     def _get_clone_options(self, revision: Optional[str] = None) -> List[str]:
         """Get the options to use when cloning the repository, passed through to git.
@@ -528,6 +545,15 @@ class GitConnector(Connector):
             message: str = f"Failed to checkout revision {revision!r} in repository {self.name!r}"
 
             if error.stderr:
+                if "error: pathspec" in error.stderr:
+                    logger.warning(f"Git ref {revision!r} not found in repository {self.name!r}")
+
+                    with progress.spinner(f"Fetching revision {revision!r} from remote, this might take a while"):
+                        self.repository.git.config("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+                        self.repository.git.fetch("origin", revision)
+
+                    return self.checkout(revision, quiet=quiet)
+
                 message += f": {error.stderr}"
 
             raise ConnectorError(message, self) from error
@@ -686,17 +712,42 @@ class GitConnector(Connector):
             self.worktrees_path.mkdir(parents=True, exist_ok=True)
 
             try:
-                self.repository.git.worktree("add", path, revision, "--force")
+                name = path.parent.name
+                local_revision = revision
+
+                self.repository.git.fetch("origin", revision.replace("origin/", ""))
+
+                if name != revision:
+                    local_revision = f"{revision}-odev-{name}"
+                    revision = f"origin/{revision}" if not revision.startswith("origin/") else revision
+                    self.repository.git.branch(local_revision, revision, "--force")
+                    self.repository.git.branch(local_revision, "--set-upstream-to", revision, "--force")
+                    self.repository.git.worktree("add", path, local_revision, "--force")
+                else:
+                    self.repository.git.worktree("add", path, revision, "--force")
             except GitCommandError as error:
                 if "fatal: invalid reference" in error.stderr:
-                    logger.warning(f"Git ref {revision!r} does not exist for repository {self.name!r}")
+                    logger.warning(f"Revision {revision!r} does not exist in local repository {self.name!r}")
 
                     if revision and not revision.startswith("origin/"):
                         return self.create_worktree(path, f"origin/{revision}")
 
                     raise ConnectorError("Did you forget to use '--version master'?", self) from error
 
-                raise error
+                if "fatal: couldn't find remote ref" in error.stderr:
+                    raise ConnectorError(
+                        f"Revision {revision!r} does not exist in remote repository {self.name!r}",
+                        self,
+                    ) from error
+
+                logger.error(f"Failed to create {message}:\n{error.stderr.strip()}")
+
+                if console.confirm(
+                    f"Repository {self.name!r} seems corrupted, try to fix by re-cloning the repository?", default=False
+                ):
+                    return self.fix_corrupted(path, revision)
+
+                raise ConnectorError("Aborted", self) from error
 
         logger.info(f"Created {message} in {path.as_posix()}")
 
@@ -715,8 +766,16 @@ class GitConnector(Connector):
 
         with spinner(f"Removing {message}"):
             logger.debug(f"Removing worktree {path!s} for repository {self.name!r}")
-            self.repository.git.worktree("remove", path, "--force")
-            shutil.rmtree(path, ignore_errors=True)
+            worktree = next((worktree for worktree in self.worktrees() if worktree.name == path.parent.name), None)
+
+            if worktree is None:
+                logger.debug(f"Worktree {path.parent.name!r} for repository {self.name!r} is not registered")
+            else:
+                self.repository.git.worktree("remove", path, "--force")
+                shutil.rmtree(path, ignore_errors=True)
+
+                if worktree.local_branch != worktree.branch:
+                    self.repository.git.branch("-D", worktree.local_branch)
 
         logger.info(f"Removed {message} in {path.as_posix()}")
 
@@ -862,3 +921,32 @@ class GitConnector(Connector):
             branches = cast(Github, self._connection).get_repo(self.name).get_branches()
 
         return [branch.name for branch in branches]
+
+    def fix_corrupted(self, path: Optional[Union[Path, str]] = None, revision: Optional[str] = None):
+        """Fix a corrupted worktree by re-cloning the repository and creating a new worktree.
+
+        :param path: Path to the worktree.
+        :param revision: Revision to create the worktree from (branch or commit SHA). Defaults to the main branch
+        of the repository.
+        """
+        self._check_repository()
+        assert self.repository is not None
+        worktrees: List[Tuple[Path, str]] = []
+
+        if path:
+            path = self._resolve_worktree_path(path)
+            revision = revision or self.default_branch or self.branch
+            worktrees += [(path, revision)]
+
+        for worktree in self.worktrees():
+            if worktree.path == self.path:
+                continue
+
+            worktrees += [(worktree.path, worktree.branch)]
+            self.remove_worktree(worktree.path)
+
+        shutil.rmtree(self.path, ignore_errors=True)
+        self.clone(revision)
+
+        for worktree_info in worktrees:
+            self.create_worktree(worktree_info[0], worktree_info[1])

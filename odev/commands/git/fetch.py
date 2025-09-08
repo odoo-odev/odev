@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Dict, List, Tuple
 
-from odev.common import args, progress, string
+from odev.common import args, string
 from odev.common.commands import GitCommand
 from odev.common.console import TableHeader
 from odev.common.logging import logging
@@ -64,21 +64,15 @@ class FetchCommand(GitCommand):
         """Group changes by version."""
         changes: Dict[str, List[Tuple[str, int, int]]] = {}
 
+        for repository in self.repositories:
+            repository.fetch(detached=False)
+
         for name, worktrees in self.grouped_worktrees.items():
             if self.args.worktree and self.args.worktree != name:
                 continue
 
-            fetch_message = f"Fetching changes in worktree {name!r}"
-
-            with progress.spinner(fetch_message):
-                for worktree in worktrees:
-                    if not worktree.detached:
-                        with progress.spinner(
-                            f"{fetch_message} of repository {worktree.connector.name!r} for version {worktree.branch!r}"
-                        ):
-                            worktree.repository.remotes.origin.fetch()
-
-                    changes.setdefault(name, []).append((worktree.connector.name, *worktree.pending_changes()))
+            for worktree in worktrees:
+                changes.setdefault(name, []).append((worktree.connector.name, *worktree.pending_changes()))
 
         if not changes:
             if self.args.worktree:

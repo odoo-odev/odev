@@ -153,9 +153,11 @@ jobs:
 
           for i in {16..17}; do
             cd ~/odoo/repositories/odoo/odoo
+            git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
             git fetch --depth 1 origin "refs/heads/$i.0:refs/remotes/origin/$i.0"
 
             cd ~/odoo/repositories/odoo/design-themes
+            git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
             git fetch --depth 1 origin "refs/heads/$i.0:refs/remotes/origin/$i.0"
           done
 

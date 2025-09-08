@@ -1,7 +1,7 @@
 """Manage git worktrees used within odev."""
 
 
-from odev.common import args, progress, string
+from odev.common import args, progress
 from odev.common.commands import GitCommand
 from odev.common.connectors.git import GitConnector
 from odev.common.console import TableHeader
@@ -52,9 +52,8 @@ class WorktreeCommand(GitCommand):
         """List worktrees and their properties."""
         headers = [
             TableHeader("Repository", min_width=20),
-            TableHeader("Branch"),
             TableHeader("Commit"),
-            TableHeader("Prunable"),
+            TableHeader("Branch"),
         ]
 
         self.print()
@@ -66,11 +65,8 @@ class WorktreeCommand(GitCommand):
                     [
                         [
                             worktree.connector.name,
-                            "<detached>" if worktree.detached else worktree.branch,
                             worktree.commit,
-                            string.stylize("No", "bold color.green")
-                            if not worktree.prunable
-                            else f"{string.stylize('Yes', 'bold color.red')} ({worktree.prunable_reason})",
+                            "<detached>" if worktree.detached else worktree.branch,
                         ]
                         for worktree in worktrees
                     ],
