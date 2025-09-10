@@ -34,6 +34,9 @@ from odev.common.signal_handling import capture_signals
 GITHUB_DOMAIN = "github.com"
 """The domain of the GitHub API."""
 
+GIT_FETCH_REMOTE_ORIGIN_ALL = "+refs/heads/*:refs/remotes/origin/*"
+"""The git config value to fetch all branches from the remote."""
+
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +161,7 @@ class GitWorktree:
         self.path = Path(worktree)
         self.ref = ref
         self.local_branch = branch
-        self.branch = branch.split("-odev-", 1)[0] if "-odev-" in branch else branch
+        self.branch = branch.split("-odev-", 1)[0] if branch and "-odev-" in branch else branch
         self.commit = commit
         self.bare = bare
         self.detached = detached
@@ -549,7 +552,7 @@ class GitConnector(Connector):
                     logger.warning(f"Git ref {revision!r} not found in repository {self.name!r}")
 
                     with progress.spinner(f"Fetching revision {revision!r} from remote, this might take a while"):
-                        self.repository.git.config("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+                        self._set_remote_origin_fetch_config()
                         self.repository.git.fetch("origin", revision)
 
                     return self.checkout(revision, quiet=quiet)
@@ -680,6 +683,17 @@ class GitConnector(Connector):
 
         return path
 
+    def _set_remote_origin_fetch_config(self):
+        """Ensure the remote.origin.fetch config is set to fetch all branches."""
+        fetch_config = self.repository.git.config("--get", "remote.origin.fetch").strip()
+
+        if fetch_config != GIT_FETCH_REMOTE_ORIGIN_ALL:
+            logger.debug(
+                f"Setting remote.origin.fetch config to fetch all branches in repository {self.name!r} "
+                f"(was {fetch_config!r})"
+            )
+            self.repository.git.config("remote.origin.fetch", GIT_FETCH_REMOTE_ORIGIN_ALL)
+
     def create_worktree(self, path: Union[Path, str], revision: Optional[str] = None):
         """Create a new worktree for the repository based on a specific revision or the default branch
         of the repository.
@@ -690,7 +704,7 @@ class GitConnector(Connector):
         self._check_repository()
         assert self.repository is not None
         path = self._resolve_worktree_path(path)
-        revision = revision or self.default_branch or self.branch
+        revision = (revision or self.default_branch or self.branch).replace("origin/", "")
 
         if path.exists():
             logger.debug(f"Old worktree {path!s} for repository {self.name!r} exists, removing it")
@@ -715,24 +729,21 @@ class GitConnector(Connector):
                 name = path.parent.name
                 local_revision = revision
 
-                self.repository.git.fetch("origin", revision.replace("origin/", ""))
+                self.repository.git.fetch("origin", revision)
 
                 if name != revision:
                     local_revision = f"{revision}-odev-{name}"
-                    revision = f"origin/{revision}" if not revision.startswith("origin/") else revision
-                    self.repository.git.branch(local_revision, revision, "--force")
-                    self.repository.git.branch(local_revision, "--set-upstream-to", revision, "--force")
-                    self.repository.git.worktree("add", path, local_revision, "--force")
-                else:
-                    self.repository.git.worktree("add", path, revision, "--force")
+                    remote_revision = f"origin/{revision}"
+                    self.repository.git.branch(local_revision, remote_revision, "--force")
+                    self.repository.git.branch(local_revision, "--set-upstream-to", remote_revision, "--force")
+
+                self.repository.git.worktree("add", path, local_revision, "--force")
+
             except GitCommandError as error:
                 if "fatal: invalid reference" in error.stderr:
-                    logger.warning(f"Revision {revision!r} does not exist in local repository {self.name!r}")
-
-                    if revision and not revision.startswith("origin/"):
-                        return self.create_worktree(path, f"origin/{revision}")
-
-                    raise ConnectorError("Did you forget to use '--version master'?", self) from error
+                    logger.debug(f"Revision {revision!r} does not exist in local repository {self.name!r}")
+                    self._set_remote_origin_fetch_config()
+                    return self.create_worktree(path, revision)
 
                 if "fatal: couldn't find remote ref" in error.stderr:
                     raise ConnectorError(
