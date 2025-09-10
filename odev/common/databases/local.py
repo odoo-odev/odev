@@ -4,6 +4,7 @@ import bz2
 import gzip
 import re
 import shutil
+import sys
 import tempfile
 from datetime import datetime
 from functools import cached_property
@@ -30,6 +31,7 @@ from odev.common import bash, progress, string
 from odev.common.connectors import GitWorktree, PostgresConnector
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.databases.base import DatabaseInfoSection
+from odev.common.errors import OdevError
 from odev.common.logging import logging
 from odev.common.mixins import PostgresConnectorMixin, ensure_connected
 from odev.common.odoobin import OdoobinProcess
@@ -651,6 +653,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.start_task(task_id)
         tracker.start()
 
+        invalid_blocks: int = 0
+
         for match, size in info:
             dirname: str = match.group("dirname")
             filename: str = match.group("filename")
@@ -658,12 +662,36 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             filestore_file_path: Path = self.filestore.path / filepath
 
             if not filestore_file_path.exists():
-                archive.getinfo(match.string).filename = filepath.as_posix()
-                archive.extract(match.string, self.filestore.path)
+                try:
+                    archive.getinfo(match.string).filename = filepath.as_posix()
+                    archive.extract(match.string, self.filestore.path)
+                except RuntimeError as ex:
+                    logger.debug(f"Failed to extract filestore file {filepath.as_posix()}: {ex}")
+
+                    if invalid_blocks <= 10 and "invalid stored block lengths" in str(ex):
+                        invalid_blocks += 1
+                        continue
+
+                    if invalid_blocks:
+                        logger.error(f"{invalid_blocks} filestore files failed to extract due to corrupted archive")
+
+                        if sys.version_info <= (3, 12):
+                            logger.warning(
+                                "This could be due to a known limitation of python's zipfile module, "
+                                "consider running odev with python 3.13+"
+                            )
+
+                        raise OdevError("Aborting") from ex
+
+                    raise
 
             tracker.update(task_id, advance=size)
 
         logger.info(f"Extracted filestore to {self.filestore.path}")
+
+        if invalid_blocks:
+            logger.warning(f"{invalid_blocks} filestore files failed to extract due to corrupted archive")
+
         tracker.remove_task(task_id)
 
     def _restore_buffered_sql(
