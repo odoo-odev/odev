@@ -10,8 +10,8 @@ body:
         >
         > Before you file an issue:
         >
-        > - Read the [Contributing guide](https://github.com/odoo-ps/ps-tech-odev/blob/main/CONTRIBUTING.md).
-        > - Check to make sure someone hasn't already opened a similar [issue](https://github.com/odoo-ps/ps-tech-odev/issues).
+        > - Read the [Contributing guide](https://github.com/odoo-odev/odev/blob/main/docs/CONTRIBUTING.md).
+        > - Check to make sure someone hasn't already opened a similar [issue](https://github.com/odoo-odev/odev/issues).
 
   - type: textarea
     attributes:
