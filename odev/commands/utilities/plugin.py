@@ -1,5 +1,6 @@
 """Enable and disable plugins to add new features and commands."""
 
+import importlib.util
 from typing import cast
 
 from odev.common import args, string
@@ -62,6 +63,14 @@ class PluginCommand(Command):
                         self.__add_plugin_to_config(dependency)
 
                     self.odev.load_plugins()
+
+                    setup_path = plugin.path / "setup.py"
+                    if setup_path.exists():
+                        spec = importlib.util.spec_from_file_location("setup", setup_path)
+                        setup_module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(setup_module)
+                        setup_module.setup(self.odev)
+
                     logger.info(
                         f"Enabled plugin {plugin.name!r}"
                         + (f" and {len(dependencies)} dependencies" if dependencies else "")
