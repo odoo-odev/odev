@@ -1,6 +1,8 @@
+import shutil
 from pathlib import Path
 
 from odev._version import __version__
+from odev.common.python import PythonEnv
 from tests.fixtures import OdevCommandTestCase
 
 
@@ -8,15 +10,15 @@ POSTGRES_PATH = "odev.common.connectors.PostgresConnector"
 GIT_PATH = "odev.common.connectors.git.GitConnector"
 
 
-class TestCommandUtilities(OdevCommandTestCase):
-    """Test suite for utility commands."""
-
-    def test_version_01_no_argument(self):
+class TestCommandUtilitiesVersion(OdevCommandTestCase):
+    def test_01_no_argument(self):
         """Command `odev version` should print the version of the application."""
         stdout, _ = self.dispatch_command("version")
         self.assertIn(f"Odev-test version {__version__}", stdout)
 
-    def test_config_01_no_argument(self):
+
+class TestCommandUtilitiesConfig(OdevCommandTestCase):
+    def test_01_no_argument(self):
         """Run the command without arguments."""
         stdout, _ = self.dispatch_command("config")
         self.assertIn(" mode ", stdout)
@@ -26,7 +28,7 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn(" dumps ", stdout)
         self.assertIn(" repositories ", stdout)
 
-    def test_config_02_print_section(self):
+    def test_02_print_section(self):
         """Run the command with a specific section and no key."""
         stdout, _ = self.dispatch_command("config", "paths")
         self.assertNotIn(" mode ", stdout)
@@ -36,7 +38,7 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn(" dumps ", stdout)
         self.assertIn(" repositories ", stdout)
 
-    def test_config_03_print_key(self):
+    def test_03_print_key(self):
         """Run the command with a specific section and key."""
         stdout, _ = self.dispatch_command("config", "update.mode")
         self.assertIn(" mode ", stdout)
@@ -47,39 +49,41 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertNotIn(" repositories ", stdout)
         self.assertRegex(stdout, rf"mode\s+{self.odev.config.update.mode}")
 
-    def test_config_04_invalid_key(self):
+    def test_04_invalid_key(self):
         """Run the command with an invalid section and key combination."""
         _, stderr = self.dispatch_command("config", "invalid.test")
         self.assertIn(f"'invalid' is not a valid section in config {self.odev.config.name!r}", stderr)
 
-    def test_config_05_set_value(self):
+    def test_05_set_value(self):
         """Run the command with a section and key combination, set a value."""
         new_update_mode = "always"
         stdout, _ = self.dispatch_command("config", "update.mode", new_update_mode)
         self.assertIn(" mode ", stdout)
         self.assertEqual(self.odev.config.update.mode, new_update_mode)
 
-    def test_config_06_set_invalid_value(self):
+    def test_06_set_invalid_value(self):
         """Run the command with a section and no key."""
         _, stderr = self.dispatch_command("config", "update", "invalid")
         self.assertIn("You must specify a key to set a value", stderr)
 
-    def test_help_01_no_argument(self):
+
+class TestCommandUtilitiesHelp(OdevCommandTestCase):
+    def test_01_no_argument(self):
         """Run the command without arguments, display all available commands."""
         stdout, _ = self.dispatch_command("help")
         self.assertIn("The following commands are provided:", stdout)
 
-    def test_help_02_command(self):
+    def test_02_command(self):
         """Run the command with a command argument, display detailed help for a specific command."""
         stdout, _ = self.dispatch_command("help", "version")
         self.assertIn(self.odev.commands["version"]._help, stdout)
 
-    def test_help_03_invalid_command(self):
+    def test_03_invalid_command(self):
         """Run the command with an invalid command argument, print an error message."""
         _, stderr = self.dispatch_command("help", "invalid")
         self.assertIn("Cannot display help for inexistent command 'invalid'", stderr)
 
-    def test_help_04_names_only(self):
+    def test_04_names_only(self):
         """Run the command with the `--names-only` flag, display only the names of the available commands."""
         stdout, _ = self.dispatch_command("help", "--names-only")
         self.assertNotIn("The following commands are provided:", stdout)
@@ -87,7 +91,9 @@ class TestCommandUtilities(OdevCommandTestCase):
         for command in {c._name for c in self.odev.commands.values()}:
             self.assertIn(f"{command}\n", stdout)
 
-    def test_history_01_clear(self):
+
+class TestCommandUtilitiesHistory(OdevCommandTestCase):
+    def test_01_clear(self):
         """Run the command with the `--clear` flag."""
         with self.patch(self.odev.store.history, "clear") as patched_clear:
             stdout, _ = self.dispatch_command("history", "--clear")
@@ -95,30 +101,32 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn("Clearing history", stdout)
         patched_clear.assert_called_once_with()
 
-    def test_history_02_no_argument(self):
+    def test_02_no_argument(self):
         """Run the command without arguments, print th history of commands without filter."""
         stdout, _ = self.dispatch_command("history")
         self.assertRegex(stdout, r"ID\s+Command\s+Date")
         self.assertGreater(len(stdout.splitlines()), 4, "there should be at least one line in the history")
 
-    def test_history_03_filter_command(self):
+    def test_03_filter_command(self):
         """Run the command with a command argument, print the history of a specific command."""
         stdout, _ = self.dispatch_command("history", "--command", "history")
         self.assertIn(" history --clear ", stdout)
 
-    def test_history_04_no_history(self):
+    def test_04_no_history(self):
         """Run the command when there is no history, print an error message."""
         self.odev.store.history.clear()
         _, stderr = self.dispatch_command("history")
         self.assertIn("No history available for all commands", stderr)
 
-    def test_list_01_list_all(self):
+
+class TestCommandUtilitiesList(OdevCommandTestCase):
+    def test_01_list_all(self):
         """Run the command, list all existing databases."""
         stdout, _ = self.dispatch_command("list", "--all")
         self.assertRegex(stdout, r"^Listing databases")
         self.assertGreater(len(stdout.splitlines()), 7, "there should be at least 1 lines in the list")
 
-    def test_list_02_names_only(self):
+    def test_02_names_only(self):
         """Run the command with the `--names-only` flag, display only the names of the databases."""
         with self.patch(POSTGRES_PATH, "query", [("test1",), ("test2",)]):
             stdout, _ = self.dispatch_command("list", "--all", "--names-only")
@@ -126,14 +134,14 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertRegex(stdout, r"^Listing databases")
         self.assertIn("test1\ntest2\n", stdout)
 
-    def test_list_03_no_result(self):
+    def test_03_no_result(self):
         """Run the command when there are no databases, print an error message."""
         with self.patch(POSTGRES_PATH, "query", []):
             _, stderr = self.dispatch_command("list")
 
         self.assertIn("No database found", stderr)
 
-    def test_list_04_expression(self):
+    def test_04_expression(self):
         """Run the command with the `--expression` flag, filter the databases."""
         with self.patch(POSTGRES_PATH, "query", [("test1",), ("test2",)]):
             stdout, _ = self.dispatch_command("list", "--expression", "test1", "--names-only", "--all")
@@ -141,13 +149,15 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn("test1\n", stdout)
         self.assertNotIn("test2\n", stdout)
 
-    def test_list_05_expression_no_result(self):
+    def test_05_expression_no_result(self):
         """Run the command with the `--expression` flag, filter the databases, display an error if no result."""
         with self.patch(POSTGRES_PATH, "query", [("test1",), ("test2",)]):
             _, stderr = self.dispatch_command("list", "--expression", "test3")
 
         self.assertIn("No database found matching pattern 'test3'", stderr)
 
+
+class TestCommandUtilitiesSetup(OdevCommandTestCase):
     def test_01_no_argument(self):
         """Run the command without arguments, run all scripts."""
         stdout, _ = self.dispatch_command("setup")
@@ -158,7 +168,9 @@ class TestCommandUtilities(OdevCommandTestCase):
         stdout, _ = self.dispatch_command("setup", "setup_script_1")
         self.assertEqual("Hello, odev from script 1!\n", stdout)
 
-    def test_update_01_no_argument(self):
+
+class TestCommandUtilitiesUpdate(OdevCommandTestCase):
+    def test_01_no_argument(self):
         """Run the command without arguments, update the application."""
         self.odev.config.update.date = "1995-12-21 00:00:00"
         self.odev.config.update.interval = 1
@@ -175,24 +187,39 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn("Current version: 3.0.0", stdout)
         self.assertIn(f"Updated to {__version__}!", stdout)
 
-    def test_venv_01_invalid_name(self):
+
+class TestCommandUtilitiesVenv(OdevCommandTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.venv = PythonEnv(cls.odev.venvs_path / "test")
+        cls.venv.create()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.run_path.as_posix(), ignore_errors=True)
+        super().tearDownClass()
+
+    def test_01_invalid_name(self):
         """Run the command with an invalid virtual environment name."""
         _, stderr = self.dispatch_command("venv", "invalid", "--command", "print('test')")
         self.assertRegex(stderr, r"Virtual environment 'invalid' does not exist")
 
-    def test_venv_02_python_command(self):
+    def test_02_python_command(self):
         """Run the command with a name valid argument and a python command."""
         stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "--command", "print('test')")
         self.assertRegex(
             stdout, r"python[\d.?]*\s-c\s[\\'\"]+print[\\'\"\(]+test[\\'\"\)]+ in virtual environment \'test\'"
         )
 
-    def test_venv_03_pip_command(self):
+    def test_03_pip_command(self):
         """Run the command with a pip command."""
         stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "--command", "pip --version")
         self.assertRegex(stdout, r"python[\d.?]*\s-m\spip\s--version\' in virtual environment \'test\'")
 
-    def test_plugin_01_single(self):
+
+class TestCommandUtilitiesPlugin(OdevCommandTestCase):
+    def test_01_single(self):
         """Run the command to enable or disable a plugin."""
         plugin = "test/test-plugin"
         plugin_link = Path(self.odev.plugins_path) / "test_plugin"
@@ -227,14 +254,15 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn(f"Plugin '{plugin}' is not installed", stdout)
         self.assertFalse(self.odev._plugin_is_installed(plugin))
 
-    def test_plugin_02_enable_invalid(self):
+    def test_02_enable_invalid(self):
         """Run the command with an invalid plugin to enable."""
         plugin = "odoo-odev/invalid"
         _, stderr = self.dispatch_command("plugin", "--enable", plugin)
         self.assertIn(f"Failed to clone repository '{plugin}'", stderr)
         self.assertFalse(self.odev._plugin_is_installed(plugin))
 
-    def test_plugin_03_enable_dependencies(self):
+    def test_03_enable_dependencies(self):
+        """Run the command to enable a plugin with dependencies."""
         plugin = "test/test-plugin"
         dependent = "test/test-plugin-dep"
         self.odev.config.paths.repositories = self.res_path / "repositories"

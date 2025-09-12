@@ -77,7 +77,7 @@ class TestCommand(OdoobinCommand):
         :return: Name of the test database to use.
         :rtype: str
         """
-        return f"{self._database.name}_{string.suid()}"
+        return f"{self._database.name}-{string.suid()}"
 
     def create_test_database(self):
         """Return the arguments to pass to the create command."""

@@ -21,7 +21,7 @@ class CreateCommand(OdoobinTemplateCommand):
 
     from_template = args.String(
         description="""Name of an existing PostgreSQL database to copy instead of initializing a new Odoo database.
-        If passed without a value, search for a template database with the same name as the new database.
+        If passed without a value (empty string), search for a template database with the same name as the new database.
         """
     )
     new_template = args.Flag(
