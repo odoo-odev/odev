@@ -41,19 +41,19 @@ class PluginCommand(Command):
 
     def run(self):
         """Enable or disable a plugin."""
-        if self.show:
-            if self.plugin:
-                return self.__show_plugin_info(cast(str, self.plugin).split("/")[-1])
+        if self.args.show:
+            if self.args.plugin:
+                return self.__show_plugin_info(self.args.plugin.split("/")[-1])
 
             for plugin in self.odev.plugins:
                 self.__show_plugin_info(plugin.name)
                 self.console.print()
 
-        if self.enable:
-            return self.odev.install_plugin(cast(str, self.plugin))
+        if self.args.enable:
+            return self.odev.install_plugin(self.args.plugin)
 
-        if self.disable:
-            return self.odev.uninstall_plugin(cast(str, self.plugin))
+        if self.args.disable:
+            return self.odev.uninstall_plugin(self.args.plugin)
 
     def __show_plugin_info(self, plugin_name: str):
         """Show the plugin information.
