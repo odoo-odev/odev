@@ -49,14 +49,16 @@ class Mapped:
     """
 
 
+STATUS_RUNNING = string.stylize("⬤", "color.green")
+STATUS_STOPPED = string.stylize("⬤", "color.black")
+
+
 TABLE_MAPPING: List[Mapped] = [
     Mapped(
         value=lambda database: database.process.is_running if database.process is not None else "",
         title=None,
         justify=None,
-        format=lambda value: string.stylize(":black_circle:", "color.green" if value else "color.red")
-        if value is not None
-        else "",
+        format=lambda value: STATUS_RUNNING if value else STATUS_STOPPED if value is not None else "",
         total=False,
     ),
     Mapped(
@@ -96,7 +98,7 @@ TABLE_MAPPING: List[Mapped] = [
     ),
     Mapped(
         value=lambda database: database.venv,
-        title="Virtual Environment",
+        title="Virtualenv",
         justify=None,
         format=lambda value: str(value) if not value._global else "",
         total=False,
@@ -117,9 +119,9 @@ TABLE_MAPPING: List[Mapped] = [
     ),
     Mapped(
         value=lambda database: database.last_date,
-        title="Last Used On",
+        title="Last Used",
         justify=None,
-        format=lambda value: value.strftime("%Y-%m-%d %X") if value else "",
+        format=lambda value: string.ago(value) if value else "",
         total=False,
     ),
     Mapped(
@@ -138,8 +140,8 @@ ORDER_MAPPING: MutableMapping[str, str] = {
     "version": "Version",
     "size": "Size (SQL)",
     "size_fs": "Size (FS)",
-    "date": "Last Use",
-    "venv": "Virtual Environment",
+    "date": "Last Used",
+    "venv": "Virtualenv",
     "worktree": "Worktree",
     "repository": "Custom Repository",
     "pid": "PID",
@@ -193,7 +195,8 @@ class ListCommand(ListLocalDatabasesMixin, Command):
 
         self.print()
         self.table(*data, box=None, title="All Databases" if self.args.show_all else "Odoo Databases")
-        self.console.clear_line()
+        self.console.print(string.stylize(f"{STATUS_RUNNING} Running\n{STATUS_STOPPED} Stopped", "color.black"))
+        self.console.print()
 
     def get_table_data(self, databases: Sequence[str]) -> Tuple[List[TableHeader], List[List[Any]], List[str]]:
         """Get the table data for the list of databases."""
