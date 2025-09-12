@@ -95,6 +95,10 @@ def setup(odev: Odev) -> None:
     )
 
     odev.config.paths.repositories = __get_dir(
-        "Where do you want to store repositories?", odev.config.paths.repositories
+        "Where do you want to store repositories?",
+        odev.config.paths.repositories,
     )
-    odev.config.paths.dumps = __get_dir("Where do you want to store dump files?", odev.config.paths.dumps)
+    odev.config.paths.dumps = __get_dir(
+        "Where do you want to store dump files?",
+        odev.config.paths.dumps,
+    )

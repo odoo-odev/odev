@@ -18,12 +18,14 @@ class ReMatch:
 class OdoobinMatch(ReMatch):
     """A string that can be compared to an odoo-bin command as run in the terminal."""
 
-    def __init__(self, database_name: str, arguments: Optional[List[str]] = None):
+    def __init__(self, database_name: str, arguments: Optional[List[str]] = None, subcommand: Optional[str] = None):
         if arguments is None:
-            arguments = ["--init", "base"]
+            arguments = []
 
+        subcommand = f"{subcommand} " if subcommand else ""
         pattern = re.compile(
-            rf"odoo-bin --database {database_name}(?:_[\w]{{8}})? "
+            rf"odoo-bin {subcommand}--database {database_name}(?:\-[\w]{{8}})? "
             rf"--addons-path [a-z0-9.\-/,]+ --log-level \w+ {' '.join(arguments)}"
         )
+
         super().__init__(pattern)

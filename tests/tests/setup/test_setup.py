@@ -29,6 +29,12 @@ class TestSetupSymlink(OdevTestCase):
 
 
 class TestSetupDirectories(OdevTestCase):
+    def setUp(self):
+        super().setUp()
+        self.dir_path = self.run_path / "dir"
+        self.dir_path.mkdir(parents=True, exist_ok=True)
+        self.odev.config.paths.repositories = self.odev.config.paths.dumps = self.dir_path
+
     def test_01_directories_unchanged(self):
         """Test the setup script responsible of registering the chosen directories
         to the configuration file creating the necessary paths on the file system.
@@ -36,7 +42,7 @@ class TestSetupDirectories(OdevTestCase):
         """
         with (
             self.patch(directories.logger, "debug") as mock_logger_debug,
-            self.patch(directories.console, "directory", return_value=self.odev.config.paths.repositories),
+            self.patch(directories.console, "directory", return_value=self.dir_path),
             self.patch(directories.console, "confirm", return_value=True),
             self.patch(shutil, "move") as mock_move,
         ):
@@ -51,21 +57,19 @@ class TestSetupDirectories(OdevTestCase):
         If the directory did change, move the old files to the new path and update
         the configuration file accordingly.
         """
-        repositories_path = self.run_path / "repositories"
-        repositories_path.mkdir(parents=True, exist_ok=True)
-        self.odev.config.paths.repositories = repositories_path
+        new_dir_path = self.run_path / "new-dir"
 
         with (
             self.patch(directories.logger, "debug") as logger_debug,
-            self.patch(directories.console, "directory", return_value=self.run_path / "new-repositories"),
+            self.patch(directories.console, "directory", return_value=new_dir_path),
             self.patch(directories.console, "confirm", return_value=True),
             self.patch(shutil, "move") as mock_move,
         ):
             directories.setup(self.odev)
 
-        logger_debug.assert_any_call(f"Moving {repositories_path} to {self.odev.config.paths.repositories}")
-        mock_move.assert_called_once()
-        self.assertEqual(self.odev.config.paths.repositories, self.run_path / "new-repositories")
+        logger_debug.assert_any_call(f"Moving {self.dir_path} to {new_dir_path}")
+        mock_move.assert_any_call(self.dir_path.as_posix(), new_dir_path.as_posix())
+        self.assertEqual(self.odev.config.paths.repositories, new_dir_path)
 
     def test_03_directories_empty(self):
         """Test the setup script responsible of registering the chosen directories
@@ -73,22 +77,22 @@ class TestSetupDirectories(OdevTestCase):
         If the new directory already exists but is empty, it should be removed before
         it is recreated.
         """
-        repositories_path = self.run_path / "repositories"
-        repositories_path.mkdir(parents=True, exist_ok=True)
-        (repositories_path / "test-file").touch()
-        self.odev.config.paths.repositories = repositories_path
+        self.dir_path.mkdir(parents=True, exist_ok=True)
+        (self.dir_path / "test-file").touch()
+        self.odev.config.paths.repositories = self.dir_path
 
-        new_repositories_path = self.run_path / "new-repositories"
-        new_repositories_path.mkdir(parents=True, exist_ok=True)
+        new_dir_path = self.run_path / "new-dir"
+        new_dir_path.mkdir(parents=True, exist_ok=True)
 
         with (
             self.patch(directories.logger, "debug") as logger_debug,
-            self.patch(directories.console, "directory", return_value=new_repositories_path.as_posix()),
+            self.patch(directories.console, "directory", return_value=new_dir_path.as_posix()),
             self.patch(directories.console, "confirm", return_value=True),
         ):
             directories.setup(self.odev)
 
-        logger_debug.assert_any_call(f"Directory {new_repositories_path.as_posix()} exists but is empty, removing it")
+        logger_debug.assert_any_call(f"Directory {new_dir_path.as_posix()} exists but is empty, removing it")
+        logger_debug.assert_any_call(f"Moving {self.dir_path} to {new_dir_path}")
 
 
 class TestSetupUpdate(OdevTestCase):

@@ -1,2 +1,2 @@
 from .capture import CaptureOutput
-from .case import OdevTestCase, OdevCommandTestCase, OdevCommandRunDatabaseTestCase
+from .case import OdevTestCase, OdevCommandTestCase
