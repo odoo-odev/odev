@@ -269,7 +269,7 @@ def ago(date: datetime.datetime) -> str:
     :return: The human readable representation.
     :rtype: str
     """
-    return timeago.format(date, datetime.datetime.utcnow())
+    return timeago.format(date, datetime.datetime.now())
 
 
 def quote(string: str, dirty_only: bool = False, force_single: bool = False) -> str:
