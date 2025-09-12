@@ -551,9 +551,9 @@ class Odev(Generic[CommandType]):
                     plugin_path.unlink(missing_ok=True)
                     raise OdevError(f"Error while installing requirements for plugin {plugin!r}: {error}") from error
 
-                self.config.plugins.enabled = {*self.config.plugins.enabled, plugin}
                 logger.info(f"Installed plugin{' dependency' if as_dependency else ''} {plugin!r}")
 
+            self.config.plugins.enabled = {*self.config.plugins.enabled, plugin}
             self._plugins_dependency_tree.cache_clear()
 
     def uninstall_plugin(self, plugin: str) -> None:

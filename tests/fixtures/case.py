@@ -56,21 +56,16 @@ class OdevTestCase(TestCase):
         cls.run_id = suid()
         cls.run_name = f"{cls.odev.name}-{cls.run_id}"
         cls.run_path = Path(f"/tmp/{cls.run_name}")
+        cls.res_path = cls.odev.tests_path / "resources"
         cls.replacer = Replacer()
         cls.__patch_cli()
         cls.__patch_odev()
         cls.__patch_framework()
-        cls.__setup_environment()
         cls.addClassCleanup(cls.tearDownClass)
         cls.odev.start()
 
-        if not isinstance(cls, OdevCommandRunDatabaseTestCase):
-            cls.__setup_database()
-
     @classmethod
     def tearDownClass(cls):
-        cls.__cleanup_environment()
-        cls.__cleanup_database()
         cls.__unpatch_all()
         cls.replacer.restore()
         cls.odev.commands.clear()
@@ -149,37 +144,6 @@ class OdevTestCase(TestCase):
                 attributes += parts[-1:]
 
     @classmethod
-    def create_odoo_database(cls, name: str) -> LocalDatabase:
-        """Create a new database for the test case."""
-        database = LocalDatabase(name)
-
-        if not database.exists:
-            database.create()
-
-        database.create_table("ir_config_parameter", {"key": "varchar(255)", "value": "varchar(255)"})
-        database.create_table("res_users_log", {"create_date": "timestamp"})
-        database.create_table(
-            "ir_module_module",
-            {
-                "name": "varchar(255)",
-                "state": "varchar(255)",
-                "latest_version": "varchar(255)",
-                "license": "varchar(255)",
-            },
-        )
-        database.query(
-            """
-            INSERT INTO ir_module_module (name, state, latest_version, license)
-            VALUES ('base', 'installed', '17.0.1.0.0', 'OPL-1')
-            """
-        )
-
-        assert database.connector is not None
-        database.connector.invalidate_cache()
-        database.venv = cls.venv
-        return database
-
-    @classmethod
     def __unpatch_all(cls):
         for patched in cls._patches:
             patched.stop()
@@ -244,28 +208,6 @@ class OdevTestCase(TestCase):
             ],
         )
 
-    @classmethod
-    def __setup_environment(cls):
-        """Setup the environment for the test case."""
-        cls.venv = PythonEnv(cls.odev.venvs_path / "test")
-        cls.venv.create()
-
-    @classmethod
-    def __setup_database(cls):
-        """Setup the database for the test case."""
-        cls.database = cls.create_odoo_database(cls.run_name)
-
-    @classmethod
-    def __cleanup_environment(cls):
-        """Teardown the environment after the test case."""
-        shutil.rmtree(cls.run_path.as_posix(), ignore_errors=True)
-
-    @classmethod
-    def __cleanup_database(cls):
-        """Teardown the database after the test case."""
-        if cls.database.exists:
-            cls.database.drop()
-
     def __check_test_mode(self):
         self.assertTrue(self.odev.in_test_mode, "Odev is not in test mode, failing test to prevent accidental damage")
 
@@ -289,8 +231,14 @@ class OdevCommandTestCase(OdevTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.__patch_odoobin_prep()
-        cls.create_odoo_database(cls.run_name)
+        # cls.__patch_odoobin_prep()
+        cls.__setup_environment()
+        # cls.create_odoo_database(cls.run_name)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.__cleanup_environment()
+        super().tearDownClass()
 
     @classmethod
     def __patch_odoobin_prep(cls):
@@ -298,6 +246,28 @@ class OdevCommandTestCase(OdevTestCase):
         cls.odev.config.paths.repositories = Config().paths.repositories
         cls._patch_object(GitConnector, [("_get_clone_options", ["--depth", "1", "--no-single-branch"])])
         cls._patch_object(OdoobinProcess, [], [("odoo_repositories", [GitConnector("odoo/odoo")])])
+
+    @classmethod
+    def __setup_environment(cls):
+        """Setup the environment for the test case."""
+        cls.venv = PythonEnv(cls.odev.venvs_path / "test")
+        cls.venv.create()
+
+    @classmethod
+    def __setup_database(cls):
+        """Setup the database for the test case."""
+        cls.database = cls.create_odoo_database(cls.run_name)
+
+    @classmethod
+    def __cleanup_environment(cls):
+        """Teardown the environment after the test case."""
+        shutil.rmtree(cls.run_path.as_posix(), ignore_errors=True)
+
+    @classmethod
+    def __cleanup_database(cls):
+        """Teardown the database after the test case."""
+        if cls.database.exists:
+            cls.database.drop()
 
     def dispatch_command(self, command: str, *arguments: str) -> Tuple[str, str]:
         """Run a command with arguments.
@@ -309,6 +279,37 @@ class OdevCommandTestCase(OdevTestCase):
             self.odev.dispatch([self.odev.name, command, *arguments])
 
         return output.stdout, output.stderr
+
+    @classmethod
+    def create_odoo_database(cls, name: str) -> LocalDatabase:
+        """Create a new database for the test case."""
+        database = LocalDatabase(name)
+
+        if not database.exists:
+            database.create()
+
+        database.create_table("ir_config_parameter", {"key": "varchar(255)", "value": "varchar(255)"})
+        database.create_table("res_users_log", {"create_date": "timestamp"})
+        database.create_table(
+            "ir_module_module",
+            {
+                "name": "varchar(255)",
+                "state": "varchar(255)",
+                "latest_version": "varchar(255)",
+                "license": "varchar(255)",
+            },
+        )
+        database.query(
+            """
+            INSERT INTO ir_module_module (name, state, latest_version, license)
+            VALUES ('base', 'installed', '17.0.1.0.0', 'OPL-1')
+            """
+        )
+
+        assert database.connector is not None
+        database.connector.invalidate_cache()
+        database.venv = cls.venv
+        return database
 
     def assert_database(
         self,

@@ -154,6 +154,7 @@ jobs:
           git fetch --depth 1 origin 18.0
 
       - name: save-odoo-repositories
+        if: steps.restore-odoo-repositories.outputs.cache-hit != 'true'
         id: save-odoo-repositories
         uses: actions/cache/save@v4
         with:
