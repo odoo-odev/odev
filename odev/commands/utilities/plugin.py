@@ -1,6 +1,5 @@
 """Enable and disable plugins to add new features and commands."""
 
-import importlib.util
 from typing import cast
 
 from odev.common import args, string
@@ -42,59 +41,19 @@ class PluginCommand(Command):
 
     def run(self):
         """Enable or disable a plugin."""
-        if self.args.show and not self.args.plugin:
+        if self.show:
+            if self.plugin:
+                return self.__show_plugin_info(cast(str, self.plugin).split("/")[-1])
+
             for plugin in self.odev.plugins:
                 self.__show_plugin_info(plugin.name)
                 self.console.print()
 
-        else:
-            plugin_git = GitConnector(self.args.plugin)
-            plugin_name = plugin_git.name
+        if self.enable:
+            return self.odev.install_plugin(cast(str, self.plugin))
 
-            if self.args.enable:
-                self.__add_plugin_to_config(plugin_name)
-
-                try:
-                    self.odev.load_plugins()
-                    plugin = self.__get_plugin(plugin_name)
-                    dependencies = plugin.manifest["depends"]
-
-                    for dependency in dependencies:
-                        self.__add_plugin_to_config(dependency)
-
-                    self.odev.load_plugins()
-
-                    setup_path = plugin.path / "setup.py"
-                    if setup_path.exists():
-                        spec = importlib.util.spec_from_file_location("setup", setup_path)
-                        setup_module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(setup_module)
-                        setup_module.setup(self.odev)
-
-                    logger.info(
-                        f"Enabled plugin {plugin.name!r}"
-                        + (f" and {len(dependencies)} dependencies" if dependencies else "")
-                    )
-                except Exception as error:
-                    self.__remove_plugin_from_config(plugin_name)
-                    raise error
-
-            elif self.args.disable:
-                self.__remove_plugin_from_config(plugin_name)
-                plugin = self.__get_plugin(plugin_name)
-
-                try:
-                    if plugin.path is not None:
-                        plugin.path.unlink(missing_ok=True)
-
-                    self.odev.load_plugins()
-                    logger.info(f"Disabled plugin {plugin_name!r}")
-                except Exception as error:
-                    self.__add_plugin_to_config(plugin_name)
-                    raise error
-
-            else:
-                self.__show_plugin_info(plugin_name)
+        if self.disable:
+            return self.odev.uninstall_plugin(cast(str, self.plugin))
 
     def __show_plugin_info(self, plugin_name: str):
         """Show the plugin information.
@@ -120,21 +79,6 @@ class PluginCommand(Command):
             if plugin.manifest["description"]:
                 self.console.print()
                 self.console.print(string.indent(cast(str, plugin.manifest["description"]), 4).rstrip("\n"))
-
-    def __add_plugin_to_config(self, repository: str):
-        """Add the given plugin to the config."""
-        if repository in self.config.plugins.enabled:
-            raise self.error(f"Plugin {repository!r} is already enabled")
-
-        plugins = [*self.config.plugins.enabled, repository]
-        self.config.plugins.enabled = [plugin for plugin in plugins if plugin]
-
-    def __remove_plugin_from_config(self, repository: str):
-        """Remove the given plugin from the config."""
-        if repository not in self.config.plugins.enabled:
-            raise self.error(f"Plugin {repository!r} is not enabled")
-
-        self.config.plugins.enabled = [plugin for plugin in self.config.plugins.enabled if plugin != repository]
 
     def __get_plugin(self, name: str) -> Plugin:
         """Find a plugin by its name."""
