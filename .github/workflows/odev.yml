@@ -138,28 +138,27 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: cache-odoo-repositories
-        id: cache-odoo-repositories
-        uses: actions/cache@v4
+      - name: restore-odoo-repositories
+        id: restore-odoo-repositories
+        uses: actions/cache/restore@v4
         with:
           path: ~/odoo/repositories
-          key: odoo-repositories
+          key: odoo-repositories-${{ matrix.python-version }}
 
       - name: clone-odoo-repositories
-        if: steps.cache-odoo-repositories.outputs.cache-hit != 'true'
+        if: steps.restore-odoo-repositories.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/odoo/odoo ~/odoo/repositories/odoo/odoo --branch master
-          git clone --depth 1 https://github.com/odoo/design-themes ~/odoo/repositories/odoo/design-themes --branch master
+          cd ~/odoo/repositories/odoo/odoo
+          git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+          git fetch --depth 1 origin 18.0
 
-          for i in {16..17}; do
-            cd ~/odoo/repositories/odoo/odoo
-            git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-            git fetch --depth 1 origin "refs/heads/$i.0:refs/remotes/origin/$i.0"
-
-            cd ~/odoo/repositories/odoo/design-themes
-            git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-            git fetch --depth 1 origin "refs/heads/$i.0:refs/remotes/origin/$i.0"
-          done
+      - name: save-odoo-repositories
+        id: save-odoo-repositories
+        uses: actions/cache/save@v4
+        with:
+          path: ~/odoo/repositories
+          key: odoo-repositories-${{ matrix.python-version }}
 
       - name: setup-python-requirements
         run: |
