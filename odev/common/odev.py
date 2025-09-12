@@ -26,6 +26,7 @@ from typing import (
     MutableMapping,
     NamedTuple,
     Optional,
+    Set,
     Type,
     TypedDict,
     cast,
@@ -119,7 +120,7 @@ class Odev(Generic[CommandType]):
         self.in_test_mode = test
         """Whether the framework is in testing mode."""
 
-        self.__class__.config = Config(self.name)
+        self._load_config()
         self.__class__.store = DataStore(self.name)
 
     def __repr__(self) -> str:
@@ -242,17 +243,16 @@ class Odev(Generic[CommandType]):
         upgrade |= self._update(self.path, self.name)
 
         logger.debug("Checking for updates in plugins")
-        upgrade |= any(self._update(path, f"plugin {plugin!r}") for plugin, path, _ in self.plugins)
+        upgrade |= any(self._update(path, plugin) for plugin, path, _ in self.plugins)
 
         if upgrade:
             self.config.update.date = datetime.now(timezone.utc)
             self.upgrade()
-            self.load_plugins()
 
             if restart:
                 self.restart()
 
-    def _update(self, path: Path, prompt_name: str) -> bool:
+    def _update(self, path: Path, plugin: Optional[str] = None) -> bool:
         """Check for updates in the odev repository and download them if necessary.
         :param path: Path to a repository to update
         :return: Whether updates were pulled and installed
@@ -261,9 +261,13 @@ class Odev(Generic[CommandType]):
         path = path.resolve()
 
         try:
-            repository = Repo(path.as_posix())
+            repository = Repo(path)
         except NoSuchPathError:
-            raise OdevError(f"Error while updating {prompt_name}, likely a missing plugin dependency")
+            if plugin:
+                logger.warning(f"Plugin {plugin!r} not found, maybe a missing dependency")
+                self.install_plugin(plugin)
+
+            raise OdevError(f"Error while updating {self.name}")
 
         manifest: Manifest = self._load_plugin_manifest(path)
         git = GitConnector(cast(str, manifest["name"]), path)
@@ -273,6 +277,7 @@ class Odev(Generic[CommandType]):
             git.fetch()
             return False
 
+        prompt_name = f"plugin {plugin}" if plugin else self.name
         logger.debug(f"Checking for updates in {git.name!r}")
 
         if not self.__update_prompt(prompt_name):
@@ -491,29 +496,109 @@ class Odev(Generic[CommandType]):
                 command_class.prepare_command(self)
                 self.commands.update({name: command_class for name in command_names})  # type: ignore [assignment]
 
-    def load_plugins(self) -> None:
-        """Load plugins from the configuration file and register them in the plugin directory."""
-        self.plugins_path.mkdir(parents=True, exist_ok=True)
-        self.config.paths.repositories.mkdir(parents=True, exist_ok=True)
+    def _load_config(self) -> None:
+        """Reload the configuration file."""
+        self.__class__.config = Config(self.name)
 
-        for plugin in self.config.plugins.enabled:
-            logger.debug(f"Registering plugin {plugin!r}")
+    def _plugin_is_installed(self, name: str) -> bool:
+        """Check whether a plugin is installed.
+
+        :param name: Name of the plugin to check
+        :return: Whether the plugin is installed
+        """
+        plugin = next((p for p in self.plugins if name == p.name), None)
+
+        if plugin is None:
+            return False
+
+        return plugin.path.is_symlink() or plugin.path.is_dir()
+
+    def install_plugin(self, plugin: str, as_dependency: bool = False) -> None:
+        """Install a new plugin from a git repository.
+
+        :param plugin: Git repository of the plugin to install
+        :param as_dependency: Whether the plugin is being installed as a dependency of another plugin
+        """
+        with progress.spinner(f"Installing plugin{' dependency' if as_dependency else ''} {plugin!r}"):
             repository = GitConnector(plugin)
 
-            if not repository.exists:
+            if repository.exists:
+                repository.update()
+            else:
                 repository.clone()
 
-            repository.update()
-            plugin_path = self.plugins_path.joinpath(repository._repository.replace("-", "_"))
+            manifest = self._load_plugin_manifest(repository.path)
 
-            if not plugin_path.exists() and not plugin_path.is_symlink():
-                logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
-                plugin_path.symlink_to(repository.path, target_is_directory=True)
+            if depends := manifest.get("depends"):
+                for dependency in depends:
+                    self.install_plugin(dependency, as_dependency=True)
 
-            self._install_plugin_requirements(plugin_path)
-            self.__class__.config = Config(self.name)  # Reload config to load plugin sections
+            plugin_path = self.plugins_path / repository._repository.replace("-", "_")
+            self.plugins_path.mkdir(parents=True, exist_ok=True)
 
-        self._plugins_dependency_tree.cache_clear()
+            if self._plugin_is_installed(plugin):
+                logger.info(f"Plugin {plugin!r} is already installed")
+            else:
+                try:
+                    if not plugin_path.exists() and not plugin_path.is_symlink():
+                        logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
+                        plugin_path.symlink_to(repository.path, target_is_directory=True)
+
+                    self._load_config()
+                    self._install_plugin_requirements(plugin_path)
+                    self._setup_plugin(plugin_path, plugin)
+                except Exception as error:
+                    plugin_path.unlink(missing_ok=True)
+                    raise OdevError(f"Error while installing requirements for plugin {plugin!r}: {error}") from error
+
+                self.config.plugins.enabled = {*self.config.plugins.enabled, plugin}
+                logger.info(f"Installed plugin{' dependency' if as_dependency else ''} {plugin!r}")
+
+            self._plugins_dependency_tree.cache_clear()
+
+    def uninstall_plugin(self, plugin: str) -> None:
+        """Uninstall a plugin the plugins that depend on it.
+
+        :param plugin: Name of the plugin to uninstall
+        """
+        if not self._plugin_is_installed(plugin):
+            if plugin in self.config.plugins.enabled:
+                self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != plugin}
+
+            return logger.info(f"Plugin {plugin!r} is not installed")
+
+        with progress.spinner(f"Uninstalling plugin {plugin!r}"):
+            dependents: Set[str] = set()
+
+            for installed_plugin in self._plugins_dependency_tree():
+                if installed_plugin == plugin:
+                    continue
+
+                installed_plugin_path = self.plugins_path / installed_plugin.split("/")[-1].replace("-", "_")
+                manifest = self._load_plugin_manifest(installed_plugin_path)
+
+                if any(dep in manifest.get("depends", []) for dep in dependents | {plugin}):
+                    dependents.add(installed_plugin)
+
+            if dependents:
+                logger.warning(
+                    f"Uninstalling plugin {plugin!r} will also uninstall the following dependent plugins:\n"
+                    f"{string.join_bullet(list(dependents))}"
+                )
+            else:
+                logger.warning(f"You are about to uninstall the plugin {plugin!r}")
+
+            if not self.console.confirm("Do you want to continue?", default=False):
+                raise OdevError("Aborting plugin uninstallation")
+
+            for dependent in dependents | {plugin}:
+                plugin_path = self.plugins_path / dependent.split("/")[-1].replace("-", "_")
+                plugin_path.unlink(missing_ok=True)
+                self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != dependent}
+                logger.info(f"Uninstalled plugin {dependent!r}")
+
+            self._load_config()
+            self._plugins_dependency_tree.cache_clear()
 
     def _install_plugin_requirements(self, plugin_path: Path) -> None:
         """Install the requirements of a plugin.
@@ -524,6 +609,23 @@ class Odev(Generic[CommandType]):
 
         if any(python.missing_requirements(plugin_path, False)):
             python.install_requirements(plugin_path)
+
+    def _setup_plugin(self, plugin_path: Path, plugin: Optional[str] = None) -> None:
+        """Run the setup script of a plugin if it exists.
+
+        :param plugin_path: Path to the plugin to setup
+        """
+        setup_script = plugin_path / "setup.py"
+
+        if setup_script.exists() and setup_script.is_file():
+            logger.info("Running setup for plugin" + (f" {plugin!r}" if plugin else ""))
+            spec = spec_from_file_location(f"{plugin_path.name}.setup", setup_script)
+            assert spec is not None and spec.loader is not None
+            setup_module: ModuleType = module_from_spec(spec)
+            cast(Loader, spec.loader).exec_module(setup_module)
+
+            if hasattr(setup_module, "setup"):
+                setup_module.setup(self)
 
     @lru_cache
     def _load_plugin_manifest(self, plugin_path: Path) -> Manifest:

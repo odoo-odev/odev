@@ -173,4 +173,4 @@ jobs:
           POSTGRES_HOST: postgres
           POSTGRES_PORT: 5432
         run: |
-          coverage run -m pytest ./tests --exitfirst --capture=no --log-cli-level debug
+          coverage run -m pytest ./tests --exitfirst --capture=no
