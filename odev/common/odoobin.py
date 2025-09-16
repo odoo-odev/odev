@@ -77,15 +77,6 @@ def odoo_repositories(enterprise: bool = True) -> Generator[GitConnector, None, 
 class OdoobinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
 
-    _additional_addons_paths: List[Path] = []
-    """List of additional addons paths to use when starting the Odoo process."""
-
-    _venv: Optional[PythonEnv] = None
-    """Cached python virtual environment used by the Odoo installation."""
-
-    _force_enterprise: bool = False
-    """Force using the enterprise version of Odoo."""
-
     def __init__(
         self,
         database: "LocalDatabase",
@@ -99,7 +90,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         self.database: LocalDatabase = database
         """Database this process is for."""
 
-        self._version: Optional[OdooVersion] = self.database.version or version or OdooVersion("master")
+        self._version: Optional[OdooVersion] = version or self.database.version or OdooVersion("master")
         """Force the version of Odoo when running the process."""
 
         odoo_branch = self._get_version()
@@ -118,6 +109,15 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         self.repository: GitConnector = GitConnector("odoo/odoo")
         """Github repository of Odoo."""
+
+        self._additional_addons_paths: List[Path] = []
+        """List of additional addons paths to use when starting the Odoo process."""
+
+        self._venv: Optional[PythonEnv] = None
+        """Cached python virtual environment used by the Odoo installation."""
+
+        self._force_enterprise: bool = False
+        """Force using the enterprise version of Odoo."""
 
     def __repr__(self) -> str:
         return (
@@ -274,7 +274,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def addons_paths(self) -> List[Path]:
         """Return the list of addons paths."""
         return [
-            path
+            path.expanduser()
             for path in self.odoo_addons_paths + self.additional_addons_paths
             if OdoobinProcess.check_addons_path(path)
         ]
@@ -720,7 +720,9 @@ class OdoobinProcess(OdevFrameworkMixin):
             return False
 
         globs = (path.glob(f"*/__{manifest}__.py") for manifest in ["manifest", "openerp"])
-        return path.is_dir() and any(manifest for glob in globs for manifest in glob)
+        return path.is_dir() and any(
+            manifest.is_file() and (manifest.parent / "__init__.py").is_file() for glob in globs for manifest in glob
+        )
 
     @classmethod
     def version_from_addons(cls, path: Path) -> Optional[OdooVersion]:

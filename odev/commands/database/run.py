@@ -4,6 +4,7 @@
 from odev.common import args, progress
 from odev.common.commands import OdoobinTemplateCommand
 from odev.common.logging import logging
+from odev.common.version import OdooVersion
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,31 @@ class RunCommand(OdoobinTemplateCommand):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.infer_template_instance()
+
+        if self.args.version:
+            version = str(OdooVersion(self.args.version))
+
+            if not self.args.worktree:
+                self.args.worktree = version
+            else:
+                logger.warning("Passing both --version and --worktree is untested and may lead to unexpected results")
+
+            if not self.args.venv:
+                self.args.venv = version
+            else:
+                logger.warning("Passing both --version and --venv is untested and may lead to unexpected results")
+
+        if (self.args.enterprise and self._database.edition == "community") or (
+            not self.args.enterprise and self._database.edition == "enterprise"
+        ):
+            logger.warning(
+                f"Forcing {'enterprise' if self.args.enterprise else 'community'} edition "
+                f"for database {self._database.name!r} which is set to {self._database.edition!r}"
+            )
+
+        self._set_odoobin_process(
+            force=any([self.args.version, self.args.venv, self.args.worktree, self.args.enterprise])
+        )
 
     @property
     def _database_exists_required(self) -> bool:

@@ -3,12 +3,19 @@ import shlex
 from abc import ABC
 from argparse import Namespace
 from pathlib import Path
-from typing import Mapping, Optional, Union
+from typing import (
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Union,
+)
 
 from rich import markup
 
 from odev.common import args, string
 from odev.common.commands import LocalDatabaseCommand
+from odev.common.connectors import GitConnector
 from odev.common.databases import LocalDatabase
 from odev.common.logging import logging
 from odev.common.odoobin import OdoobinProcess
@@ -120,33 +127,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
     def __init__(self, args: Namespace, **kwargs):
         super().__init__(args, **kwargs)
-        if not isinstance(self._database, LocalDatabase):
-            raise self.error(f"Database must be an instance of {LocalDatabase.__name__}.")
-
-        if self.odoobin is not None:
-            if self.args.addons is not None:
-                addons_paths = [Path(addon).resolve() for addon in self.args.addons]
-                invalid_paths = [path for path in addons_paths if not self.odoobin.check_addons_path(path)]
-
-                if invalid_paths:
-                    logger.warning(
-                        "Some additional addons paths are invalid, they will be ignored:\n"
-                        + string.join_bullet([path.as_posix() for path in invalid_paths])
-                    )
-            else:
-                addons_paths = [Path().resolve()]
-
-            self.odoobin.additional_addons_paths = addons_paths
-            self.odoobin.save_database_repository()
-            self.odoobin.with_edition("enterprise" if self.args.enterprise else "community")
-
-            if self.args.version is not None:
-                self.odoobin.with_version(OdooVersion(self.args.version))
-
-            if self.args.worktree is not None:
-                self.odoobin.with_worktree(self.args.worktree)
-
-            self.odoobin.with_venv(self.venv.name)
+        self._set_odoobin_process(
+            force=any([self.args.version, self.args.venv, self.args.worktree, self.args.enterprise])
+        )
 
     @property
     def odoobin(self) -> Optional[OdoobinProcess]:
@@ -198,6 +181,63 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
         self.last_level = match.group("level").lower()
         self._print_progress_log_line(match)
+
+    def _guess_addons_paths(self) -> List[Path]:
+        """Guess the addons path."""
+        if self.args.addons is not None:
+            addons_paths = [Path(addon).resolve() for addon in self.args.addons]
+            invalid_paths = [path for path in addons_paths if not self.odoobin.check_addons_path(path)]
+
+            if invalid_paths:
+                logger.warning(
+                    "Some additional addons paths are invalid, they will be ignored:\n"
+                    + string.join_bullet([path.as_posix() for path in invalid_paths])
+                )
+        elif self._database.repository:
+            addons_paths = [GitConnector(self._database.repository.full_name).path.resolve()]
+        else:
+            current_path = Path().resolve()
+            addons_paths = [current_path] if self.odoobin.check_addons_path(current_path) else []
+
+        return addons_paths
+
+    def _set_addons_paths(self) -> None:
+        """Find additional addons paths from the database repository if any."""
+        addons_paths = self._guess_addons_paths()
+
+        globs = [path.glob(f"**/__{manifest}__.py") for path in addons_paths for manifest in ["manifest", "openerp"]]
+        addons_paths = [
+            path.parents[1] for path in (p for g in globs for p in g) if self.odoobin.check_addons_path(path.parents[1])
+        ]
+
+        self.odoobin.additional_addons_paths = sorted(set(addons_paths))
+        self.odoobin.save_database_repository()
+
+    def _set_odoobin_process(self, force=False) -> None:
+        """Set the odoo-bin process associated with the database.
+
+        :param force: If True, force the creation of a new odoo-bin process even if one already exists.
+        """
+        if not isinstance(self._database, LocalDatabase):
+            raise self.error(f"Database must be an instance of {LocalDatabase.__name__}.")
+
+        if self._database.process is not None and not force:
+            return
+
+        version = OdooVersion(self.args.version) if self.args.version else self.version
+        venv = PythonEnv(self.args.venv) if self.args.venv else self.venv
+        worktree = self.args.worktree or self.worktree
+        edition: Literal["community", "enterprise"] = (
+            "enterprise" if self.args.enterprise or self._database.edition == "enterprise" else "community"
+        )
+        process = OdoobinProcess(
+            database=self._database,
+            version=version,
+            venv=venv.name,
+            worktree=worktree,
+        ).with_edition(edition)
+        self._database.process = process
+        self._set_addons_paths()
 
     def _print_progress_log_line(self, match: re.Match):
         """Print a line of odoo-bin output when streamed through the odoobin_progress handler."""
@@ -280,6 +320,10 @@ class OdoobinTemplateCommand(OdoobinCommand):
         aliases=["-t", "--from-template"],
         description="Name of an existing PostgreSQL database to copy.",
     )
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.infer_template_instance()
 
     def infer_template_instance(self):
         """Infer the template database from the command line arguments."""

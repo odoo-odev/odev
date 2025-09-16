@@ -334,6 +334,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         return self._process
 
+    @process.setter
+    def process(self, value: Optional[OdoobinProcess]):
+        """Set the Odoo process of the database."""
+        self._process = value
+
     @property
     def repository(self) -> Optional[Repository]:
         if self._repository is None:

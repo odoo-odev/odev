@@ -69,7 +69,7 @@ class CreateCommand(OdoobinTemplateCommand):
         if self.args.version:
             return OdooVersion(self.args.version)
 
-        if self._template:
+        if hasattr(self, "_template") and self._template:
             with self._template:
                 if self._template.version:
                     return self._template.version

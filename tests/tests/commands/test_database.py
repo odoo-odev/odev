@@ -358,6 +358,50 @@ class TestDatabaseCommands(OdevCommandTestCase):
             stdout,
         )
 
+    def test_12_run_with_addons_path(self):
+        """Command `odev run` should run Odoo in a database, recursively detect additional addons paths
+        and store the value of the repository for future usage.
+        """
+        self.assertDatabaseExist(self.database_name)
+        self.assertDatabaseIsOdoo(self.database_name)
+        database = LocalDatabase(self.database_name)
+        self.assertIsNone(database.repository)
+
+        addon = "test/test-addons"
+        addons_path_end = f"repositories/{addon}"
+        addons_path = self.res_path / addons_path_end
+
+        with (
+            self.patch("odev.common.commands.odoobin.OdoobinCommand", "_guess_addons_paths", [addons_path]),
+            self.patch_property(
+                OdoobinProcess,
+                "additional_repositories",
+                (r for r in [GitConnector(addon)]),
+            ),
+        ):
+            stdout, _ = self.dispatch_command("run", self.database_name, "--stop-after-init")
+
+        self.assertIn(f"Running 'odoo-bin' in version '{ODOO_DB_VERSION}' on database '{self.database_name}'", stdout)
+        self.assertRegex(stdout, rf"--addons-path [^\s]+?{addons_path_end},[^\s]+?{addons_path_end}/submodule")
+        self.assertEqual(database.repository.full_name, addon)
+
+    def test_13_run_with_version(self):
+        """Command `odev run` should run Odoo in a database with a specific version."""
+        self.assertDatabaseExist(self.database_name)
+        self.assertDatabaseIsOdoo(self.database_name)
+        self.assertDatabaseVersionEqual(self.database_name, ODOO_DB_VERSION)
+
+        version = "17.0"
+
+        with self.wrap("odev.common.bash", "stream") as stream:
+            stdout, _ = self.dispatch_command("run", "--version", version, self.database_name, "--stop-after-init")
+            self.assertCalledWithOdoobin(stream, self.database_name, ["--stop-after-init"])
+
+        self.assertIn(f"Running 'odoo-bin' in version '{version}' on database '{self.database_name}'", stdout)
+        self.assertDatabaseExist(self.database_name)
+        self.assertDatabaseIsOdoo(self.database_name)
+        self.assertDatabaseVersionEqual(self.database_name, ODOO_DB_VERSION)
+
     # --------------------------------------------------------------------------
     # Test cases - delete
     # Keep at the end to avoid interference with other tests and to cleanup
