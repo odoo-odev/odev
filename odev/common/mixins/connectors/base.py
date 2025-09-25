@@ -1,6 +1,6 @@
 """Mixins for commands that need to use a connector."""
 
-from typing import Callable, Type
+from collections.abc import Callable
 
 from odev.common.connectors import Connector
 from odev.common.logging import logging
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def ensure_connected(func: Callable) -> Callable:
-    """Decorator that ensures that the connector is connected before running the decorated method."""
+    """Ensure that the connector is connected before running the decorated method."""
 
     def wrapped(self, *args, **kwargs):
         with self:
@@ -22,7 +22,7 @@ def ensure_connected(func: Callable) -> Callable:
 class ConnectorMixin:
     """Base mixin for commands that need to use a connector."""
 
-    _connector_class: Type[Connector]
+    _connector_class: type[Connector]
     """The class of the connector to use."""
 
     _connector_attribute_name: str = "connector"

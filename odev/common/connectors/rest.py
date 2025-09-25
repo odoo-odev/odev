@@ -4,18 +4,14 @@ import json
 import platform
 import re
 from abc import ABC, abstractmethod, abstractproperty
-from contextlib import contextmanager
+from collections.abc import MutableMapping, Sequence
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import FrameType
 from typing import (
     Any,
     ClassVar,
     Literal,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
-    Union,
     cast,
 )
 from urllib.parse import ParseResult, urlencode, urlparse
@@ -39,7 +35,7 @@ logger = logging.getLogger(__name__)
 class RestConnector(Connector, ABC):
     """Abstract class for connecting to a remote HTTP endpoint using REST."""
 
-    _connection: Optional[Session] = None
+    _connection: Session | None = None
     """The session used to connect to the endpoint."""
 
     _cache: ClassVar[MutableMapping[str, Any]] = {}
@@ -111,14 +107,14 @@ class RestConnector(Connector, ABC):
         ).password
 
     @property
-    def session_domains(self) -> Set[str]:
+    def session_domains(self) -> set[str]:
         """Domains to store session cookies for."""
         return {
             self.parsed_url.netloc,
         }
 
     @property
-    def session_cookies(self) -> Set[str]:
+    def session_cookies(self) -> set[str]:
         """Session cookies to store."""
         return {
             "session_id",
@@ -160,10 +156,8 @@ class RestConnector(Connector, ABC):
             for scope in self.session_cookies:
                 self.store.secrets.invalidate(domain, scope=scope)
 
-            try:
+            with suppress(KeyError):
                 self._connection.cookies.clear(domain=domain)
-            except KeyError:
-                pass
 
     def connect(self):
         """Open a session to the endpoint."""
@@ -188,7 +182,7 @@ class RestConnector(Connector, ABC):
         logger.debug("Invalidating session cookies")
         self._clear_cookies()
 
-    def cache(self, key: str, value: Optional[Response] = None) -> Optional[Response]:
+    def cache(self, key: str, value: Response | None = None) -> Response | None:
         """Get the cached value for the specified key.
         If value is not `None`, add the value to the cache.
         :param key: The key to get or set.
@@ -215,12 +209,13 @@ class RestConnector(Connector, ABC):
         self,
         method: Literal["GET", "POST", "HEAD"],
         path: str,
-        obfuscate_params: Optional[Sequence[str]] = None,
+        obfuscate_params: Sequence[str] | None = None,
         raise_for_status: bool = True,
         retry_on_error: bool = True,
         **kwargs,
     ) -> Response:
         """Low-level execution of an HTTP request to the endpoint to enable caching and logging.
+
         :param method: The HTTP method to use.
         :param path: The path to the resource.
         :param obfuscate_params: The parameters to obfuscate,
@@ -235,7 +230,9 @@ class RestConnector(Connector, ABC):
         if not self.connected:
             self.connect()
 
-        assert self._connection is not None, "Connection was not established"
+        if self._connection is None:
+            raise ConnectorError("Connection not established with the endpoint", self)
+
         parsed = urlparse(path)
 
         if parsed.scheme and parsed.netloc:
@@ -296,15 +293,15 @@ class RestConnector(Connector, ABC):
     @abstractmethod
     def request(
         self,
-        method: Union[Literal["GET"], Literal["POST"]],
+        method: Literal["GET"] | Literal["POST"],
         path: str,
         authenticate: bool = True,
-        params: Optional[dict] = None,
+        params: dict | None = None,
         **kwargs,
     ) -> Response:
-        """Executes an HTTP request to the endpoint.
-        Authentication is handled automatically using the credentials stored in the secrets vault
-        (see properties `login` and `password`).
+        """Execute an HTTP request to the endpoint. Authentication is handled automatically using
+        the credentials stored in the secrets vault (see properties `login` and `password`).
+
         :param method: The HTTP method to use.
         :param path: The path to the resource.
         :param params: The parameters to pass to the request.
@@ -313,7 +310,7 @@ class RestConnector(Connector, ABC):
         :rtype: requests.Response
         """
 
-    def get(self, path: str, params: Optional[dict] = None, authenticate: bool = True, **kwargs) -> Response:
+    def get(self, path: str, params: dict | None = None, authenticate: bool = True, **kwargs) -> Response:
         """Perform a GET request to the endpoint.
         Authentication is handled automatically using the Odoo credentials stored in the secrets vault.
 
@@ -325,7 +322,7 @@ class RestConnector(Connector, ABC):
         """
         return self.request("GET", path, params=params, authenticate=authenticate, **kwargs)
 
-    def post(self, path: str, params: Optional[dict] = None, authenticate: bool = True, **kwargs) -> Response:
+    def post(self, path: str, params: dict | None = None, authenticate: bool = True, **kwargs) -> Response:
         """Perform a POST request to the endpoint.
         Authentication is handled automatically using the Odoo credentials stored in the secrets vault.
 
@@ -339,6 +336,7 @@ class RestConnector(Connector, ABC):
 
     def download(self, path: str, file_path: Path, progress_message: str = "Downloading", **kwargs) -> Path:
         """Download a file from the endpoint.
+
         :param path: The path to the resource.
         :param filename: The name of the file to save.
         :param progress_message: The message to display in the progress bar.
@@ -349,18 +347,17 @@ class RestConnector(Connector, ABC):
         progress = Progress(download=True)
         task = progress.add_task(progress_message, total=None)
 
-        def signal_handler_progress(
-            signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None
-        ):
+        def signal_handler_progress(signal_number: int, frame: FrameType | None = None, message: str | None = None):
             progress.stop_task(task)
             progress.stop()
             logger.warning(f"{cast(Task, progress._tasks.get(task)).description}: task interrupted by user")
             raise KeyboardInterrupt
 
         try:
-            with capture_signals(handler=signal_handler_progress), self.get(
-                path, **kwargs, stream=True, authenticate=False
-            ) as response:
+            with (
+                capture_signals(handler=signal_handler_progress),
+                self.get(path, **kwargs, stream=True, authenticate=False) as response,
+            ):
                 progress.start()
                 content_length = int(response.headers.get("content-length", 0))
                 progress.update(task, total=content_length)
@@ -373,7 +370,7 @@ class RestConnector(Connector, ABC):
         except Exception as exception:
             progress.stop_task(task)
             progress.stop()
-            raise exception
+            raise exception from exception
 
         progress.stop_task(task)
         progress.stop()

@@ -1,7 +1,7 @@
 """Base abstract connector class to extend."""
 
-from abc import ABC, abstractmethod, abstractproperty
-from typing import TYPE_CHECKING, Optional
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class Connector(ABC):
     """Base class for handling connection to external services."""
 
-    _connection: Optional[object] = None
+    _connection: object | None = None
     """The instance of a connection to the service."""
 
     _framework: "Odev"
@@ -21,14 +21,15 @@ class Connector(ABC):
 
     def __init__(self):
         """Initialize the connector."""
-        from odev.common import framework
+        from odev.common import framework  # noqa: PLC0415 - avoid circular import at the top level
 
         self._framework = framework
 
     def __enter__(self):
         """Open a connection to the external service."""
         self.connect()
-        assert self._connection is not None, "Connection was not established"
+        if self._connection is None:
+            raise ConnectionError("Failed to establish connection")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -39,7 +40,8 @@ class Connector(ABC):
         """Return the representation of the connector."""
         return f"{self.__class__.__name__}({self.url!r})"
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def url(self) -> str:
         """Return the URL to the external service."""
         raise NotImplementedError

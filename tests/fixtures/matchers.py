@@ -1,5 +1,4 @@
 import re
-from typing import List, Optional
 
 
 class ReMatch:
@@ -14,11 +13,14 @@ class ReMatch:
     def __eq__(self, other: str) -> bool:
         return bool(self.pattern.search(other))
 
+    def __hash__(self) -> int:
+        return hash(self.pattern.pattern)
+
 
 class OdoobinMatch(ReMatch):
     """A string that can be compared to an odoo-bin command as run in the terminal."""
 
-    def __init__(self, database_name: str, arguments: Optional[List[str]] = None, subcommand: Optional[str] = None):
+    def __init__(self, database_name: str, arguments: list[str] | None = None, subcommand: str | None = None):
         if arguments is None:
             arguments = []
 

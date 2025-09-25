@@ -1,6 +1,5 @@
 """Run an Odoo database locally."""
 
-
 from odev.common import args, progress
 from odev.common.commands import OdoobinTemplateCommand
 from odev.common.logging import logging

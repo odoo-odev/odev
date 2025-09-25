@@ -1,18 +1,12 @@
-# import re
-# from pathlib import Path
-# from subprocess import CompletedProcess
-
-
 from odev.common.commands.odoobin import TEMPLATE_SUFFIX as ODOO_DB_TEMPLATE_SUFFIX
 from odev.common.config import Config
 from odev.common.connectors.git import GitConnector
 from odev.common.databases import LocalDatabase
 from odev.common.odoobin import OdoobinProcess
+
 from tests.fixtures import OdevCommandTestCase
 from tests.fixtures.matchers import OdoobinMatch
 
-
-# ODOOBIN_PATH = "odev.common.odoobin.OdoobinProcess"
 
 ODOO_DB_VERSION = "18.0"
 """Version to use in tests, keep in sync with branches pulled in GitHub workflows."""
@@ -55,7 +49,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
     # Assertions
     # --------------------------------------------------------------------------
 
-    def __assertDatabaseExist(self, name: str, exists: bool):
+    def __assertDatabaseExist(self, name: str, exists: bool):  # noqa: N802
         """Assert that a database exists or not."""
         database = LocalDatabase(name)
 
@@ -71,7 +65,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
             if database.exists:
                 connector.revoke_database(database.name)
 
-    def __assertDatabaseOdoo(self, name: str, is_odoo: bool):
+    def __assertDatabaseOdoo(self, name: str, is_odoo: bool):  # noqa: N802
         """Assert that a database is an Odoo database or not."""
         database = LocalDatabase(name)
 
@@ -87,7 +81,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
             if database.exists:
                 connector.revoke_database(database.name)
 
-    def __assertDatabaseVersion(self, name: str, version: str):
+    def __assertDatabaseVersion(self, name: str, version: str):  # noqa: N802
         """Assert that a database has a specific Odoo version."""
         database = LocalDatabase(name)
 
@@ -103,27 +97,33 @@ class TestDatabaseCommands(OdevCommandTestCase):
             if database.exists:
                 connector.revoke_database(database.name)
 
-    def assertDatabaseExist(self, name: str):
+    def assertDatabaseExist(self, name: str):  # noqa: N802
         """Assert that a database exists."""
-        self.__assertDatabaseExist(name, True)
+        self.__assertDatabaseExist(name, exists=True)
 
-    def assertDatabaseNotExist(self, name: str):
+    def assertDatabaseNotExist(self, name: str):  # noqa: N802
         """Assert that a database does not exist."""
-        self.__assertDatabaseExist(name, False)
+        self.__assertDatabaseExist(name, exists=False)
 
-    def assertDatabaseIsOdoo(self, name: str):
+    def assertDatabaseIsOdoo(self, name: str):  # noqa: N802
         """Assert that a database is an Odoo database."""
-        self.__assertDatabaseOdoo(name, True)
+        self.__assertDatabaseOdoo(name, is_odoo=True)
 
-    def assertDatabaseIsNotOdoo(self, name: str):
+    def assertDatabaseIsNotOdoo(self, name: str):  # noqa: N802
         """Assert that a database is not an Odoo database."""
-        self.__assertDatabaseOdoo(name, False)
+        self.__assertDatabaseOdoo(name, is_odoo=False)
 
-    def assertDatabaseVersionEqual(self, name: str, version: str):
+    def assertDatabaseVersionEqual(self, name: str, version: str):  # noqa: N802
         """Assert that a database has a specific Odoo version."""
         self.__assertDatabaseVersion(name, version)
 
-    def assertCalledWithOdoobin(self, stream_mock, database_name: str, args: list[str] = None, subcommand: str = None):
+    def assertCalledWithOdoobin(  # noqa: N802
+        self,
+        stream_mock,
+        database_name: str,
+        args: list[str] | None = None,
+        subcommand: str | None = None,
+    ):
         """Assert that a mock was called with the expected odoo-bin command.
 
         :param stream_mock: The mock to assert.
@@ -426,7 +426,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
         """Command `odev delete` should delete databases matching a regular expression."""
         self.assertDatabaseExist(self.database_name)
 
-        with self.patch(self.odev.console, "confirm", True):
+        with self.patch(self.odev.console, "confirm", return_value=True):
             stdout, _ = self.dispatch_command("delete", "--expression", "^odev-test-[a-z0-9]{8}")
 
         self.assertDatabaseNotExist(self.database_name)

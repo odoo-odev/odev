@@ -1,22 +1,13 @@
-"""Python and venv-related utilities"""
+"""Python and venv-related utilities."""
 
 import re
 import shlex
 import shutil
 import sys
+from collections.abc import Callable, Generator, Mapping, MutableMapping
 from functools import lru_cache
 from pathlib import Path
 from subprocess import CompletedProcess
-from typing import (
-    Callable,
-    Generator,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Tuple,
-    Union,
-)
 
 import virtualenv
 from cachetools.func import ttl_cache
@@ -69,18 +60,32 @@ OS_PACKAGES = {
 }
 
 
+@lru_cache
+def get_python_version(path: Path | str) -> str:
+    """Get the python version from a python interpreter.
+
+    :param path: Path to the python interpreter.
+    :return: The python version.
+    :rtype: str
+    """
+    process = bash.execute(f"{path} --version")
+
+    if process is None:
+        raise RuntimeError(f"Failed to get python version from interpreter at {path}")
+
+    return ".".join(re.sub(r"[^\d\.]", "", process.stdout.decode()).split(".")[:2])
+
+
 class PythonEnv:
     """Object representation of a local python environment, this could be the global python interpreter or
     a virtual environment.
     """
 
-    def __init__(self, path: Optional[Union[Path, str]] = None, version: Optional[str] = None):
-        """Initializes a python environment.
+    def __init__(self, path: Path | str | None = None, version: str | None = None):
+        """Initialize a python environment.
 
-        :param path: Path to the python environment containing the interpreter to use in the current context.
-            If omitted, defaults to the global python interpreter.
-        :param version: The python version to use.
-            If omitted, defaults to the version of the current python interpreter.
+        :param path: Path to the python environment containing the interpreter to use in the current context. If omitted, defaults to the global python interpreter.
+        :param version: The python version to use. If omitted, defaults to the version of the current python interpreter.
         """
         self._global = path is None
         """Whether the python environment is using the global interpreter (no virtualenv)."""
@@ -88,7 +93,10 @@ class PythonEnv:
         path = Path(path or sys.prefix)
 
         if len(path.parts) == 1:
-            from odev.common.odev import HOME_PATH, VENVS_DIRNAME
+            from odev.common.odev import (  # noqa: PLC0415 - avoid circular import at the top level
+                HOME_PATH,
+                VENVS_DIRNAME,
+            )
 
             path = HOME_PATH / VENVS_DIRNAME / path
 
@@ -110,7 +118,7 @@ class PythonEnv:
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.name!r}, version={self.version})"
 
-    def __key(self) -> Tuple[str, str, bool]:
+    def __key(self) -> tuple[str, str, bool]:
         return (self.path.resolve().as_posix(), self._version, self._global)
 
     def __hash__(self) -> int:
@@ -153,12 +161,9 @@ class PythonEnv:
         """Whether the python environment exists."""
         return self.python.is_file()
 
-    @lru_cache
     def get_version(self) -> str:
         """Get the python version used in the current environment."""
-        process = bash.execute(f"{self.python} --version")
-        assert process is not None
-        return ".".join(re.sub(r"[^\d\.]", "", process.stdout.decode()).split(".")[:2])
+        return get_python_version(self.python)
 
     def create(self) -> None:
         """Create a new virtual environment."""
@@ -180,9 +185,9 @@ class PythonEnv:
                     self.install_system_packages()
                     return self.create()
 
-                raise error
+                raise RuntimeError("Failed to create virtual environment") from error
 
-        logger.info(f"Created {venv_description}")
+        return logger.info(f"Created {venv_description}")
 
     def remove(self) -> None:
         """Remove the current virtual environment."""
@@ -194,7 +199,7 @@ class PythonEnv:
         with progress.spinner(f"Removing {venv_description}"):
             shutil.rmtree(self.path, ignore_errors=True)
 
-        logger.info(f"Removed {venv_description}")
+        return logger.info(f"Removed {venv_description}")
 
     def install_system_packages(self) -> None:
         """Install system packages for the current python version."""
@@ -225,7 +230,7 @@ class PythonEnv:
 
         logger.info(f"Installed system packages for python {self.version}")
 
-    def install_packages(self, packages: List[str], options: Optional[List[str]] = None) -> None:
+    def install_packages(self, packages: list[str], options: list[str] | None = None) -> None:
         """Install python packages.
         :param packages: a list of package specs to install.
         """
@@ -234,7 +239,7 @@ class PythonEnv:
             message=f"Installing python packages:\n{string.join_bullet(self.__format_packages(packages))}",
         )
 
-    def install_requirements(self, path: Union[Path, str]):
+    def install_requirements(self, path: Path | str):
         """Install packages from a requirements.txt file.
         :param path: Path to the requirements.txt file or the containing directory.
         """
@@ -244,7 +249,7 @@ class PythonEnv:
             message=f"Installing missing packages from {requirements_path}",
         )
 
-    def __format_packages(self, packages: List[str]) -> List[str]:
+    def __format_packages(self, packages: list[str]) -> list[str]:
         """Format a list of package specs for display."""
         formatted_packages = []
 
@@ -269,10 +274,10 @@ class PythonEnv:
         logger.info(message)
 
         with progress.spinner("Installing packages") as spinner:
-            buffer: List[str] = []
-            entire_buffer: List[str] = []
-            packages: List[str] = []
-            installed_packages: List[str] = []
+            buffer: list[str] = []
+            entire_buffer: list[str] = []
+            packages: list[str] = []
+            installed_packages: list[str] = []
             collected_packages_count = 0
 
             for line in bash.stream(f"{self.pip} install {options} --no-color"):
@@ -317,13 +322,12 @@ class PythonEnv:
             logger.info(
                 f"Successfully installed {len(packages)} python packages:\n{string.join_bullet(installed_packages)}"
             )
+        elif any("ERROR:" in line for line in entire_buffer):
+            logger.error("Failed to install python packages:")
+            console.print()
+            console.print("\n".join(entire_buffer), highlight=False)
         else:
-            if any("ERROR:" in line for line in entire_buffer):
-                logger.error("Failed to install python packages:")
-                console.print()
-                console.print("\n".join(entire_buffer), highlight=False)
-            else:
-                logger.info("All python packages are already installed and up-to-date")
+            logger.info("All python packages are already installed and up-to-date")
 
     @ttl_cache(ttl=60)
     def __pip_freeze_all(self) -> CompletedProcess:
@@ -335,7 +339,7 @@ class PythonEnv:
 
         return packages
 
-    def __package_spec(self, package: str) -> Tuple[str, str]:
+    def __package_spec(self, package: str) -> tuple[str, str]:
         """Get the name and version of a package spec.
         :param package: The package spec to parse.
         :return: A tuple with the package name and version.
@@ -346,27 +350,24 @@ class PythonEnv:
             # With a line in requirements.txt as follows:
             #   odoo_upgrade @ git+https://github.com/odoo/upgrade-util@aaa1f0fee6870075e25cb5e6744e4c589bb32b46
             # Consider:
-            #   Package name:   odoo_upgrade
-            #   Version:        aaa1f0fee6870075e25cb5e6744e4c589bb32b46
+            #   - Package name:   odoo_upgrade
+            #   - Version:        aaa1f0fee6870075e25cb5e6744e4c589bb32b46
             package_name, package_version = package.split(" @ ") if " @ " in package else (package, package)
-
-            if "@" in package_version:
-                package_version = package_name.split("@")[-1]
-            else:
-                package_version = "1.0.0"
+            package_version = package_name.split("@")[-1] if "@" in package_name else "1.0.0"
         else:
             raise ValueError(f"Invalid package specification {package!r}")
 
         return package_name.strip().lower(), package_version.strip()
 
-    def installed_packages(self) -> Mapping[str, Union[Version, str]]:
+    def installed_packages(self) -> Mapping[str, Version | str]:
         """Run pip freeze.
+
         :return: The result of the pip command execution.
         :rtype: CompletedProcess
         """
         freeze = self.__pip_freeze_all()
         packages = freeze.stdout.decode().splitlines()
-        installed: MutableMapping[str, Union[Version, str]] = {}
+        installed: MutableMapping[str, Version | str] = {}
 
         for package in packages:
             package_name, package_version = self.__package_spec(package)
@@ -380,7 +381,7 @@ class PythonEnv:
 
         return installed
 
-    def missing_requirements(self, path: Union[Path, str], raise_if_error: bool = True) -> Generator[str, None, None]:
+    def missing_requirements(self, path: Path | str, raise_if_error: bool = True) -> Generator[str, None, None]:  # noqa: PLR0912
         """Check for missing packages in a requirements.txt file.
         Useful to ensure all packages have the correct version even if the user already installed some packages
         manually.
@@ -393,15 +394,15 @@ class PythonEnv:
             requirements_path = self.__check_requirements_path(path)
         except FileNotFoundError as error:
             if raise_if_error:
-                raise error
+                raise error from error
             return
 
         logger.debug(f"Checking missing python packages from {requirements_path}")
         installed_packages = self.installed_packages()
         required_packages = requirements_path.read_text().splitlines()
 
-        for line in required_packages:
-            line = line.split("#", 1)[0].strip()
+        for line_ in required_packages:
+            line = line_.split("#", 1)[0].strip()
 
             if not line.strip():
                 continue
@@ -438,9 +439,8 @@ class PythonEnv:
                 yield line
                 continue
 
-            assert isinstance(
-                installed_version, Version
-            ), f"Invalid version {installed_version!r} for python package {match.group('name')}"
+            if not isinstance(installed_version, Version):
+                raise TypeError(f"Invalid version {installed_version!r} for python package {match.group('name')}")
 
             if match.group("version") is None and match.group("op") is None:
                 continue
@@ -457,14 +457,14 @@ class PythonEnv:
                 "package_version": parse_version(package_version),
             }
 
-            if not eval(f"installed_version {package_operator} package_version", version_locals):
+            if not eval(f"installed_version {package_operator} package_version", version_locals):  # noqa: S307 - known values
                 logger.debug(
                     f"Incorrect python package version {match.group('name')} "
                     f"({installed_version} {package_operator} {package_version})"
                 )
                 yield line
 
-    def __check_requirements_path(self, path: Union[Path, str]) -> Path:
+    def __check_requirements_path(self, path: Path | str) -> Path:
         requirements_path = Path(path).resolve()
 
         if requirements_path.is_dir():
@@ -475,7 +475,7 @@ class PythonEnv:
 
         return requirements_path
 
-    def __check_package_conditions(self, conditional: Optional[str]) -> bool:
+    def __check_package_conditions(self, conditional: str | None) -> bool:
         if conditional is None:
             return True
 
@@ -486,7 +486,7 @@ class PythonEnv:
                 conditional,
             )
 
-        return eval(
+        return eval(  # noqa: S307 - known values and operations
             conditional,
             {
                 "sys_platform": sys.platform,
@@ -496,11 +496,11 @@ class PythonEnv:
 
     def run_script(
         self,
-        script: Union[Path, str],
-        args: Optional[List[str]] = None,
+        script: Path | str,
+        args: list[str] | None = None,
         stream: bool = False,
-        progress: Optional[Callable[[str], None]] = None,
-        script_input: Optional[str] = None,
+        progress: Callable[[str], None] | None = None,
+        script_input: str | None = None,
     ) -> CompletedProcess:
         """Run a python script.
 
@@ -535,8 +535,9 @@ class PythonEnv:
 
         return CompletedProcess(command, 0)
 
-    def run(self, command: str) -> Optional[CompletedProcess]:
+    def run(self, command: str) -> CompletedProcess | None:
         """Run a python command.
+
         :param command: The command to run.
         :return: The result of the command execution.
         :rtype: CompletedProcess

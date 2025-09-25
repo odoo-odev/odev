@@ -1,7 +1,6 @@
 """Display information about a local or remote database."""
 
 import re
-from typing import Dict, List
 
 from odev.common import progress, string
 from odev.common.commands import DatabaseCommand
@@ -60,7 +59,7 @@ class InfoCommand(DatabaseCommand):
         if isinstance(self._database, LocalDatabase):
             self.table(self.info_headers, self.info_local_process(), title="Local Process")
 
-    def _stylized_info_section(self, section: str) -> Dict[str, str]:
+    def _stylized_info_section(self, section: str) -> dict[str, str]:
         """Return the stylized information about the database.
         :param section: The section name.
         """
@@ -79,7 +78,7 @@ class InfoCommand(DatabaseCommand):
 
         return info
 
-    def info_hosting(self) -> List[List[str]]:
+    def info_hosting(self) -> list[list[str]]:
         """Return the rows to be displayed in a table about the hosting of the database."""
         info = self.info["hosting"]
 
@@ -90,7 +89,7 @@ class InfoCommand(DatabaseCommand):
             ["Hosting", info["platform"]],
         ]
 
-    def info_backend(self) -> List[List[str]]:
+    def info_backend(self) -> list[list[str]]:
         """Return the rows to be displayed in a table about the backend of the database."""
         info = self._stylized_info_section("backend")
 
@@ -105,7 +104,7 @@ class InfoCommand(DatabaseCommand):
             ["Database Size", info["size_sql"]],
         ]
 
-    def info_local_process(self) -> List[List[str]]:
+    def info_local_process(self) -> list[list[str]]:
         """Return the rows to be displayed in a table about the local process of the database."""
         info = self._stylized_info_section("backend")
 
@@ -117,7 +116,7 @@ class InfoCommand(DatabaseCommand):
             ["Addons Paths", info["addons"]],
         ]
 
-    def info_git(self) -> List[List[str]]:
+    def info_git(self) -> list[list[str]]:
         """Return the rows to be displayed in a table about the git information of the database."""
         info = self._stylized_info_section("git")
 

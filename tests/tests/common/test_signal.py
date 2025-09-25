@@ -1,6 +1,7 @@
 from signal import SIGINT
 
 from odev.common.signal_handling import signal_handler_exit
+
 from tests.fixtures import OdevTestCase
 
 

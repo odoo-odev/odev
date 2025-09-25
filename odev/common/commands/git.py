@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Dict, Generator, List
+from collections.abc import Generator
 
 from odev.common import args
 from odev.common.commands import Command
@@ -29,9 +29,9 @@ class GitCommand(Command, ABC):
                     yield worktree
 
     @property
-    def grouped_worktrees(self) -> Dict[str, List[GitWorktree]]:
+    def grouped_worktrees(self) -> dict[str, list[GitWorktree]]:
         """Group worktrees by name."""
-        worktrees: Dict[str, List[GitWorktree]] = {}
+        worktrees: dict[str, list[GitWorktree]] = {}
         for worktree in self.worktrees:
             worktrees.setdefault(worktree.name, []).append(worktree)
         return worktrees

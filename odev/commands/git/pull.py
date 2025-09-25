@@ -1,7 +1,5 @@
 """Pull changes in local worktrees."""
 
-from typing import List, Tuple
-
 from odev.commands.git.fetch import FetchCommand
 from odev.common import progress
 from odev.common.logging import logging
@@ -15,7 +13,7 @@ class PullCommand(FetchCommand):
 
     _name = "pull"
 
-    def run_hook(self, name: str, changes: List[Tuple[str, int, int]]):
+    def run_hook(self, name: str, changes: list[tuple[str, int, int]]):
         """Print a summary of the pending changes for a worktree."""
         for change in changes:
             repository, behind, _ = change

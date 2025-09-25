@@ -1,5 +1,4 @@
-"""
-Utilities for working with the operating system and issue BASH-like commands to
+"""Utilities for working with the operating system and issue BASH-like commands to
 the subsystem.
 """
 
@@ -10,6 +9,7 @@ import shlex
 import sys
 import termios
 import tty
+from collections.abc import Generator
 from subprocess import (
     DEVNULL,
     CalledProcessError,
@@ -17,27 +17,26 @@ from subprocess import (
     Popen,
     run as run_subprocess,
 )
-from typing import Generator, Optional
 
 from odev.common.console import console
 from odev.common.logging import logging
 
 
-__all__ = ["execute", "detached", "stream"]
+__all__ = ["detached", "execute", "stream"]
 
 
 logger = logging.getLogger(__name__)
 
 CTRL_C, CTRL_D = b"\x03", b"\x04"
 
-global sudo_password
-sudo_password: Optional[str] = None
+global sudo_password  # noqa: PLW0604
+sudo_password: str | None = None
 
 
 # --- Helpers ------------------------------------------------------------------
 
 
-def __run_command(command: str, capture: bool = True, sudo_password: Optional[str] = None) -> CompletedProcess[bytes]:
+def __run_command(command: str, capture: bool = True, sudo_password: str | None = None) -> CompletedProcess[bytes]:
     """Execute a command as a subprocess.
     If `sudo_password` is provided and not `None`, the command will be executed with
     elevated privileges.
@@ -49,12 +48,11 @@ def __run_command(command: str, capture: bool = True, sudo_password: Optional[st
     :return: The result of the command execution.
     :rtype: CompletedProcess
     """
-
     if sudo_password is not None:
         command = f"sudo -Sks {command}"
         sudo_password = f"{sudo_password}\n"
 
-    return run_subprocess(
+    return run_subprocess(  # noqa: S602 - intentional use of shell=True
         command,
         shell=True,
         check=True,
@@ -82,7 +80,7 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
 # --- Public API ---------------------------------------------------------------
 
 
-def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Optional[CompletedProcess[bytes]]:
+def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> CompletedProcess[bytes] | None:
     """Execute a command in the operating system and wait for it to complete.
     Output of the command will be captured and returned after the execution completes.
 
@@ -101,13 +99,12 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Op
         logger.debug(f"Running process: {shlex.quote(command)}")
         process_result = __run_command(command)
     except CalledProcessError as exception:
-
         # If already running as root, sudo will not work
         if not sudo or not os.geteuid():
             __raise_or_log(exception, raise_on_error)
             return None
 
-        global sudo_password
+        global sudo_password  # noqa: PLW0603
         sudo_password = sudo_password or console.secret("Session password:")
 
         if not sudo_password:
@@ -141,10 +138,10 @@ def detached(command: str) -> Popen[bytes]:
     :param str command: The command to execute.
     """
     logger.debug(f"Running detached process: {shlex.quote(command)}")
-    return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)
+    return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)  # noqa: S602 - intentional use of shell=True
 
 
-def stream(command: str) -> Generator[str, None, None]:
+def stream(command: str) -> Generator[str, None, None]:  # noqa: PLR0912
     """Execute a command in the operating system and stream its output line by line.
     :param str command: The command to execute.
     """
@@ -158,8 +155,7 @@ def stream(command: str) -> Generator[str, None, None]:
             yield ""
             return
 
-        for line in exec_process.stdout.decode().splitlines():
-            yield line
+        yield from exec_process.stdout.decode().splitlines()
 
         return
 
@@ -168,7 +164,7 @@ def stream(command: str) -> Generator[str, None, None]:
     master, slave = pty.openpty()
 
     try:
-        process = Popen(
+        process = Popen(  # noqa: S603
             shlex.split(command),
             stdout=slave,
             stderr=slave,

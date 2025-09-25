@@ -2,7 +2,6 @@
 
 import shutil
 from pathlib import Path
-from typing import Optional, Union
 
 from odev.common.console import console
 from odev.common.logging import logging
@@ -18,7 +17,7 @@ PRIORITY = 20
 # --- Helpers ------------------------------------------------------------------
 
 
-def __resolve(path: Union[str, Path]) -> Path:
+def __resolve(path: str | Path) -> Path:
     """Resolve a path while expanding user tokens."""
     if isinstance(path, str):
         path = Path(path)
@@ -50,7 +49,7 @@ def __move(old: Path, new: Path) -> None:
     shutil.move(old.as_posix(), new.as_posix())
 
 
-def __ask_dir(message: str, default: Optional[str] = None, path: Optional[Path] = None) -> Optional[Path]:
+def __ask_dir(message: str, default: str | None = None, path: Path | None = None) -> Path | None:
     """Prompt for a directory path."""
     if path is None:
         asked_path = console.directory(message, default)
@@ -67,9 +66,9 @@ def __ask_dir(message: str, default: Optional[str] = None, path: Optional[Path] 
     return path
 
 
-def __get_dir(message: str, default: Path) -> Optional[Path]:
+def __get_dir(message: str, default: Path) -> Path | None:
     """Prompt for a directory path."""
-    new_path: Optional[Path] = None
+    new_path: Path | None = None
 
     while new_path is None:
         new_path = __ask_dir(message, default.as_posix(), new_path)
@@ -82,7 +81,8 @@ def __get_dir(message: str, default: Path) -> Optional[Path]:
 
 
 def setup(odev: Odev) -> None:
-    """Setup working directories for odev.
+    """Set up working directories for odev.
+
     :param config: Odev configuration
     """
     logger.info(

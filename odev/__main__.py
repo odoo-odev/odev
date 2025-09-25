@@ -1,4 +1,5 @@
 import os
+import sys
 from bdb import BdbQuit
 from signal import SIGINT, SIGTERM, signal
 from time import monotonic
@@ -8,22 +9,20 @@ from time import monotonic
 
 
 def main():
-    """
-    Manages taking input from the user and calling the subsequent subcommands
+    """Manage taking input from the user and calling the subsequent subcommands
     with the proper arguments as specified in the command line.
     """
     start_time = monotonic()
 
     # --- Dynamically import odev to include startup time in performance stats -
-    from odev.common import init_framework, signal_handling as handlers
-    from odev.common.errors.odev import OdevError
-    from odev.common.logging import logging
+    from odev.common import init_framework, signal_handling as handlers  # noqa: PLC0415
+    from odev.common.errors.odev import OdevError  # noqa: PLC0415
+    from odev.common.logging import logging  # noqa: PLC0415
 
     logger = logging.getLogger(__name__)
     logger.debug(f"Framework loaded in {monotonic() - start_time:.3f} seconds")
 
     try:
-
         # --- Handle signals and interrupts ------------------------------------
         for sig in (SIGINT, SIGTERM):
             signal(sig, handlers.signal_handler_exit)
@@ -38,17 +37,17 @@ def main():
 
     except OdevError as error:
         logger.error(error)
-        exit(1)
+        sys.exit(1)
 
     except KeyboardInterrupt:
         handlers.signal_handler_exit(SIGINT, None)
 
     except BdbQuit:
         logger.error("Debugger execution interrupted")
-        exit(1)
+        sys.exit(1)
 
     except Exception:
         logger.exception("Execution failed due to an unhandled exception")
-        exit(1)
+        sys.exit(1)
 
     logger.debug(f"Execution completed successfully in {monotonic() - start_time:.3f} seconds")

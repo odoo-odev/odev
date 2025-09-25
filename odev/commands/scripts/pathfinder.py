@@ -1,7 +1,6 @@
 """Find the shortest path between two models in a database using the BFS algorithm."""
 
 import ast
-from typing import List, Tuple
 
 from odev.common import args, string
 from odev.common.commands import OdoobinShellScriptCommand
@@ -23,7 +22,7 @@ class PathfinderCommand(OdoobinShellScriptCommand):
 
     def run_script_handle_result(self, result: str):
         """Handle the result of the script execution."""
-        paths: List[List[Tuple[str, str, str]]] = ast.literal_eval(result)
+        paths: list[list[tuple[str, str, str]]] = ast.literal_eval(result)
         headers = [
             TableHeader(align="right", style="color.black"),
             TableHeader(min_width=30),
@@ -32,8 +31,8 @@ class PathfinderCommand(OdoobinShellScriptCommand):
         ]
 
         for path in paths:
-            chain: List[str] = []
-            rows: List[List[str]] = []
+            chain: list[str] = []
+            rows: list[list[str]] = []
             cardinality_from, cardinality_to = "one", "one"
 
             for index, (model, record, relation) in enumerate(path):

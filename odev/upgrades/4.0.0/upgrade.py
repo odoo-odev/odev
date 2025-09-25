@@ -1,4 +1,4 @@
-"""Upgrade to odev 4.0.0"""
+"""Upgrade to odev 4.0.0."""
 
 from pathlib import Path
 
@@ -7,7 +7,6 @@ from odev.common.odev import Odev
 
 
 def run(odev: Odev) -> None:
-
     # --- Update config file ---------------------------------------------------
 
     interval = odev.config.parser.get("update", "check_interval", fallback="1")

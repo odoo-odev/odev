@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar, Dict, Literal, Optional
+from typing import ClassVar, Literal
 
 from odev.common import string
 from odev.common.connectors.rpc import RpcConnector
@@ -71,8 +71,8 @@ class Repository:
         return f"https://github.com/{self.full_name}"
 
 
-DatabaseInfoSection = Dict[str, str]
-DatabaseInfo = Dict[str, DatabaseInfoSection]
+DatabaseInfoSection = dict[str, str]
+DatabaseInfo = dict[str, DatabaseInfoSection]
 
 
 class Database(OdevFrameworkMixin, ABC):
@@ -87,13 +87,13 @@ class Database(OdevFrameworkMixin, ABC):
     _platform_display: ClassVar[str]
     """The display name of the platform on which the database is running."""
 
-    _filestore: Optional[Filestore] = None
+    _filestore: Filestore | None = None
     """The filestore of the database."""
 
-    _repository: Optional[Repository] = None
+    _repository: Repository | None = None
     """The repository containing custom code for the database."""
 
-    _branch: Optional[Branch] = None
+    _branch: Branch | None = None
     """The branch of the repository containing custom code for the database."""
 
     def __init__(self, name: str, *args, **kwargs):
@@ -117,11 +117,11 @@ class Database(OdevFrameworkMixin, ABC):
 
     @abstractmethod
     def __enter__(self):
-        """Setup connection to the required underlying systems."""
+        """Set up connection to the required underlying systems."""
         raise NotImplementedError
 
     @abstractmethod
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         """Close connection with the required underlying systems."""
         raise NotImplementedError
 
@@ -141,12 +141,12 @@ class Database(OdevFrameworkMixin, ABC):
         raise NotImplementedError
 
     @abstractproperty
-    def version(self) -> Optional[OdooVersion]:
+    def version(self) -> OdooVersion | None:
         """Return the Odoo version of the database."""
         raise NotImplementedError
 
     @abstractproperty
-    def edition(self) -> Optional[Literal["community", "enterprise"]]:
+    def edition(self) -> Literal["community", "enterprise"] | None:
         """Return the Odoo edition of the database."""
         raise NotImplementedError
 
@@ -161,21 +161,21 @@ class Database(OdevFrameworkMixin, ABC):
         raise NotImplementedError
 
     @abstractproperty
-    def expiration_date(self) -> Optional[datetime]:
+    def expiration_date(self) -> datetime | None:
         """Return the expiration date of the database."""
         raise NotImplementedError
 
     @abstractproperty
-    def uuid(self) -> Optional[str]:
+    def uuid(self) -> str | None:
         """Return the UUID of the database."""
         raise NotImplementedError
 
     @abstractproperty
-    def last_access_date(self) -> Optional[datetime]:
+    def last_access_date(self) -> datetime | None:
         """Return the date of the last access to the database."""
 
     @abstractproperty
-    def url(self) -> Optional[str]:
+    def url(self) -> str | None:
         """Return the URL to access the database."""
         raise NotImplementedError
 
@@ -190,17 +190,17 @@ class Database(OdevFrameworkMixin, ABC):
         raise NotImplementedError
 
     @abstractproperty
-    def rpc_port(self) -> Optional[int]:
+    def rpc_port(self) -> int | None:
         """Return the port used by the Odoo RPC interface."""
         raise NotImplementedError
 
     @abstractproperty
-    def repository(self) -> Optional[Repository]:
+    def repository(self) -> Repository | None:
         """The repository containing custom code for the database."""
         raise NotImplementedError
 
     @abstractproperty
-    def branch(self) -> Optional[Branch]:
+    def branch(self) -> Branch | None:
         """Return information about the branch of the repository containing custom
         code for the database.
         """
@@ -209,6 +209,7 @@ class Database(OdevFrameworkMixin, ABC):
     @property
     def models(self) -> RpcConnector:
         """Accessor for the models in the database, interfaced through the odoolib proxy.
+
         >>> self.models["res.partner"].search_count([])
         """
         return self.rpc
@@ -225,8 +226,9 @@ class Database(OdevFrameworkMixin, ABC):
         """Neutralize the database and make it suitable for development."""
         raise NotImplementedError(f"Database neutralization not implemented for {self.platform.display} databases")
 
-    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Path:
+    def dump(self, filestore: bool = False, path: Path | None = None) -> Path:
         """Generate a dump file for the database.
+
         :param filestore: Whether to include the filestore in the dump.
         :param path: The path to the dump file.
         :return: The path to the dump file.
@@ -243,8 +245,8 @@ class Database(OdevFrameworkMixin, ABC):
     def _get_dump_filename(
         self,
         filestore: bool = False,
-        suffix: Optional[str] = None,
-        extension: Optional[str] = None,
+        suffix: str | None = None,
+        extension: str | None = None,
     ) -> str:
         """Return the filename of the dump file.
         :param filestore: Whether to include the filestore in the dump.
@@ -319,12 +321,12 @@ class DummyDatabase(Database):
         return False
 
     @property
-    def version(self) -> Optional[OdooVersion]:
+    def version(self) -> OdooVersion | None:
         """Return the Odoo version of the database."""
         return None
 
     @property
-    def edition(self) -> Optional[Literal["community", "enterprise"]]:
+    def edition(self) -> Literal["community", "enterprise"] | None:
         """Return the Odoo edition of the database."""
         return None
 
@@ -339,22 +341,22 @@ class DummyDatabase(Database):
         return 0
 
     @property
-    def expiration_date(self) -> Optional[datetime]:
+    def expiration_date(self) -> datetime | None:
         """Return the expiration date of the database."""
         return None
 
     @property
-    def uuid(self) -> Optional[str]:
+    def uuid(self) -> str | None:
         """Return the UUID of the database."""
         return None
 
     @property
-    def last_access_date(self) -> Optional[datetime]:
+    def last_access_date(self) -> datetime | None:
         """Return the date of the last access to the database."""
         return None
 
     @property
-    def url(self) -> Optional[str]:
+    def url(self) -> str | None:
         """Return the URL to access the database."""
         return None
 
@@ -369,17 +371,17 @@ class DummyDatabase(Database):
         return False
 
     @property
-    def rpc_port(self) -> Optional[int]:
+    def rpc_port(self) -> int | None:
         """Return the port used by the Odoo RPC interface."""
         return None
 
     @property
-    def repository(self) -> Optional[Repository]:
+    def repository(self) -> Repository | None:
         """The repository containing custom code for the database."""
         return None
 
     @property
-    def branch(self) -> Optional[Branch]:
+    def branch(self) -> Branch | None:
         """Return information about the branch of the repository containing custom
         code for the database.
         """
@@ -388,5 +390,5 @@ class DummyDatabase(Database):
     def __enter__(self):
         return self
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         pass

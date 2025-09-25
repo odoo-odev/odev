@@ -1,4 +1,4 @@
-from typing import Generator
+from collections.abc import Generator
 
 from odev.common import args, progress
 from odev.common.commands import Command

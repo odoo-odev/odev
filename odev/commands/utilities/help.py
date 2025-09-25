@@ -1,7 +1,6 @@
 """Gets help about commands."""
 
 import textwrap
-from typing import List, Tuple
 
 from rich.markup import escape
 
@@ -75,11 +74,11 @@ class HelpCommand(Command):
 
         if command._aliases:
             aliases = f"""
-                [bold underline]Aliases:[/bold underline] {', '.join(command._aliases)}
+                [bold underline]Aliases:[/bold underline] {", ".join(command._aliases)}
             """
             message += string.dedent(aliases, message_options_indent - message_indent)
 
-        positional_arguments: List[Tuple[str, str]] = [
+        positional_arguments: list[tuple[str, str]] = [
             (arg.__dict__["dest"], string.normalize_indent(arg.__dict__["help"]))
             for arg in parser._positionals._group_actions
         ]
@@ -92,7 +91,7 @@ class HelpCommand(Command):
             """
             message += string.dedent(positionals, message_options_indent - message_indent)
 
-        optional_arguments: List[Tuple[str, str]] = [
+        optional_arguments: list[tuple[str, str]] = [
             (", ".join(arg.__dict__["option_strings"]), string.normalize_indent(arg.__dict__["help"]))
             for arg in parser._optionals._group_actions
         ]

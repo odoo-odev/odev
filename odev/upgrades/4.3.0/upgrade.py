@@ -1,4 +1,4 @@
-"""Upgrade to odev 4.3.0
+"""Upgrade to odev 4.3.0.
 
 Migrate existing secrets to the new table structure.
 
@@ -18,6 +18,12 @@ from odev.common.odev import Odev
 
 
 logger = logging.getLogger(__name__)
+
+
+NAME_SPLIT_LENGTHS = {
+    "local": 2,
+    "remote": 3,
+}
 
 
 def run(odev: Odev) -> None:
@@ -50,19 +56,19 @@ def run(odev: Odev) -> None:
 
         if name == "odoo.com:pass":
             name, scope, platform = "accounts.odoo.com", "user", ""
-        elif name.endswith(":pass") or name.endswith(":rpc"):
+        elif name.endswith((":pass", ":rpc")):
             scope = "user"
             split = name.split(":")
 
-            if len(split) == 2:
+            if len(split) == NAME_SPLIT_LENGTHS["local"]:
                 name, platform = split[0], "local"
-            elif len(split) == 3:
+            elif len(split) == NAME_SPLIT_LENGTHS["remote"]:
                 name, platform = split[1], "remote"
-        elif name.endswith(":session_id") or name.endswith(":td_id"):
+        elif name.endswith((":session_id", ":td_id")):
             platform = ""
             name, scope = name.split(":")
         else:
-            name, scope, platform = name, "", ""
+            scope, platform = "", ""
 
         odev.store.query(
             f"""

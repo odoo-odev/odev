@@ -43,16 +43,16 @@ class CaptureOutput:
         return self
 
     def __exit__(self, *args):
-        assert self._stdout_handler is not None
-        assert self._stderr_handler is not None
+        if self._stdout_handler is None or self._stderr_handler is None:
+            raise AssertionError("CaptureOutput not properly initialized")
 
         for logger in logging.Logger.manager.loggerDict.values():
             if isinstance(logger, logging.Logger):
                 logger.removeHandler(self._stdout_handler)
                 logger.removeHandler(self._stderr_handler)
 
-        assert self._stderr is not None
-        assert self._stdout is not None
+        if self._stderr is None or self._stdout is None:
+            raise AssertionError("CaptureOutput streams not properly initialized")
 
         self._stdout_value = re.sub(RE_STYLE_BLOCKS, r"\1", self._stdout.getvalue())
         self._stderr_value = re.sub(RE_STYLE_BLOCKS, r"\1", self._stderr.getvalue())

@@ -1,6 +1,5 @@
 """Clone the Git repository for a database."""
 
-
 from odev.common import args
 from odev.common.commands import DatabaseOrRepositoryCommand
 from odev.common.connectors import GitConnector

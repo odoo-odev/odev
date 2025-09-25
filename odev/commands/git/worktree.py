@@ -1,6 +1,5 @@
 """Manage git worktrees used within odev."""
 
-
 from odev.common import args, progress
 from odev.common.commands import GitCommand
 from odev.common.connectors.git import GitConnector
@@ -79,7 +78,8 @@ class WorktreeCommand(GitCommand):
         """Prune worktrees."""
         with progress.spinner("Looking for prunable worktrees"):
             if not any(worktree.prunable for worktree in self.worktrees):
-                return logger.info("No worktrees to prune")
+                logger.info("No worktrees to prune")
+                return
 
         with progress.spinner("Pruning worktrees"):
             for repository in self.repositories:
@@ -137,16 +137,15 @@ class WorktreeCommand(GitCommand):
 
             if s.startswith("saas-"):
                 return (1, version_to_float(s.split("-")[1]))
-            elif s.startswith("staging.saas-"):
+            if s.startswith("staging.saas-"):
                 return (3, version_to_float(s.split("-")[1]))
-            elif s.startswith("staging."):
+            if s.startswith("staging."):
                 return (2, version_to_float(s.split(".")[1]))
-            elif s.startswith("tmp.saas-"):
+            if s.startswith("tmp.saas-"):
                 return (5, version_to_float(s.split("-")[1]))
-            elif s.startswith("tmp."):
+            if s.startswith("tmp."):
                 return (4, version_to_float(s.split(".")[1]))
-            else:
-                return (0, version_to_float(s))
+            return (0, version_to_float(s))
 
         branches = sorted(repository.list_remote_branches(), key=sort_key)
         ref = self.console.fuzzy(

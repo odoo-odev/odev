@@ -2,8 +2,6 @@ from datetime import datetime
 from typing import (
     ClassVar,
     Literal,
-    Optional,
-    Tuple,
     cast,
 )
 from urllib.parse import urlparse
@@ -25,16 +23,16 @@ class RemoteDatabase(Database):
     _url: str
     """The URL of the remote database."""
 
-    _filestore: Optional[Filestore] = None
+    _filestore: Filestore | None = None
     """The filestore of the database."""
 
-    _repository: Optional[Repository] = None
+    _repository: Repository | None = None
     """The repository containing custom code for the database."""
 
-    _branch: Optional[Branch] = None
+    _branch: Branch | None = None
     """The branch of the repository containing custom code for the database."""
 
-    def __init__(self, url: str, name: Optional[str] = None) -> None:
+    def __init__(self, url: str, name: str | None = None) -> None:
         super().__init__(url)
         self._name, self._url = self.get_name_from_url(url)
 
@@ -48,7 +46,7 @@ class RemoteDatabase(Database):
     def __exit__(self, *args):
         self.rpc.__exit__(*args)
 
-    def get_name_from_url(self, url: str) -> Tuple[str, str]:
+    def get_name_from_url(self, url: str) -> tuple[str, str]:
         """Infer the name of the database from its URL or its URL from its name."""
         parsed = urlparse(url)
 
@@ -66,7 +64,7 @@ class RemoteDatabase(Database):
         return bool(self.rpc["ir.module.module"].search_count([("name", "=", "base")]))
 
     @property
-    def version(self) -> Optional[OdooVersion]:
+    def version(self) -> OdooVersion | None:
         version = (
             self.rpc["ir.module.module"]
             .search_read(
@@ -93,7 +91,7 @@ class RemoteDatabase(Database):
         return "community"
 
     @property
-    def filestore(self) -> Optional[Filestore]:
+    def filestore(self) -> Filestore | None:
         return None
 
     @property
@@ -101,7 +99,7 @@ class RemoteDatabase(Database):
         return 0
 
     @property
-    def expiration_date(self) -> Optional[datetime]:
+    def expiration_date(self) -> datetime | None:
         date = (
             self.rpc["ir.config_parameter"]
             .search_read([("key", "=", "database.expiration_date")], ["value"])[0]
@@ -110,13 +108,13 @@ class RemoteDatabase(Database):
         return datetime.strptime(date, DATETIME_FORMAT) if isinstance(date, str) else None
 
     @property
-    def uuid(self) -> Optional[str]:
+    def uuid(self) -> str | None:
         return cast(
             str, self.rpc["ir.config_parameter"].search_read([("key", "=", "database.uuid")], ["value"])[0].get("value")
         )
 
     @property
-    def last_access_date(self) -> Optional[datetime]:
+    def last_access_date(self) -> datetime | None:
         date = (
             self.rpc["res.users.log"]
             .search_read([], ["create_date"], order="create_date desc", limit=1)[0]
@@ -145,9 +143,9 @@ class RemoteDatabase(Database):
         return self.exists
 
     @property
-    def repository(self) -> Optional[Repository]:
+    def repository(self) -> Repository | None:
         return None
 
     @property
-    def branch(self) -> Optional[Branch]:
+    def branch(self) -> Branch | None:
         return None

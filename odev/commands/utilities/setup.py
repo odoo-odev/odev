@@ -3,15 +3,12 @@
 import inspect
 import pkgutil
 import textwrap
+from collections.abc import Generator
 from importlib import import_module
 from importlib.util import find_spec
 from types import ModuleType
 from typing import (
     TYPE_CHECKING,
-    Generator,
-    List,
-    Optional,
-    Tuple,
     cast,
 )
 
@@ -43,7 +40,7 @@ class SetupCommand(Command):
         else:
             self.run_setup()
 
-    def run_setup(self, name: Optional[str] = None) -> None:
+    def run_setup(self, name: str | None = None) -> None:
         """Run the entire setup."""
         package = self.odev.setup_path.relative_to(self.odev.path).as_posix().replace("/", ".")
 
@@ -58,9 +55,9 @@ class SetupCommand(Command):
         # During tests, the Odev instance is a patched property and we get the Odev instance back from the class
         # instead of a property object as we would outside tests; I don't like this workaround, but it's the best
         # solution I could come up with...
-        odev = cast("Odev", cls.odev.fget(cls) if isinstance(cls.odev, property) and cls.odev.fget else cls.odev)  # type: ignore [attr-defined] # noqa: B950 [line too long]
+        odev = cast("Odev", cls.odev.fget(cls) if isinstance(cls.odev, property) and cls.odev.fget else cls.odev)  # type: ignore [attr-defined]
         package = odev.setup_path.relative_to(odev.path).as_posix().replace("/", ".")
-        scripts: List[Tuple[str, str]] = [
+        scripts: list[tuple[str, str]] = [
             (script.__name__, string.normalize_indent(script.__doc__ or "No description."))
             for script in cls.__import_setup_scripts(package)
         ]
@@ -69,7 +66,7 @@ class SetupCommand(Command):
         cls._description += textwrap.dedent(
             f"""
 
-            {string.stylize('Available categories:', 'bold underline')}
+            {string.stylize("Available categories:", "bold underline")}
 
             {string.format_options_list(scripts, indent_len=len(max(script_names, key=len)) + 1, blanks=1)}
             """
@@ -80,11 +77,14 @@ class SetupCommand(Command):
     @classmethod
     def __import_setup_scripts(cls, package: str) -> Generator[ModuleType, None, None]:
         """Import all setup scripts from the setup directory.
+
         :return: Imported setup modules
         :rtype: Generator[ModuleType]
         """
         loader = find_spec(package)
-        assert loader is not None and loader.submodule_search_locations, "Could not find the setup module"
+
+        if loader is None or loader.submodule_search_locations is None:
+            raise ImportError(f"Could not find the setup package {package!r}")
 
         submodules = sorted(
             (

@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 from odev.setup import completion, directories, symlink, update
+
 from tests.fixtures import OdevTestCase
 
 

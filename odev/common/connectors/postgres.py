@@ -1,17 +1,11 @@
 """PostgreSQL connector."""
 
 import textwrap
+from collections.abc import Mapping, MutableMapping, Sequence
 from contextlib import contextmanager, nullcontext
 from typing import (
     ClassVar,
-    List,
     Literal,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
 )
 
 import psycopg2
@@ -20,6 +14,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT, QueryCanceledError, 
 from odev.common import string
 from odev.common.connectors import Connector
 from odev.common.console import console
+from odev.common.errors import ConnectorError
 from odev.common.logging import DEBUG_SQL, LOG_LEVEL, logging
 from odev.common.signal_handling import capture_signals
 from odev.common.thread import Thread
@@ -45,7 +40,7 @@ class Cursor(PsycopgCursor):
             yield
         except Exception as e:
             self.execute("ROLLBACK")
-            raise e
+            raise e from e
         finally:
             self.execute("COMMIT")
 
@@ -56,19 +51,19 @@ class PostgresConnector(Connector):
     _fallback_database: ClassVar[str] = DEFAULT_DATABASE
     """The database to connect to if none is specified."""
 
-    _connection: Optional[psycopg2.extensions.connection] = None
+    _connection: psycopg2.extensions.connection | None = None
     """The instance of a connection to the database engine."""
 
-    _query_cache: ClassVar[MutableMapping[Tuple[str, str], Union[List[tuple], Literal[False]]]] = {}
+    _query_cache: ClassVar[MutableMapping[tuple[str, str], list[tuple] | Literal[False]]] = {}
     """Simple cache of queries."""
 
-    cr: Optional[Cursor] = None
+    cr: Cursor | None = None
     """The cursor to the database engine."""
 
     _nocache: bool = False
     """Whether to disable caching of SQL queries."""
 
-    def __init__(self, database: Optional[str] = None):
+    def __init__(self, database: str | None = None):
         """Initialize the connector."""
         super().__init__()
 
@@ -100,7 +95,7 @@ class PostgresConnector(Connector):
             self._connection.close()
             del self._connection
 
-    def invalidate_cache(self, database_name: Optional[str] = None):
+    def invalidate_cache(self, database_name: str | None = None):
         """Invalidate the cache for a given database."""
         database_name = database_name or self.database
         logger.debug(f"Invalidating SQL cache for database {database_name!r}")
@@ -118,16 +113,18 @@ class PostgresConnector(Connector):
     def query(
         self,
         query: str,
-        params: Optional[Sequence] = None,
+        params: Sequence | None = None,
         transaction: bool = True,
-    ) -> Union[Optional[List[tuple]], bool]:
+    ) -> list[tuple] | None | bool:
         """Execute a query and return its result.
 
         :param query: The query to execute.
         :param params: Additional parameters to pass to the cursor.
         :param transaction: Whether to execute the query in a transaction.
         """
-        assert self.cr is not None, "The cursor is not initialized, connect first"
+        if self.cr is None:
+            raise ConnectorError("The cursor is not initialized, connect first", self)
+
         query = textwrap.dedent(query).strip()
         query_lower = query.lower()
         is_select = query_lower.startswith("select")
@@ -165,7 +162,7 @@ class PostgresConnector(Connector):
             except RuntimeError as error:
                 if isinstance(error.__cause__, QueryCanceledError):
                     return False
-                raise error
+                raise error from error
 
             result = expect_result and self.cr.fetchall()
 
@@ -177,7 +174,7 @@ class PostgresConnector(Connector):
 
         return result if expect_result else True
 
-    def create_database(self, database: str, template: Optional[str] = None) -> bool:
+    def create_database(self, database: str, template: str | None = None) -> bool:
         """Create a database.
 
         :param database: The name of the database to create.
@@ -205,7 +202,6 @@ class PostgresConnector(Connector):
 
         :param database: The name of the database to disconnect.
         """
-
         try:
             self.invalidate_cache("postgres")
             self.query(
@@ -298,6 +294,7 @@ class PostgresConnector(Connector):
 
     def columns_exist(self, table: str, columns: list[str]) -> list[str]:
         """Check whether a column exists in a table.
+
         :param table: The name of the table to check.
         :param columns: The name of the column to check.
         :return: Whether the column exists.
@@ -310,17 +307,17 @@ class PostgresConnector(Connector):
             f"""
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_name = '{table}' AND column_name IN ({','.join([f"'{c}'" for c in columns])})
+            WHERE table_name = '{table}' AND column_name IN ({",".join([f"'{c}'" for c in columns])})
             """,
         )
 
         if results and isinstance(results, list) and columns:
             return [c for c in columns if c not in [r[0] for r in results]]
-        else:
-            return []
+        return []
 
     def create_column(self, table: str, column: str, attributes: str) -> bool:
         """Create a column in a table.
+
         :param table: The name of the table to create the column in.
         :param column: The name of the column to create.
         :param attributes: The attributes of the column.

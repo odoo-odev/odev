@@ -6,6 +6,7 @@ import re
 import shutil
 import sys
 import tempfile
+from collections.abc import Generator, Mapping
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
@@ -15,13 +16,7 @@ from types import FrameType
 from typing import (
     IO,
     ClassVar,
-    Generator,
-    List,
     Literal,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
     Union,
     cast,
 )
@@ -47,25 +42,27 @@ logger = logging.getLogger(__name__)
 ARCHIVE_DUMP = "dump.sql"
 ARCHIVE_FILESTORE = "filestore/"
 
-SQL_DUMP_IGNORE_LINES: Set[str] = {"GRANT CREATE ON SCHEMA public TO odoo;"}
+SQL_DUMP_IGNORE_LINES: set[str] = {"GRANT CREATE ON SCHEMA public TO odoo;"}
+
+NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")
 
 
 class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
 
-    connector: Optional[PostgresConnector] = None
+    connector: PostgresConnector | None = None
     """The PostgreSQL connector of the database."""
 
     _whitelisted: bool = False
     """Whether the database is whitelisted and should not be removed automatically."""
 
-    _filestore: Optional[Filestore] = None
+    _filestore: Filestore | None = None
     """The filestore of the database."""
 
-    _repository: Optional[Repository] = None
+    _repository: Repository | None = None
     """The repository containing custom code for the database."""
 
-    _branch: Optional[Branch] = None
+    _branch: Branch | None = None
     """The branch of the repository containing custom code for the database."""
 
     _platform: ClassVar[Literal["local"]] = "local"  # type: ignore [assignment]
@@ -74,13 +71,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     _platform_display: ClassVar[str] = "Local"
     """The display name of the platform on which the database is running."""
 
-    _venv: Optional[PythonEnv] = None
+    _venv: PythonEnv | None = None
     """The path to the virtual environment of the database."""
 
-    _worktree: Optional[str] = None
+    _worktree: str | None = None
     """The name of the worktree used to run the database."""
 
-    _process: Optional[OdoobinProcess] = None
+    _process: OdoobinProcess | None = None
     """The Odoo process running the database."""
 
     def __init__(self, name: str):
@@ -137,7 +134,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         self.store.databases.set(self)
 
     @property
-    def worktree(self) -> Optional[str]:
+    def worktree(self) -> str | None:
         if self._worktree is None:
             info = self.store.databases.get(self)
 
@@ -159,12 +156,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             yield from self.process.odoo_worktrees
 
     @property
-    def version(self) -> Optional[OdooVersion]:  # type: ignore [override]
+    def version(self) -> OdooVersion | None:  # type: ignore [override]
         if not self.is_odoo:
             return None
 
         with self:
-            assert self.connector is not None
             result = self.connector.query(
                 """
                 SELECT latest_version
@@ -183,7 +179,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return OdooVersion("master")
 
     @cached_property
-    def edition(self) -> Optional[Literal["community", "enterprise"]]:  # type: ignore [override]
+    def edition(self) -> Literal["community", "enterprise"] | None:  # type: ignore [override]
         if not self.is_odoo:
             return None
 
@@ -210,11 +206,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return self._filestore
 
     @property
-    def url(self) -> Optional[str]:
+    def url(self) -> str | None:
         if not self.is_odoo or self.process is None:
             return None
 
-        return self.process.is_running and f"http://localhost:{self.process.rpc_port}" or None
+        return (self.process.is_running and f"http://localhost:{self.process.rpc_port}") or None
 
     @property
     def size(self) -> int:
@@ -231,7 +227,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return cast(int, result[0][0]) if result and result is not True else 0
 
     @property
-    def expiration_date(self) -> Optional[datetime]:
+    def expiration_date(self) -> datetime | None:
         if not self.is_odoo:
             return None
 
@@ -254,7 +250,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return datetime.strptime(result[0][0], "%Y-%m-%d")
 
     @property
-    def uuid(self) -> Optional[str]:
+    def uuid(self) -> str | None:
         if not self.is_odoo:
             return None
 
@@ -271,7 +267,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return None if not result or isinstance(result, bool) else result[0][0]
 
     @property
-    def last_date(self) -> Optional[datetime]:
+    def last_date(self) -> datetime | None:
         """The last date the database was used or accessed."""
         last_access = self.last_access_date
         last_usage = self.last_usage_date
@@ -282,7 +278,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return last_access or last_usage
 
     @property
-    def last_usage_date(self) -> Optional[datetime]:
+    def last_usage_date(self) -> datetime | None:
         """The last date the database was used in a command (with odev)."""
         if not self.is_odoo:
             return None
@@ -300,7 +296,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             return None if not result or isinstance(result, bool) else result[0][0]
 
     @property
-    def last_access_date(self) -> Optional[datetime]:
+    def last_access_date(self) -> datetime | None:
         if not self.is_odoo:
             return None
 
@@ -328,19 +324,19 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return self.process is not None and self.process.is_running
 
     @property
-    def process(self) -> Optional[OdoobinProcess]:
+    def process(self) -> OdoobinProcess | None:
         if self._process is None and self.is_odoo:
             self._process = self._get_process_instance()
 
         return self._process
 
     @process.setter
-    def process(self, value: Optional[OdoobinProcess]):
+    def process(self, value: OdoobinProcess | None):
         """Set the Odoo process of the database."""
         self._process = value
 
     @property
-    def repository(self) -> Optional[Repository]:
+    def repository(self) -> Repository | None:
         if self._repository is None:
             if not self.is_odoo:
                 return None
@@ -362,7 +358,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         self.store.databases.set(self)
 
     @property
-    def branch(self) -> Optional[Branch]:
+    def branch(self) -> Branch | None:
         if self.repository is None:
             return None
 
@@ -411,9 +407,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         )
 
     @property
-    def installed_modules(self) -> List[str]:
+    def installed_modules(self) -> list[str]:
         """List modules that are currently installed on the database."""
-        modules: List[Tuple[str]] = self.query(
+        modules: list[tuple[str]] = self.query(
             """
             SELECT name
             FROM ir_module_module
@@ -432,7 +428,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.version,
         )
 
-    def create(self, template: Optional[str] = None) -> bool:
+    def create(self, template: str | None = None) -> bool:
         """Create the database.
 
         :param template: The name of the template to copy.
@@ -461,16 +457,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     def neutralize(self):
         """Neutralize the database."""
+        max_retries = 5
+
         with self.connector.nocache():
             # Artificially wait for SQL transaction to be committed and for the process to be ready
             # before running the neutralize command
             # This is not clean but it works, I guess
-            while (not self.process or not self.version) and (retries := 0) < 5:
+            while (not self.process or not self.version) and (retries := 0) < max_retries:
                 retries += 1
                 sleep(0.2)
-
-            assert self.process is not None
-            assert self.version is not None
 
         admin = self._db_user_admin()
 
@@ -495,10 +490,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.process.run(["-d", self.name], subcommand="neutralize")
             self.console.print()
 
-        installed_modules: Set[str] = set(self.installed_modules) & {
+        installed_modules: set[str] = set(self.installed_modules) & {
             path.name for path in self.process.additional_addons_paths
         }
-        scripts: List[Path] = [self.odev.static_path / "neutralize-pre.sql"]
+        scripts: list[Path] = [self.odev.static_path / "neutralize-pre.sql"]
 
         with progress.spinner(f"Looking up neutralization scripts in {len(installed_modules)} installed modules"):
             for addon in self.process.additional_addons_paths:
@@ -510,7 +505,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         scripts.append(self.odev.static_path / "neutralize-post.sql")
 
-        if self.version.major < 15:
+        if self.version < NEUTRALIZE_BEFORE_ODOO_VERSION:
             scripts.append(self.odev.static_path / "neutralize-post-before-15.0.sql")
 
         tracker = progress.Progress()
@@ -519,12 +514,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.start()
 
         for python_file in scripts:
-            tracker.update(task, advance=1, description=self.console.render_str(f"Running {python_file.as_posix()}"))  # type: ignore [attr-defined]  # noqa: B950
+            tracker.update(task, advance=1, description=self.console.render_str(f"Running {python_file.as_posix()}"))  # type: ignore [attr-defined]
             self.query(python_file.read_text())
 
         tracker.stop()
 
-    def dump(self, filestore: bool = False, path: Optional[Path] = None) -> Path:
+    def dump(self, filestore: bool = False, path: Path | None = None) -> Path:
         if path is None:
             path = self.odev.dumps_path
 
@@ -564,8 +559,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         def signal_handler_progress(
             signal_number: int,
-            frame: Optional[FrameType] = None,
-            message: Optional[str] = None,
+            frame: FrameType | None = None,
+            message: str | None = None,
         ):
             for task in tracker.tasks:
                 if not task.finished:
@@ -594,13 +589,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if self.connector is not None:
             self.connector.invalidate_cache()
 
-    def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile) -> Optional[Thread]:
+    def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile) -> Thread | None:
         """Restore the filestore from a zip archive.
         :param archive: The archive to restore the filestore from.
         :param tracker: An instance of Progress to track the restore process.
         """
         re_filestore_file = re.compile(rf"^{ARCHIVE_FILESTORE}(?P<dirname>[\da-f]{{2}})/(?P<filename>[\da-f]{{40}})$")
-        info: List[Tuple[re.Match[str], int]] = []
+        info: list[tuple[re.Match[str], int]] = []
 
         for archive_info in archive.filelist:
             file_match = re_filestore_file.match(archive_info.filename)
@@ -646,7 +641,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         self,
         tracker: progress.Progress,
         archive: ZipFile,
-        info: List[Tuple[re.Match[str], int]],
+        info: list[tuple[re.Match[str], int]],
     ):
         """Thread to monitor the restore process of a zipped dump file and update the progress tracker.
         :param tracker: An instance of Progress to track the restore process.
@@ -659,6 +654,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.start()
 
         invalid_blocks: int = 0
+        max_invalid_blocks: int = 10
 
         for match, size in info:
             dirname: str = match.group("dirname")
@@ -673,7 +669,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 except RuntimeError as ex:
                     logger.debug(f"Failed to extract filestore file {filepath.as_posix()}: {ex}")
 
-                    if invalid_blocks <= 10 and "invalid stored block lengths" in str(ex):
+                    if invalid_blocks <= max_invalid_blocks and "invalid stored block lengths" in str(ex):
                         invalid_blocks += 1
                         continue
 
@@ -702,7 +698,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def _restore_buffered_sql(
         self,
         tracker: progress.Progress,
-        dump: Union[gzip.GzipFile, bz2.BZ2File, IO[bytes]],
+        dump: gzip.GzipFile | bz2.BZ2File | IO[bytes],
         bytes_count: int,
         mode: Literal["sql", "dump"] = "sql",
     ) -> Thread:
@@ -723,17 +719,18 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         # In the event the SQL dump doesn't set the unaccent function as immutable, we need to force it on the database
         # ourselves. The creation of the function should be around the 50th line in the SQL file, we crawl up to
         # the 100th to make sure we don't miss it
+        max_lines_to_check = 100
+
         if mode == "sql":
             for index, line in enumerate(dump):
-                if index >= 100 or "LANGUAGE sql IMMUTABLE" in line.decode():
+                if index >= max_lines_to_check or "LANGUAGE sql IMMUTABLE" in line.decode():
                     break
             else:
                 self.unaccent()
 
             dump.seek(0)
 
-        psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, bufsize=-1)
-        assert psql_process.stdin is not None
+        psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, bufsize=-1)  # noqa: S602
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
         thread.start()
 
@@ -751,24 +748,25 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Thread to monitor the restore process of a zipped dump file and update the progress tracker.
         :param process: The process to monitor.
         """
-        assert process.stdout is not None
         for _ in iter(process.stdout.readline, b""):
             if process.poll() is not None:
                 break
 
     def _restore_zip(self, file: Path, tracker: progress.Progress):
         """Restore a database from a zip archive containing a dump file and optionally a filestore.
+
         :param file: The path to the zip archive.
         :param tracker: An instance of Progress to track the restore process.
         """
         with ZipFile(file, "r") as archive:
             if ARCHIVE_DUMP not in archive.namelist():
-                return logger.error(
+                logger.error(
                     f"Invalid dump file {file.as_posix()}, "
                     f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
+                return
 
-            threads: List[Thread] = []
+            threads: list[Thread] = []
 
             if ARCHIVE_FILESTORE in archive.namelist():
                 threads.append(self._restore_zip_filestore(tracker, archive))
@@ -786,7 +784,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
             tracker.stop()
 
-    def _restore_buffer(self, tracker: progress.Progress, dump: Union[gzip.GzipFile, bz2.BZ2File, IO[bytes]]):
+    def _restore_buffer(self, tracker: progress.Progress, dump: gzip.GzipFile | bz2.BZ2File | IO[bytes]):
         """Restore a database from a stream containing a dump file and optionally a filestore.
         :param tracker: An instance of Progress to track the restore process.
         :param dump: The buffered dump file to restore SQL data from.
@@ -825,7 +823,8 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param file: The path to the dump file.
         :param tracker: An instance of Progress to track the restore process.
         """
-        self._restore_buffered_sql(tracker, open(file, "rb"), file.stat().st_size, "dump")
+        with file.open("rb") as dump:
+            self._restore_buffered_sql(tracker, dump, file.stat().st_size, "dump")
 
     @ensure_connected
     def unaccent(self):

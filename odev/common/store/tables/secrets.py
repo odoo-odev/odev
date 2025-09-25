@@ -1,10 +1,11 @@
 from base64 import b64decode, b64encode
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence, Tuple
+from typing import Literal
 
 from paramiko.agent import Agent as SSHAgent, AgentKey
 from paramiko.ssh_exception import SSHException
-from ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt
+from ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt  # noqa: N811
 
 from odev.common.console import console
 from odev.common.errors import OdevError
@@ -62,7 +63,7 @@ class SecretStore(PostgresTable):
     _constraints = {"secrets_unique_name_login_scope_platform": "UNIQUE(name, login, scope, platform)"}
 
     @classmethod
-    def _list_ssh_keys(cls) -> Tuple[AgentKey, ...]:
+    def _list_ssh_keys(cls) -> tuple[AgentKey, ...]:
         """List all SSH keys available in the ssh-agent."""
         keys = SSHAgent().get_keys()
 
@@ -74,11 +75,12 @@ class SecretStore(PostgresTable):
     @classmethod
     def encrypt(cls, plaintext: str) -> str:
         """Symmetrically encrypt a string using ssh-agent.
+
         :param plaintext: The string to encrypt.
         :return: The encrypted string.
         :rtype: str
         """
-        ciphered: Optional[str] = None
+        ciphered: str | None = None
 
         for key in cls._list_ssh_keys():
             try:
@@ -94,11 +96,12 @@ class SecretStore(PostgresTable):
     @classmethod
     def decrypt(cls, ciphertext: str) -> str:
         """Symmetrically decrypt a string using ssh-agent.
+
         :param ciphertext: The string to decrypt.
         :return: The decrypted string.
         :rtype: str
         """
-        deciphered: Optional[str] = None
+        deciphered: str | None = None
 
         for key in cls._list_ssh_keys():
             try:
@@ -117,13 +120,13 @@ class SecretStore(PostgresTable):
 
         return str(deciphered)
 
-    def get(
+    def get(  # noqa: PLR0913
         self,
         key: str,
-        fields: Optional[Sequence[Literal["login", "password"]]] = None,
+        fields: Sequence[Literal["login", "password"]] | None = None,
         scope: str = "",
         platform: str = "",
-        prompt_format: Optional[str] = None,
+        prompt_format: str | None = None,
         ask_missing: bool = True,
         force_ask: bool = False,
     ) -> Secret:
@@ -222,8 +225,9 @@ class SecretStore(PostgresTable):
         name: str,
         scope: str = "",
         platform: str = "",
-    ) -> Optional[Secret]:
+    ) -> Secret | None:
         """Get a secret from the vault.
+
         :param name: The name of the secret.
         :return: The login and password.
         :rtype: Tuple[str, str]

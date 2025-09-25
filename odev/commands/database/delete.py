@@ -53,7 +53,8 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
             self.confirm_delete()
 
             with progress.spinner(f"Dropping database {self._database.name!r}"):
-                return self.delete_one(self._database)
+                self.delete_one(self._database)
+                return
 
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
@@ -128,10 +129,12 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
     def remove_venv(self, database: LocalDatabase):
         """Remove the venv linked to this database if not used by any other database."""
         if database.venv is None or not database.venv.exists:
-            return logger.debug(f"No virtual environment found for database {database.name!r}")
+            logger.debug(f"No virtual environment found for database {database.name!r}")
+            return
 
         if database.venv._global:
-            return logger.debug(f"Virtual environment {database.venv.name!r} is global and cannot be removed")
+            logger.debug(f"Virtual environment {database.venv.name!r} is global and cannot be removed")
+            return
 
         with database.psql(self.odev.name) as psql, psql.nocache():
             using_venv = psql.query(
@@ -143,16 +146,21 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
                 """
             )
 
-        if using_venv is not None and not isinstance(using_venv, bool) and not using_venv[0][0]:
-            if self.console.confirm(f"Virtual environment {database.venv.name!r} is no longer used, remove it?"):
-                database.venv.remove()
+        if (
+            using_venv is not None
+            and not isinstance(using_venv, bool)
+            and not using_venv[0][0]
+            and self.console.confirm(f"Virtual environment {database.venv.name!r} is no longer used, remove it?")
+        ):
+            database.venv.remove()
 
     def remove_filestore(self, database: LocalDatabase):
         """Remove the filestore linked to this database."""
         filestore = database.filestore.path
 
         if filestore is None or not filestore.exists():
-            return logger.debug(f"No filestore found for database {database.name!r}")
+            logger.debug(f"No filestore found for database {database.name!r}")
+            return
 
         filestore_path = filestore.as_posix()
         shutil.rmtree(filestore_path)

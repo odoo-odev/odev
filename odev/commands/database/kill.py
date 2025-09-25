@@ -41,7 +41,9 @@ class KillCommand(LocalDatabaseCommand):
 
             # Wait for up to 3 seconds total with 5 retries until the process is gone
             retries: int = 0
-            while self.odoobin.is_running and retries < 5:
+            max_retries: int = 5
+
+            while self.odoobin.is_running and retries < max_retries:
                 retries += 1
                 sleep(0.2 * retries)
 

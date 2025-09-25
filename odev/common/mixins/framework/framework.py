@@ -20,7 +20,7 @@ class OdevFrameworkMixin(ABC):
     def __init__(self, *args, **kwargs):
         """Initialize the mixin."""
         super().__init__(*args, **kwargs)
-        from odev.common import framework
+        from odev.common import framework  # noqa: PLC0415 - avoid circular import at top level
 
         self.__class__._framework = framework
 

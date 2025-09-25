@@ -2,13 +2,8 @@ import inspect
 import re
 from abc import ABC
 from argparse import Namespace
-from typing import (
-    ClassVar,
-    Mapping,
-    Optional,
-    Sequence,
-    Union,
-)
+from collections.abc import Mapping, Sequence
+from typing import ClassVar
 
 from odev.common import args, progress, string
 from odev.common.commands import Command
@@ -20,11 +15,7 @@ from odev.common.logging import logging
 logger = logging.getLogger(__name__)
 
 
-DatabaseType = Union[
-    LocalDatabase,
-    RemoteDatabase,
-    DummyDatabase,
-]
+DatabaseType = LocalDatabase | RemoteDatabase | DummyDatabase
 
 
 class DatabaseCommand(Command, ABC):
@@ -74,9 +65,9 @@ class DatabaseCommand(Command, ABC):
 
     # --------------------------------------------------------------------------
 
-    def __init__(self, args: Namespace, database: Optional[DatabaseType] = None, **kwargs):
+    def __init__(self, args: Namespace, database: DatabaseType | None = None, **kwargs):
         super().__init__(args, **kwargs)
-        self.database_name: Optional[str] = self.args.database or None
+        self.database_name: str | None = self.args.database or None
         """The database name specified by the user."""
 
         self._database: DatabaseType = DummyDatabase()
@@ -120,7 +111,8 @@ class DatabaseCommand(Command, ABC):
 
     def infer_database_instance(self) -> DatabaseType:
         """Return the database instance to use with this command, inferred from the database's name."""
-        assert self.database_name is not None
+        if self._database.name is None:
+            raise CommandError("No database specified", self)
 
         if hasattr(self.args, "platform") and self.args.platform:
             allowed_database_classes = [self._database_platforms[self.args.platform]]
@@ -131,19 +123,19 @@ class DatabaseCommand(Command, ABC):
                 if key in self._database_allowed_platforms
             ]
 
-        for DatabaseClass in allowed_database_classes:
+        for database_cls in allowed_database_classes:
             with progress.spinner(
-                f"Searching for existing {DatabaseClass._platform_display} database {self.database_name!r}"
+                f"Searching for existing {database_cls._platform_display} database {self.database_name!r}"
             ):
                 database: DatabaseType
 
-                if "branch" in inspect.getfullargspec(DatabaseClass.__init__).args and self.args.branch:
-                    database = DatabaseClass(self.database_name, branch=self.args.branch)  # type: ignore [call-arg]
+                if "branch" in inspect.getfullargspec(database_cls.__init__).args and self.args.branch:
+                    database = database_cls(self.database_name, branch=self.args.branch)  # type: ignore [call-arg]
                 else:
-                    database = DatabaseClass(self.database_name)
+                    database = database_cls(self.database_name)
 
                 if database.exists:
-                    logger.debug(f"Found existing {DatabaseClass._platform_display} database {database.name!r}")
+                    logger.debug(f"Found existing {database_cls._platform_display} database {database.name!r}")
                     return database
 
         if hasattr(self.args, "platform") and self.args.platform:

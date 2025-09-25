@@ -19,8 +19,9 @@ ODOO_REPOSITORIES = ["odoo", "enterprise", "design-themes"]
 # --- Setup --------------------------------------------------------------------
 
 
-def setup(odev: Odev) -> None:
+def setup(odev: Odev) -> None:  # noqa: PLR0912
     """Import Odoo repositories if already downloaded.
+
     :param config: Odev configuration
     """
     if not console.confirm("Have you already downloaded Odoo repositories on this computer?"):
@@ -97,4 +98,4 @@ def setup(odev: Odev) -> None:
         else:
             logger.debug(f"Path {old_repo_path} does not exist, skipping")
 
-    logger.info(f"Moved {len(repositories)} repositories to {new_parent_path}")
+    return logger.info(f"Moved {len(repositories)} repositories to {new_parent_path}")

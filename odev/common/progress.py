@@ -2,7 +2,7 @@
 stacked on top of each other.
 """
 
-from typing import ClassVar, List, Optional
+from typing import ClassVar
 
 from rich.console import RenderableType
 from rich.markup import escape
@@ -48,7 +48,10 @@ class Progress(RichProgress):
             filter(lambda handler: isinstance(handler, OdevRichHandler), logger.root.handlers),
             OdevRichHandler(console=console),
         )
-        assert isinstance(handler, OdevRichHandler)
+
+        if not isinstance(handler, OdevRichHandler):
+            raise TypeError("No OdevRichHandler found in root logger handlers")
+
         log_info_symbol: str = escape(handler.get_level_symbol_text(logging.INFO))
 
         columns = [
@@ -95,7 +98,7 @@ class StackedStatus(Status):
     by stopping the previous one when starting a new one, then resuming the previous one after.
     """
 
-    _stack: ClassVar[List[Status]] = []
+    _stack: ClassVar[list[Status]] = []
     """Stack of active statuses."""
 
     _paused: ClassVar[bool] = False
@@ -128,7 +131,7 @@ class StackedStatus(Status):
             console.is_live = False
 
     @property
-    def stack(self) -> List[Status]:
+    def stack(self) -> list[Status]:
         """Return the stack of active statuses."""
         return self.__class__._stack
 
@@ -154,16 +157,15 @@ class StackedStatus(Status):
 
     def update(
         self,
-        status: Optional[RenderableType] = None,
+        status: RenderableType | None = None,
         *,
-        spinner: Optional[str] = None,
-        spinner_style: Optional[StyleType] = None,
-        speed: Optional[float] = None,
+        spinner: str | None = None,
+        spinner_style: StyleType | None = None,
+        speed: float | None = None,
     ) -> None:
-        if status is not None:
-            if isinstance(status, str):
-                status = string.normalize_indent(status)
-                status = console.render_str(status)
+        if status is not None and isinstance(status, str):
+            status = string.normalize_indent(status)
+            status = console.render_str(status)
 
         return super().update(status, spinner=spinner, spinner_style=spinner_style, speed=speed)
 

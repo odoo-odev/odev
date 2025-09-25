@@ -2,8 +2,9 @@
 
 import re
 from collections import defaultdict
+from collections.abc import Mapping, MutableMapping
 from pathlib import Path
-from typing import List, Mapping, MutableMapping, cast
+from typing import cast
 
 from odev.common import args, string
 from odev.common.commands import OdoobinCommand
@@ -39,10 +40,10 @@ class TestCommand(OdoobinCommand):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.test_files: List[str] = []
+        self.test_files: list[str] = []
         """List of test files to run."""
 
-        self.test_tags: List[str] = []
+        self.test_tags: list[str] = []
         """List of test tags to run."""
 
         for test in self.args.tests:
@@ -52,7 +53,7 @@ class TestCommand(OdoobinCommand):
         self.test_database: LocalDatabase = LocalDatabase(self.generate_test_database_name())
         """Test database to create."""
 
-        self.test_buffer: List[str] = []
+        self.test_buffer: list[str] = []
         """Buffer to store the output of odoo-bin running on the test database."""
 
         self.last_level = ""
@@ -136,7 +137,8 @@ class TestCommand(OdoobinCommand):
                 self.test_buffer.append(line)
 
             color = f"logging.level.{self.last_level}" if self.last_level in problematic_test_levels else "color.black"
-            return self.print(string.stylize(line, color), highlight=False, soft_wrap=False)
+            self.print(string.stylize(line, color), highlight=False, soft_wrap=False)
+            return
 
         self.last_level = match.group("level").lower()
 
@@ -165,21 +167,23 @@ class TestCommand(OdoobinCommand):
     def print_tests_results(self):
         """Print the results of the tests."""
         if not self.test_buffer:
-            return logger.info("No failing tests, congratulations!")
+            logger.info("No failing tests, congratulations!")
+            return
 
         if self.ODOO_LOG_REGEX.match(self.test_buffer.pop()) is None:
-            return self.error("Cannot fetch tests results, check the odoo-bin output for more information")
+            self.error("Cannot fetch tests results, check the odoo-bin output for more information")
+            return
 
         for test in self.__tests_details():
             self.__print_test_details(test)
 
         self.print()
 
-    def __tests_details(self) -> List[MutableMapping[str, str]]:
+    def __tests_details(self) -> list[MutableMapping[str, str]]:
         """Loop through the tests buffer and compile a list of tests information."""
-        tests: List[MutableMapping[str, str]] = []
+        tests: list[MutableMapping[str, str]] = []
         test: MutableMapping[str, str] = defaultdict(str)
-        trace: List[str] = []
+        trace: list[str] = []
 
         for line in self.test_buffer:
             match = self.ODOO_LOG_REGEX.match(line)
@@ -204,7 +208,6 @@ class TestCommand(OdoobinCommand):
 
                 if module is not None:
                     test_path = re.sub(rf"^.*?{module}", module, test["logger"]).replace(".", "/")
-                    assert self.test_database.process is not None
                     globs = [p.glob(f"{test_path}.py") for p in self.test_database.process.addons_paths]
                     files = (file for glob in globs for file in glob)
                     test["path"] = cast(Path, next(files, None)).as_posix()

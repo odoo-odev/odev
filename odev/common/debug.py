@@ -1,9 +1,9 @@
 """Shared method for debugging odev or interacting with debuggers."""
 
 import subprocess
+from collections.abc import Generator
 from functools import lru_cache
 from pathlib import Path
-from typing import Generator, Tuple, Union
 
 from odev.common import bash, string
 from odev.common.logging import logging
@@ -17,7 +17,7 @@ DEBUG_MODE: bool = False
 
 
 @lru_cache
-def find_debuggers(root: Union[str, Path]) -> Generator[Tuple[Path, int], None, None]:
+def find_debuggers(root: str | Path) -> Generator[tuple[Path, int], None, None]:
     """Find all call to interactive debuggers in the given directory and its subdirectories.
     :param root: The directory to search for debugger instances.
     :return: A generator of tuples containing the file path and the line number of the call to the debugger.

@@ -11,11 +11,10 @@ class ConnectorError(OdevError):
     """Custom exception for errors raised while using a connector."""
 
     def __init__(self, message: str, connector: "Connector", *args, **kwargs):
-        """
-        Initialize the exception.
+        """Initialize the exception.
 
         :param message: the error message.
         :param command: the connector that raised the exception.
         """
         super().__init__(message, *args, **kwargs)
-        self.connector: "Connector" = connector
+        self.connector: Connector = connector

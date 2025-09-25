@@ -3,22 +3,14 @@
 import re
 import shlex
 from ast import literal_eval
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
     TYPE_CHECKING,
-    Callable,
-    Generator,
-    List,
     Literal,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
     cast,
 )
 
@@ -41,18 +33,18 @@ if TYPE_CHECKING:
     from odev.common.databases import LocalDatabase
 
 
-__all__ = ["OdoobinProcess", "ODOO_PYTHON_VERSIONS"]
+__all__ = ["ODOO_PYTHON_VERSIONS", "OdoobinProcess"]
 
 
 logger = logging.getLogger(__name__)
 
 
-ODOO_COMMUNITY_REPOSITORIES: List[str] = [
+ODOO_COMMUNITY_REPOSITORIES: list[str] = [
     "odoo/odoo",
     "odoo/design-themes",
 ]
 
-ODOO_ENTERPRISE_REPOSITORIES: List[str] = ["odoo/enterprise"]
+ODOO_ENTERPRISE_REPOSITORIES: list[str] = ["odoo/enterprise"]
 
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
     16: "3.10",
@@ -64,7 +56,7 @@ ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
 
 def odoo_repositories(enterprise: bool = True) -> Generator[GitConnector, None, None]:
     """List of Odoo repositories depending on the edition passed."""
-    repo_names: List[str] = [*ODOO_COMMUNITY_REPOSITORIES]
+    repo_names: list[str] = [*ODOO_COMMUNITY_REPOSITORIES]
 
     if enterprise:
         for repo_name in ODOO_ENTERPRISE_REPOSITORIES:
@@ -80,9 +72,9 @@ class OdoobinProcess(OdevFrameworkMixin):
     def __init__(
         self,
         database: "LocalDatabase",
-        venv: Optional[str] = None,
-        worktree: Optional[str] = None,
-        version: Optional[OdooVersion] = None,
+        venv: str | None = None,
+        worktree: str | None = None,
+        version: OdooVersion | None = None,
     ):
         """Initialize the OdoobinProcess object."""
         super().__init__()
@@ -90,18 +82,18 @@ class OdoobinProcess(OdevFrameworkMixin):
         self.database: LocalDatabase = database
         """Database this process is for."""
 
-        self._version: Optional[OdooVersion] = version or self.database.version or OdooVersion("master")
+        self._version: OdooVersion | None = version or self.database.version or OdooVersion("master")
         """Force the version of Odoo when running the process."""
 
         odoo_branch = self._get_version()
 
-        self._forced_venv_name: Optional[str] = venv
+        self._forced_venv_name: str | None = venv
         """Forced name of the virtual environment to use."""
 
         self._venv_name: str = odoo_branch
         """Name of the virtual environment to use."""
 
-        self._forced_worktree_name: Optional[str] = worktree
+        self._forced_worktree_name: str | None = worktree
         """Forced name of the worktree to use."""
 
         self._worktree_name: str = odoo_branch
@@ -110,10 +102,10 @@ class OdoobinProcess(OdevFrameworkMixin):
         self.repository: GitConnector = GitConnector("odoo/odoo")
         """Github repository of Odoo."""
 
-        self._additional_addons_paths: List[Path] = []
+        self._additional_addons_paths: list[Path] = []
         """List of additional addons paths to use when starting the Odoo process."""
 
-        self._venv: Optional[PythonEnv] = None
+        self._venv: PythonEnv | None = None
         """Cached python virtual environment used by the Odoo installation."""
 
         self._force_enterprise: bool = False
@@ -139,7 +131,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return self._venv
 
     @property
-    def version(self) -> Optional[OdooVersion]:
+    def version(self) -> OdooVersion | None:
         """Version of Odoo running in this process."""
         if self._version is not None:
             return self._version
@@ -181,7 +173,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return self.odev.home_path / "virtualenvs" / str(self._forced_venv_name or self._venv_name)
 
     @property
-    def pid(self) -> Optional[int]:
+    def pid(self) -> int | None:
         """Return the process id of the current database if it is running."""
         process = self._get_ps_process()
 
@@ -196,7 +188,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return int(pid)
 
     @property
-    def command(self) -> Optional[str]:
+    def command(self) -> str | None:
         """Return the command of the process of the current database if it is running."""
         process = self._get_ps_process()
 
@@ -206,7 +198,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return " ".join(re.split(r"\s+", process)[10:])
 
     @property
-    def rpc_port(self) -> Optional[int]:
+    def rpc_port(self) -> int | None:
         """Return the RPC port of the process of the current database if it is running."""
         if not self.command:
             return None
@@ -230,7 +222,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return GitConnector("odoo/support-tools")
 
     @property
-    def additional_addons_paths(self) -> List[Path]:
+    def additional_addons_paths(self) -> list[Path]:
         """Return the list of additional addons paths."""
         if not self._additional_addons_paths and self.database.repository:
             repository = GitConnector(self.database.repository.full_name)
@@ -241,7 +233,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return self._additional_addons_paths
 
     @additional_addons_paths.setter
-    def additional_addons_paths(self, value: List[Path]):
+    def additional_addons_paths(self, value: list[Path]):
         """Set the list of additional addons paths."""
         self._additional_addons_paths = value
 
@@ -261,7 +253,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                     yield worktree
 
     @property
-    def odoo_addons_paths(self) -> List[Path]:
+    def odoo_addons_paths(self) -> list[Path]:
         """Return the list of Odoo addons paths."""
         return [
             worktree.path / addon
@@ -271,7 +263,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         ]
 
     @property
-    def addons_paths(self) -> List[Path]:
+    def addons_paths(self) -> list[Path]:
         """Return the list of addons paths."""
         return [
             path.expanduser()
@@ -292,7 +284,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         )
         return (path for glob in globs for path in glob if not re.search(r"/iot.*/requirements.txt$", str(path)))
 
-    def with_edition(self, edition: Optional[Literal["community", "enterprise"]] = None) -> "OdoobinProcess":
+    def with_edition(self, edition: Literal["community", "enterprise"] | None = None) -> "OdoobinProcess":
         """Return the OdoobinProcess instance with the given edition forced."""
         if edition is None:
             edition = "enterprise"
@@ -300,13 +292,13 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._force_enterprise = edition == "enterprise"
         return self
 
-    def with_venv(self, venv: Union[PythonEnv, str]) -> "OdoobinProcess":
+    def with_venv(self, venv: PythonEnv | str) -> "OdoobinProcess":
         """Return the OdoobinProcess instance with the given virtual environment forced."""
         self._forced_venv_name = venv.name if isinstance(venv, PythonEnv) else venv
         self._venv = None
         return self
 
-    def with_version(self, version: Optional[OdooVersion] = None) -> "OdoobinProcess":
+    def with_version(self, version: OdooVersion | None = None) -> "OdoobinProcess":
         """Return the OdoobinProcess instance with the given version forced."""
         if version is None:
             version = OdooVersion("master")
@@ -322,7 +314,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return self
 
     @ttl_cache(ttl=1)
-    def _get_ps_process(self) -> Optional[str]:
+    def _get_ps_process(self) -> str | None:
         """Return the process currently running odoo, if any.
         Grep-ed `ps aux` output.
         """
@@ -335,7 +327,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         return None
 
-    def _get_python_version(self) -> Optional[str]:
+    def _get_python_version(self) -> str | None:
         """Return the Python version used by the current Odoo installation."""
         if self.version is None:
             return None
@@ -359,12 +351,12 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         :param hard: Send a SIGKILL instead of a SIGTERM to the running process.
         """
-
         if self.pid is not None:
             bash.execute(f"kill -{9 if hard else 2} {self.pid}")
 
     def supports_subcommand(self, subcommand: str) -> bool:
         """Return whether the given subcommand is supported by the current version of Odoo.
+
         :param subcommand: Subcommand to check.
         :return: True if the subcommand is supported, False otherwise.
         :rtype: bool
@@ -377,7 +369,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         return process is not None and "Unknown command" not in output.get()
 
-    def prepare_odoobin_args(self, args: Optional[List[str]] = None, subcommand: Optional[str] = None) -> List[str]:
+    def prepare_odoobin_args(self, args: list[str] | None = None, subcommand: str | None = None) -> list[str]:
         """Prepare the arguments to pass to odoo-bin.
 
         :param args: Additional arguments to pass to odoo-bin.
@@ -388,7 +380,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         home_path = Path("~").expanduser().as_posix()
         addons_paths = ",".join(re.sub(rf"^{home_path}", "~", path.as_posix()) for path in self.addons_paths)
 
-        odoo_bin_args: List[str] = []
+        odoo_bin_args: list[str] = []
         odoo_bin_args.extend(["--database", self.database.name])
         odoo_bin_args.extend(["--addons-path", addons_paths])
         odoo_bin_args.extend(["--log-level", LOG_LEVEL.lower()])
@@ -402,7 +394,8 @@ class OdoobinProcess(OdevFrameworkMixin):
     def prepare_odoobin(self):
         """Prepare the odoo-bin executable and ensure all dependencies are installed."""
         if self.version is None:
-            return logger.warning("No version specified, skipping environment setup")
+            logger.warning("No version specified, skipping environment setup")
+            return
 
         with spinner(f"Preparing worktree {self.worktree!r}"):
             self.update_worktrees()
@@ -413,9 +406,9 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def format_command(
         self,
-        args: Optional[List[str]] = None,
-        subcommand: Optional[str] = None,
-        subcommand_input: Optional[str] = None,
+        args: list[str] | None = None,
+        subcommand: str | None = None,
+        subcommand_input: str | None = None,
     ) -> str:
         """Format the command to run the Odoo process.
         :param args: Additional arguments to pass to odoo-bin
@@ -449,9 +442,9 @@ class OdoobinProcess(OdevFrameworkMixin):
     def deploy(
         self,
         module: Path,
-        args: Optional[List[str]] = None,
-        url: Optional[str] = None,
-    ) -> Optional[CompletedProcess]:
+        args: list[str] | None = None,
+        url: str | None = None,
+    ) -> CompletedProcess | None:
         """Run odoo-bin deploy to import a module on the database at the given URL.
         :param args: Additional arguments to pass to odoo-bin.
         :param url: URL of the database to which import the module.
@@ -459,7 +452,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if args is None:
             args = []
 
-        database: Union[LocalDatabase, RemoteDatabase]
+        database: LocalDatabase | RemoteDatabase
 
         if url is None:
             database = self.database
@@ -482,7 +475,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         odoo_subcommand: str = "deploy"
         odoo_command: str = f"odoo-bin {odoo_subcommand}"
-        odoo_args: List[str] = [
+        odoo_args: list[str] = [
             odoo_subcommand,
             *args,
             module.as_posix(),
@@ -510,16 +503,17 @@ class OdoobinProcess(OdevFrameworkMixin):
             else:
                 return process
 
-    def run(
+    def run(  # noqa: PLR0913
         self,
-        args: Optional[List[str]] = None,
-        subcommand: Optional[str] = None,
-        subcommand_input: Optional[str] = None,
+        args: list[str] | None = None,
+        subcommand: str | None = None,
+        subcommand_input: str | None = None,
         stream: bool = True,
-        progress: Optional[Callable[[str], None]] = None,
+        progress: Callable[[str], None] | None = None,
         prepare: bool = True,
-    ) -> Optional[CompletedProcess]:
+    ) -> CompletedProcess | None:
         """Run Odoo on the current database.
+
         :param args: Additional arguments to pass to odoo-bin.
         :param subcommand: Subcommand to pass to odoo-bin.
         :param subcommand_input: Input to pipe to the subcommand.
@@ -591,7 +585,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         packages = ["rtlcss"]
 
-        if cast(OdooVersion, self.version).major <= 10:
+        if cast(OdooVersion, self.version).major <= 10:  # noqa: PLR2004
             packages.extend(["less", "less-plugin-clean-css"])
 
         missing = list(self.missing_npm_packages(packages))
@@ -634,9 +628,10 @@ class OdoobinProcess(OdevFrameworkMixin):
             if any(self.venv.missing_requirements(path)):
                 self.venv.install_requirements(path)
 
-        assert isinstance(self.version, OdooVersion)
+        if not isinstance(self.version, OdooVersion):
+            raise TypeError("Cannot prepare the virtual environment for an unknown version of Odoo")
 
-        if self.version.major < 10 and not self.version.master:
+        if self.version.major < 10 and not self.version.master:  # noqa: PLR2004
             self.venv.install_packages(["psycopg2==2.7.3.1"])
 
     def outdated_odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
@@ -688,7 +683,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         elif outdated_worktrees:
             logger.info(f"Multiple repositories have pending changes in worktree {outdated_worktrees[0].name!r}")
-            worktrees_to_pull: List[GitWorktree] = self.console.checkbox(
+            worktrees_to_pull: list[GitWorktree] = self.console.checkbox(
                 "Select the repositories to update:",
                 choices=[
                     (worktree, f"{worktree.connector.name} ({worktree.pending_changes()[0]} commits)")
@@ -701,6 +696,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 worktree.connector.pull_worktrees(worktrees_to_pull, force=True)
 
         self.odev.config.repositories.date = today
+        return None
 
     def clone_repositories(self):
         """Clone the missing Odoo repositories."""
@@ -725,7 +721,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         )
 
     @classmethod
-    def version_from_addons(cls, path: Path) -> Optional[OdooVersion]:
+    def version_from_addons(cls, path: Path) -> OdooVersion | None:
         """Find the highest Odoo version of the addons in a directory, if this is an addons directory.
 
         :param path: Path to the addons directory.
@@ -733,7 +729,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if not cls.check_addons_path(path):
             return None
 
-        versions = cast(Set[OdooVersion], {cls.version_from_manifest(addon) for addon in path.iterdir()} - {None})
+        versions = cast(set[OdooVersion], {cls.version_from_manifest(addon) for addon in path.iterdir()} - {None})
 
         if not versions:
             return None
@@ -741,7 +737,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return max(versions)
 
     @classmethod
-    def version_from_manifest(cls, addon: Path) -> Optional[OdooVersion]:
+    def version_from_manifest(cls, addon: Path) -> OdooVersion | None:
         """Find the Odoo version of an addon from its manifest file.
 
         :param addon: Path to the addon directory.
@@ -765,7 +761,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         return None
 
     @classmethod
-    def read_manifest(cls, path: Path) -> Optional[Mapping[str, Union[str, List[Union[str, int, bool]]]]]:
+    def read_manifest(cls, path: Path) -> Mapping[str, str | list[str | int | bool]] | None:
         """Read the manifest file of an Odoo module.
 
         :param path: Path to the manifest file.
@@ -779,7 +775,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         except SyntaxError:
             return None
 
-    def addons_debuggers(self) -> Generator[Tuple[Path, int], None, None]:
+    def addons_debuggers(self) -> Generator[tuple[Path, int], None, None]:
         """Find all calls to interactive debuggers in the addons paths for the current Odoo version.
         :return: The path to the file and line where the debugger is called, if any.
         """
@@ -787,8 +783,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         addons_paths = {(odoo_base_path if odoo_base_path in path.parents else path) for path in self.addons_paths}
 
         for addon in addons_paths:
-            for debugger in find_debuggers(addon):
-                yield debugger
+            yield from find_debuggers(addon)
 
     def save_database_repository(self):
         """Link the database to the first repository in additional addons-paths, allowing for reusing it in subsequent
@@ -849,7 +844,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if repository.branch is not None:
             self.database.branch = Branch(repository.branch, cast(Repository, self.database.repository))
 
-    def standardize(self, remove_studio: bool = False, dry: bool = False) -> Optional[CompletedProcess]:
+    def standardize(self, remove_studio: bool = False, dry: bool = False) -> CompletedProcess | None:
         """Remove customizations from a database using the `clean_database.py` script
         from the `odoo/support-tools` repository.
         :param remove_studio: Whether to remove Studio customizations.
@@ -866,7 +861,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 self.venv.install_requirements(self.odoo_support_repository.path)
 
         with capture_signals():
-            command_args: List[str] = []
+            command_args: list[str] = []
             command_args.append(self.database.name)
             command_args.extend(["--addons-path-list", ",".join(path.as_posix() for path in self.addons_paths)])
 

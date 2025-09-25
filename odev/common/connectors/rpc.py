@@ -1,17 +1,11 @@
 """Interact with any Odoo database using XML/JSON RPC."""
 
+from collections.abc import Mapping, MutableMapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
-    List,
     Literal,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Set,
     TypedDict,
-    Union,
     cast,
 )
 from urllib.parse import urlparse
@@ -34,13 +28,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-FieldsGetMapping = Mapping[str, Mapping[str, Union[str, bool]]]
-RecordMetaData = TypedDict("RecordMetaData", {"xml_id": str, "noupdate": bool})
+FieldsGetMapping = Mapping[str, Mapping[str, str | bool]]
+
+
+class RecordMetaData(TypedDict):
+    xml_id: str
+    noupdate: bool
 
 
 RPC_DATA_CACHE: MutableMapping[str, MutableMapping[int, RecordData]] = {}
 RPC_FIELDS_CACHE: MutableMapping[str, FieldsGetMapping] = {}
 RPC_DEFAULT_CACHE: MutableMapping[str, FieldsGetMapping] = {}
+HTTPS_PORT = 443
 
 
 class Model:
@@ -58,7 +57,9 @@ class Model:
         if not self._connector.connected:
             self._connector.connect()
 
-        assert self._connector._connection is not None
+        if self._connector._connection is None:
+            raise ConnectorError("Cannot access model without an established connection", self._connector)
+
         self._model = self._connector._connection.get_model(model)
         RPC_DATA_CACHE.setdefault(self._name, {})
         RPC_FIELDS_CACHE.setdefault(self._name, {})
@@ -92,17 +93,17 @@ class Model:
         return self.fields_get()
 
     @property
-    def fields_relational(self) -> Set[str]:
+    def fields_relational(self) -> set[str]:
         """Relational fields as defined on the model."""
         return {name for name, field in self.fields.items() if "relation" in field}
 
     @property
-    def fields_relational_m2o(self) -> Set[str]:
+    def fields_relational_m2o(self) -> set[str]:
         """Many2one relational fields as defined on the model."""
         return {name for name, field in self.fields.items() if field.get("type") == "many2one"}
 
     @property
-    def fields_relational_x2m(self) -> Set[str]:
+    def fields_relational_x2m(self) -> set[str]:
         """X2many relational fields as defined on the model."""
         return {name for name, field in self.fields.items() if field.get("type") in ("one2many", "many2many")}
 
@@ -115,7 +116,7 @@ class Model:
 
         return cached
 
-    def default_get(self, fields_list: Optional[list] = None) -> FieldsGetMapping:
+    def default_get(self, fields_list: list | None = None) -> FieldsGetMapping:
         """Return the default value for all models fields."""
         cached = RPC_DEFAULT_CACHE[self._name]
 
@@ -124,19 +125,18 @@ class Model:
 
         return cached
 
-    def read(
-        self, ids: Sequence[int], fields: Optional[Sequence[str]] = None, load: Optional[str] = None
-    ) -> RecordDataList:
+    def read(self, ids: Sequence[int], fields: Sequence[str] | None = None, load: str | None = None) -> RecordDataList:
         """Read the data of the records with the given ids.
+
         :param ids: The ids of the records to read
         :param fields: The fields to read, all fields by default
         :return: The data of the records with the given ids
         """
-        missing_ids = []
-
-        for id_ in ids:
-            if id_ not in self.cache or not set(self.fields).issubset(set(self.cache[id_].keys())):
-                missing_ids.append(id_)
+        missing_ids = [
+            id_
+            for id_ in ids
+            if id_ not in self.cache or (fields and not set(fields).issubset(set(self.cache[id_].keys())))
+        ]
 
         if not fields:
             fields = list(self.fields.keys())
@@ -161,11 +161,12 @@ class Model:
         self,
         domain: Domain,
         offset: int = 0,
-        limit: Optional[int] = None,
-        order: Optional[str] = None,
-        context: Optional[Mapping[str, Any]] = None,
-    ) -> List[int]:
+        limit: int | None = None,
+        order: str | None = None,
+        context: Mapping[str, Any] | None = None,
+    ) -> list[int]:
         """Search for records matching the given domain and return their ids.
+
         :param domain: The domain to filter the records to export
         :param offset: The offset of the first record to return
         :param limit: The maximum number of records to return
@@ -173,19 +174,20 @@ class Model:
         :param context: Additional context to pass to the search
         :return: The ids of the records matching the given domain
         """
-        return cast(List[int], self._model.search(domain, offset=offset, limit=limit, order=order, context=context))
+        return cast(list[int], self._model.search(domain, offset=offset, limit=limit, order=order, context=context))
 
-    def search_read(
+    def search_read(  # noqa: PLR0913
         self,
         domain: Domain,
-        fields: Optional[Sequence[str]] = None,
+        fields: Sequence[str] | None = None,
         offset: int = 0,
-        limit: Optional[int] = None,
-        order: Optional[str] = None,
-        context: Optional[Mapping[str, Any]] = None,
-        load: Optional[str] = None,
+        limit: int | None = None,
+        order: str | None = None,
+        context: Mapping[str, Any] | None = None,
+        load: str | None = None,
     ) -> RecordDataList:
         """Search for records matching the given domain and return their data.
+
         :param domain: The domain to filter the records to export
         :param fields: The fields to export, all fields by default
         :param offset: The offset of the first record to return
@@ -201,17 +203,18 @@ class Model:
 
         return self.read(ids, fields=fields, load=load)
 
-    def read_group(
+    def read_group(  # noqa: PLR0913
         self,
         domain: Domain,
-        fields: Optional[Sequence[str]] = None,
-        groupby: Optional[Union[str, Sequence[str]]] = None,
+        fields: Sequence[str] | None = None,
+        groupby: str | Sequence[str] | None = None,
         offset: int = 0,
-        limit: Optional[int] = None,
-        order: Optional[str] = None,
-        context: Optional[Mapping[str, Any]] = None,
+        limit: int | None = None,
+        order: str | None = None,
+        context: Mapping[str, Any] | None = None,
     ):
         """Get the aggregated data of the records matching the given domain, grouped by the groupby clause.
+
         :param domain: The domain to filter the records to export
         :param fields: The fields to aggregate, all fields by default
         :param groupby: The fields to group by
@@ -221,7 +224,10 @@ class Model:
         :param context: Additional context to pass to the search
         """
         fields = fields or []
-        assert groupby is not None, "read_group() requires a groupby clause"
+
+        if groupby is None:
+            raise ValueError("read_group() requires a groupby clause")
+
         return self._model.read_group(
             domain,
             fields=fields,
@@ -237,7 +243,7 @@ class Model:
 class RpcConnector(Connector):
     """Interact with any Odoo database using XML/JSON RPC."""
 
-    _connection: Optional[odoolib.Connection] = None
+    _connection: odoolib.Connection | None = None
     """The instance of a connection to the service."""
 
     def __init__(self, database: "Database"):
@@ -273,7 +279,7 @@ class RpcConnector(Connector):
     @property
     def protocol(self) -> Literal["jsonrpc", "jsonrpcs"]:
         """Return the protocol to use to reach the external service."""
-        return "jsonrpcs" if self.port == 443 else "jsonrpc"
+        return "jsonrpcs" if self.port == HTTPS_PORT else "jsonrpc"
 
     @property
     def user_id(self) -> int:
@@ -328,7 +334,6 @@ class RpcConnector(Connector):
                 self._connection = None
                 return self.connect()
 
-        assert self._connection is not None, "Failed to establish RPC connection"
         self.__patch_odoolib_send()
         return self._connection
 
@@ -348,7 +353,6 @@ class RpcConnector(Connector):
         """Monkey patch calls to `execute_kw` to log RPC calls from the connector to a database
         and catch exceptions thrown by the connector for better handling of errors.
         """
-        assert self._connection is not None
         logger.debug(f"Connected to {self.database.platform.display} database {self.database.name!r}'s RPC API")
         original_send = self._connection.connector.send
 

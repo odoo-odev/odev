@@ -5,9 +5,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import cast
 
-
 # --- Common modules -----------------------------------------------------------
-
 from .base import Branch, Database, DummyDatabase, Filestore, Repository
 from .local import LocalDatabase
 from .remote import RemoteDatabase

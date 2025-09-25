@@ -5,9 +5,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import cast
 
-
 # --- Common modules -----------------------------------------------------------
-
 from .base import ConnectorMixin, ensure_connected
 from .github import GitConnectorMixin
 from .postgres import PostgresConnectorMixin

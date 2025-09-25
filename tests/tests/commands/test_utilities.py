@@ -3,6 +3,7 @@ from pathlib import Path
 
 from odev._version import __version__
 from odev.common.python import PythonEnv
+
 from tests.fixtures import OdevCommandTestCase
 
 
@@ -230,7 +231,7 @@ class TestCommandUtilitiesPlugin(OdevCommandTestCase):
             plugin_link.unlink()
 
         with (
-            self.patch_property(GIT_PATH, "exists", True),
+            self.patch_property(GIT_PATH, "exists", value=True),
             self.patch(GIT_PATH, "update"),
         ):
             self.dispatch_command("plugin", "--enable", plugin)
@@ -242,13 +243,13 @@ class TestCommandUtilitiesPlugin(OdevCommandTestCase):
         self.assertIn(f"Plugin '{plugin}' is already installed", stdout)
         self.assertTrue(self.odev._plugin_is_installed(plugin))
 
-        with self.patch(self.odev.console, "confirm", True):
+        with self.patch(self.odev.console, "confirm", return_value=True):
             self.dispatch_command("plugin", "--disable", plugin)
 
         self.assertNotIn(plugin, self.odev.config.plugins.enabled)
         self.assertFalse(plugin_link.is_symlink())
 
-        with self.patch(self.odev.console, "confirm", True):
+        with self.patch(self.odev.console, "confirm", return_value=True):
             stdout, _ = self.dispatch_command("plugin", "--disable", plugin)
 
         self.assertIn(f"Plugin '{plugin}' is not installed", stdout)
@@ -268,7 +269,7 @@ class TestCommandUtilitiesPlugin(OdevCommandTestCase):
         self.odev.config.paths.repositories = self.res_path / "repositories"
 
         with (
-            self.patch_property(GIT_PATH, "exists", True),
+            self.patch_property(GIT_PATH, "exists", value=True),
             self.patch(GIT_PATH, "update"),
         ):
             self.dispatch_command("plugin", "--enable", dependent)
@@ -276,7 +277,7 @@ class TestCommandUtilitiesPlugin(OdevCommandTestCase):
         self.assertTrue(self.odev._plugin_is_installed(dependent))
         self.assertTrue(self.odev._plugin_is_installed(plugin))
 
-        with self.patch(self.odev.console, "confirm", True):
+        with self.patch(self.odev.console, "confirm", return_value=True):
             stdout, _ = self.dispatch_command("plugin", "--disable", plugin)
 
         self.assertIn(f"Uninstalling plugin {plugin!r} will also uninstall the following dependent plugins", stdout)

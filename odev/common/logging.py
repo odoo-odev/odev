@@ -13,7 +13,7 @@ import re
 import sys
 from contextlib import contextmanager
 from logging import LogRecord
-from typing import Dict, Literal, Union
+from typing import Literal
 
 from rich.logging import RichHandler
 from rich.text import Text
@@ -22,7 +22,7 @@ from odev.common import string
 from odev.common.console import console
 
 
-__all__ = ["logging", "LOG_LEVEL", "silence_loggers"]
+__all__ = ["LOG_LEVEL", "logging", "silence_loggers"]
 
 
 # --- Logging configuration ----------------------------------------------------
@@ -71,7 +71,7 @@ class OdevRichHandler(RichHandler):
     See `rich.logging.RichHandler`.
     """
 
-    symbols: Dict[Union[int, Literal["default"]], str] = {
+    symbols: dict[int | Literal["default"], str] = {
         logging.CRITICAL: "~",
         logging.ERROR: "-",
         logging.WARNING: "!",
@@ -141,5 +141,5 @@ def silence_loggers(*names: str):
 
     yield
 
-    for logger, level in zip(loggers, levels):
+    for logger, level in zip(loggers, levels, strict=False):
         logger.setLevel(level)

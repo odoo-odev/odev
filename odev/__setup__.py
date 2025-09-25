@@ -1,5 +1,6 @@
 import os
 import pkgutil
+import sys
 from importlib import import_module
 from importlib.util import find_spec
 from signal import SIGINT, SIGTERM, signal
@@ -35,7 +36,9 @@ def main():
 
         # --- Load and run setup modules ---------------------------------------
         loader = find_spec("odev.setup")
-        assert loader is not None and loader.submodule_search_locations, "Could not find the setup module"
+
+        if loader is None or not loader.submodule_search_locations:
+            raise RuntimeError("Could not find the setup module")
 
         submodules = sorted(
             (
@@ -56,6 +59,6 @@ def main():
 
     except Exception:
         logger.exception("Execution failed due to an unhandled exception")
-        exit(1)
+        sys.exit(1)
 
     logger.debug("Execution completed successfully")

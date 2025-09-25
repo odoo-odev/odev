@@ -5,13 +5,7 @@ import random
 import re
 import string as string_module
 import textwrap
-from typing import (
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from collections.abc import Sequence
 
 import timeago  # type: ignore [import]
 
@@ -27,6 +21,9 @@ __all__ = [
     "short_help",
     "suid",
 ]
+
+
+BYTES_UNIT_FACTOR = 1024
 
 
 def normalize_indent(text: str) -> str:
@@ -55,7 +52,7 @@ def short_help(name: str, description: str, indent_len: int = 0) -> str:
     return stylize(name, "bold") + help_text
 
 
-def format_options_list(elements: List[Tuple[str, str]], indent_len: int = 0, blanks: int = 0) -> str:
+def format_options_list(elements: list[tuple[str, str]], indent_len: int = 0, blanks: int = 0) -> str:
     """Return a list of elements formatted as a string.
 
     :param elements: The list of elements to format.
@@ -102,22 +99,22 @@ def min_indent(text: str) -> int:
     return min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())
 
 
-def bytes_size(size: Union[int, float]) -> str:
-    """Formats a number to its human readable representation in bytes-units.
+def bytes_size(size: int | float) -> str:
+    """Format a number to its human readable representation in bytes-units.
 
     :param size: The number to format.
     :return: The formatted number.
     :rtype: str
     """
     for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
-        if abs(size) < 1024.0:
+        if abs(size) < BYTES_UNIT_FACTOR:
             return f"{size:3.1f} {unit}B"
-        size /= 1024.0
+        size /= BYTES_UNIT_FACTOR
     return f"{size:.1f} YB"
 
 
 def bytes_from_string(string: str) -> int:
-    """Converts a human readable representation of bytes-units to a number.
+    """Convert a human readable representation of bytes-units to a number.
 
     :param repr: The string to parse.
     :return: The number of bytes.
@@ -129,7 +126,7 @@ def bytes_from_string(string: str) -> int:
         raise ValueError(f"Invalid bytes representation: {string}")
 
     number = float(match.group("number"))
-    factor = 1024.0 ** ["", "K", "M", "G", "T", "P", "E", "Z", "Y"].index(match.group("factor"))
+    factor = BYTES_UNIT_FACTOR ** ["", "K", "M", "G", "T", "P", "E", "Z", "Y"].index(match.group("factor"))
     return int(number * factor)
 
 
@@ -140,17 +137,18 @@ def suid() -> str:
     :rtype: str
     """
     alphabet = string_module.ascii_lowercase + string_module.digits
-    return "".join(random.choices(alphabet, k=8))
+    return "".join(random.choices(alphabet, k=8))  # noqa: S311 - cryptographic security is not needed here
 
 
 def stylize(value: str, style: str) -> str:
     """Stylize a value to use with Rich markup.
+
     :param value: The value to stylize.
     :param style: The style to apply.
     :return: The stylized value.
     :rtype: str
     """
-    from odev.common.console import resolve_styles
+    from odev.common.console import resolve_styles  # noqa: PLC0415 - avoid circular import at the top level
 
     style = resolve_styles(style)
     return f"[{style}]{value}[/{style}]"
@@ -167,7 +165,7 @@ def resolve_styles(text: str) -> str:
     """Resolve markup styles from a text, replacing aliased styles by their proper value usable by Rich.
     :param text: The text to resolve styles from.
     """
-    from odev.common.console import resolve_styles
+    from odev.common.console import resolve_styles  # noqa: PLC0415 - avoid circular import at the top level
 
     def replace_tag(match: re.Match) -> str:
         tag = f"{match.group(1)} {replacement} {match.group(2)}".strip()
@@ -181,7 +179,7 @@ def resolve_styles(text: str) -> str:
     return text
 
 
-def list_styles(text: str) -> List[str]:
+def list_styles(text: str) -> list[str]:
     """Extract Rich styles from a text and returns the list of tags in their order of appearance.
     Only lists unique opening tags, closing tags are ignored. Nested tags are supported.
     :param text: The text to list styles from.
@@ -196,8 +194,9 @@ def strip_ansi_colors(text: str) -> str:
     return re.sub(r"\x1b[^m]*m", "", text)
 
 
-def join(parts: Sequence[str], last_delimiter: Optional[str] = None) -> str:
+def join(parts: Sequence[str], last_delimiter: str | None = None) -> str:
     """Join parts, optionally adding a last delimiter between the last two items.
+
     :param parts: Parts to join.
     :param last_delimiter: The last delimiter to add.
     :return: The joined parts.
@@ -217,6 +216,7 @@ def join(parts: Sequence[str], last_delimiter: Optional[str] = None) -> str:
 
 def join_and(parts: Sequence[str]) -> str:
     """Join parts adding "and" between the two lasts items.
+
     :param parts: Parts to join.
     :return: The joined parts.
     :rtype: str
@@ -226,6 +226,7 @@ def join_and(parts: Sequence[str]) -> str:
 
 def join_or(parts: Sequence[str]) -> str:
     """Join parts adding "or" between the two lasts items.
+
     :param parts: Parts to join.
     :return: The joined parts.
     :rtype: str
@@ -235,6 +236,7 @@ def join_or(parts: Sequence[str]) -> str:
 
 def join_bullet(parts: Sequence[str]) -> str:
     """Join parts as a bullet list.
+
     :param parts: Parts to join.
     :return: The joined parts.
     :rtype: str
@@ -245,6 +247,7 @@ def join_bullet(parts: Sequence[str]) -> str:
 
 def seconds_to_time(seconds: int) -> str:
     """Convert seconds to a human readable time.
+
     :param seconds: The number of seconds.
     :return: The human readable time.
     :rtype: str
@@ -254,6 +257,7 @@ def seconds_to_time(seconds: int) -> str:
 
 def float_to_hours(value: float) -> str:
     """Convert a float to a human readable time.
+
     :param value: The float to convert.
     :return: The human readable time.
     :rtype: str
@@ -265,6 +269,7 @@ def float_to_hours(value: float) -> str:
 
 def ago(date: datetime.datetime) -> str:
     """Return a human readable representation of a datetime to show how long ago it was.
+
     :param date: The datetime to convert.
     :return: The human readable representation.
     :rtype: str
@@ -274,13 +279,14 @@ def ago(date: datetime.datetime) -> str:
 
 def quote(string: str, dirty_only: bool = False, force_single: bool = False) -> str:
     """Quote a string.
+
     :param string: The string to quote.
     :param dirty_only: Do not quote strings that have no quotes to begin with.
     :param force_single: Force single quotes.
     :return: The quoted string.
     :rtype: str
     """
-    index = max(string.find(char) for char in {"'", '"'})
+    index = max(string.find(char) for char in ("'", '"'))
 
     if dirty_only and index == -1:
         return string

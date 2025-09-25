@@ -1,6 +1,5 @@
 """Backup a database and save its dump file locally."""
 
-
 from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.logging import logging

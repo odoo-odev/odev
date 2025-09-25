@@ -3,22 +3,19 @@
 import pkgutil
 from importlib import import_module
 from pathlib import Path
-from typing import cast
-
 
 # --- Common modules -----------------------------------------------------------
-
-from typing import TypeVar
+from typing import TypeVar, cast
 
 from .base import Command, CommandError
-from .database import DatabaseCommand, LocalDatabaseCommand, RemoteDatabaseCommand, DatabaseOrRepositoryCommand
+from .database import DatabaseCommand, DatabaseOrRepositoryCommand, LocalDatabaseCommand, RemoteDatabaseCommand
 from .git import GitCommand
 from .odoobin import (
+    TEMPLATE_SUFFIX,
     OdoobinCommand,
-    OdoobinTemplateCommand,
     OdoobinShellCommand,
     OdoobinShellScriptCommand,
-    TEMPLATE_SUFFIX,
+    OdoobinTemplateCommand,
 )
 
 

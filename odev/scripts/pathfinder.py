@@ -1,4 +1,6 @@
-# Find the shortest path between two models in a database using the BFS algorithm
+"""Find the shortest path between two models in a database using the BFS algorithm."""
+
+from odev.common.errors import OdevError
 
 
 def check_installed_models(env, models):
@@ -6,9 +8,9 @@ def check_installed_models(env, models):
     missing_models = [model for model in models if model not in env]
 
     if missing_models:
-        raise Exception(
+        raise OdevError(
             f"""
-            Model(s) {', '.join(missing_models)} not found in database.
+            Model(s) {", ".join(missing_models)} not found in database.
             Make sure all modules are installed and up-to-date.
             """
         )
@@ -37,9 +39,9 @@ def pathfinder(env, origin, destination):
             if "relation" in value
         }
 
-        for next_model in next_models.keys():
+        for next_model, (field, type_) in next_models.items():
             if destination == next_model:
-                current_path += [(destination, *next_models[destination])]
+                current_path += [(destination, field, type_)]
 
                 if complete_paths and len(current_path) > len(complete_paths[0]) + 1:
                     return complete_paths
@@ -49,7 +51,7 @@ def pathfinder(env, origin, destination):
 
             if next_model not in explored:
                 new_path = current_path[:]
-                new_path.append((next_model, *next_models[next_model]))
+                new_path.append((next_model, field, type_))
                 all_paths.append(new_path)
                 explored.add(next_model)
 

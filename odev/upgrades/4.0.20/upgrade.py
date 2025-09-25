@@ -1,4 +1,5 @@
-"""Upgrade to odev 4.0.20:
+"""Upgrade to odev 4.0.20.
+
 Migrate stored password from agentcrypt to ssh-crypt
 """
 
@@ -30,12 +31,12 @@ def run(odev: Odev) -> None:
     )
 
     try:
-        from agentcrypt3.exceptions import NoContainerException
-        from agentcrypt3.io import Container
+        from agentcrypt3.exceptions import NoContainerException  # noqa: PLC0415
+        from agentcrypt3.io import Container  # noqa: PLC0415
     except ImportError:
         try:
-            from agentcrypt.exceptions import NoContainerException
-            from agentcrypt.io import Container
+            from agentcrypt.exceptions import NoContainerException  # noqa: PLC0415
+            from agentcrypt.io import Container  # noqa: PLC0415
         except ImportError:
             logger.warning(
                 f"""
@@ -53,7 +54,7 @@ def run(odev: Odev) -> None:
             )
 
             if odev.console.confirm("Abort the update now?"):
-                raise OdevError("Update aborted")
+                raise OdevError("Update aborted") from None
 
             odev.store.secrets.clear()
             return
@@ -70,11 +71,11 @@ def run(odev: Odev) -> None:
             logger.debug(f"Error decrypting secret '{name}': {error}")
             continue
 
-        ciphertext = b64encode(ssh_encrypt(plaintext)).decode()
+        encoded_ciphertext = b64encode(ssh_encrypt(plaintext)).decode()
         odev.store.query(
             f"""
             UPDATE secrets
-            SET cipher = '{ciphertext}'
+            SET cipher = '{encoded_ciphertext}'
             WHERE name = '{name}'
             """
         )

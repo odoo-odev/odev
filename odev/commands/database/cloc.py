@@ -2,8 +2,8 @@
 
 import csv
 import re
+from collections.abc import MutableMapping, Sequence
 from io import StringIO
-from typing import List, MutableMapping, Optional, Sequence
 
 from odev.common import args, string
 from odev.common.commands import OdoobinCommand
@@ -78,7 +78,7 @@ class ClocCommand(OdoobinCommand):
         :return: A tuple of the parsed lines and the total line.
         :rtype: Tuple[List[Dict[str, str]], Dict[str, str]]
         """
-        result_lines: List[str] = output.strip().splitlines()
+        result_lines: list[str] = output.strip().splitlines()
         total_line = result_lines[~0]
         result_lines = result_lines[2:~1]
         total = self._parse_line(total_line)
@@ -86,7 +86,7 @@ class ClocCommand(OdoobinCommand):
         if total is None:
             raise self.error("Cannot parse total line from cloc output.")
 
-        lines: List[List[str]] = []
+        lines: list[list[str]] = []
         last_module: str = ""
 
         for result_line in result_lines:
@@ -95,7 +95,7 @@ class ClocCommand(OdoobinCommand):
             if parsed_line is None:
                 continue
 
-            line: List[str] = list(parsed_line.values())
+            line: list[str] = list(parsed_line.values())
 
             if line[0] is None:
                 line[0] = ""
@@ -110,7 +110,7 @@ class ClocCommand(OdoobinCommand):
 
         return lines, ["", *list(total.values())[1:]]
 
-    def _parse_line(self, line: str) -> Optional[MutableMapping[str, str]]:
+    def _parse_line(self, line: str) -> MutableMapping[str, str] | None:
         """Parse a line of the cloc output.
 
         :param line: The line to parse.

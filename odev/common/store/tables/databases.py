@@ -1,5 +1,6 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Mapping, Optional
+from typing import Literal
 
 from odev.common.databases import Database, LocalDatabase
 from odev.common.postgres import PostgresTable
@@ -24,10 +25,10 @@ class DatabaseInfo:
     whitelisted: bool
     """Whether the database is whitelisted and should not be removed automatically."""
 
-    repository: Optional[str]
+    repository: str | None
     """Custom repository linked to the database."""
 
-    branch: Optional[str]
+    branch: str | None
     """Branch in the custom repository with the code for the database."""
 
     worktree: str
@@ -60,9 +61,9 @@ class DatabaseStore(PostgresTable):
         "databases_unique_name_url": "UNIQUE(name, url)",
     }
 
-    def get(self, database: Database) -> Optional[DatabaseInfo]:
+    def get(self, database: Database) -> DatabaseInfo | None:
         """Get the saved values of a database."""
-        keys = ", ".join([key for key in self._columns.keys() if key != "id"])
+        keys = ", ".join([key for key in self._columns if key != "id"])
         result = self.database.query(
             f"""
             SELECT {keys} FROM {self.name}
@@ -78,7 +79,7 @@ class DatabaseStore(PostgresTable):
 
         return DatabaseInfo(*result[0])
 
-    def set(self, database: Database, arguments: Optional[str] = None):
+    def set(self, database: Database, arguments: str | None = None):
         """Save values for a database."""
         values = {
             "name": f"{database.name!r}",
@@ -101,7 +102,7 @@ class DatabaseStore(PostgresTable):
             INSERT INTO {self.name} ({", ".join(values.keys())})
             VALUES ({", ".join(values.values())})
             ON CONFLICT (name, platform) DO
-                UPDATE SET {", ".join(f'{key} = {value}' for key, value in values.items())}
+                UPDATE SET {", ".join(f"{key} = {value}" for key, value in values.items())}
             """
         )
 

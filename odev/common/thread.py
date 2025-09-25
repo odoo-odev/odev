@@ -18,7 +18,7 @@ class Thread(BaseThread):
     def run(self):
         try:
             super().run()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - we want to catch all exceptions in the thread
             self._exception = e
 
     def join(self, *args, **kwargs):

@@ -1,5 +1,7 @@
 """Catch OS signals and interrupts to handle them gracefully."""
 
+import sys
+from collections.abc import Callable, Collection, MutableMapping
 from contextlib import contextmanager
 from signal import (
     SIGINT,
@@ -10,20 +12,13 @@ from signal import (
     signal,
 )
 from types import FrameType
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    MutableMapping,
-    Optional,
-    Union,
-)
+from typing import Any
 
 from odev.common.console import console
 from odev.common.logging import logging
 
 
-__all__ = ["signal_handler_warning", "signal_handler_exit", "signal_handler_subprocess", "capture_signals"]
+__all__ = ["capture_signals", "signal_handler_exit", "signal_handler_subprocess", "signal_handler_warning"]
 
 
 logger = logging.getLogger(__name__)
@@ -32,36 +27,36 @@ logger = logging.getLogger(__name__)
 # --- Handle signals and interrupts --------------------------------------------
 
 
-def signal_handler_warning(signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None):
+def signal_handler_warning(signal_number: int, frame: FrameType | None = None, message: str | None = None):
     """Log a warning message with the signal received."""
     console.clear_line(0)  # Hide control characters
     logger.warning(message or f"Received signal ({signal_number})")
 
 
-def signal_handler_exit(signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None):
+def signal_handler_exit(signal_number: int, frame: FrameType | None = None, message: str | None = None):
     """Log a warning message with the signal received and exit the current process."""
     signal_handler_warning(
         signal_number=signal_number,
         frame=frame,
         message=message or f"Received signal ({signal_number}), aborting execution",
     )
-    exit(signal_number)
+    sys.exit(signal_number)
 
 
-def signal_handler_subprocess(signal_number: int, frame: Optional[FrameType] = None, message: Optional[str] = None):
+def signal_handler_subprocess(signal_number: int, frame: FrameType | None = None, message: str | None = None):
     """Send over the signal to a subprocess when using :func:`capture_signals` or do nothing."""
 
 
 # --- Context manager to handle signals on a specific block --------------------
 
 
-SignalHandler = Union[Callable[[Union[int, Signals], Optional[FrameType]], Any], int, Handlers, None]
+SignalHandler = Callable[[int | Signals, FrameType | None], Any] | int | Handlers | None
 
 
 @contextmanager
 def capture_signals(
-    signals: Optional[Union[Signals, Collection[Signals]]] = None,
-    handler: Optional[SignalHandler] = None,
+    signals: Signals | Collection[Signals] | None = None,
+    handler: SignalHandler | None = None,
 ):
     """Capture OS signals and interrupts and handle them gracefully.
 
@@ -76,7 +71,7 @@ def capture_signals(
     if handler is None:
         handler = signal_handler_subprocess
 
-    original_handlers: MutableMapping[Signals, Optional[SignalHandler]] = {}
+    original_handlers: MutableMapping[Signals, SignalHandler | None] = {}
 
     try:
         for signal_number in signals:

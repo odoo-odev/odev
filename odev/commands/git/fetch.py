@@ -1,7 +1,6 @@
 """Fetch changes in local worktrees."""
 
 from functools import lru_cache
-from typing import Dict, List, Tuple
 
 from odev.common import args, string
 from odev.common.commands import GitCommand
@@ -25,7 +24,7 @@ class FetchCommand(GitCommand):
 
     def run(self):
         changes_by_worktree = self.grouped_changes()
-        sorted_worktree: List[str] = sorted(
+        sorted_worktree: list[str] = sorted(
             changes_by_worktree.keys(),
             key=lambda worktree: (
                 -int(worktree.partition(".")[0]) if worktree[0].isdigit() else -float("inf"),
@@ -40,7 +39,7 @@ class FetchCommand(GitCommand):
 
         self.console.clear_line()
 
-    def run_hook(self, worktree: str, changes: List[Tuple[str, int, int]]):
+    def run_hook(self, worktree: str, changes: list[tuple[str, int, int]]):
         """Print a summary of the pending changes for a worktree."""
         self.table(
             [
@@ -59,10 +58,10 @@ class FetchCommand(GitCommand):
             title=worktree,
         )
 
-    @lru_cache
-    def grouped_changes(self) -> Dict[str, List[Tuple[str, int, int]]]:
+    @lru_cache  # noqa: B019
+    def grouped_changes(self) -> dict[str, list[tuple[str, int, int]]]:
         """Group changes by version."""
-        changes: Dict[str, List[Tuple[str, int, int]]] = {}
+        changes: dict[str, list[tuple[str, int, int]]] = {}
 
         for repository in self.repositories:
             repository.fetch(detached=False)

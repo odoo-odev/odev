@@ -6,18 +6,13 @@ import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Namespace, RawTextHelpFormatter
 from collections import defaultdict
+from collections.abc import Iterable, MutableMapping, Sequence
 from io import StringIO
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
     ClassVar,
-    Iterable,
-    List,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
     cast,
 )
 
@@ -62,7 +57,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     _arguments: ClassVar[MutableMapping[str, MutableMapping[str, Any]]] = defaultdict(dict)
     """Arguments definitions to extend commands capabilities."""
 
-    _unknown_arguments_dest: Optional[str] = None
+    _unknown_arguments_dest: str | None = None
     """Key to which unknown arguments will be saved when parsed.
     If `None` and unknown arguments are found, an error will be raised.
     """
@@ -97,8 +92,8 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         return instance
 
     def __init__(self, arguments: Namespace):
-        """
-        Initialize the command runner.
+        """Initialize the command runner.
+
         :param args: the parsed arguments as an instance of :class:`Namespace`
         """
         self.args: Namespace = arguments
@@ -126,7 +121,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
     @classmethod
     def is_abstract(cls) -> bool:
-        """Indicates if the command is abstract. Abstract commands are not registered and cannot be executed,
+        """Indicate if the command is abstract. Abstract commands are not registered and cannot be executed,
         they can only be inherited from.
         """
         return inspect.isabstract(cls) or ABC in cls.__bases__
@@ -151,10 +146,10 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                 cls._arguments[argument_name].update(**argument_dict)
 
     @classmethod
-    def ordered_arguments_definitions(cls) -> List[Tuple[str, args.Argument]]:
+    def ordered_arguments_definitions(cls) -> list[tuple[str, args.Argument]]:
         """List the arguments definitions for the command in their order of declaration."""
         arguments = cast(
-            Iterable[Tuple[str, args.Argument]],
+            Iterable[tuple[str, args.Argument]],
             inspect.getmembers(cls, lambda a: isinstance(a, args.Argument)),
         )
         return sorted(
@@ -202,6 +197,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def update_argument(cls, name: str, **values: Any) -> None:
         """Update the properties of an argument that is already registered. The can be used to update the properties
         of an argument that is inherited from a parent class.
+
         :param name: the name of the argument to update
         :param values: the values to update
         """
@@ -234,7 +230,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         for argument in cls._arguments.values():
             params = dict(argument)
             params.pop("name")
-            aliases: List[str] = sorted(params.pop("aliases", []), key=lambda alias: (alias.startswith("--"), alias))
+            aliases: list[str] = sorted(params.pop("aliases", []), key=lambda alias: (alias.startswith("--"), alias))
 
             if params.get("nargs") == "*...":
                 cls._unknown_arguments_dest = aliases[0]
@@ -307,8 +303,8 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
     @abstractmethod
     def run(self) -> None:
-        """Executes the command."""
-        raise NotImplementedError()
+        """Execute the command."""
+        raise NotImplementedError
 
     def cleanup(self) -> None:
         """Cleanup after the command execution."""
@@ -316,7 +312,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def print(
         self,
         renderable: RenderableType = "",
-        file: Optional[Path] = None,
+        file: Path | None = None,
         auto_paginate: bool = False,
         *args: Any,
         **kwargs: Any,
@@ -333,10 +329,10 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
     def table(
         self,
         columns: Sequence[TableHeader],
-        rows: Sequence[List[Any]],
-        totals: Optional[List[Any]] = None,
-        file: Optional[Path] = None,
-        title: Optional[str] = None,
+        rows: Sequence[list[Any]],
+        totals: list[Any] | None = None,
+        file: Path | None = None,
+        title: str | None = None,
         **kwargs,
     ) -> None:
         """Print a table to stdout with highlighting and theming.

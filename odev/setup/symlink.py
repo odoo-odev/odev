@@ -20,7 +20,8 @@ PRIORITY = 10
 
 
 def setup(odev: Odev) -> None:
-    """Setup symlinks to odev for using it as a shell command.
+    """Set up symlinks to odev for using it as a shell command.
+
     :param config: Odev configuration
     """
     main_path = Path(__file__).parents[2] / "main.py"

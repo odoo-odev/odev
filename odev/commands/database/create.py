@@ -2,7 +2,7 @@
 
 import re
 import shutil
-from typing import List, cast
+from typing import cast
 
 from odev.common import args, progress
 from odev.common.commands import TEMPLATE_SUFFIX, OdoobinTemplateCommand
@@ -95,7 +95,6 @@ class CreateCommand(OdoobinTemplateCommand):
         """Drop the database if it exists."""
         with self._database.psql().nocache():
             if self._database.exists:
-
                 if self._database.running:
                     raise self.error(f"Database {self._database.name!r} is running, stop it and try again")
 
@@ -166,7 +165,7 @@ class CreateCommand(OdoobinTemplateCommand):
         if self._template:
             logger.debug(f"Initializing database {self._database.name!r} from template {self._template.name!r}")
 
-        args: List[str] = self.args.odoo_args
+        args: list[str] = self.args.odoo_args
         joined_args = " ".join(args)
 
         if not re.search(r"(-i|--install)", joined_args):

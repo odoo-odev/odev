@@ -44,7 +44,7 @@ class DeployCommand(DatabaseCommand):
         )
 
         if process is None or process.stdout is None:
-            return None
+            return
 
         result = process.stdout.decode()
         error_match = re.search(r"\nError", result, re.IGNORECASE)

@@ -12,7 +12,7 @@ __all__ = ["OdooVersion"]
 
 _Version = collections.namedtuple("_Version", ["major", "minor", "module", "saas", "master"])
 
-
+MIN_VERSION_LENGTH = 3
 ODOO_VERSION_PATTERN = r"""
     (?:
         (?P<master>master)?             # master
@@ -45,7 +45,7 @@ class OdooVersion(_BaseVersion):
 
         module_version = tuple(int(i) for i in match.group("module").split(".")) if match.group("module") else ()
 
-        while len(module_version) < 3:
+        while len(module_version) < MIN_VERSION_LENGTH:
             module_version += (0,)
 
         # Store the parsed out pieces of the version
@@ -79,7 +79,7 @@ class OdooVersion(_BaseVersion):
         return version
 
     def __repr__(self) -> str:
-        return f"OdooVersion({str(self)})"
+        return f"OdooVersion({self!s})"
 
     def __bool__(self) -> bool:
         """Return True if the version is not empty."""

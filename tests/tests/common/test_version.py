@@ -1,6 +1,7 @@
 from packaging.version import InvalidVersion
 
 from odev.common.version import OdooVersion
+
 from tests.fixtures import OdevTestCase
 
 

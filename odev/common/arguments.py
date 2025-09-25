@@ -2,28 +2,24 @@
 
 import pathlib
 import re
-from abc import ABC
+from collections.abc import MutableMapping
 from typing import (
     Any,
-    List as ListType,
     Literal,
-    MutableMapping,
-    Optional,
-    Union,
 )
 
 
-class Argument(ABC):
+class Argument:
     """Base argument class."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[Any] = None,
-        choices: Optional[ListType[Any]] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: Any | None = None,
+        choices: list[Any] | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         action: Literal[
             "store",
             "store_const",
@@ -73,7 +69,8 @@ class Argument(ABC):
         self.kwargs = kwargs
 
     def to_dict(self, name: str) -> MutableMapping[str, Any]:
-        """Dictionary representation of the argument to feed into the parser.
+        """Represent the argument as a dictionary to feed into the parser.
+
         :param name: The name of the argument, will be used if the `name` attribute is not set.
         """
         arg_dict: MutableMapping[str, Any] = {
@@ -101,17 +98,18 @@ class Argument(ABC):
 class String(Argument):
     """String argument."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[str] = None,
-        choices: Optional[ListType[str]] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: str | None = None,
+        choices: list[str] | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         **kwargs: Any,
     ) -> None:
         """Add a string argument to the command class.
+
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
         :param description: A description for the argument, will be displayed in the `help` command.
@@ -140,17 +138,18 @@ class String(Argument):
 class Integer(Argument):
     """Integer argument."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[int] = None,
-        choices: Optional[ListType[int]] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: int | None = None,
+        choices: list[int] | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         **kwargs: Any,
     ) -> None:
         """Add an integer argument to the command class.
+
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
         :param description: A description for the argument, will be displayed in the `help` command.
@@ -181,13 +180,14 @@ class Flag(Argument):
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[bool] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: bool | None = None,
         **kwargs: Any,
     ) -> None:
         """Add a flag that has a boolean value which depends on whether it was passed in the command line.
+
         The default value is inverted if the flag is set.
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
@@ -211,14 +211,15 @@ class List(Argument):
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[ListType[Any]] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: list[Any] | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         **kwargs: Any,
     ) -> None:
         """Add a comma-separated list of values argument to the command class.
+
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
         :param description: A description for the argument, will be displayed in the `help` command.
@@ -248,14 +249,15 @@ class Path(Argument):
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[pathlib.Path] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: pathlib.Path | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         **kwargs: Any,
     ) -> None:
         """Add a path argument to the command class, stored as a `pathlib.Path` object.
+
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
         :param description: A description for the argument, will be displayed in the `help` command.
@@ -284,14 +286,15 @@ class Regex(Argument):
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[re.Pattern] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: re.Pattern | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         **kwargs: Any,
     ) -> None:
         """Add a path argument to the command class, evaluated and stored as a regular expression.
+
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
         :param description: A description for the argument, will be displayed in the `help` command.
@@ -320,11 +323,11 @@ class Eval(Argument):
 
     def __init__(
         self,
-        name: Optional[str] = None,
-        aliases: Optional[ListType[str]] = None,
-        description: Optional[str] = None,
-        default: Optional[Any] = None,
-        nargs: Optional[Union[int, Literal["*", "+", "?", "*..."]]] = None,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        default: Any | None = None,
+        nargs: int | Literal["*", "+", "?", "*..."] | None = None,
         **kwargs: Any,
     ) -> None:
         """Add a python literal argument to the command class, evaluated by `ast.literal_eval()`.

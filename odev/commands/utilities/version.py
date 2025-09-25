@@ -14,7 +14,7 @@ class VersionCommand(Command):
     _aliases = ["v"]
 
     def run(self):
-        """Prints the current version of the application."""
+        """Print the current version of the application."""
         logger.info(
             f"{self.odev.name.capitalize()} version {string.stylize(self.odev.config.update.version, 'repr.version')}"
         )

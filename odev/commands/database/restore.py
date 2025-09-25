@@ -1,6 +1,5 @@
 """Restore a backup of a database."""
 
-
 from odev.common import args, progress
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase
@@ -36,7 +35,8 @@ class RestoreCommand(DatabaseCommand):
     def run(self):
         file = self.args.backup
         if not file.is_file():
-            return logger.error(f"Invalid dump file {file}")
+            logger.error(f"Invalid dump file {file}")
+            return
 
         self.check_database()
         self.restore_backup(file)

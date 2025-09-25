@@ -4,14 +4,10 @@ import re
 from abc import ABC, abstractmethod
 from argparse import Action as BaseAction, ArgumentParser, Namespace
 from ast import literal_eval
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import (
     Any,
-    List,
-    Optional,
-    Sequence,
-    Union,
 )
 
 
@@ -42,8 +38,8 @@ class Action(BaseAction, ABC):
         self,
         parser: ArgumentParser,
         namespace: Namespace,
-        values: Union[str, Sequence, None],
-        option_string: Optional[str] = None,
+        values: str | Sequence | None,
+        option_string: str | None = None,
     ) -> None:
         setattr(namespace, self.dest, self._transform(values))
 
@@ -51,7 +47,7 @@ class Action(BaseAction, ABC):
     def _transform_one(self, value: str) -> Any:
         """Transform a single value."""
 
-    def _transform(self, values: Union[str, Sequence, None]) -> Optional[Any]:
+    def _transform(self, values: str | Sequence | None) -> Any | None:
         """Transform the values passed to the action."""
         if values is None:
             return values
@@ -73,14 +69,14 @@ class Action(BaseAction, ABC):
 class IntAction(Action):
     """Converter for command line arguments passed as a string that should be converted to an int."""
 
-    def _transform_one(self, value: Union[str, int]) -> int:
+    def _transform_one(self, value: str | int) -> int:
         return int(value)
 
 
 class ListAction(Action):
     """Converter for command line arguments passed as comma-separated lists of values."""
 
-    def _transform_one(self, value: Union[str, List]) -> List[str]:
+    def _transform_one(self, value: str | list) -> list[str]:
         return value.split(",") if isinstance(value, str) else value
 
 
@@ -94,7 +90,7 @@ class RegexAction(Action):
 class PathAction(Action):
     """Converter for command line arguments passed as a string that should be converted to a Path."""
 
-    def _transform_one(self, value: Union[str, Path]) -> Path:
+    def _transform_one(self, value: str | Path) -> Path:
         return Path(value).expanduser().resolve()
 
 

@@ -1,15 +1,10 @@
 """Gets help about commands."""
 
+from collections.abc import Callable, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import (
     Any,
-    Callable,
-    List,
     Literal,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
 )
 
 from odev.common import args, progress, string
@@ -30,15 +25,15 @@ class Mapped:
     value: Callable[[LocalDatabase], Any]
     """A lambda expression to fetch a value from a database object."""
 
-    title: Optional[str]
+    title: str | None
     """The title of the column in the table."""
 
-    justify: Optional[Literal["left", "center", "right"]]
+    justify: Literal["left", "center", "right"] | None
     """The justification of the column in the table, one of "center", "left"
     or "right".
     """
 
-    format: Optional[Callable[[Any], str]]
+    format: Callable[[Any], str] | None
     """A callable that takes the value and returns and formats it to display
     it in the table.
     """
@@ -53,7 +48,7 @@ STATUS_RUNNING = string.stylize("⬤", "color.green")
 STATUS_STOPPED = string.stylize("⬤", "color.black")
 
 
-TABLE_MAPPING: List[Mapped] = [
+TABLE_MAPPING: list[Mapped] = [
     Mapped(
         value=lambda database: database.process.is_running if database.process is not None else "",
         title=None,
@@ -189,7 +184,8 @@ class ListCommand(ListLocalDatabasesMixin, Command):
                 raise self.error(message)
 
             if self.args.names_only and databases:
-                return self.print("\n".join(databases), highlight=False)
+                self.print("\n".join(databases), highlight=False)
+                return
 
             data = self.get_table_data(databases)
 
@@ -198,18 +194,18 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         self.console.print(string.stylize(f"{STATUS_RUNNING} Running\n{STATUS_STOPPED} Stopped", "color.black"))
         self.console.print()
 
-    def get_table_data(self, databases: Sequence[str]) -> Tuple[List[TableHeader], List[List[Any]], List[str]]:
+    def get_table_data(self, databases: Sequence[str]) -> tuple[list[TableHeader], list[list[Any]], list[str]]:
         """Get the table data for the list of databases."""
-        headers: List[TableHeader] = []
-        rows: List[List[Any]] = []
-        totals: List[int] = []
+        headers: list[TableHeader] = []
+        rows: list[list[Any]] = []
+        totals: list[int] = []
 
         for mapped in TABLE_MAPPING:
             headers.append(TableHeader(title=mapped.title or "", align=mapped.justify or "left"))
             totals.append(0)
 
         for database in databases:
-            row: List[Any] = []
+            row: list[Any] = []
 
             with LocalDatabase(database) as db:
                 for index, mapped in enumerate(TABLE_MAPPING):
@@ -227,6 +223,6 @@ class ListCommand(ListLocalDatabasesMixin, Command):
             )
             rows.sort(key=lambda row: row[column_index])
 
-        totals_formatted: List[str] = [string.bytes_size(total) if total != 0 else "" for total in totals]
+        totals_formatted: list[str] = [string.bytes_size(total) if total != 0 else "" for total in totals]
         totals_formatted[1] = f"{len(databases)} databases"
         return headers, rows, totals_formatted

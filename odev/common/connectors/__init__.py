@@ -5,13 +5,11 @@ from importlib import import_module
 from pathlib import Path
 from typing import cast
 
-
 # --- Common modules -----------------------------------------------------------
-
 from .base import Connector
+from .git import GitConnector, GitWorktree, Stash
 from .postgres import PostgresConnector
 from .rest import RestConnector
-from .git import GitConnector, GitWorktree, Stash
 from .rpc import RpcConnector
 
 

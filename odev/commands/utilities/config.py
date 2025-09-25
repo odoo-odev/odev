@@ -1,7 +1,5 @@
 """Get or set odev configuration values."""
 
-from typing import Optional
-
 from odev.common import args, string
 from odev.common.commands import Command
 from odev.common.console import TableHeader
@@ -33,7 +31,7 @@ class ConfigCommand(Command):
         except KeyError as error:
             raise self.error(str(error.args[0])) from error
 
-    def print_config(self, section: Optional[str] = None, key: Optional[str] = None):
+    def print_config(self, section: str | None = None, key: str | None = None):
         """Print the entire configuration."""
         config = self.config.to_dict()
         headers = [

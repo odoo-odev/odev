@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
 
 from odev.common import string
 from odev.common.commands import Command, DatabaseCommand
@@ -41,15 +40,16 @@ class HistoryStore(PostgresTable):
     }
     _constraints = {"history_unique_command_arguments": "UNIQUE(command, arguments)"}
 
-    def get(self, command: Optional[Command] = None, database: Optional[Database] = None) -> List[HistoryLine]:
+    def get(self, command: Command | None = None, database: Database | None = None) -> list[HistoryLine]:
         """Get the history of a command or a database.
+
         :param command: The command to get the history of.
         :param database: The database to get the history of.
         :return: The history of the command or database.
         :rtype: List[Tuple[Any]]
         """
         where_clause: str = ""
-        where_clauses: List[str] = []
+        where_clauses: list[str] = []
 
         if command is not None:
             where_clauses.append(f"command = {command!r}")

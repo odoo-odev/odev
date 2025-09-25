@@ -6,7 +6,8 @@ import pkgutil
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping
+from datetime import datetime
 from functools import lru_cache
 from importlib.abc import Loader
 from importlib.machinery import FileFinder
@@ -16,18 +17,9 @@ from types import ModuleType
 from typing import (
     Any,
     ClassVar,
-    Generator,
     Generic,
-    Iterable,
-    Iterator,
-    List,
     Literal,
-    Mapping,
-    MutableMapping,
     NamedTuple,
-    Optional,
-    Set,
-    Type,
     TypedDict,
     cast,
 )
@@ -51,6 +43,14 @@ from odev.common.store import DataStore
 from odev.common.string import join_bullet
 
 
+try:
+    from datetime import UTC
+except ImportError:  # UTC is only available in Python 3.11+
+    from datetime import timezone
+
+    UTC = timezone.utc
+
+
 __all__ = ["Odev"]
 
 
@@ -65,6 +65,9 @@ HOME_PATH = Path("~").expanduser() / "odev"
 VENVS_DIRNAME = "virtualenvs"
 """Name of the directory where virtual environments are stored."""
 
+MIN_ARGV_LENGTH = 2
+"""Minimum number of command line arguments required (command and subcommand)."""
+
 
 class Manifest(TypedDict):
     """Plugin manifest information."""
@@ -72,7 +75,7 @@ class Manifest(TypedDict):
     name: str
     description: str
     version: str
-    depends: List[str]
+    depends: list[str]
 
 
 class Plugin(NamedTuple):
@@ -101,7 +104,7 @@ class Odev(Generic[CommandType]):
     store: ClassVar[DataStore]
     """Odev data storage."""
 
-    commands: MutableMapping[str, Type[CommandType]] = {}
+    commands: MutableMapping[str, type[CommandType]] = {}
     """Collection of existing and loaded commands."""
 
     executable: ClassVar[Path] = Path(sys.argv[0])
@@ -110,11 +113,12 @@ class Odev(Generic[CommandType]):
     _started: bool = False
     """Whether the framework has been started."""
 
-    _command_stack: List[CommandType] = []
+    _command_stack: list[CommandType] = []
     """Stack of current commands being executed. Last command in list is the one currently running."""
 
     def __init__(self, test: bool = False):
         """Initialize the framework.
+
         :param test: Whether the framework is being initialized for testing purposes
         """
         self.in_test_mode = test
@@ -215,7 +219,8 @@ class Odev(Generic[CommandType]):
     def start(self) -> None:
         """Start the framework, check for updates and load plugins and commands."""
         if self._started:
-            return logger.debug("Framework already started")
+            logger.debug("Framework already started")
+            return
 
         logger.debug(
             f"Starting {self.name} version {string.stylize(self.version, 'repr.version')} "
@@ -246,14 +251,15 @@ class Odev(Generic[CommandType]):
         upgrade |= any(self._update(path, plugin) for plugin, path, _ in self.plugins)
 
         if upgrade:
-            self.config.update.date = datetime.now(timezone.utc)
+            self.config.update.date = datetime.now(UTC)
             self.upgrade()
 
             if restart:
                 self.restart()
 
-    def _update(self, path: Path, plugin: Optional[str] = None) -> bool:
+    def _update(self, path: Path, plugin: str | None = None) -> bool:
         """Check for updates in the odev repository and download them if necessary.
+
         :param path: Path to a repository to update
         :return: Whether updates were pulled and installed
         :rtype: bool
@@ -262,16 +268,18 @@ class Odev(Generic[CommandType]):
 
         try:
             repository = Repo(path)
-        except NoSuchPathError:
+        except NoSuchPathError as error:
             if plugin:
                 logger.warning(f"Plugin {plugin!r} not found, maybe a missing dependency")
                 self.install_plugin(plugin)
 
-            raise OdevError(f"Error while updating {self.name}")
+            raise OdevError(f"Error while updating {self.name}") from error
 
         manifest: Manifest = self._load_plugin_manifest(path)
         git = GitConnector(cast(str, manifest["name"]), path)
-        assert git.repository is not None
+
+        if git.repository is None:
+            raise OdevError(f"Repository for {self.name!r} not found at {path.as_posix()}")
 
         if not self.__date_check_interval() or not self.__git_branch_behind(git.repository):
             git.fetch()
@@ -315,7 +323,7 @@ class Odev(Generic[CommandType]):
     def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
         logger.debug("Restarting odev")
-        os.execv(self.executable.as_posix(), [*sys.argv, f"--log-level={LOG_LEVEL}"])
+        os.execv(self.executable.as_posix(), [*sys.argv, f"--log-level={LOG_LEVEL}"])  # noqa: S606
 
     def check_upgrade(self) -> bool:
         """Check whether the current version of odev is the latest available version.
@@ -351,9 +359,9 @@ class Odev(Generic[CommandType]):
         logger.debug(f"Last pruning of databases was {last_pruning} days ago")
 
         if last_pruning >= PRUNING_INTERVAL:
-            from odev.common.databases.local import LocalDatabase
+            from odev.common.databases.local import LocalDatabase  # noqa: PLC0415
 
-            delete_command_cls = cast(Type[CommandType], self.commands.get("delete"))
+            delete_command_cls = cast(type[CommandType], self.commands.get("delete"))
             delete_command = cast(DeleteCommand, delete_command_cls(delete_command_cls.parse_arguments([])))
 
             def filter_databases(name: str) -> bool:
@@ -379,7 +387,8 @@ class Odev(Generic[CommandType]):
                 )
 
                 if action == "skip":
-                    return logger.debug("Skipping database pruning")
+                    logger.debug("Skipping database pruning")
+                    return
 
                 if action == "review":
                     whitelisted = self.console.checkbox(
@@ -407,20 +416,26 @@ class Odev(Generic[CommandType]):
         command_dirs = [path for path in sources if path.is_dir() and not path.name.startswith("_")]
         return pkgutil.iter_modules([d.as_posix() for d in command_dirs])
 
-    def import_commands(self, sources: Iterable[Path]) -> List[Type[CommandType]]:
+    def import_commands(self, sources: Iterable[Path]) -> list[type[CommandType]]:
         """Import all commands from the source directories.
+
         :param sources: Source directories to search for commands.
         :return: List of imported command classes
         :rtype: List[CommandType]
         """
         command_modules = self.list_commands(sources)
-        command_classes: List[Type[CommandType]] = []
+        command_classes: list[type[CommandType]] = []
 
         for module_info in command_modules:
-            assert isinstance(module_info.module_finder, FileFinder)
+            if not isinstance(module_info.module_finder, FileFinder):
+                raise TypeError("Module finder is not a FileFinder instance")
+
             module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
             spec = spec_from_file_location(module_path.stem, module_path.as_posix())
-            assert spec is not None and spec.loader is not None
+
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Cannot load module {module_info.name} from {module_path.as_posix()}")
+
             command_module: ModuleType = module_from_spec(spec)
             spec.loader.exec_module(command_module)
             command_classes.extend(command[1] for command in inspect.getmembers(command_module, self.__filter_commands))
@@ -435,11 +450,11 @@ class Odev(Generic[CommandType]):
             logger.debug(f"Registering command {command_class._name!r}")
             command_names = [command_class._name] + (list(command_class._aliases) or [])
 
-            if any(name in command_names for name in self.commands.keys()):
+            if any(name in command_names for name in self.commands):
                 raise ValueError(f"Another command {command_class._name!r} is already registered")
 
             command_class.prepare_command(self)
-            self.commands.update({name: command_class for name in command_names})
+            self.commands.update(dict.fromkeys(command_names, command_class))
 
     def register_plugin_commands(self) -> None:
         """Register commands for the plugins directories, pulling changes in plugins if an error arises while loading
@@ -448,12 +463,14 @@ class Odev(Generic[CommandType]):
         try:
             self._register_plugin_commands()
         except Exception as error:
-            logger.debug(f"Error while loading plugins commands: {error}")
+            logger.error(f"Error while loading plugins commands: {error}")
 
             with progress.spinner("Updating plugins"):
                 for plugin, _, _ in self.plugins:
                     git = GitConnector(plugin)
-                    assert git.repository is not None
+
+                    if git.repository is None:
+                        raise OdevError(f"Repository for plugin {plugin!r} not found") from error
 
                     with Stash(git.repository):
                         git.repository.remotes.origin.fetch()
@@ -482,19 +499,19 @@ class Odev(Generic[CommandType]):
                 logger.debug(f"{action} {command_class._name!r} from plugin {plugin.name!r}")
 
                 if (
-                    command_class._name in self.commands.keys()
+                    command_class._name in self.commands
                     and base_command_class is not None
                     and command_class.__bases__ != base_command_class.__bases__
                 ):
 
-                    class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):  # type: ignore [valid-type,misc]  # noqa: B950
+                    class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):
                         pass
 
-                    command_class = PatchedCommand
+                    command_class = PatchedCommand  # noqa: PLW2901 - we want to override the variable
                     PatchedCommand.__name__ = base_command_class.__name__
 
                 command_class.prepare_command(self)
-                self.commands.update({name: command_class for name in command_names})  # type: ignore [assignment]
+                self.commands.update(dict.fromkeys(command_names, command_class))
 
     def _load_config(self) -> None:
         """Reload the configuration file."""
@@ -565,10 +582,11 @@ class Odev(Generic[CommandType]):
             if plugin in self.config.plugins.enabled:
                 self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != plugin}
 
-            return logger.info(f"Plugin {plugin!r} is not installed")
+            logger.info(f"Plugin {plugin!r} is not installed")
+            return
 
         with progress.spinner(f"Uninstalling plugin {plugin!r}"):
-            dependents: Set[str] = set()
+            dependents: set[str] = set()
 
             for installed_plugin in self._plugins_dependency_tree():
                 if installed_plugin == plugin:
@@ -607,10 +625,10 @@ class Odev(Generic[CommandType]):
         """
         python = PythonEnv()
 
-        if any(python.missing_requirements(plugin_path, False)):
+        if any(python.missing_requirements(plugin_path, raise_if_error=False)):
             python.install_requirements(plugin_path)
 
-    def _setup_plugin(self, plugin_path: Path, plugin: Optional[str] = None) -> None:
+    def _setup_plugin(self, plugin_path: Path, plugin: str | None = None) -> None:
         """Run the setup script of a plugin if it exists.
 
         :param plugin_path: Path to the plugin to setup
@@ -620,14 +638,17 @@ class Odev(Generic[CommandType]):
         if setup_script.exists() and setup_script.is_file():
             logger.info("Running setup for plugin" + (f" {plugin!r}" if plugin else ""))
             spec = spec_from_file_location(f"{plugin_path.name}.setup", setup_script)
-            assert spec is not None and spec.loader is not None
+
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Cannot load setup module from {setup_script.as_posix()}")
+
             setup_module: ModuleType = module_from_spec(spec)
             cast(Loader, spec.loader).exec_module(setup_module)
 
             if hasattr(setup_module, "setup"):
                 setup_module.setup(self)
 
-    @lru_cache
+    @lru_cache  # noqa: B019 - cache result as it won't change during execution
     def _load_plugin_manifest(self, plugin_path: Path) -> Manifest:
         """Load the manifest file of a plugin."""
         resolved_path = plugin_path.resolve()
@@ -642,7 +663,10 @@ class Odev(Generic[CommandType]):
             return defaults
 
         spec = spec_from_file_location(f"{plugin_path.name}.__manifest__", (plugin_path / "__manifest__.py").as_posix())
-        assert spec is not None
+
+        if spec is None:
+            raise ImportError(f"Cannot load manifest module from {(plugin_path / '__manifest__.py').as_posix()}")
+
         manifest = module_from_spec(spec)
         cast(Loader, spec.loader).exec_module(manifest)
 
@@ -653,8 +677,8 @@ class Odev(Generic[CommandType]):
             "depends": getattr(manifest, "depends", defaults["depends"]),
         }
 
-    @lru_cache
-    def _plugins_dependency_tree(self) -> List[str]:
+    @lru_cache  # noqa: B019 - cache result as it won't change during execution
+    def _plugins_dependency_tree(self) -> list[str]:
         """Order plugins by mutual dependencies, the first one in the returned list being the first one that needs to
         be imported to respect the dependency graph.
         """
@@ -668,14 +692,14 @@ class Odev(Generic[CommandType]):
                 graph.add_edge(dependency, manifest["name"])
 
         try:
-            resolved_graph: List[str] = list(nx.topological_sort(graph))
+            resolved_graph: list[str] = list(nx.topological_sort(graph))
             logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
-        except nx.NetworkXUnfeasible:
-            raise OdevError("Circular dependency detected in plugins")
+        except nx.NetworkXUnfeasible as exception:
+            raise OdevError("Circular dependency detected in plugins") from exception
 
         return resolved_graph
 
-    def parse_arguments(self, command_cls: Type[CommandType], *args):
+    def parse_arguments(self, command_cls: type[CommandType], *args):
         """Parse arguments for a command.
 
         :param command_cls: Command class to parse arguments for
@@ -687,7 +711,7 @@ class Odev(Generic[CommandType]):
             arguments = command_cls.parse_arguments(args)
             command_cls.check_arguments(arguments)
         except SystemExit as exception:
-            raise command_cls.error(None, str(exception))  # type: ignore [call-arg]
+            raise command_cls.error(None, str(exception)) from exception
         return arguments
 
     def run_command(
@@ -695,7 +719,7 @@ class Odev(Generic[CommandType]):
         name: str,
         *cli_args: str,
         history: bool = False,
-        database: Optional[DatabaseType] = None,
+        database: DatabaseType | None = None,
     ) -> bool:
         """Run a command with the given arguments.
 
@@ -747,7 +771,7 @@ class Odev(Generic[CommandType]):
 
         return not command_errored
 
-    def dispatch(self, argv: Optional[List[str]] = None) -> None:
+    def dispatch(self, argv: list[str] | None = None) -> None:
         """Handle commands and arguments as received from the terminal.
         :param argv: Optional list of command-line arguments used to override arguments received from the CLI.
         """
@@ -756,7 +780,7 @@ class Odev(Generic[CommandType]):
         if (
             not len(argv)
             or (
-                len(argv) >= 2
+                len(argv) >= MIN_ARGV_LENGTH
                 and any(
                     arg in filter(lambda a: a.startswith("-"), cast(CommandType, self.commands.get("help"))._aliases)
                     for arg in argv
@@ -773,11 +797,12 @@ class Odev(Generic[CommandType]):
 
     def __filter_commands(self, attribute: Any) -> bool:
         """Filter module attributes to extract commands.
+
         :param attribute: Module attribute
         :return: Whether the module attribute is a command
         :rtype: bool
         """
-        from odev.common.commands.base import Command
+        from odev.common.commands.base import Command  # noqa: PLC0415 - avoid circular import
 
         return (
             inspect.isclass(attribute)
@@ -788,6 +813,7 @@ class Odev(Generic[CommandType]):
 
     def __git_branch_behind(self, repository: Repo) -> bool:
         """Assess whether the current branch is behind the remote tracking branch.
+
         :param repository: Git repository to check for pending incoming changes
         :return: Whether the branch is behind the remote tracking branch
         :rtype: bool
@@ -800,7 +826,7 @@ class Odev(Generic[CommandType]):
         repository_path = Path(repository.working_dir)
         repository_name = f"'{repository_path.parent.name}/{repository_path.name}'"
         rev_list: str = repository.git.rev_list("--left-right", "--count", f"{remote_branch.name}...HEAD")
-        commits_behind, commits_ahead = [int(commits_count) for commits_count in rev_list.split("\t")]
+        commits_behind, commits_ahead = (int(commits_count) for commits_count in rev_list.split("\t"))
         message_behind = f"{commits_behind} commit{'s' if commits_behind > 1 else ''} behind"
         message_ahead = f"{commits_ahead} commit{'s' if commits_ahead > 1 else ''} ahead of"
 
@@ -821,6 +847,7 @@ class Odev(Generic[CommandType]):
 
     def __release_notes(self, repository: Repo, from_commit: str) -> Mapping[str, str]:
         """Retrieve the release notes of the latest version of the repository.
+
         :param repository: Git repository to retrieve release notes from
         :param from_commit: Commit hash to start retrieving release notes from
         :return: Release notes grouped by type
@@ -847,12 +874,13 @@ class Odev(Generic[CommandType]):
 
         return {
             key: f"{subtitles[key]}\n{join_bullet([note[0].upper() + note[1:] for note in grouped[key]])}\n"
-            for key in subtitles.keys()
+            for key in subtitles
             if key in grouped
         }
 
     def __requirements_changed(self, repository: Repo) -> bool:
         """Assess whether the requirements.txt file was modified.
+
         :param repository: Git repository to check for changes in requirements.txt file
         :return: Whether the requirements.txt file has changed
         :rtype: bool
@@ -869,6 +897,7 @@ class Odev(Generic[CommandType]):
 
     def __date_check_interval(self) -> bool:
         """Check whether the last check date is older than today minus the check interval.
+
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
@@ -876,6 +905,7 @@ class Odev(Generic[CommandType]):
 
     def __update_prompt(self, name: str) -> bool:
         """Prompt the user to update odev if a new version is available.
+
         :param name: Name of the repository to update
         :return: Whether the user wants to update odev
         :rtype: bool
@@ -887,6 +917,7 @@ class Odev(Generic[CommandType]):
 
     def __validate_upgrade_script(self, script: Path) -> bool:
         """Validate the upgrade script's version to check whether it should be run.
+
         :param script: Upgrade script's path
         :return: Whether the upgrade script should be run
         :rtype: bool
@@ -902,7 +933,7 @@ class Odev(Generic[CommandType]):
             ]
         )
 
-    def __list_upgrade_scripts(self) -> List[Path]:
+    def __list_upgrade_scripts(self) -> list[Path]:
         """List the upgrade scripts that should be run.
 
         :return: Upgrade scripts that should be run
@@ -919,7 +950,10 @@ class Odev(Generic[CommandType]):
         :param script: Upgrade script's path
         """
         spec = spec_from_file_location(script.stem, script.as_posix())
-        assert spec is not None and spec.loader is not None
+
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load upgrade script module from {script.as_posix()}")
+
         script_module: ModuleType = module_from_spec(spec)
         spec.loader.exec_module(script_module)
 

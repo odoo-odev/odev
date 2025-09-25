@@ -1,13 +1,10 @@
 import importlib
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     ClassVar,
-    List,
-    Optional,
-    Tuple,
 )
 from unittest import TestCase
 from unittest.mock import PropertyMock, _patch, patch
@@ -16,6 +13,7 @@ from testfixtures import Replacer
 
 from odev.common import odev
 from odev.common.string import suid
+
 from tests.fixtures import CaptureOutput
 
 
@@ -34,7 +32,7 @@ class OdevTestCase(TestCase):
     run_path: ClassVar[Path]
     """Path to the test case run directory under `/tmp`."""
 
-    _patches: ClassVar[List[_patch]] = []
+    _patches: ClassVar[list[_patch]] = []
     """The patches applied to the test case."""
 
     __config: str
@@ -53,7 +51,7 @@ class OdevTestCase(TestCase):
         cls.odev = odev.Odev(test=True)
         cls.run_id = suid()
         cls.run_name = f"{cls.odev.name}-{cls.run_id}"
-        cls.run_path = Path(f"/tmp/{cls.run_name}")
+        cls.run_path = Path(f"/tmp/{cls.run_name}")  # noqa: S108
         cls.res_path = cls.odev.tests_path / "resources"
         cls.replacer = Replacer()
         cls.__patch_cli()
@@ -106,7 +104,7 @@ class OdevTestCase(TestCase):
         return patch.object(target, attribute, new_callable=PropertyMock, return_value=value, **kwargs)
 
     @classmethod
-    def wrap(cls, target: Any, attribute: str, wrapper: Optional[Callable[..., Any]] = None, **kwargs):
+    def wrap(cls, target: Any, attribute: str, wrapper: Callable[..., Any] | None = None, **kwargs):
         """Wrap an object's attribute with a function, making it registering calls during tests while keeping
         its original behavior.
         :param target: The object to wrap.
@@ -124,7 +122,7 @@ class OdevTestCase(TestCase):
     @classmethod
     def _import_dotted_path(cls, path: str) -> Any:
         """Import an object from a dotted path."""
-        attributes: List[str] = []
+        attributes: list[str] = []
         max_iterations = path.count(".")
 
         while len(attributes) <= max_iterations:
@@ -137,12 +135,15 @@ class OdevTestCase(TestCase):
 
                     imported = getattr(imported, attribute)
 
-                return imported
-
             except ModuleNotFoundError:
                 parts = path.split(".")
                 path = ".".join(parts[:-1])
                 attributes += parts[-1:]
+
+            else:
+                return imported
+
+        return None
 
     @classmethod
     def __unpatch_all(cls):
@@ -153,8 +154,8 @@ class OdevTestCase(TestCase):
     def _patch_object(
         cls,
         target: Any,
-        attributes: Optional[List[Tuple[str, Any]]] = None,
-        properties: Optional[List[Tuple[str, Any]]] = None,
+        attributes: list[tuple[str, Any]] | None = None,
+        properties: list[tuple[str, Any]] | None = None,
         **kwargs,
     ):
         """Patch an object's attributes and properties.
@@ -226,7 +227,7 @@ class OdevTestCase(TestCase):
 class OdevCommandTestCase(OdevTestCase):
     """Extended test case to run commands in test mode."""
 
-    def dispatch_command(self, command: str, *arguments: str) -> Tuple[str, str]:
+    def dispatch_command(self, command: str, *arguments: str) -> tuple[str, str]:
         """Run a command with arguments.
         :param command: The name of the command to run.
         :param arguments: The arguments to pass to the command, as if they where received through the CLI.

@@ -21,7 +21,8 @@ class HistoryCommand(Command):
 
     def run(self) -> None:
         if self.args.clear:
-            return self.clear_history()
+            self.clear_history()
+            return
 
         self.show_history()
 

@@ -4,6 +4,7 @@ from pathlib import Path
 from odev._version import __version__
 from odev.common.commands import Command
 from odev.common.odev import logger
+
 from tests.fixtures import CaptureOutput, OdevTestCase
 
 

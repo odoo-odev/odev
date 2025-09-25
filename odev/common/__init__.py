@@ -41,13 +41,13 @@ for module_info in modules:
 # --- Setup the framework and make it globally available -----------------------
 
 
-global framework
+global framework  # noqa: PLW0603, PLW0604
 framework = None
 
 
 def init_framework():
     """Initialize the framework once."""
-    global framework
+    global framework  # noqa: PLW0603
     if framework is None:
         framework = odev.Odev()
     return framework

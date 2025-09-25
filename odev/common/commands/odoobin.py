@@ -2,13 +2,10 @@ import re
 import shlex
 from abc import ABC
 from argparse import Namespace
+from collections.abc import Mapping
 from pathlib import Path
 from typing import (
-    List,
     Literal,
-    Mapping,
-    Optional,
-    Union,
 )
 
 from rich import markup
@@ -132,7 +129,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         )
 
     @property
-    def odoobin(self) -> Optional[OdoobinProcess]:
+    def odoobin(self) -> OdoobinProcess | None:
         """The odoo-bin process associated with the database."""
         return self._database.process
 
@@ -177,12 +174,13 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         match = self._parse_progress_log_line(line)
 
         if match is None or not self.args.pretty:
-            return self.print(markup.escape(line), highlight=False, soft_wrap=False)
+            self.print(markup.escape(line), highlight=False, soft_wrap=False)
+            return
 
         self.last_level = match.group("level").lower()
         self._print_progress_log_line(match)
 
-    def _guess_addons_paths(self) -> List[Path]:
+    def _guess_addons_paths(self) -> list[Path]:
         """Guess the addons path."""
         if self.args.addons is not None:
             addons_paths = [Path(addon).resolve() for addon in self.args.addons]
@@ -287,11 +285,11 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             soft_wrap=True,
         )
 
-    def _parse_progress_log_line(self, line: str) -> Optional[re.Match]:
+    def _parse_progress_log_line(self, line: str) -> re.Match | None:
         """Parse a line of odoo-bin output."""
         return re.match(self.ODOO_LOG_REGEX, string.strip_ansi_colors(line))
 
-    def _colorize_duration_by_threshold(self, time: Union[str, float], thresholds: Mapping[float, str]) -> str:
+    def _colorize_duration_by_threshold(self, time: str | float, thresholds: Mapping[float, str]) -> str:
         """Colorize the textual representation of a duration according to thresholds.
         :param time: The duration to colorize.
         :param thresholds: A list of tuples containing a threshold and a color.
@@ -344,7 +342,8 @@ class OdoobinTemplateCommand(OdoobinCommand):
 
 class OdoobinShellCommand(OdoobinCommand, ABC):
     """Base class for commands that interact with an odoo-bin shell process
-    with the added ability to run scripts inside its environment."""
+    with the added ability to run scripts inside its environment.
+    """
 
     script = args.String(
         aliases=["--script"],
@@ -371,11 +370,11 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             result = self.run_script()
 
             if result is not None:
-                return self.run_script_handle_result(result)
+                self.run_script_handle_result(result)
         else:
             self.odoobin.run(args=self.args.odoo_args, subcommand="shell")
 
-    def run_script(self) -> Optional[str]:
+    def run_script(self) -> str | None:
         """Run a script inside of odoo-bin shell and exit.
         :return: The output of the script.
         """

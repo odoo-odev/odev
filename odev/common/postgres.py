@@ -1,8 +1,7 @@
 """PostgreSQL database class."""
 
-from abc import ABC
+from collections.abc import Mapping, MutableMapping
 from contextlib import nullcontext
-from typing import Mapping, MutableMapping, Optional
 
 from psycopg2.errors import InvalidTableDefinition
 
@@ -65,14 +64,14 @@ class PostgresDatabase(PostgresConnectorMixin):
                 LIMIT 1
                 """
             )
-        return isinstance(result, list) and result[0][0] or 0
+        return (isinstance(result, list) and result[0][0]) or 0
 
     def exists(self) -> bool:
         """Check if the database exists."""
         with self.psql() as psql:
             return bool(psql.database_exists(self.name))
 
-    def create(self, template: Optional[str] = None) -> bool:
+    def create(self, template: str | None = None) -> bool:
         """Create the database.
 
         :param template: The name of the template to copy.
@@ -138,22 +137,21 @@ class PostgresDatabase(PostgresConnectorMixin):
         )
 
 
-class PostgresTable(ABC):
+class PostgresTable:
     """Representation of a PostgreSQL table in a database."""
 
-    _columns: Optional[Mapping[str, str]] = None
+    _columns: Mapping[str, str] | None = None
     """Columns definition of the table, must be set in subclass.
     Format: `{column_name: column_type}` where `column_type` is the SQL definition of the column.
     """
 
-    _constraints: Optional[Mapping[str, str]] = None
+    _constraints: Mapping[str, str] | None = None
     """Constraints definition of the table, must be set in subclass.
     Format: `{constraint_name: constraint_definition}` where `constraint_definition`.
     """
 
-    def __init__(self, database: PostgresDatabase, name: Optional[str] = None):
+    def __init__(self, database: PostgresDatabase, name: str | None = None):
         """Initialize the database."""
-
         self.database: PostgresDatabase = database
         """The database in which the table is."""
 
@@ -171,10 +169,9 @@ class PostgresTable(ABC):
             if not self.database.table_exists(self.name):
                 logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
                 self.database.create_table(self.name, self._columns)
-            else:
-                if missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
-                    for column in missing_columns:
-                        self.__add_missing_column(column)
+            elif missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
+                for column in missing_columns:
+                    self.__add_missing_column(column)
 
         if self._constraints is not None:
             for name, definition in self._constraints.items():
@@ -187,7 +184,9 @@ class PostgresTable(ABC):
 
     def __add_missing_column(self, column: str):
         """Add a missing column to an existing table."""
-        assert self._columns is not None
+        if self._columns is None:
+            raise ValueError("No columns defined for the table")
+
         logger.debug(f"Adding column {column!r} to table {self.name!r} in database {self.database.name!r}")
 
         try:

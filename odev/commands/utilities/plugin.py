@@ -43,17 +43,20 @@ class PluginCommand(Command):
         """Enable or disable a plugin."""
         if self.args.show:
             if self.args.plugin:
-                return self.__show_plugin_info(self.args.plugin.split("/")[-1])
+                self.__show_plugin_info(self.args.plugin.split("/")[-1])
+                return
 
             for plugin in self.odev.plugins:
                 self.__show_plugin_info(plugin.name)
                 self.console.print()
 
         if self.args.enable:
-            return self.odev.install_plugin(self.args.plugin)
+            self.odev.install_plugin(self.args.plugin)
+            return
 
         if self.args.disable:
-            return self.odev.uninstall_plugin(self.args.plugin)
+            self.odev.uninstall_plugin(self.args.plugin)
+            return
 
     def __show_plugin_info(self, plugin_name: str):
         """Show the plugin information.
@@ -68,10 +71,10 @@ class PluginCommand(Command):
             logger.info(
                 string.normalize_indent(
                     f"""
-                    Plugin {plugin.name!r} is {string.stylize('enabled', 'color.green')}
-                    {string.stylize('Version:', 'color.black')} {string.stylize(plugin.manifest['version'], 'repr.version')}
-                    {string.stylize('Branch:', 'color.black')}  {string.stylize(cast(str, plugin_git.branch), 'color.cyan')}
-                    {string.stylize('Path:', 'color.black')}    {plugin.path.resolve()}
+                    Plugin {plugin.name!r} is {string.stylize("enabled", "color.green")}
+                    {string.stylize("Version:", "color.black")} {string.stylize(plugin.manifest["version"], "repr.version")}
+                    {string.stylize("Branch:", "color.black")}  {string.stylize(cast(str, plugin_git.branch), "color.cyan")}
+                    {string.stylize("Path:", "color.black")}    {plugin.path.resolve()}
                     """
                 )
             )

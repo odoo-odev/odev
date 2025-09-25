@@ -1,4 +1,6 @@
-"""Setup auto completion script for odev commands and databases, see:
+"""Setup auto completion script for odev commands and databases.
+
+See:
 - https://github.com/scop/bash-completion/
 - https://www.gnu.org/savannah-checkouts/gnu/bash/manual/html_node/Programmable-Completion.html
 """
@@ -28,7 +30,7 @@ comp_path = Path("~/.local/share/bash-completion/completions/complete_odev.sh").
 
 
 def setup(odev: Odev) -> None:
-    """Setup auto completion script for odev commands and databases.
+    """Set up auto completion script for odev commands and databases.
 
     See:
     - https://github.com/scop/bash-completion/
@@ -36,7 +38,6 @@ def setup(odev: Odev) -> None:
 
     :param config: Odev configuration
     """
-
     if not comp_path.parent.exists():
         logger.debug(f"Directory {comp_path.parent} does not exist, creating it")
         comp_path.parent.mkdir(parents=True)

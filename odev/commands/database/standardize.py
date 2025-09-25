@@ -30,7 +30,6 @@ class StandardizeCommand(OdoobinCommand):
         message: str = f"customizations from database {self._database.name!r}"
 
         with progress.spinner(f"Removing {message}"):
-            assert self.odoobin is not None
             self.odoobin.standardize(remove_studio=not self.args.keep_studio)
 
         logger.info(f"Removed {message}")

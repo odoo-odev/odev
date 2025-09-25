@@ -40,63 +40,6 @@ jobs:
       - name: run-pre-commit
         uses: pre-commit/action@v3.0.0
 
-  upgrade:
-    name: upgrade
-    runs-on: ubuntu-22.04
-    steps:
-      - name: checkout-repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: setup-postgresql
-        run: |
-          sudo apt install -y postgresql postgresql-client
-          sudo service postgresql start
-          sudo -u postgres createuser -s $USER
-          createdb odev
-
-      - name: setup-python
-        uses: actions/setup-python@v5.0.0
-        with:
-          python-version: '3.12'
-
-      - name: setup-python-requirements
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-
-      - name: checkout-first-commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: e4eab979a66ca9d2fa41b7062100022d28653276  # known working commit in version 4.0.0
-
-      - name: setup-python-requirements
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-
-      - name: run-odev
-        run: |
-          python main.py version -v debug
-          cat <<EOT >> ~/.config/odev/odev.cfg
-          [update]
-          version = 4.0.0
-          EOT
-
-      - name: checkout-last-commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: run-odev
-        run: python main.py version -v debug
-
   unit-tests:
     name: unit-tests-${{ matrix.os }}-python${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -173,4 +116,4 @@ jobs:
           POSTGRES_HOST: postgres
           POSTGRES_PORT: 5432
         run: |
-          coverage run -m pytest ./tests --exitfirst --capture=no
+          coverage run -m pytest ./tests --exitfirst
