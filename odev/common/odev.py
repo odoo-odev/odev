@@ -294,7 +294,18 @@ class Odev(Generic[CommandType]):
             return False
 
         with progress.spinner(f"Updating {prompt_name}"):
+            if git.repository.head.is_detached:
+                raise OdevError(
+                    f"Cannot update {prompt_name} as the repository is in a detached HEAD state\n"
+                    "Consider checking out the main branch for regular updates"
+                )
+
             current_branch = git.repository.active_branch.name
+
+            if not plugin and current_branch != "main":
+                logger.warning("Running from a non-standard branch, update may not be available")
+                logger.info("Consider switching to the 'main' branch for regular updates")
+
             logger.debug(f"Pulling latest changes from {git.name!r} on branch {current_branch!r}")
             install_requirements = self.__requirements_changed(git.repository)
             head_commit = git.repository.commit().hexsha
