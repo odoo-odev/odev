@@ -2,6 +2,7 @@
 
 import pkgutil
 from importlib import import_module
+from inspect import isclass
 from pathlib import Path
 from typing import cast
 
@@ -41,7 +42,7 @@ class DataStore(PostgresDatabase):
             for attribute in dir(module):
                 obj = getattr(module, attribute)
 
-                if isinstance(obj, type) and issubclass(obj, PostgresTable) and obj is not PostgresTable:
+                if isclass(obj) and issubclass(obj, PostgresTable) and obj is not PostgresTable:
                     obj_name = getattr(obj, "name", None)
 
                     if not obj_name:

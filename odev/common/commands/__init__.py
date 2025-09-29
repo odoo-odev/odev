@@ -3,6 +3,7 @@
 import pkgutil
 from importlib import import_module
 from pathlib import Path
+from inspect import isclass
 
 # --- Common modules -----------------------------------------------------------
 from typing import TypeVar, cast
@@ -33,7 +34,7 @@ for module_info in modules:
     for attribute in dir(module):
         obj = getattr(module, attribute)
 
-        if isinstance(obj, type) and issubclass(obj, Command) and obj is not Command:
+        if isclass(obj) and issubclass(obj, Command) and obj is not Command:
             globals()[attribute] = obj
 
 
