@@ -4,6 +4,7 @@ import pkgutil
 from importlib import import_module
 from pathlib import Path
 from typing import cast
+from inspect import isclass
 
 # --- Common modules -----------------------------------------------------------
 from .base import Branch, Database, DummyDatabase, Filestore, Repository
@@ -25,5 +26,5 @@ for module_info in modules:
     for attribute in dir(module):
         obj = getattr(module, attribute)
 
-        if isinstance(obj, type) and issubclass(obj, Database) and obj is not Database:
+        if isclass(obj) and issubclass(obj, Database) and obj is not Database:
             globals()[attribute] = obj
