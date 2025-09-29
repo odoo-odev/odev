@@ -237,7 +237,7 @@ class Odev(Generic[CommandType]):
         self.prune_databases()
         self._started = True
 
-    def update(self, restart: bool = True, upgrade: bool = False) -> None:
+    def update(self, restart: bool = True, upgrade: bool = False) -> bool:
         """Update the framework and plugins if necessary.
         :param restart: Whether to restart the framework after updating.
         :param upgrade: Whether to force the upgrade process.
@@ -248,14 +248,16 @@ class Odev(Generic[CommandType]):
         upgrade |= self._update(self.path, self.name)
 
         logger.debug("Checking for updates in plugins")
-        upgrade |= any(self._update(path, plugin) for plugin, path, _ in self.plugins)
+        plugins_upgrade = any(self._update(path, plugin) for plugin, path, _ in self.plugins)
 
-        if upgrade:
+        if upgrade or plugins_upgrade:
             self.config.update.date = datetime.now(UTC)
             self.upgrade()
 
             if restart:
                 self.restart()
+
+        return upgrade
 
     def _update(self, path: Path, plugin: str | None = None) -> bool:
         """Check for updates in the odev repository and download them if necessary.

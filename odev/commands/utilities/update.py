@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from packaging import version
+
 from odev.common import string
 from odev.common.commands import Command
 from odev.common.config import DATETIME_FORMAT
@@ -21,10 +23,10 @@ class UpdateCommand(Command):
         update_mode = self.odev.config.update.mode
         self.odev.config.update.mode = "always"
         self.odev.config.update.date = datetime.strptime("1995-12-21 00:00:00", DATETIME_FORMAT)
-        self.odev.update(restart=False, upgrade=True)
+        updated = self.odev.update(restart=False, upgrade=True)
         self.odev.config.update.mode = update_mode
 
-        if from_version != self.odev.version:
+        if updated and version.parse(from_version) < version.parse(self.odev.version):
             logger.info(f"Updated to {string.stylize(self.odev.version, 'repr.version')}!")
         else:
-            logger.info("No update available")
+            logger.info("Odev is up to date")
