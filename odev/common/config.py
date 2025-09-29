@@ -342,11 +342,14 @@ class Config:
 
     def to_dict(self) -> dict[str, dict[str, str]]:
         """Convert the config to a dict."""
-        converted: dict[str, dict[str, str]] = self.parser.__dict__["_sections"]
+        converted: dict[str, dict[str, str]] = self.parser.__dict__["_sections"].copy()
+        cleaned: dict[str, dict[str, str]] = {}
 
         for section, options in converted.items():
             if not (section_obj := getattr(self, section, None)):
                 continue
+
+            cleaned[section] = {}
 
             for key in options:
                 if not (option_obj := getattr(section_obj, key, None)):
@@ -355,4 +358,6 @@ class Config:
                 if isinstance(option_obj, list):
                     options[key] = "\n".join(options[key].split(","))
 
-        return converted
+                cleaned[section][key] = options[key]
+
+        return cleaned
