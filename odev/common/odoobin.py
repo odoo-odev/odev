@@ -721,6 +721,15 @@ class OdoobinProcess(OdevFrameworkMixin):
         )
 
     @classmethod
+    def check_addon_path(cls, path: Path) -> bool:
+        """Return whether the given path is a valid Odoo addon.
+        :param path: Path to check.
+        :return: True if the path is a valid Odoo addon path, False otherwise.
+        :rtype: bool
+        """
+        return (path.is_dir() and (path / "__manifest__.py").exists()) or (path / "__openerp__.py").exists()
+
+    @classmethod
     def version_from_addons(cls, path: Path) -> OdooVersion | None:
         """Find the highest Odoo version of the addons in a directory, if this is an addons directory.
 
