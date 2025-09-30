@@ -59,6 +59,9 @@ SILENCED_LOGGERS = [
     "pip._internal",
     "rich",
     "urllib3",
+    "httpcore.connection",
+    "httpcore.http11",
+    "LiteLLM",
 ]
 
 
