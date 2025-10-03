@@ -15,13 +15,14 @@ from typing import (
 )
 
 from cachetools.func import ttl_cache
+from packaging.version import Version
 
 from odev.common import bash, string
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
 from odev.common.databases.remote import RemoteDatabase
 from odev.common.debug import find_debuggers
-from odev.common.logging import LOG_LEVEL, logging
+from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.progress import spinner
 from odev.common.python import PythonEnv
@@ -47,6 +48,7 @@ ODOO_COMMUNITY_REPOSITORIES: list[str] = [
 ODOO_ENTERPRISE_REPOSITORIES: list[str] = ["odoo/enterprise"]
 
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
+    19: "3.12",
     16: "3.10",
     14: "3.8",
     11: "3.7",
@@ -121,6 +123,19 @@ class OdoobinProcess(OdevFrameworkMixin):
             f"pid={self.pid!r}"
             ")"
         )
+
+    @classmethod
+    def get_psql_version(cls) -> Version | None:
+        """Return the version of psql installed on the system."""
+        process = bash.execute("psql --version")
+
+        if process is not None and process.returncode == 0:
+            match = re.search(r"(\d+\.\d+)", process.stdout.decode())
+
+            if match is not None:
+                return Version(match.group(1))
+
+        return None
 
     @property
     def venv(self) -> PythonEnv:
@@ -403,6 +418,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         with spinner(f"Preparing virtual environment {self.venv.name!r}"):
             self.prepare_venv()
             self.prepare_npm()
+            self.prepare_psql()
 
     def format_command(
         self,
@@ -572,13 +588,33 @@ class OdoobinProcess(OdevFrameworkMixin):
             else:
                 return process
 
+    def prepare_psql(self):
+        """Prepare the PostgreSQL for the Odoo installation.
+        Mainly, check that the installed version is supported.
+        """
+        logger.debug("Verifying PostgreSQL installation")
+
+        with silence_loggers("odev.common.bash"):
+            psql_version = self.get_psql_version()
+
+        if psql_version is None:
+            raise RuntimeError("PostgreSQL is not installed, please install it first")
+
+        if self.version is None:
+            logger.warning("No version specified, skipping PostgreSQL version check")
+            return
+
+        if self.version >= OdooVersion("19.0") and psql_version < Version("16.0"):
+            raise RuntimeError(
+                f"Odoo {self.version} requires PostgreSQL 16 or higher, current version is {psql_version}"
+            )
+
     def prepare_npm(self):
         """Prepare the packages of the Odoo installation."""
-        if not self.database.exists:
-            raise RuntimeError("Database does not exist")
-
         logger.debug("Verifying NPM installation")
-        npm_process = bash.execute("which npm")
+
+        with silence_loggers("odev.common.bash"):
+            npm_process = bash.execute("which npm", raise_on_error=False)
 
         if npm_process is None or npm_process.returncode:
             raise RuntimeError("NPM is not installed, please install it first")
@@ -723,6 +759,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     @classmethod
     def check_addon_path(cls, path: Path) -> bool:
         """Return whether the given path is a valid Odoo addon.
+
         :param path: Path to check.
         :return: True if the path is a valid Odoo addon path, False otherwise.
         :rtype: bool
