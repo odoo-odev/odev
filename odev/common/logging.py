@@ -116,6 +116,8 @@ logging.basicConfig(
     format="%(message)s" if LOG_LEVEL != "DEBUG" else "[color.black](%(name)s)[/color.black] %(message)s",
     handlers=[
         OdevRichHandler(
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
             show_time=False,
             console=console,
             markup=True,
