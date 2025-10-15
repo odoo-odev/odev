@@ -256,7 +256,7 @@ class Database(OdevFrameworkMixin, ABC):
         """
         prefix = datetime.utcnow().strftime("%Y%m%d")
         suffix = f".{suffix}" if suffix else ""
-        extension = extension if extension is not None else "zip" if filestore else "sql"
+        extension = extension if extension is not None else ("zip" if filestore else "sql")
         return f"{prefix}-{self.name}.dump{suffix}.{extension}"
 
     def info(self) -> DatabaseInfo:

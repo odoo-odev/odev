@@ -547,10 +547,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 shutil.move(temp_file, file)
             else:
                 with progress.spinner(f"Writing dump to archive {file}"):
-                    shutil.make_archive((file.parent / file.stem).as_posix(), "zip", self.filestore.path)
-
-                    with ZipFile(file, "w") as zip_file:
-                        zip_file.write(temp_file.as_posix(), "dump.sql")
+                    temp_directory_path = Path(temp_directory)
+                    temp_file = temp_file.rename(temp_directory_path / "dump.sql")
+                    shutil.copytree(self.filestore.path, temp_directory_path / "filestore")
+                    shutil.make_archive((file.parent / file.stem).as_posix(), "zip", temp_directory_path)
 
         return file
 
