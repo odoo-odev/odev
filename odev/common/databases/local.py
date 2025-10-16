@@ -22,6 +22,8 @@ from typing import (
 )
 from zipfile import ZipFile
 
+from packaging.version import Version
+
 from odev.common import bash, progress, string
 from odev.common.connectors import GitWorktree, PostgresConnector
 from odev.common.databases import Branch, Database, Filestore, Repository
@@ -714,7 +716,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         tracker.start()
 
         command = "psql" if mode != "dump" else "pg_restore --disable-triggers --no-owner --no-privileges"
-        command += f" --dbname {self.name} --single-transaction"
+        command += f" --dbname {self.name} --single-transaction -v ON_ERROR_STOP=1"
 
         # In the event the SQL dump doesn't set the unaccent function as immutable, we need to force it on the database
         # ourselves. The creation of the function should be around the 50th line in the SQL file, we crawl up to
@@ -730,15 +732,36 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
             dump.seek(0)
 
-        psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, bufsize=-1)  # noqa: S602
+        psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, bufsize=-1)  # noqa: S602
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
         thread.start()
 
-        for line in dump:
-            if mode == "dump" or line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
-                psql_process.stdin.write(line)
+        try:
+            for line in dump:
+                if mode == "dump" or line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
+                    psql_process.stdin.write(line)
 
             tracker.update(extract_task_id, advance=len(line))
+        except BrokenPipeError as error:
+            tracker.stop()
+            logger.error(
+                "Failed to restore dump, the psql process exited unexpectedly with error:\n"
+                f"{psql_process.stderr.read().decode()}"
+            )
+
+            dump.seek(0)
+            dump_psql_version = re.search(r"Dumped from database version (\d+\.\d+)", dump.read(4000).decode()).group(1)
+            odev_psql_version = OdoobinProcess.get_psql_version()
+            logger.warning(
+                "This could be a PostgreSQL version mismatch between the dump and the installed psql client:\n"
+                f"- Dump version:  {dump_psql_version}\n"
+                f"- Local version: {odev_psql_version}\n"
+            )
+
+            if Version(dump_psql_version) > odev_psql_version:
+                logger.warning("Consider upgrading your local PostgreSQL installation")
+
+            raise OdevError("Restore aborted") from error
 
         tracker.update(extract_task_id, advance=1)
         psql_process.stdin.close()
