@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable, Generator, Mapping, MutableMapping
 from functools import lru_cache
 from pathlib import Path
-from subprocess import CompletedProcess
+from subprocess import CalledProcessError, CompletedProcess
 
 import virtualenv
 from cachetools.func import ttl_cache
@@ -15,6 +15,7 @@ from packaging.version import InvalidVersion, Version, parse as parse_version
 
 from odev.common import bash, progress, string
 from odev.common.console import console
+from odev.common.errors import OdevError
 from odev.common.logging import logging, silence_loggers
 
 
@@ -178,14 +179,18 @@ class PythonEnv:
                     virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
             except RuntimeError as error:
                 if str(error).startswith("failed to find interpreter") and not self._global:
-                    logger.warning(
-                        f"Missing interpreter for python {self.version}, attempting automatic installation "
-                        "of missing system packages"
-                    )
+                    logger.warning(f"Missing interpreter for python {self.version}")
+
+                    if not console.confirm(
+                        "Do you want to attempt to install missing system packages automatically?",
+                        default=False,
+                    ):
+                        raise OdevError("Failed to create virtual environment") from error
+
                     self.install_system_packages()
                     return self.create()
 
-                raise RuntimeError("Failed to create virtual environment") from error
+                raise OdevError("Failed to create virtual environment") from error
 
         return logger.info(f"Created {venv_description}")
 
@@ -206,8 +211,6 @@ class PythonEnv:
         if self._global:
             raise RuntimeError("Cannot install system packages for the global python interpreter")
 
-        logger.info(f"Installing system packages for python {self.version}")
-
         with progress.spinner("Installing system packages"):
             package_manager = next((pkg for pkg in OS_PACKAGES if shutil.which(pkg)), None)
 
@@ -218,7 +221,23 @@ class PythonEnv:
                 )
 
             packages = " ".join([pkg.format(version=self.version) for pkg in OS_PACKAGES[package_manager]])
-            bash.execute(f"{package_manager} install -y {packages}", sudo=True)
+            logger.info(
+                f"The following packages will be installed using {package_manager}:\n"
+                + string.join_bullet(packages.split())
+            )
+
+            if not console.confirm("Continue?", default=True):
+                logger.warning("Aborting system package installation")
+                return
+
+            try:
+                bash.execute(f"{package_manager} install -y {packages}", sudo=True)
+            except CalledProcessError as error:
+                if "Unable to locate package python3" in error.stderr.decode():
+                    logger.error(f"Python {self.version} is not available in the system package manager")
+                    logger.warning("Have you enabled all required repositories (e.g. ppa:deadsnakes/ppa)?")
+
+                raise OdevError("Failed to install system packages, please do it manually") from error
 
             if package_manager == "dnf":
                 lldap_r = Path("/usr/lib64/libldap_r.so")

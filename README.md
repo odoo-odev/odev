@@ -6,6 +6,7 @@ Automate common tasks relative to working with Odoo development databases.
 
 -   [ODEV](#odev)
     -   [About](#about)
+    -   [Requirements](#requirements)
     -   [Installation](#installation)
     -   [Contributing](#contributing)
     -   [Features](#features)
@@ -23,26 +24,38 @@ Odev is a multi-purpose tool designed for making the life of Odoo developers and
 It provides wrapper scripts around common tasks, speeding up the whole process of working with databases and allowing
 shortcuts to otherwise lengthy commands.
 
-## Installation
+## Requirements
 
-Make sure [Python 3.10 or higher](https://www.python.org/downloads/) is installed and available in your path.
+Before you can run this tool, make sure the below requirements are set on your system:
+
+- [Python **3.10.12** or higher](https://www.python.org/downloads/) (3.12+ is recommended)
+- Python's [virtualenv](https://virtualenv.pypa.io/en/latest/) module (this is **not** python3-venv)
+- [PostgreSQL](https://www.odoo.com/documentation/19.0/administration/on_premise/source.html#prepare) as from Odoo's
+  source install requirements
+- [Other Odoo dependencies](https://www.odoo.com/documentation/19.0/administration/on_premise/source.html#dependencies)
+
+Make sure `git` is properly setup with SSH key authentication before using commands, as Odev will try to connect to
+the Odoo [Community](https://github.com/odoo/odoo) and [Enterprise](https://github.com/odoo/enterprise) repositories
+to pull sources when required.
+
+## Installation
 
 Clone the [odev repository](https://github.com/odoo-odev/odev) to your computer and navigate to the `odev` folder:
 
 ```sh
-git clone git@github.com:odoo-odev/odev.git && cd odev
+git clone https://github.com/odoo-odev/odev.git && cd odev
 ```
 
-Install the requirements through `pip`:
+Run the install script:
 
 ```sh
-pip install --user -r requirements.txt
+./install.sh
 ```
 
-Run `setup.py` and follow the instructions displayed on screen:
+Run `odev setup` to configure `odev`:
 
 ```sh
-python ./setup.py
+odev setup
 ```
 
 That's it! You are ready to go, use `odev` from anywhere in your terminal to use it.
@@ -84,12 +97,21 @@ Plugins can be enabled with the predefined command `odev plugin --enable <plugin
 
 #### Known Plugins
 
-| Name                                                                                          | Description                                                                                                  |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [odoo-ps/odev-plugin-hosted](https://github.com/odoo-ps/odev-plugin-hosted)                   | Interact with PaaS (odoo.sh) and SaaS (Odoo Online) databases, requires Odoo Technical Support access level. |
-| [odoo-odev/odev-plugin-editor-vscode](https://github.com/odoo-odev/odev-plugin-editor-vscode) | Interact with VSCode, open a debugger session and configure workspaces.                                      |
-| [odoo-odev/odev-plugin-export](https://github.com/odoo-odev/odev-plugin-export)               | Export customizations from a database and convert Studio to code.                                            |
-| [odoo-odev/odev-plugin-project](https://github.com/odoo-odev/odev-plugin-project)             | Follow-up on projects and setup working directories for creating new Odoo modules.                           |
+[plugin-ai-translation]: https://github.com/odoo-odev/odev-plugin-ai-translation
+[plugin-ai-scaffold]: https://github.com/odoo-ps/odev-plugin-ai-scaffold
+[plugin-editor-vscode]: https://github.com/odoo-odev/odev-plugin-editor-vscode
+[plugin-export]: https://github.com/odoo-odev/odev-plugin-export
+[plugin-project]: https://github.com/odoo-odev/odev-plugin-project
+[plugin-hosted]: https://github.com/odoo-ps/odev-plugin-hosted
+
+| Name                                                          | Description                                                                                                  |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [odoo-odev/odev-plugin-ai-translation][plugin-ai-translation] | Generate Odoo module translations using AI.                                                                  |
+| [odoo-odev/odev-plugin-ai-scaffold][plugin-ai-scaffold]       | Scaffold Odoo modules using AI, based on a formatted technical specification.                                |
+| [odoo-odev/odev-plugin-editor-vscode][plugin-editor-vscode]   | Interact with VSCode, open a debugger session and configure workspaces.                                      |
+| [odoo-odev/odev-plugin-export][plugin-export]                 | Export customizations from a database and convert Studio to code.                                            |
+| [odoo-odev/odev-plugin-project][plugin-project]               | Follow-up on projects and setup working directories for creating new Odoo modules.                           |
+| [odoo-ps/odev-plugin-hosted][plugin-hosted]                   | Interact with PaaS (odoo.sh) and SaaS (Odoo Online) databases, requires Odoo Technical Support access level. |
 
 ### Credentials
 

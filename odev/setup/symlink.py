@@ -24,7 +24,7 @@ def setup(odev: Odev) -> None:
 
     :param config: Odev configuration
     """
-    main_path = Path(__file__).parents[2] / "main.py"
+    main_path = Path(__file__).parents[2] / "odev.sh"
     known_env_paths = getenv("PATH", "").split(":")
     local_path = Path("~/.local/bin").expanduser()
     link_path = (local_path if str(local_path) in known_env_paths else Path("/usr/local/bin")) / "odev"
