@@ -13,6 +13,7 @@ from importlib.abc import Loader
 from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+from time import sleep
 from types import ModuleType
 from typing import (
     Any,
@@ -25,7 +26,7 @@ from typing import (
 )
 
 import networkx as nx
-from git import NoSuchPathError, Repo
+from git import GitCommandError, NoSuchPathError, Repo
 from packaging import version
 
 from odev._version import __version__
@@ -245,13 +246,14 @@ class Odev(Generic[CommandType]):
         upgrade |= self.check_upgrade()
 
         logger.debug(f"Checking for updates in {self.name!r}")
-        upgrade |= self._update(self.path, self.name)
+        upgrade |= self._update(self.path)
 
         logger.debug("Checking for updates in plugins")
         plugins_upgrade = any(self._update(path, plugin) for plugin, path, _ in self.plugins)
 
         if upgrade or plugins_upgrade:
             self.config.update.date = datetime.now(UTC)
+            self._set_version_after_update()
             self.upgrade()
 
             if restart:
@@ -311,7 +313,19 @@ class Odev(Generic[CommandType]):
             head_commit = git.repository.commit().hexsha
 
             with Stash(git.repository):
-                repository.git.pull(repository.remote().name, current_branch)
+                try:
+                    repository.git.pull(repository.remote().name, current_branch)
+                except GitCommandError as error:
+                    error_message = f"Error while pulling latest changes for {prompt_name}: {error}"
+
+                    if "fatal: Cannot rebase onto multiple branches" in str(error):
+                        # Likely happening because of a race condition when a detached subprocess is fetching changes
+                        # in the same repository, we can safely retry after a short wait
+                        logger.debug(error_message)
+                        sleep(0.5)
+                        return self._update(path, plugin)
+
+                    raise OdevError(error_message) from error
 
             if install_requirements:
                 logger.debug(f"Installing new package requirements for {prompt_name!r}")
@@ -338,14 +352,32 @@ class Odev(Generic[CommandType]):
         logger.debug("Restarting odev")
         os.execv(self.executable.as_posix(), [*sys.argv, f"--log-level={LOG_LEVEL}"])  # noqa: S606
 
+    def _set_version_after_update(self):
+        """Set the version of odev after an update by reading it from the _version.py file.
+
+        :return: The version of odev after an update
+        :rtype: version.Version
+        """
+        version_module_path = self.path / "odev" / "_version.py"
+        spec = spec_from_file_location("_version", version_module_path)
+
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load version module from {version_module_path}")
+
+        version_module = module_from_spec(spec)
+        spec.loader.exec_module(version_module)
+        self.__class__.version = version_module.__version__
+
     def check_upgrade(self) -> bool:
         """Check whether the current version of odev is the latest available version.
 
         :return: Whether the current version is the latest available version
         :rtype: bool
         """
-        logger.debug("Checking for existing upgrades")
-        return version.parse(self.version) > version.parse(self.config.update.version)
+        new_version = version.parse(self.version)
+        old_version = version.parse(self.config.update.version)
+        logger.debug(f"Checking for existing upgrades from {old_version} to {new_version}")
+        return new_version > old_version
 
     def upgrade(self) -> None:
         """Upgrade the current version of odev."""
