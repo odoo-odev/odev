@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+"""Entry point for the odev package."""
 
 import odev.__main__ as main
 

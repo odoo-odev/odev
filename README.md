@@ -27,22 +27,24 @@ shortcuts to otherwise lengthy commands.
 
 Make sure [Python 3.10 or higher](https://www.python.org/downloads/) is installed and available in your path.
 
+Install [virtualenv](https://virtualenv.pypa.io/en/latest/) if not already available.
+
 Clone the [odev repository](https://github.com/odoo-odev/odev) to your computer and navigate to the `odev` folder:
 
 ```sh
-git clone git@github.com:odoo-odev/odev.git && cd odev
+git clone https://github.com/odoo-odev/odev.git && cd odev
 ```
 
-Install the requirements through `pip`:
+Run the install script:
 
 ```sh
-pip install --user -r requirements.txt
+./install.sh
 ```
 
-Run `setup.py` and follow the instructions displayed on screen:
+Run `odev setup` to configure `odev`:
 
 ```sh
-python ./setup.py
+odev setup
 ```
 
 That's it! You are ready to go, use `odev` from anywhere in your terminal to use it.
