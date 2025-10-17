@@ -23,11 +23,16 @@ Odev is a multi-purpose tool designed for making the life of Odoo developers and
 It provides wrapper scripts around common tasks, speeding up the whole process of working with databases and allowing
 shortcuts to otherwise lengthy commands.
 
+## Requirements
+
+Before you can run this tool, make sure the below requirements are set on your system:
+
+- [Python **3.10.12** or higher](https://www.python.org/downloads/) (3.12+ is recommended)
+- Python's [virtualenv](https://virtualenv.pypa.io/en/latest/) module (this is **not** python3-venv)
+- [PostgreSQL](https://www.odoo.com/documentation/19.0/administration/on_premise/source.html#prepare) as from Odoo's
+  source install requirements
+
 ## Installation
-
-Make sure [Python 3.10 or higher](https://www.python.org/downloads/) is installed and available in your path.
-
-Install [virtualenv](https://virtualenv.pypa.io/en/latest/) if not already available.
 
 Clone the [odev repository](https://github.com/odoo-odev/odev) to your computer and navigate to the `odev` folder:
 
