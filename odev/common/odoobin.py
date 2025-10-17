@@ -22,6 +22,7 @@ from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
 from odev.common.databases.remote import RemoteDatabase
 from odev.common.debug import find_debuggers
+from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.progress import spinner
@@ -487,7 +488,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                 args.extend(["--password", shlex.quote(secret.password)])
 
         if not database.is_odoo:
-            raise RuntimeError("Cannot deploy onto a non-odoo database")
+            raise OdevError("Cannot deploy onto a non-odoo database")
 
         odoo_subcommand: str = "deploy"
         odoo_command: str = f"odoo-bin {odoo_subcommand}"
@@ -540,7 +541,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         :rtype: subprocess.CompletedProcess
         """
         if self.is_running and subcommand is None:
-            raise RuntimeError("Odoo is already running on this database")
+            raise OdevError("Odoo is already running on this database")
 
         if prepare:
             with spinner(f"Preparing odoo-bin version {str(self.version)!r} for database {self.database.name!r}"):
@@ -598,16 +599,14 @@ class OdoobinProcess(OdevFrameworkMixin):
             psql_version = self.get_psql_version()
 
         if psql_version is None:
-            raise RuntimeError("PostgreSQL is not installed, please install it first")
+            raise OdevError("PostgreSQL is not installed, please install it first")
 
         if self.version is None:
             logger.warning("No version specified, skipping PostgreSQL version check")
             return
 
         if self.version >= OdooVersion("19.0") and psql_version < Version("16.0"):
-            raise RuntimeError(
-                f"Odoo {self.version} requires PostgreSQL 16 or higher, current version is {psql_version}"
-            )
+            raise OdevError(f"Odoo {self.version} requires PostgreSQL 16 or higher, current version is {psql_version}")
 
     def prepare_npm(self):
         """Prepare the packages of the Odoo installation."""
@@ -617,7 +616,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             npm_process = bash.execute("which npm", raise_on_error=False)
 
         if npm_process is None or npm_process.returncode:
-            raise RuntimeError("NPM is not installed, please install it first")
+            raise OdevError("NPM is not installed, please install it first")
 
         packages = ["rtlcss"]
 
@@ -634,7 +633,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         installed_packages_process = bash.execute(f"cd {self.odoo_path} && npm list")
 
         if installed_packages_process is None:
-            raise RuntimeError("Failed to check installed NPM packages")
+            raise OdevError("Failed to check installed NPM packages")
 
         installed_packages = installed_packages_process.stdout.decode()
 
@@ -645,7 +644,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     def prepare_venv(self):
         """Prepare the virtual environment of the Odoo installation."""
         if not self.database.exists:
-            raise RuntimeError("Database does not exist")
+            raise OdevError("Database does not exist")
 
         if not self.venv.exists:
             self.venv.create()
@@ -897,7 +896,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         :param dry: Whether to only print the command that would be executed without running it.
         """
         if self.is_running:
-            raise RuntimeError("Odoo is already running on this database")
+            raise OdevError("Odoo is already running on this database")
 
         with spinner(f"Preparing Odoo {str(self.version)!r} for database {self.database.name!r}"):
             self.prepare_odoobin()

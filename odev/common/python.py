@@ -72,7 +72,7 @@ def get_python_version(path: Path | str) -> str:
     process = bash.execute(f"{path} --version")
 
     if process is None:
-        raise RuntimeError(f"Failed to get python version from interpreter at {path}")
+        raise OdevError(f"Failed to get python version from interpreter at {path}")
 
     return ".".join(re.sub(r"[^\d\.]", "", process.stdout.decode()).split(".")[:2])
 
@@ -169,7 +169,7 @@ class PythonEnv:
     def create(self) -> None:
         """Create a new virtual environment."""
         if self._global:
-            raise RuntimeError("Cannot create a virtual environment from the global python interpreter")
+            raise OdevError("Cannot create a virtual environment from the global python interpreter")
 
         venv_description = f"virtual environment {self.name!r} with python version {self.version}"
 
@@ -209,13 +209,13 @@ class PythonEnv:
     def install_system_packages(self) -> None:
         """Install system packages for the current python version."""
         if self._global:
-            raise RuntimeError("Cannot install system packages for the global python interpreter")
+            raise OdevError("Cannot install system packages for the global python interpreter")
 
         with progress.spinner("Installing system packages"):
             package_manager = next((pkg for pkg in OS_PACKAGES if shutil.which(pkg)), None)
 
             if not package_manager:
-                raise RuntimeError(
+                raise OdevError(
                     f"Neither {string.join_or(list(OS_PACKAGES.keys()))} package managers found on the system, "
                     "cannot install packages"
                 )
@@ -354,7 +354,7 @@ class PythonEnv:
         packages = bash.execute(f"{self.pip} freeze --all")
 
         if packages is None:
-            raise RuntimeError("Failed to run pip freeze")
+            raise OdevError("Failed to run pip freeze")
 
         return packages
 

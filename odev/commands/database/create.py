@@ -183,7 +183,8 @@ class CreateCommand(OdoobinTemplateCommand):
         try:
             run_process = process.run(args=args, progress=self.odoobin_progress)
             self.console.print()
-        except OdevError:
+        except OdevError as error:
+            logger.error(str(error))
             run_process = None
 
         if run_process is None:
