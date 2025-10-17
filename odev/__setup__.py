@@ -7,6 +7,7 @@ from signal import SIGINT, SIGTERM, signal
 
 from odev._version import __version__
 from odev.common import init_framework, signal_handling as handlers
+from odev.common.errors import OdevError
 from odev.common.logging import logging
 
 
@@ -28,7 +29,7 @@ def main():
         # --- Do not run as superuser ------------------------------------------
         logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
-            raise RuntimeError("Odev should not be run as root")
+            raise OdevError("Odev should not be run as root")
 
         # --- Initialize odev configuration files ------------------------------
         logger.debug("Initializing configuration files")
@@ -38,7 +39,7 @@ def main():
         loader = find_spec("odev.setup")
 
         if loader is None or not loader.submodule_search_locations:
-            raise RuntimeError("Could not find the setup module")
+            raise OdevError("Could not find the setup module")
 
         submodules = sorted(
             (

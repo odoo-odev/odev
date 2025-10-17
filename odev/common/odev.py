@@ -340,10 +340,7 @@ class Odev(Generic[CommandType]):
                 sections = "\n".join(notes.values())
                 logger.info(f"Updated {prompt_name}:\n\n{sections}")
                 self.console.print(highlight=False)
-                logger.info(
-                    "Check the full changelog at "
-                    f"https://github.com/{git.name}/compare/{head_commit}...{current_branch}"
-                )
+                logger.info(f"Check the full changelog at {git.remote.url}/compare/{head_commit}...{current_branch}")
 
         return True
 

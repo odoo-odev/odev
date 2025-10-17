@@ -29,7 +29,7 @@ def main():
 
         logger.debug("Checking runtime permissions")
         if os.geteuid() == 0:
-            raise RuntimeError("Odev should not be run as root")
+            raise OdevError("Odev should not be run as root")
 
         odev = init_framework()
         odev.start()

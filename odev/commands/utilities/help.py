@@ -55,7 +55,7 @@ class HelpCommand(Command):
         if command is None:
             raise self.error(f"Cannot display help for inexistent command '{self.args.command}'")
 
-        executable = self.odev.executable.stem
+        executable = self.odev.name
         parser = command.prepare_parser()
         usage = escape(parser.format_usage().replace("usage:", executable).strip())
 
@@ -112,7 +112,7 @@ class HelpCommand(Command):
         :return: A summary of all commands.
         :rtype: str
         """
-        executable = self.odev.executable.stem
+        executable = self.odev.name
         message = f"""
             [bold {Colors.PURPLE}]{executable.upper()} {self.odev.version}[/bold {Colors.PURPLE}]
 
