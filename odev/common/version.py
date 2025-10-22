@@ -23,7 +23,7 @@ ODOO_VERSION_PATTERN = r"""
         (?P<minor>(?:[0-9]+)?)          # odoo minor version
         [\.]?
         (?P<module>(?:[0-9]+\.?)*)?     # module version
-        (?P<edition>\+[a-z])?           # edition
+        (?P<edition>\+e)?               # edition
     )
 """
 
