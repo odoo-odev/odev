@@ -10,7 +10,7 @@ from packaging.version import InvalidVersion, _BaseVersion
 __all__ = ["OdooVersion"]
 
 
-_Version = collections.namedtuple("_Version", ["major", "minor", "module", "saas", "master"])
+_Version = collections.namedtuple("_Version", ["major", "minor", "module", "saas", "master", "edition"])
 
 MIN_VERSION_LENGTH = 3
 ODOO_VERSION_PATTERN = r"""
@@ -23,6 +23,7 @@ ODOO_VERSION_PATTERN = r"""
         (?P<minor>(?:[0-9]+)?)          # odoo minor version
         [\.]?
         (?P<module>(?:[0-9]+\.?)*)?     # module version
+        (?P<edition>\+[a-z])?           # edition
     )
 """
 
@@ -55,6 +56,7 @@ class OdooVersion(_BaseVersion):
             module=module_version,
             saas=match.group("saas") is not None,
             master=match.group("master") is not None,
+            edition=match.group("edition"),
         )
 
         # Generate a key which will be used for sorting
@@ -63,6 +65,7 @@ class OdooVersion(_BaseVersion):
             self._version.major,
             self._version.minor,
             self._version.module,
+            self._version.edition,
             self._version.saas,
         )
 
@@ -110,8 +113,13 @@ class OdooVersion(_BaseVersion):
         """Get whether this is the master version."""
         return self._version.master
 
+    @property
+    def edition(self) -> str | None:
+        """Get the edition."""
+        return self._version.edition
 
-def _cmpkey(master: bool, major: int, minor: int, module: tuple, saas: bool):
+
+def _cmpkey(master: bool, major: int, minor: int, module: tuple, edition: str | None, saas: bool):  # noqa: PLR0913
     # When we compare a release version, we want to compare it with all of the
     # trailing zeros removed. So we'll use a reverse the list, drop all the now
     # leading zeros until we come to something non zero, then take the rest
@@ -125,4 +133,4 @@ def _cmpkey(master: bool, major: int, minor: int, module: tuple, saas: bool):
     # Master versions should sort before non-master versions
     _master = int(master)
 
-    return _master, major, minor, _module, _saas
+    return _master, major, minor, _module, edition, _saas
