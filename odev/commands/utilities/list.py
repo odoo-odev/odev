@@ -145,7 +145,16 @@ ORDER_MAPPING: MutableMapping[str, str] = {
 
 
 class ListCommand(ListLocalDatabasesMixin, Command):
-    """List local Odoo databases with some information about them."""
+    """List local Odoo databases with their current status and information required for their management through this
+    tool. This includes custom repositories, virtual environments, worktrees, sizes, last used dates, and whether they
+    are whitelisted or not.
+
+    By default, only Odoo databases are listed. Use the `--all` option to include non-Odoo databases or templates
+    generated through `odev create` and `odev run` as well.
+
+    System databases such as `postgres`, `template0`, `template1`, `odev`, and the default user database are always
+    excluded from the list.
+    """
 
     _name = "list"
     _aliases = ["ls"]
@@ -158,7 +167,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         aliases=["-e", "--expression"],
         description="Regular expression pattern to filter listed databases.",
     )
-    show_all = args.Flag(aliases=["-a", "--all"], description="Show non-Odoo databases as well.")
+    show_all = args.Flag(aliases=["-a", "--all"], description="Show non-Odoo databases and templates.")
     order = args.String(
         aliases=["-s", "--sort"],
         choices=list(ORDER_MAPPING.keys()),
