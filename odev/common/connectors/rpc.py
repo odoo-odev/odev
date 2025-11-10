@@ -132,14 +132,12 @@ class Model:
         :param fields: The fields to read, all fields by default
         :return: The data of the records with the given ids
         """
-        missing_ids = [
-            id_
-            for id_ in ids
-            if id_ not in self.cache or (fields and not set(fields).issubset(set(self.cache[id_].keys())))
-        ]
-
         if not fields:
             fields = list(self.fields.keys())
+
+        missing_ids = [
+            id_ for id_ in ids if id_ not in self.cache or not set(fields).issubset(set(self.cache[id_].keys()))
+        ]
 
         if missing_ids:
             missing_fields = set(fields)
@@ -153,7 +151,10 @@ class Model:
             records = cast(RecordDataList, self._model.read(list(missing_ids or ids), list(missing_fields), load=load))
 
             for record in records:
-                self.cache[cast(int, record["id"])] = record
+                if cast(int, record["id"]) in self.cache:
+                    self.cache[cast(int, record["id"])].update(record)
+                else:
+                    self.cache[cast(int, record["id"])] = record
 
         return [self.cache[id_] for id_ in ids]
 
