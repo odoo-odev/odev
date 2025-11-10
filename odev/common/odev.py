@@ -108,7 +108,7 @@ class Odev(Generic[CommandType]):
     commands: MutableMapping[str, type[CommandType]] = {}
     """Collection of existing and loaded commands."""
 
-    executable: ClassVar[Path] = Path(sys.argv[0])
+    executable: ClassVar[Path] = Path(sys.argv[0]).parent.resolve() / "odev.sh"
     """Path to the current executable."""
 
     _started: bool = False
