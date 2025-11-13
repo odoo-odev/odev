@@ -10,7 +10,7 @@ from collections.abc import Generator, Mapping
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from subprocess import PIPE, Popen
+from subprocess import PIPE, CalledProcessError, Popen
 from time import sleep
 from types import FrameType
 from typing import (
@@ -44,7 +44,19 @@ logger = logging.getLogger(__name__)
 ARCHIVE_DUMP = "dump.sql"
 ARCHIVE_FILESTORE = "filestore/"
 
-SQL_DUMP_IGNORE_LINES: set[str] = {"GRANT CREATE ON SCHEMA public TO odoo;"}
+SQL_DUMP_RESTRICT_BACKPORTS = {
+    Version("13.22"),
+    Version("14.19"),
+    Version("15.14"),
+    Version("16.10"),
+    Version("17.6"),
+    Version("18.0"),
+}
+SQL_DUMP_IGNORE_LINES = {
+    re.compile(r"^GRANT CREATE ON SCHEMA public TO odoo;$"),
+    re.compile(r"^CREATE EXTENSION IF NOT EXISTS vector"),
+    re.compile(r"^COMMENT ON EXTENSION vector"),
+}
 
 NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")
 
@@ -730,18 +742,37 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             else:
                 self.unaccent()
 
+            self.pg_vector()
             dump.seek(0)
 
         psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, bufsize=-1)  # noqa: S602
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
         thread.start()
 
+        odev_psql_version = OdoobinProcess.get_psql_version()
+        restrict_support_version = next(
+            (version for version in SQL_DUMP_RESTRICT_BACKPORTS if version.major == odev_psql_version.major),
+            None,
+        )
+
+        if not restrict_support_version and odev_psql_version < SQL_DUMP_RESTRICT_BACKPORTS[-1]:
+            logger.debug("PostgreSQL '\\restrict' command is not supported, will be skipped")
+            restrict_support = False
+        else:
+            restrict_support = True
+
         try:
             for line in dump:
-                if mode == "dump" or line.decode().strip() not in SQL_DUMP_IGNORE_LINES:
+                if mode == "sql" and (
+                    (not restrict_support and re.match(r"\\(un)?restrict", line.decode()))
+                    or any(pattern.match(line.decode()) for pattern in SQL_DUMP_IGNORE_LINES)
+                ):
+                    logger.debug(f"Skipping line in SQL dump: {line.decode()!r}")
+                else:
                     psql_process.stdin.write(line)
+                    logger.debug(f"Restoring line in SQL dump: {line.decode()!r}")
 
-            tracker.update(extract_task_id, advance=len(line))
+                tracker.update(extract_task_id, advance=len(line))
         except BrokenPipeError as error:
             tracker.stop()
             logger.error(
@@ -751,7 +782,6 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
             dump.seek(0)
             dump_psql_version = re.search(r"Dumped from database version (\d+\.\d+)", dump.read(4000).decode()).group(1)
-            odev_psql_version = OdoobinProcess.get_psql_version()
             logger.warning(
                 "This could be a PostgreSQL version mismatch between the dump and the installed psql client:\n"
                 f"- Dump version:  {dump_psql_version}\n"
@@ -883,8 +913,19 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @ensure_connected
     def pg_trgm(self):
         """Install the pg_trgm extension on the database."""
-        pg_trgm_query = "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+        pg_trgm_query = "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public"
         return self.query(pg_trgm_query)
+
+    def pg_vector(self):
+        """Install the pgvector extension on the database."""
+        pgvector_query = "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"
+
+        try:
+            return bash.execute(f"sudo -u postgres psql -d {self.name} -c '{pgvector_query}'")
+        except CalledProcessError as error:
+            raise OdevError(
+                "Failed to install pgvector extension, make sure it is installde on your system first"
+            ) from error
 
     @ensure_connected
     def neuter_filestore(self):
