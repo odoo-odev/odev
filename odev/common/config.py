@@ -194,6 +194,22 @@ class RepositoriesSection(Section):
         self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
 
 
+class QuickStartSection(Section):
+    """Quickstart configuration."""
+
+    @property
+    def should_clone_repo(self) -> bool:
+        """Wherever the repository should be cloned on quickstart"""
+        value = self.get("should_clone_repo", "True").capitalize()
+        if value not in ("True", "False"):
+            raise ValueError(f"'should_clone_repo' config must be one of 'True', 'False', got {value!r}")
+        return value == "True"
+
+    @should_clone_repo.setter
+    def should_clone_repo(self, value: str | bool):
+        self.set("should_clone_repo", str(value))
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -216,6 +232,9 @@ class Config:
 
     repositories: RepositoriesSection
     """Configuration for Odoo repositories."""
+
+    quickstart: QuickStartSection
+    """Configuration for Odoo quickstart options."""
 
     def __init__(self, name: str = "odev"):
         self.name: str = name
