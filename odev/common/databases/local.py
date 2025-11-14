@@ -57,6 +57,7 @@ SQL_DUMP_IGNORE_LINES = {
     re.compile(r"^CREATE EXTENSION IF NOT EXISTS vector"),
     re.compile(r"^COMMENT ON EXTENSION vector"),
 }
+SQL_DUMP_MAX_LINES = 100  # Max number of lines to check for statements to ignore
 
 NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")
 
@@ -715,35 +716,23 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         dump: gzip.GzipFile | bz2.BZ2File | IO[bytes],
         bytes_count: int,
         mode: Literal["sql", "dump"] = "sql",
+        fast_mode: bool = True,
     ) -> Thread:
         """Restore SQL data from a buffered dump file.
         :param tracker: An instance of Progress to track the restore process.
         :param dump: The dump file to restore SQL data from.
         :param bytes_count: The total number of bytes to track.
         :param mode: The mode to use when restoring the dump, either `sql` or `dump`.
+        :param fast_mode: Whether to run the restore in fast mode.
         """
         # Adding 1 to the bytes count so that the progress bar doesn't reach 100%
         # until the process is complete and the last buffered line has been processed
         extract_task_id = tracker.add_task("Restoring dump from archive", total=bytes_count + 1)
         tracker.start()
-
-        command = "psql" if mode != "dump" else "pg_restore --disable-triggers --no-owner --no-privileges"
-        command += f" --dbname {self.name} --single-transaction -v ON_ERROR_STOP=1"
-
-        # In the event the SQL dump doesn't set the unaccent function as immutable, we need to force it on the database
-        # ourselves. The creation of the function should be around the 50th line in the SQL file, we crawl up to
-        # the 100th to make sure we don't miss it
-        max_lines_to_check = 100
+        command = self._buffered_sql_restore_command()
 
         if mode == "sql":
-            for index, line in enumerate(dump):
-                if index >= max_lines_to_check or "LANGUAGE sql IMMUTABLE" in line.decode():
-                    break
-            else:
-                self.unaccent()
-
-            self.pg_vector()
-            dump.seek(0)
+            self._buffered_sql_enable_extensions(dump)
 
         psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, bufsize=-1)  # noqa: S602
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
@@ -756,31 +745,34 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         )
 
         if not restrict_support_version and odev_psql_version < SQL_DUMP_RESTRICT_BACKPORTS[-1]:
-            logger.debug("PostgreSQL '\\restrict' command is not supported, will be skipped")
-            restrict_support = False
-        else:
-            restrict_support = True
+            logger.warning(
+                "PostgreSQL '\\restrict' command is not supported, consider upgrading postgres to a newer version"
+            )
 
         try:
-            for line in dump:
-                if mode == "sql" and (
-                    (not restrict_support and re.match(r"\\(un)?restrict", line.decode()))
-                    or any(pattern.match(line.decode()) for pattern in SQL_DUMP_IGNORE_LINES)
+            for index, line in enumerate(dump):
+                if (
+                    mode == "sql"
+                    and index <= SQL_DUMP_MAX_LINES  # Stop checking after x lines to limit performance impact
+                    and any(pattern.match(line.decode()) for pattern in SQL_DUMP_IGNORE_LINES)
                 ):
                     logger.debug(f"Skipping line in SQL dump: {line.decode()!r}")
                 else:
                     psql_process.stdin.write(line)
-                    logger.debug(f"Restoring line in SQL dump: {line.decode()!r}")
 
                 tracker.update(extract_task_id, advance=len(line))
         except BrokenPipeError as error:
             tracker.stop()
+            dump.seek(0)
             logger.error(
                 "Failed to restore dump, the psql process exited unexpectedly with error:\n"
-                f"{psql_process.stderr.read().decode()}"
+                + psql_process.stderr.read().decode()
             )
 
-            dump.seek(0)
+            if fast_mode:
+                logger.warning("Retrying in degraded mode: if it goes through, double-check data integrity")
+                return self._restore_buffered_sql(tracker, dump, bytes_count, mode, fast_mode=False)
+
             dump_psql_version = re.search(r"Dumped from database version (\d+\.\d+)", dump.read(4000).decode()).group(1)
             logger.warning(
                 "This could be a PostgreSQL version mismatch between the dump and the installed psql client:\n"
@@ -878,6 +870,38 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """
         with file.open("rb") as dump:
             self._restore_buffered_sql(tracker, dump, file.stat().st_size, "dump")
+
+    def _buffered_sql_restore_command(self, mode: Literal["sql", "dump"] = "sql", fast_mode: bool = True) -> str:
+        """Build the command to restore SQL data from a buffered dump file.
+
+        :param mode: Whether working with plain SQL files or a dump;
+        :param fast_mode: Whether to run the restore in fast mode.
+        :return: The command to restore SQL data from a buffered dump file.
+        """
+        command = "psql" if mode != "dump" else "pg_restore --disable-triggers --no-owner --no-privileges"
+        command += f" --dbname {self.name}"
+
+        if fast_mode:
+            command += " --single-transaction -v ON_ERROR_STOP=1"
+
+        return command
+
+    def _buffered_sql_enable_extensions(self, dump: gzip.GzipFile | bz2.BZ2File | IO[bytes]):
+        """Enable PostgreSQL extensions before restoring the dump.
+        In the event the SQL dump doesn't set the unaccent function as immutable, we need to force it on the database
+        ourselves. The creation of the function should be around the 50th line in the SQL file, we crawl up to
+        the 100th to make sure we don't miss it.
+
+        :param dump: The dump file to restore SQL data from.
+        """
+        for index, line in enumerate(dump):
+            if index >= SQL_DUMP_MAX_LINES or "LANGUAGE sql IMMUTABLE" in line.decode():
+                break
+        else:
+            self.unaccent()
+
+        self.pg_vector()
+        dump.seek(0)
 
     @ensure_connected
     def unaccent(self):
