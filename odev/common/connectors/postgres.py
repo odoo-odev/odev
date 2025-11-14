@@ -182,7 +182,7 @@ class PostgresConnector(Connector):
         :return: Whether the database was created.
         :rtype: bool
         """
-        template = template or "template0"
+        template = template or "template1"
         self.revoke_database(template)
 
         return bool(
@@ -190,7 +190,7 @@ class PostgresConnector(Connector):
                 f"""
                 CREATE DATABASE "{database}"
                     WITH TEMPLATE "{template}"
-                    LC_COLLATE 'C'
+                    LC_COLLATE 'en_US.UTF-8'
                     ENCODING 'unicode'
                 """,
                 transaction=False,
