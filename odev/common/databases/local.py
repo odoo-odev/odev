@@ -2,6 +2,7 @@
 
 import bz2
 import gzip
+import os
 import re
 import shutil
 import sys
@@ -44,20 +45,15 @@ logger = logging.getLogger(__name__)
 ARCHIVE_DUMP = "dump.sql"
 ARCHIVE_FILESTORE = "filestore/"
 
-SQL_DUMP_RESTRICT_BACKPORTS = {
+SQL_DUMP_IGNORE_LINES_NUMBER = 100
+SQL_DUMP_RESTRICT_BACKPORTS = [
     Version("13.22"),
     Version("14.19"),
     Version("15.14"),
     Version("16.10"),
     Version("17.6"),
-    Version("18.0"),
-}
-SQL_DUMP_IGNORE_LINES = {
-    re.compile(r"^GRANT CREATE ON SCHEMA public TO odoo;$"),
-    re.compile(r"^CREATE EXTENSION IF NOT EXISTS vector"),
-    re.compile(r"^COMMENT ON EXTENSION vector"),
-}
-SQL_DUMP_MAX_LINES = 100  # Max number of lines to check for statements to ignore
+    Version("18.1"),
+]
 
 NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")
 
@@ -725,68 +721,71 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param mode: The mode to use when restoring the dump, either `sql` or `dump`.
         :param fast_mode: Whether to run the restore in fast mode.
         """
+        if mode == "sql":
+            self._buffered_sql_check_restrict(dump)
+            self._buffered_sql_enable_extensions(dump)
+        elif mode == "dump":
+            self.unaccent()
+
+        command = self._buffered_sql_restore_command(mode=mode, fast_mode=fast_mode)
+
         # Adding 1 to the bytes count so that the progress bar doesn't reach 100%
         # until the process is complete and the last buffered line has been processed
-        extract_task_id = tracker.add_task("Restoring dump from archive", total=bytes_count + 1)
+        extract_task_id = tracker.add_task("Restoring dump from archive", total=bytes_count)
         tracker.start()
-        command = self._buffered_sql_restore_command()
-
-        if mode == "sql":
-            self._buffered_sql_enable_extensions(dump)
 
         psql_process: Popen[bytes] = Popen(command, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, bufsize=-1)  # noqa: S602
         thread = Thread(target=self._restore_zip_sql_threaded, args=(psql_process,))
         thread.start()
 
-        odev_psql_version = OdoobinProcess.get_psql_version()
-        restrict_support_version = next(
-            (version for version in SQL_DUMP_RESTRICT_BACKPORTS if version.major == odev_psql_version.major),
-            None,
-        )
-
-        if not restrict_support_version and odev_psql_version < SQL_DUMP_RESTRICT_BACKPORTS[-1]:
-            logger.warning(
-                "PostgreSQL '\\restrict' command is not supported, consider upgrading postgres to a newer version"
-            )
-
         try:
-            for index, line in enumerate(dump):
-                if (
-                    mode == "sql"
-                    and index <= SQL_DUMP_MAX_LINES  # Stop checking after x lines to limit performance impact
-                    and any(pattern.match(line.decode()) for pattern in SQL_DUMP_IGNORE_LINES)
-                ):
-                    logger.debug(f"Skipping line in SQL dump: {line.decode()!r}")
-                else:
-                    psql_process.stdin.write(line)
-
+            for line in dump:
+                psql_process.stdin.write(line)
                 tracker.update(extract_task_id, advance=len(line))
+
         except BrokenPipeError as error:
+            # Close the buffered writer, avoid BrokenPipe errors
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, psql_process.stdin.fileno())
+            os.close(devnull)
+
+            # Reset the tracker
+            tracker.remove_task(extract_task_id)
             tracker.stop()
-            dump.seek(0)
+            self.console.clear_line()
+
             logger.error(
                 "Failed to restore dump, the psql process exited unexpectedly with error:\n"
                 + psql_process.stderr.read().decode()
             )
 
             if fast_mode:
-                logger.warning("Retrying in degraded mode: if it goes through, double-check data integrity")
+                dump.seek(0)
+                logger.warning("Retrying in degraded mode (slower and ignoring errors)")
                 return self._restore_buffered_sql(tracker, dump, bytes_count, mode, fast_mode=False)
 
-            dump_psql_version = re.search(r"Dumped from database version (\d+\.\d+)", dump.read(4000).decode()).group(1)
-            logger.warning(
-                "This could be a PostgreSQL version mismatch between the dump and the installed psql client:\n"
-                f"- Dump version:  {dump_psql_version}\n"
-                f"- Local version: {odev_psql_version}\n"
-            )
+            if mode == "sql":
+                odev_psql_version = OdoobinProcess.get_psql_version()
+                dump_psql_version = re.search(
+                    r"Dumped from database version (\d+\.\d+)", dump.read(4000).decode()
+                ).group(1)
+                logger.warning(
+                    "This could be a PostgreSQL version mismatch between the dump and the installed psql client:\n"
+                    f"- Dump version:  {dump_psql_version}\n"
+                    f"- Local version: {odev_psql_version}\n"
+                )
 
-            if Version(dump_psql_version) > odev_psql_version:
-                logger.warning("Consider upgrading your local PostgreSQL installation")
+                if Version(dump_psql_version) > odev_psql_version:
+                    logger.warning("Consider upgrading your local PostgreSQL installation")
 
             raise OdevError("Restore aborted") from error
 
-        tracker.update(extract_task_id, advance=1)
         psql_process.stdin.close()
+        thread.join()
+
+        if psql_process.returncode or (errors := psql_process.stderr.read().decode().replace("\n" * 3, "\n")):
+            logger.error(f"Errors occurred during the restore process:\n{errors}")
+
         return thread
 
     def _restore_zip_sql_threaded(self, process: Popen[bytes]):
@@ -821,7 +820,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             with archive.open(ARCHIVE_DUMP) as dump:
                 threads.append(self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size))
 
-            [thread.join() for thread in threads if thread is not None]
+            [thread.join() for thread in threads if thread is not None and thread.is_alive()]
 
             if neuter_filestore:
                 self.neuter_filestore()
@@ -871,7 +870,38 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         with file.open("rb") as dump:
             self._restore_buffered_sql(tracker, dump, file.stat().st_size, "dump")
 
-    def _buffered_sql_restore_command(self, mode: Literal["sql", "dump"] = "sql", fast_mode: bool = True) -> str:
+    def _buffered_sql_check_restrict(self, dump: gzip.GzipFile | bz2.BZ2File | IO[bytes]):
+        """Ensure the dump can be restored on the current version of PostgreSQL.
+
+        :param dump: The dump file to restore SQL data from.
+        """
+        dump.seek(0)
+
+        if not re.match(r"^\\restrict .*", dump.read(4000).decode()):
+            dump.seek(0)
+            return
+
+        odev_psql_version = OdoobinProcess.get_psql_version()
+        matching_psql_version = next(
+            (version for version in SQL_DUMP_RESTRICT_BACKPORTS if version.major == odev_psql_version.major),
+            None,
+        )
+
+        if (
+            not matching_psql_version and odev_psql_version.major >= SQL_DUMP_RESTRICT_BACKPORTS[-1].major
+        ) or matching_psql_version.minor <= odev_psql_version.minor:
+            supports_restrict = True
+        else:
+            supports_restrict = False
+
+        if not supports_restrict:
+            logger.error("PostgreSQL '\\restrict' command is not supported, consider upgrading to a newer version")
+            supported_versions = string.join_bullet(str(version) for version in SQL_DUMP_RESTRICT_BACKPORTS[::-1])
+            logger.info(f"Current PostgreSQL version: {odev_psql_version}")
+            logger.info(f"Supported PostgreSQL versions:\n{supported_versions}")
+            raise OdevError("Restore aborted")
+
+    def _buffered_sql_restore_command(self, mode: Literal["sql", "dump"], fast_mode: bool = True) -> str:
         """Build the command to restore SQL data from a buffered dump file.
 
         :param mode: Whether working with plain SQL files or a dump;
@@ -882,7 +912,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         command += f" --dbname {self.name}"
 
         if fast_mode:
-            command += " --single-transaction -v ON_ERROR_STOP=1"
+            command += " --single-transaction"
+
+            if mode == "sql":
+                command += " -v ON_ERROR_STOP=1"
 
         return command
 
@@ -895,7 +928,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param dump: The dump file to restore SQL data from.
         """
         for index, line in enumerate(dump):
-            if index >= SQL_DUMP_MAX_LINES or "LANGUAGE sql IMMUTABLE" in line.decode():
+            if index >= SQL_DUMP_IGNORE_LINES_NUMBER or "LANGUAGE sql IMMUTABLE" in line.decode():
                 break
         else:
             self.unaccent()
