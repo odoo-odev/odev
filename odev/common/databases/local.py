@@ -52,7 +52,7 @@ SQL_DUMP_RESTRICT_BACKPORTS = [
     Version("15.14"),
     Version("16.10"),
     Version("17.6"),
-    Version("18.1"),
+    Version("18.0"),
 ]
 
 NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")

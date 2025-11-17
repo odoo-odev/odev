@@ -184,13 +184,20 @@ class PostgresConnector(Connector):
         """
         template = template or "template1"
         self.revoke_database(template)
+        collation = self.query(
+            f"""
+            SELECT datcollate
+            FROM pg_database
+            WHERE datname = '{template}'
+            """
+        )[0][0]
 
         return bool(
             self.query(
                 f"""
                 CREATE DATABASE "{database}"
                     WITH TEMPLATE "{template}"
-                    LC_COLLATE 'en_US.UTF-8'
+                    LC_COLLATE '{collation}'
                     ENCODING 'unicode'
                 """,
                 transaction=False,
