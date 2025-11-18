@@ -11,7 +11,7 @@ from collections.abc import Generator, Mapping
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from subprocess import PIPE, CalledProcessError, Popen
+from subprocess import PIPE, Popen
 from time import sleep
 from types import FrameType
 from typing import (
@@ -933,11 +933,10 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         else:
             self.unaccent()
 
-        self.pg_vector()
         dump.seek(0)
 
     @ensure_connected
-    def unaccent(self):
+    def unaccent(self) -> bool:
         """Install the unaccent extension on the database."""
         unaccent_queries = [
             "CREATE SCHEMA IF NOT EXISTS unaccent_schema",
@@ -968,21 +967,33 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return res
 
     @ensure_connected
-    def pg_trgm(self):
+    def pg_trgm(self) -> bool:
         """Install the pg_trgm extension on the database."""
         pg_trgm_query = "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public"
         return self.query(pg_trgm_query)
 
-    def pg_vector(self):
-        """Install the pgvector extension on the database."""
-        pgvector_query = "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"
+    def pg_vector(self) -> bool:
+        """Install the vector extension on the database.
+        Try creating the extension through a regular query first, that will only work if the extension is whitelisted
+        in `pgextwlist` or if the user is owner of the extension. If this fails, try enabling it as the `postgres`
+        user.
+        """
+        pg_vector_query = "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public"
 
         try:
-            return bash.execute(f"sudo -u postgres psql -d {self.name} -c '{pgvector_query}'")
-        except CalledProcessError as error:
-            raise OdevError(
-                "Failed to install pgvector extension, make sure it is installde on your system first"
-            ) from error
+            self.query(pg_vector_query)
+        except RuntimeError:
+            link = string.link(
+                "pgextwlist",
+                "https://github.com/dimitri/pgextwlist?tab=readme-ov-file#postgresql-extension-whitelist",
+            )
+            logger.error(
+                "Failed to install 'pgvector' extension, please ensure it is installed on your system "
+                f"and whitelisted with {link}"
+            )
+            return False
+
+        return True
 
     @ensure_connected
     def neuter_filestore(self):

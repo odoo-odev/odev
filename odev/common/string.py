@@ -293,3 +293,14 @@ def quote(string: str, dirty_only: bool = False, force_single: bool = False) -> 
 
     double = not force_single and (index == -1 or string[index] == "'")
     return f'"{string}"' if double else f"'{string}'"
+
+
+def link(text: str, url: str) -> str:
+    """Convert a link to text to be printed in the console.
+
+    :param text: The text to link.
+    :param url: The URL to link to.
+    :return: The link.
+    :rtype: str
+    """
+    return f"[link={url}]{text}[/link]"

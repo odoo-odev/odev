@@ -153,7 +153,10 @@ class CreateCommand(OdoobinTemplateCommand):
             self._template.connector.disconnect()
 
         with progress.spinner(f"Creating {message}"):
-            created = self._database.create(template=template) & self._database.unaccent() & self._database.pg_trgm()
+            created = self._database.create(template=template)
+            created &= self._database.unaccent()
+            created &= self._database.pg_trgm()
+            created &= self._database.pg_vector()
 
             if created is False:
                 raise self.error(f"Failed to create database {self._database.name!r}")
