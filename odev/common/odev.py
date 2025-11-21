@@ -312,7 +312,7 @@ class Odev(Generic[CommandType]):
                     "development mode\nUpdates will not be pulled automatically\nConsider switching to branch "
                     f"{default_branch!r} for regular updates"
                 )
-                return False
+                return True
 
             logger.debug(f"Pulling latest changes from {git.name!r} on branch {current_branch!r}")
             install_requirements = self.__requirements_changed(git.repository)
