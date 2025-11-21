@@ -303,10 +303,16 @@ class Odev(Generic[CommandType]):
                 )
 
             current_branch = git.repository.active_branch.name
+            default_branch = git.default_branch
 
-            if not plugin and current_branch != "main":
-                logger.warning("Running from a non-standard branch, update may not be available")
-                logger.info("Consider switching to the 'main' branch for regular updates")
+            if current_branch != default_branch:
+                target = "Odev" if not plugin else f"Plugin {plugin!r}"
+                logger.warning(
+                    f"{target} is running from a non-standard branch {current_branch!r}, assuming your are in "
+                    "development mode\nUpdates will not be pulled automatically\nConsider switching to branch "
+                    f"{default_branch!r} for regular updates"
+                )
+                return False
 
             logger.debug(f"Pulling latest changes from {git.name!r} on branch {current_branch!r}")
             install_requirements = self.__requirements_changed(git.repository)
