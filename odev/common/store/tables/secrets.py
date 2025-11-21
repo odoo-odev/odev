@@ -85,8 +85,11 @@ class SecretStore(PostgresTable):
         for key in cls._list_ssh_keys():
             try:
                 ciphered = str(b64encode(ssh_encrypt(plaintext, ssh_key=key)).decode()) if plaintext else ""
+                logger.debug(f"Payload encrypted with key {key.name}")
             except SSHException as e:
                 logger.debug(f"Failed to encrypt with key {key.name}: {e}")
+            else:
+                break
 
         if ciphered is None:
             raise OdevError("Encryption failed, no key could be used for signing.")
