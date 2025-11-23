@@ -44,6 +44,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
         cls.odev.config.paths.repositories = Config().paths.repositories
         cls._patch_object(GitConnector, [("_get_clone_options", ["--depth", "1", "--no-single-branch"])])
         cls._patch_object(OdoobinProcess, [], [("odoo_repositories", [GitConnector("odoo/odoo")])])
+        cls._patch_object(LocalDatabase, [("pg_vector", True)])
 
     # --------------------------------------------------------------------------
     # Assertions
