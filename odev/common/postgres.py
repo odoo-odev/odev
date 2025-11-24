@@ -158,8 +158,8 @@ class PostgresTable:
         self.name: str = name or self.name
         """Name of the table in which data is stored, must be set in subclass."""
 
-        with self.database:
-            self.prepare_database_table()
+        # with self.database:
+        #    self.prepare_database_table()
 
         self.database.tables[self.name] = self
 
