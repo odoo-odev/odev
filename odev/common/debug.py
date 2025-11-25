@@ -29,7 +29,7 @@ def find_debuggers(root: str | Path) -> Generator[tuple[Path, int], None, None]:
         raise NotADirectoryError(f"{root} is not a directory")
 
     try:
-        grep = bash.execute(rf"""grep -rnE "((i?pu?db)\.set_trace\(|pu\.db)" {root.as_posix()} --include='*.py'""")
+        grep = bash.execute(rf"""grep -RnE "((i?pu?db)\.set_trace\(|pu\.db)" {root.as_posix()} --include='*.py'""")
         output = grep.stdout.decode() if grep is not None else ""
     except subprocess.CalledProcessError:
         output = ""
