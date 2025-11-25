@@ -141,7 +141,7 @@ class VenvCommand(Command):
     def __check_name(self):
         """Check if a name was properly given through CLI arguments."""
         if not self.args.name:
-            raise self.error("No name specified, use '--name' to provide one")
+            raise self.error("You need to provide a name for the virtual environment.")
 
     def iter_venvs(self) -> Generator[PythonEnv, None, None]:
         """Iterate over existing virtual environments."""

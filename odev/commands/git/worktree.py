@@ -164,4 +164,4 @@ class WorktreeCommand(GitCommand):
     def __check_name(self):
         """Check if a name was properly given through CLI arguments."""
         if not self.args.name:
-            raise self.error("No name specified, use '--name' to provide one")
+            raise self.error("You need to provide a name for the worktree.")
