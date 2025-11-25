@@ -32,7 +32,8 @@ def main():
             raise OdevError("Odev should not be run as root")
 
         odev = init_framework()
-        odev.start()
+        odev.start(start_time)
+        logger.debug(f"Framework started in {monotonic() - start_time:.3f} seconds")
         odev.dispatch()
 
     except OdevError as error:

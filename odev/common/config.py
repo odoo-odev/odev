@@ -207,6 +207,28 @@ class SecuritySection(Section):
         self.set("encryption_key", value)
 
 
+class TelemetrySection(Section):
+    """Telemetry configuration."""
+
+    @property
+    def client_id(self) -> str:
+        """Unique client identifier."""
+        return cast(str, self.get("client_id", ""))
+
+    @client_id.setter
+    def client_id(self, value: str):
+        self.set("client_id", value)
+
+    @property
+    def enabled(self) -> bool:
+        """Whether telemetry is enabled."""
+        return self.get("enabled", "true") == "true"
+
+    @enabled.setter
+    def enabled(self, value: bool):
+        self.set("enabled", "true" if value else "false")
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -226,6 +248,9 @@ class Config:
 
     pruning: PruningSection
     """Configuration for odev pruning of databases."""
+
+    telemetry: TelemetrySection
+    """Configuration for odev telemetry."""
 
     repositories: RepositoriesSection
     """Configuration for Odoo repositories."""

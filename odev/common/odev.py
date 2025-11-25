@@ -5,6 +5,7 @@ import os
 import pkgutil
 import re
 import sys
+from argparse import Namespace
 from collections import defaultdict
 from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping
 from datetime import datetime
@@ -13,7 +14,7 @@ from importlib.abc import Loader
 from importlib.machinery import FileFinder
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from time import sleep
+from time import monotonic, sleep
 from types import ModuleType
 from typing import (
     Any,
@@ -42,6 +43,7 @@ from odev.common.logging import LOG_LEVEL, logging
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
 from odev.common.string import join_bullet
+from odev.common.telemetry import Telemetry
 
 
 try:
@@ -122,11 +124,15 @@ class Odev(Generic[CommandType]):
 
         :param test: Whether the framework is being initialized for testing purposes
         """
+        self.start_time = monotonic()
+        """Time when the framework was started."""
+
         self.in_test_mode = test
         """Whether the framework is in testing mode."""
 
         self._load_config()
         self.__class__.store = DataStore(self.name)
+        self.telemetry = Telemetry(self)
 
     def __repr__(self) -> str:
         test_mode = ", test=True" if self.in_test_mode else ""
@@ -217,8 +223,11 @@ class Odev(Generic[CommandType]):
             plugin_manifest = self._load_plugin_manifest(plugin_path)
             yield Plugin(plugin_name, plugin_path, plugin_manifest)
 
-    def start(self) -> None:
-        """Start the framework, check for updates and load plugins and commands."""
+    def start(self, start_time: float | None = None) -> None:
+        """Start the framework, check for updates and load plugins and commands.
+
+        :param start_time: Time when the framework was started
+        """
         if self._started:
             logger.debug("Framework already started")
             return
@@ -227,6 +236,9 @@ class Odev(Generic[CommandType]):
             f"Starting {self.name} version {string.stylize(self.version, 'repr.version')} "
             f"{'in test mode' if self.in_test_mode else ''}".strip()
         )
+
+        if start_time:
+            self.start_time = start_time
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
         self.update()
@@ -747,7 +759,7 @@ class Odev(Generic[CommandType]):
 
         return resolved_graph
 
-    def parse_arguments(self, command_cls: type[CommandType], *args):
+    def parse_arguments(self, command_cls: type[CommandType], *args) -> Namespace:
         """Parse arguments for a command.
 
         :param command_cls: Command class to parse arguments for
@@ -799,9 +811,9 @@ class Odev(Generic[CommandType]):
                     command = command_cls(arguments)
 
             command._argv = cli_args
-
             logger.debug(f"Running {command!r}")
             self._command_stack.append(command)
+            telemetry = self.telemetry.send(command)
             command.run()
             self._command_stack.pop()
         except OdevError as exception:
@@ -813,7 +825,15 @@ class Odev(Generic[CommandType]):
         finally:
             try:
                 logger.debug(f"Cleaning up after {command!r}")
-                command.cleanup()  # type: ignore [unbound-variable]
+                command.cleanup()
+
+                if telemetry and self.config.telemetry.enabled:
+                    telemetry[0].join()
+                    telemetry_line = telemetry[1].get()
+
+                    if telemetry_line is not None:
+                        self.telemetry.update(telemetry_line)
+
             except UnboundLocalError:
                 pass
 
