@@ -194,6 +194,19 @@ class RepositoriesSection(Section):
         self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
 
 
+class SecuritySection(Section):
+    """Security configuration."""
+
+    @property
+    def encryption_key(self) -> str:
+        """Encryption key."""
+        return cast(str, self.get("encryption_key", ""))
+
+    @encryption_key.setter
+    def encryption_key(self, value: str):
+        self.set("encryption_key", value)
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -216,6 +229,9 @@ class Config:
 
     repositories: RepositoriesSection
     """Configuration for Odoo repositories."""
+
+    security: SecuritySection
+    """Configuration for security and secrets encryption."""
 
     def __init__(self, name: str = "odev"):
         self.name: str = name
