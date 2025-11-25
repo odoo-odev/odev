@@ -122,6 +122,7 @@ logging.basicConfig(
             show_time=False,
             console=console,
             markup=True,
+            show_path=LOG_LEVEL == "DEBUG",
         )
     ],
 )
