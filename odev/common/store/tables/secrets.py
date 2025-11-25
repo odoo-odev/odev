@@ -7,6 +7,7 @@ from paramiko.agent import Agent as SSHAgent, AgentKey
 from paramiko.ssh_exception import SSHException
 from ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt  # noqa: N811
 
+from odev.common.config import Config
 from odev.common.console import console
 from odev.common.errors import OdevError
 from odev.common.logging import logging
@@ -62,13 +63,24 @@ class SecretStore(PostgresTable):
     }
     _constraints = {"secrets_unique_name_login_scope_platform": "UNIQUE(name, login, scope, platform)"}
 
+    config = Config()
+    """Configuration parameters."""
+
     @classmethod
-    def _list_ssh_keys(cls) -> tuple[AgentKey, ...]:
+    def _list_ssh_keys(cls) -> list[AgentKey]:
         """List all SSH keys available in the ssh-agent."""
-        keys = SSHAgent().get_keys()
+        keys = list(SSHAgent().get_keys())
 
         if not keys:
             raise OdevError("No SSH keys found in ssh-agent, or ssh-agent is not running.")
+
+        fingerprint = cls.config.security.encryption_key
+
+        if fingerprint:
+            for i, key in enumerate(keys):
+                if key.fingerprint == fingerprint:
+                    keys.insert(0, keys.pop(i))
+                    break
 
         return keys
 
@@ -85,10 +97,10 @@ class SecretStore(PostgresTable):
         for key in cls._list_ssh_keys():
             try:
                 ciphered = str(b64encode(ssh_encrypt(plaintext, ssh_key=key)).decode()) if plaintext else ""
-                logger.debug(f"Payload encrypted with key {key.name}")
             except SSHException as e:
-                logger.debug(f"Failed to encrypt with key {key.name}: {e}")
+                logger.debug(f"Failed to encrypt with key {key.fingerprint} ({key.name}, {key.comment}): {e}")
             else:
+                cls.config.security.encryption_key = key.fingerprint
                 break
 
         if ciphered is None:
@@ -107,16 +119,21 @@ class SecretStore(PostgresTable):
         deciphered: str | None = None
 
         for key in cls._list_ssh_keys():
+            key_desc = f"{key.fingerprint} ({key.name}, {key.comment})"
+
             try:
                 deciphered = (
                     str(ssh_decrypt(b64decode(ciphertext.encode()).decode(), ssh_key=key)) if ciphertext else ""
                 )
             except SSHException as e:
-                logger.debug(f"Failed to decrypt with key {key.name}: {e}")
+                logger.debug(f"Failed to decrypt with key {key_desc}: {e}")
             except UnicodeDecodeError as e:
-                logger.debug(f"Failed to decode decrypted string with key {key.name}: {e}")
+                logger.debug(f"Failed to decode decrypted string with key {key_desc}: {e}")
             except ValueError as e:
-                logger.debug(f"Unexpected error when trying to handle SSH key {key.name}: {e}")
+                logger.debug(f"Unexpected error when trying to handle SSH key {key_desc}: {e}")
+            else:
+                cls.config.security.encryption_key = key.fingerprint
+                break
 
         if deciphered is None:
             raise OdevError("Decryption failed, no key could be used")
@@ -248,6 +265,7 @@ class SecretStore(PostgresTable):
         if not result:
             return None
 
+        logger.debug(f"Secret '{name}:{scope}:{platform}' retrieved from storage")
         return Secret(name, result[0][0], SecretStore.decrypt(result[0][1]), scope, platform)
 
     def _set(self, secret: Secret):
@@ -263,6 +281,7 @@ class SecretStore(PostgresTable):
                 UPDATE SET login = '{secret.login}', cipher = '{cipher}'
             """
         )
+        logger.debug(f"Secret '{secret.key}:{secret.scope}:{secret.platform}' saved to storage")
 
     def _delete(self, name: str, scope: str = "", platform: str = ""):
         """Remove a secret from the vault.
