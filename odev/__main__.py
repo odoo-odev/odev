@@ -1,5 +1,6 @@
 import os
 import sys
+import traceback
 from bdb import BdbQuit
 from signal import SIGINT, SIGTERM, signal
 from time import monotonic
@@ -47,8 +48,14 @@ def main():
         logger.error("Debugger execution interrupted")
         sys.exit(1)
 
-    except Exception:
-        logger.exception("Execution failed due to an unhandled exception")
+    except Exception as error:  # noqa: BLE001
+        logger.error(
+            f"""
+            Execution failed due to an unhandled exception:
+            {error.__class__.__name__}: {error}
+            """
+        )
+        logger.debug(traceback.format_exc())
         sys.exit(1)
 
     logger.debug(f"Execution completed successfully in {monotonic() - start_time:.3f} seconds")
