@@ -2,8 +2,6 @@ import importlib
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from queue import Queue
-from threading import Thread
 from typing import (
     Any,
     ClassVar,
@@ -228,22 +226,6 @@ class OdevTestCase(TestCase):
 
 class OdevCommandTestCase(OdevTestCase):
     """Extended test case to run commands in test mode."""
-
-    def setUp(self):
-        super().setUp()
-        self._mock_telemetry()
-
-    def _mock_telemetry(self):
-        queue = Queue()
-        thread = Thread(target=lambda _queue: _queue.put(1))
-        thread.start()
-        self._patch_object(
-            "odev.common.telemetry.Telemetry",
-            [
-                ("send", (thread, queue)),
-                ("update", None),
-            ],
-        )
 
     def dispatch_command(self, command: str, *arguments: str) -> tuple[str, str]:
         """Run a command with arguments.
