@@ -3,4 +3,5 @@
 from . import directories
 from . import completion
 from . import symlink
+from . import telemetry
 from . import update

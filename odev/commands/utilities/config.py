@@ -36,7 +36,7 @@ class ConfigCommand(Command):
         config = self.config.to_dict()
         headers = [
             TableHeader(min_width=15),
-            TableHeader(min_width=30),
+            TableHeader(min_width=60),
             TableHeader(style="color.black"),
         ]
 
