@@ -17,8 +17,12 @@ from odev.common.logging import logging
 
 logger = logging.getLogger(__name__)
 
-TELEMETRY_ENDPOINT = "https://ps-tools-staging.odoo.com"
-TELEMETRY_KEY = "changeme"
+TELEMETRY_ENDPOINT = "https://odev-telemetry.odoo.com"
+
+# Yes, this is unsafe, we know.
+# Anyway, the endpoint is public and the key is not sensitive. Worst case? Someone sends fake telemetry data.
+# This is not ideal but it will already prevent most automated bots from sending fake data.
+TELEMETRY_KEY = "xEGGxJLlTuRfGO8f5STWpehXKGRB8RbVpo3DgWYA7nJquh16I5Q59SU+ucyhcZoy"
 
 
 class Telemetry:
