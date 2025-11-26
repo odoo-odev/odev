@@ -155,7 +155,7 @@ class Telemetry:
             try:
                 request = self._prepare_request("odev/telemetry/update", payload)
 
-                with urlopen(request, timeout=2):  # noqa: S310
+                with urlopen(request, timeout=1):  # noqa: S310
                     pass
             except (URLError, OSError) as e:
                 logger.debug(f"Telemetry failed: {e}")

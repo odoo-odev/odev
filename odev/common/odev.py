@@ -391,7 +391,8 @@ class Odev(Generic[CommandType]):
         """
         new_version = version.parse(self.version)
         old_version = version.parse(self.config.update.version)
-        logger.debug(f"Checking for existing upgrades from {old_version} to {new_version}")
+        versions = " to ".join([string.stylize(str(ver), "repr.version") for ver in (old_version, new_version)])
+        logger.debug(f"Checking for existing upgrades from {versions}")
         return new_version > old_version
 
     def upgrade(self) -> None:
@@ -813,7 +814,7 @@ class Odev(Generic[CommandType]):
             command._argv = cli_args
             logger.debug(f"Running {command!r}")
             self._command_stack.append(command)
-            telemetry = self.telemetry.send(command)
+            telemetry = self.telemetry.send(command) if not self.in_test_mode else None
             command.run()
             self._command_stack.pop()
         except OdevError as exception:
