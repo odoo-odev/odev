@@ -42,7 +42,7 @@ class HelpCommand(Command):
         else:
             help_text = self.all_commands_help()
 
-        self.console.print(textwrap.dedent(help_text).strip(), highlight=False, auto_paginate=True)
+        self.console.print(textwrap.dedent(help_text).strip(), highlight=False)
 
     def single_command_help(self) -> str:
         """Return help about a single command.
