@@ -111,8 +111,8 @@ class DatabaseCommand(Command, ABC):
 
     def infer_database_instance(self) -> DatabaseType:
         """Return the database instance to use with this command, inferred from the database's name."""
-        if self._database.name is None:
-            raise CommandError("No database specified", self)
+        if self.database_name is None:
+            raise CommandError("No database name specified", self)
 
         if hasattr(self.args, "platform") and self.args.platform:
             allowed_database_classes = [self._database_platforms[self.args.platform]]
