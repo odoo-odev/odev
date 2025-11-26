@@ -101,7 +101,7 @@ class Telemetry:
 
     def send(self, command: Command) -> tuple[threading.Thread, Queue] | None:
         """Send telemetry data."""
-        if len(self.odev._command_stack) != 1:
+        if len(self.odev._command_stack) != 1 or self.odev.in_test_mode:
             return None
 
         payload = {
@@ -129,7 +129,7 @@ class Telemetry:
             try:
                 request = self._prepare_request("odev/telemetry", payload)
 
-                with urlopen(request, timeout=2) as response:  # noqa: S310
+                with urlopen(request, timeout=1) as response:  # noqa: S310
                     content = response.read()
 
                 result = json.loads(content).get("result", {}).get("id")
@@ -145,6 +145,9 @@ class Telemetry:
 
     def update(self, line_id: int) -> None:
         """Update a specific line in the telemetry data."""
+        if len(self.odev._command_stack) != 1 or self.odev.in_test_mode:
+            return
+
         payload = {
             "telemetry_id": line_id,
             "exit_code": 0,

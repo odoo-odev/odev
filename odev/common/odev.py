@@ -814,7 +814,7 @@ class Odev(Generic[CommandType]):
             command._argv = cli_args
             logger.debug(f"Running {command!r}")
             self._command_stack.append(command)
-            telemetry = self.telemetry.send(command) if not self.in_test_mode else None
+            telemetry = self.telemetry.send(command)
             command.run()
             self._command_stack.pop()
         except OdevError as exception:
