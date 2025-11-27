@@ -8,13 +8,8 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
-from typing import (
-    TYPE_CHECKING,
-    Literal,
-    cast,
-)
+from typing import TYPE_CHECKING, Literal, cast
 
-from cachetools.func import ttl_cache
 from packaging.version import Version
 
 from odev.common import bash, string
@@ -71,6 +66,9 @@ def odoo_repositories(enterprise: bool = True) -> Generator[GitConnector, None, 
 
 class OdoobinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
+
+    _processes_cache: dict[str, str] = {}
+    _processes_cache_timestamp: datetime = datetime.min
 
     def __init__(
         self,
@@ -329,19 +327,24 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._forced_worktree_name = worktree
         return self
 
-    @ttl_cache(ttl=1)
     def _get_ps_process(self) -> str | None:
         """Return the process currently running odoo, if any.
         Grep-ed `ps aux` output.
         """
-        process = bash.execute(
-            f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}(\\s+|$)' || echo -n ''"
-        )
+        if datetime.now() - OdoobinProcess._processes_cache_timestamp < timedelta(seconds=5):
+            return OdoobinProcess._processes_cache.get(self.database.name)
+
+        process = bash.execute("ps aux | grep odoo-bin || echo -n ''")
+        OdoobinProcess._processes_cache = {}
+        OdoobinProcess._processes_cache_timestamp = datetime.now()
 
         if process is not None:
-            return process.stdout.decode()
+            for line in process.stdout.decode().splitlines():
+                match = re.search(r"odoo-bin\s+.*(?:-d|--database)(?:\s+|=)(?P<db>[^\s]+)", line)
+                if match:
+                    OdoobinProcess._processes_cache[match.group("db")] = line
 
-        return None
+        return OdoobinProcess._processes_cache.get(self.database.name)
 
     def _get_python_version(self) -> str | None:
         """Return the Python version used by the current Odoo installation."""

@@ -69,6 +69,7 @@ def get_python_version(path: Path | str) -> str:
     :return: The python version.
     :rtype: str
     """
+    return "18.0"
     process = bash.execute(f"{path} --version")
 
     if process is None:

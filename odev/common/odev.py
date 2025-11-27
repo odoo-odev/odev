@@ -241,7 +241,7 @@ class Odev(Generic[CommandType]):
             self.start_time = start_time
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
-        self.update()
+        # self.update()
 
         with progress.spinner("Loading commands"):
             self.register_commands()
@@ -546,7 +546,7 @@ class Odev(Generic[CommandType]):
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
 
-            self._install_plugin_requirements(plugin.path)
+            # self._install_plugin_requirements(plugin.path)
 
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
