@@ -36,7 +36,7 @@ from odev.commands.database.delete import DeleteCommand
 from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseType
-from odev.common.config import Config
+from odev.common.config import CONFIG_DIR, Config
 from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
 from odev.common.errors import OdevError
@@ -184,7 +184,7 @@ class Odev(Generic[CommandType]):
     @property
     def plugins_path(self) -> Path:
         """Local path to the plugins directory."""
-        return self.base_path / "plugins"
+        return CONFIG_DIR / "plugins"
 
     @property
     def commands_path(self) -> Path:
