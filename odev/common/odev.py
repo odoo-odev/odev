@@ -35,7 +35,7 @@ from odev.commands.database.delete import DeleteCommand
 from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseType
-from odev.common.config import Config
+from odev.common.config import CONFIG_DIR, Config
 from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
 from odev.common.errors import OdevError
@@ -183,7 +183,7 @@ class Odev(Generic[CommandType]):
     @property
     def plugins_path(self) -> Path:
         """Local path to the plugins directory."""
-        return self.base_path / "plugins"
+        return CONFIG_DIR / "plugins"
 
     @property
     def commands_path(self) -> Path:
@@ -491,8 +491,12 @@ class Odev(Generic[CommandType]):
             if not isinstance(module_info.module_finder, FileFinder):
                 raise TypeError("Module finder is not a FileFinder instance")
 
-            module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
-            spec = spec_from_file_location(module_path.stem, module_path.as_posix())
+            if module_info.ispkg:
+                module_path = Path(module_info.module_finder.path) / module_info.name / "__init__.py"
+            else:
+                module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
+
+            spec = spec_from_file_location(module_info.name, module_path.as_posix())
 
             if spec is None or spec.loader is None:
                 raise ImportError(f"Cannot load module {module_info.name} from {module_path.as_posix()}")
@@ -541,6 +545,10 @@ class Odev(Generic[CommandType]):
 
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
+        # Add plugins path to sys.path so plugins can import their own modules
+        if str(self.plugins_path) not in sys.path:
+            sys.path.insert(0, str(self.plugins_path))
+
         for plugin in self.plugins:
             logger.debug(
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
