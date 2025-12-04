@@ -34,11 +34,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "Creating plugins directory"
+mkdir -p ~/.config/odev/plugins
+
 echo "Installing dependencies"
 ~/.config/odev/venv/bin/pip install -r requirements.txt > /dev/null 2>&1
 ~/.config/odev/venv/bin/pip install -r requirements-dev.txt > /dev/null 2>&1
 
-find odev/plugins/*/ -type f -name 'requirements.txt' | while read reqfile; do
+find ~/.config/odev/plugins/*/ -type f -name 'requirements.txt' | while read reqfile; do
     ~/.config/odev/venv/bin/pip install -r "$reqfile" > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "Failed to install dependencies from $reqfile"

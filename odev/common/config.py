@@ -293,8 +293,8 @@ class Config:
 
         modules = [inspect.getmodule(self)]
 
-        # Find all odev/plugins/*/config.py files and import their Section subclasses
-        plugins_config_paths = glob.glob(str(Path(__file__).parent.parent / "plugins" / "*" / "config.py"))
+        # Find all ~/.config/odev/plugins/*/config.py files and import their Section subclasses
+        plugins_config_paths = glob.glob(str(CONFIG_DIR / "plugins" / "*" / "config.py"))
 
         for config_path in plugins_config_paths:
             module_name = f"odev.plugins.{Path(config_path).parent.name}.config"

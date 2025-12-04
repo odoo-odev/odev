@@ -570,9 +570,16 @@ class Odev(Generic[CommandType]):
 
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
-        # Add plugins path to sys.path so plugins can import their own modules
-        if str(self.plugins_path) not in sys.path:
-            sys.path.insert(0, str(self.plugins_path))
+        # Ensure odev.plugins exists as a module so legacy imports work
+        odev_module = sys.modules.get("odev")
+        if odev_module:
+            if not hasattr(odev_module, "plugins"):
+                odev_module.plugins = ModuleType("odev.plugins")
+                odev_module.plugins.__path__ = []
+                sys.modules["odev.plugins"] = odev_module.plugins
+
+            if str(self.plugins_path) not in odev_module.plugins.__path__:
+                odev_module.plugins.__path__.append(str(self.plugins_path))
 
         for plugin in self.plugins:
             logger.debug(
