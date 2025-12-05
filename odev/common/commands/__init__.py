@@ -1,12 +1,6 @@
 """Odev base command classes."""
 
-import pkgutil
-from importlib import import_module
-from pathlib import Path
-from inspect import isclass
-
-# --- Common modules -----------------------------------------------------------
-from typing import TypeVar, cast
+from typing import TypeVar
 
 from .base import Command, CommandError
 from .database import DatabaseCommand, DatabaseOrRepositoryCommand, LocalDatabaseCommand, RemoteDatabaseCommand
@@ -19,23 +13,20 @@ from .odoobin import (
     OdoobinTemplateCommand,
 )
 
-
-# --- Plugins ------------------------------------------------------------------
-
-odev_path = Path(__file__).parent.parent.parent
-
-plugins = [path for path in (odev_path / "plugins").glob("*/common/commands") if path.is_dir()]
-modules = pkgutil.iter_modules([directory.as_posix() for directory in plugins])
-
-for module_info in modules:
-    module_path = cast(str, module_info.module_finder.path).replace(str(odev_path.parent) + "/", "").replace("/", ".")  # type: ignore [union-attr]
-    module = import_module(f"{module_path}.{module_info.name}")
-
-    for attribute in dir(module):
-        obj = getattr(module, attribute)
-
-        if isclass(obj) and issubclass(obj, Command) and obj is not Command:
-            globals()[attribute] = obj
-
-
 CommandType = TypeVar("CommandType", Command, DatabaseCommand)
+
+__all__ = [
+    "TEMPLATE_SUFFIX",
+    "Command",
+    "CommandError",
+    "CommandType",
+    "DatabaseCommand",
+    "DatabaseOrRepositoryCommand",
+    "GitCommand",
+    "LocalDatabaseCommand",
+    "OdoobinCommand",
+    "OdoobinShellCommand",
+    "OdoobinShellScriptCommand",
+    "OdoobinTemplateCommand",
+    "RemoteDatabaseCommand",
+]
