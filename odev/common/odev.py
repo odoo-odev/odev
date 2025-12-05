@@ -1,5 +1,6 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
+import importlib
 import inspect
 import os
 import pkgutil
@@ -586,6 +587,11 @@ class Odev(Generic[CommandType]):
             )
 
             self._install_plugin_requirements(plugin.path)
+
+            try:
+                importlib.import_module(f"odev.plugins.{plugin.path.name}")
+            except ImportError as error:
+                logger.debug(f"Could not import plugin module {plugin.path.name}: {error}")
 
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
