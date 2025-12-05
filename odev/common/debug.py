@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from odev.common import bash, string
+from odev.common.config import CONFIG_DIR
 from odev.common.logging import logging
 
 
@@ -41,7 +42,13 @@ def find_debuggers(root: str | Path) -> Generator[tuple[Path, int], None, None]:
 
 # ------------------------------------------------------------------------------
 # Find calls to interactive debuggers within odev's source code
-debuggers = [f"{file.as_posix()}:{line}" for file, line in find_debuggers(Path(__file__).parents[1])]
+sources = [Path(__file__).parents[1]]
+plugins_path = CONFIG_DIR / "plugins"
+
+if plugins_path.is_dir():
+    sources.append(plugins_path)
+
+debuggers = [f"{file.as_posix()}:{line}" for source in sources for file, line in find_debuggers(source)]
 
 if debuggers:
     logger.warning(f"Interactive debuggers detected:\n{string.join_bullet(debuggers)}")
