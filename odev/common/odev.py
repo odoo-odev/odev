@@ -880,7 +880,7 @@ class Odev(Generic[CommandType]):
 
     def check_release(self) -> None:
         """Check if a new release is available."""
-        if not self.git.repository:
+        if not self.git.repository or self.git.repository.head.is_detached:
             return
 
         if self.git.repository.active_branch.name != self.config.update.release:
