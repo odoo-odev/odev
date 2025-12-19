@@ -247,29 +247,34 @@ class GitConnector(Connector):
         self._path: Path | None = path
         """Forced path to the git repository on the local system."""
 
-        if "@" in repo and ":" in repo:  # Assume the repo is in the format git@github.com:organization/repository.git
-            repo = repo.split(":")[-1]
+        if path:
+            repo_url = Repo(path).remote().url
+            self._organization, self._repository = repo_url.split("/")[-2:]
+        else:
+            if "@" in repo and ":" in repo:
+                # Assume the repo is in the format git@github.com:organization/repository.git
+                repo = repo.split(":")[-1]
 
-        repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
-        repo_values = repo.split("/")
+            repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
+            repo_values = repo.split("/")
 
-        if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
-            raise ConnectorError(
-                "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
-                + string.join_bullet(
-                    [
-                        string.stylize(url, "color.purple")
-                        for url in (
-                            "organization/repository",
-                            "https://github.com/organization/repository",
-                            "git@github.com:organization/repository.git",
-                        )
-                    ],
-                ),
-                self,
-            )
+            if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
+                raise ConnectorError(
+                    "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
+                    + string.join_bullet(
+                        [
+                            string.stylize(url, "color.purple")
+                            for url in (
+                                "organization/repository",
+                                "https://github.com/organization/repository",
+                                "git@github.com:organization/repository.git",
+                            )
+                        ],
+                    ),
+                    self,
+                )
 
-        self._organization, self._repository = repo_values
+            self._organization, self._repository = repo_values
 
     def __repr__(self) -> str:
         return f"GitConnector({self.name!r})"
