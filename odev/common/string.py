@@ -33,6 +33,9 @@ def normalize_indent(text: str) -> str:
     :return: The normalized text.
     :rtype: str
     """
+    if not text:
+        return ""
+
     if "\n" in text.strip():
         min_indent = min(len(line) - len(line.lstrip()) for line in text.splitlines()[1:] if line.strip())
         text = " " * min_indent + text

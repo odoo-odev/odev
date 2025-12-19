@@ -148,6 +148,17 @@ class UpdateSection(Section):
 
         self.set("interval", str(value))
 
+    @property
+    def release(self) -> str:
+        """Release channel. You can switch between 'main' and 'beta' to get the latest features. Beta will have more
+        updates but may be less stable. Defaults to 'main'.
+        """
+        return cast(str, self.get("release", "main"))
+
+    @release.setter
+    def release(self, value: str):
+        self.set("release", value)
+
 
 class PluginsSection(Section):
     """Odev plugins configuration."""

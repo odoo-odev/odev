@@ -25,6 +25,9 @@ class ConfigCommand(Command):
                     if key is None:
                         raise self.error("You must specify a key to set a value")
 
+                    if section == "update" and key == "release":
+                        self.odev.switch_release_channel(self.args.value)
+
                     self.config.set(section, key, self.args.value)
 
                 self.print_config(section=section, key=key)

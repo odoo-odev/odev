@@ -1,5 +1,6 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
+import contextlib
 import inspect
 import os
 import pkgutil
@@ -223,6 +224,22 @@ class Odev(Generic[CommandType]):
             plugin_manifest = self._load_plugin_manifest(plugin_path)
             yield Plugin(plugin_name, plugin_path, plugin_manifest)
 
+    @property
+    def release(self) -> str:
+        """Current release channel."""
+        if not self.git.repository:
+            return "<unknown>"
+
+        if self.git.repository.head.is_detached:
+            return "<detached>"
+
+        branch = self.git.repository.active_branch.name
+
+        if branch in ["main", "beta"]:
+            return branch
+
+        return f"dev:{branch}"
+
     def start(self, start_time: float | None = None) -> None:
         """Start the framework, check for updates and load plugins and commands.
 
@@ -241,6 +258,7 @@ class Odev(Generic[CommandType]):
             self.start_time = start_time
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
+        self.check_release()
         self.update()
 
         with progress.spinner("Loading commands"):
@@ -545,8 +563,6 @@ class Odev(Generic[CommandType]):
             logger.debug(
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
-
-            self._install_plugin_requirements(plugin.path)
 
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
@@ -862,7 +878,56 @@ class Odev(Generic[CommandType]):
 
         self.run_command(argv[0], *argv[1:], history=True)
 
+    def check_release(self) -> None:
+        """Check if a new release is available."""
+        if not self.git.repository or self.git.repository.head.is_detached:
+            return
+
+        if self.git.repository.active_branch.name != self.config.update.release:
+            logger.warning(
+                f"Release channel is set to {self.config.update.release!r} in configuration file "
+                f"but repository is on branch {self.git.repository.active_branch.name!r}\n"
+                "Consider running 'odev config update.release <branch>' to switch odev and its plugins to the desired "
+                "release channel"
+            )
+
+    def switch_release_channel(self, branch: str) -> None:
+        """Switch the release channel to the given branch."""
+        with progress.spinner(f"Switching odev to {branch!r} release channel"):
+            self.__checkout_release_channel(self.git, branch)
+
+        with progress.spinner(f"Switching plugins to {branch!r} release channel"):
+            for plugin in self.plugins:
+                self.__checkout_release_channel(GitConnector(plugin.name), branch)
+
+        self.config.update.release = branch
+        logger.info(f"Switched release channel to {branch!r}")
+
     # --- Private methods ------------------------------------------------------
+
+    def __checkout_release_channel(self, repo: GitConnector, branch: str) -> None:
+        """Checkout the release channel."""
+        if not repo.repository:
+            logger.warning(f"Directory {repo.name!r} is not a git repository, skipping")
+            return
+
+        if repo.repository.head.is_detached:
+            logger.warning(f"Repository {repo.name!r} is detached, please switch manually")
+            return
+
+        current_branch = repo.repository.active_branch.name
+
+        if current_branch not in ["main", "beta"]:
+            logger.warning(f"Repository {repo.name!r} is not on 'main' or 'beta' branch, please switch manually")
+            return
+
+        if current_branch == branch:
+            logger.info(f"Repository {repo.name!r} is already on {branch!r} branch, skipping")
+            return
+
+        with contextlib.suppress(GitCommandError):
+            repo.checkout(branch)
+            self._install_plugin_requirements(repo.path)
 
     def __filter_commands(self, attribute: Any) -> bool:
         """Filter module attributes to extract commands.
