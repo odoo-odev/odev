@@ -370,15 +370,22 @@ class Odev(Generic[CommandType]):
             self._load_plugin_manifest.cache_clear()
             manifest = self._load_plugin_manifest(path)
             self.config.plugins.enabled = {*self.config.plugins.enabled, *manifest["depends"]}
-            notes = self.__release_notes(git.repository, head_commit)
-
-            if notes:
-                sections = "\n".join(notes.values())
-                logger.info(f"Updated {prompt_name}:\n\n{sections}")
-                self.console.print(highlight=False)
-                logger.info(f"Check the full changelog at {git.remote.url}/compare/{head_commit}...{current_branch}")
+            self._show_release_notes(git, head_commit, prompt_name)
 
         return True
+
+    def _show_release_notes(self, git: GitConnector, head_commit: str, prompt_name: str):
+        if not git.repository or not git.remote:
+            return
+
+        if notes := self.__release_notes(git.repository, head_commit):
+            sections = "\n".join(notes.values())
+            logger.info(f"Updated {prompt_name}:\n\n{sections}")
+            self.console.print(highlight=False)
+            github_url = git.remote.url.replace("git@github.com:", "https://github.com/").replace(".git", "")
+            logger.info(
+                f"Check the full changelog at {github_url}/compare/{head_commit}...{git.repository.active_branch.name}"
+            )
 
     def restart(self) -> None:
         """Restart the current process with the latest version of odev."""
