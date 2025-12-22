@@ -249,7 +249,10 @@ class GitConnector(Connector):
 
         if path:
             repo_url = Repo(path).remote().url
-            self._organization, self._repository = repo_url.split("/")[-2:]
+            self._organization, self._repository = repo_url.removesuffix(".git").split("/")[-2:]
+
+            if ":" in self._organization:
+                self._organization = self._organization.split(":")[-1]
         else:
             if "@" in repo and ":" in repo:
                 # Assume the repo is in the format git@github.com:organization/repository.git
