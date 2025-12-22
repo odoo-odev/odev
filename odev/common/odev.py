@@ -1,5 +1,6 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
+import contextlib
 import importlib
 import inspect
 import os
