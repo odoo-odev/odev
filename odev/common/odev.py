@@ -336,12 +336,12 @@ class Odev(Generic[CommandType]):
             current_branch = git.repository.active_branch.name
             default_branch = git.default_branch
 
-            if current_branch != default_branch:
+            if current_branch not in (default_branch, "beta"):
                 target = "Odev" if not plugin else f"Plugin {plugin!r}"
                 logger.warning(
                     f"{target} is running from a non-standard branch {current_branch!r}, assuming your are in "
                     "development mode\nUpdates will not be pulled automatically\nConsider switching to branch "
-                    f"{default_branch!r} for regular updates"
+                    f"{default_branch!r} or 'beta' for regular updates"
                 )
                 return True
 
