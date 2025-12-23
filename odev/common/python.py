@@ -118,7 +118,7 @@ class PythonEnv:
         if self._global:
             return "Global Interpreter"
 
-        return f"{self.name} - Python {self.version}" if self.exists else ""
+        return f"{self.name}" if self.exists else ""
 
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.name!r}, version={self.version})"
