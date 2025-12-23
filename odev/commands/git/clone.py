@@ -32,7 +32,7 @@ class CloneCommand(DatabaseOrRepositoryCommand):
 
     def _clone_repository(self):
         """Find and clone the correct repository."""
-        git = GitConnector(self.args.repository or self._database.repository.name)
+        git = GitConnector(self.args.repository or self._database.repository.full_name)
 
         if git.path.exists():
             logger.info(f"Repository {git.name!r} already cloned under {git.path.as_posix()}")
