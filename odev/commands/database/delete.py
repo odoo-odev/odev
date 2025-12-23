@@ -84,7 +84,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         tracker.start()
 
         for database in databases:
-            with silence_loggers(__name__):
+            with silence_loggers(__name__), self.console.force_bypass_prompt(force=True):
                 self.delete_one(LocalDatabase(database))
 
             tracker.update(task, advance=1)

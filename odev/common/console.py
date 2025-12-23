@@ -11,6 +11,7 @@ from typing import (
     ClassVar,
     Literal,
 )
+from warnings import deprecated
 
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
@@ -270,11 +271,18 @@ class Console(RichConsole):
         """Set the is_live property."""
         Console._is_live = value
 
+    @deprecated("Use `force_bypass_prompt` instead.")
     @contextmanager
     def no_bypass_prompt(self):
         """Context manager to temporarily disable prompt bypassing."""
+        with self.force_bypass_prompt(force=False):
+            yield
+
+    @contextmanager
+    def force_bypass_prompt(self, force: bool = False):
+        """Context manager to temporarily force prompt bypassing."""
         original_bypass = self.bypass_prompt
-        self.bypass_prompt = False
+        self.bypass_prompt = force
         yield
         self.bypass_prompt = original_bypass
 
