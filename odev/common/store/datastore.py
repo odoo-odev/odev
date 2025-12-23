@@ -27,7 +27,13 @@ class DataStore(PostgresDatabase):
         self.databases = DatabaseStore(self)
         self.history = HistoryStore(self)
         self.secrets = SecretStore(self)
+        self.__load_tables()
         self.__load_plugins_tables()
+
+    def __load_tables(self):
+        for table in self.tables.values():
+            if not self.table_exists(table.name):
+                table.prepare_database_table()
 
     def __load_plugins_tables(self):
         odev_path = Path(__file__).parents[2]
