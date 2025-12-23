@@ -10,14 +10,15 @@ from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
     TYPE_CHECKING,
+    ClassVar,
     Literal,
     cast,
 )
 
-from cachetools.func import ttl_cache
 from packaging.version import Version
 
 from odev.common import bash, string
+from odev.common.cache import TTLCache
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
 from odev.common.databases.remote import RemoteDatabase
@@ -71,6 +72,8 @@ def odoo_repositories(enterprise: bool = True) -> Generator[GitConnector, None, 
 
 class OdoobinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
+
+    cache_ps_process: ClassVar[TTLCache] = TTLCache(ttl=5)
 
     def __init__(
         self,
@@ -329,17 +332,21 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._forced_worktree_name = worktree
         return self
 
-    @ttl_cache(ttl=1)
     def _get_ps_process(self) -> str | None:
         """Return the process currently running odoo, if any.
         Grep-ed `ps aux` output.
         """
+        if (output := self.cache_ps_process.get(self.database.name)) is not None:
+            return output
+
         process = bash.execute(
             f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}(\\s+|$)' || echo -n ''"
         )
 
         if process is not None:
-            return process.stdout.decode()
+            output = process.stdout.decode()
+            self.cache_ps_process.set(self.database.name, output)
+            return output
 
         return None
 
@@ -527,7 +534,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         subcommand_input: str | None = None,
         stream: bool = True,
         progress: Callable[[str], None] | None = None,
-        prepare: bool = True,
+        prepare: bool = False,
     ) -> CompletedProcess | None:
         """Run Odoo on the current database.
 
