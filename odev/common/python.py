@@ -8,12 +8,13 @@ from collections.abc import Callable, Generator, Mapping, MutableMapping
 from functools import lru_cache
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
+from typing import ClassVar
 
 import virtualenv
-from cachetools.func import ttl_cache
 from packaging.version import InvalidVersion, Version, parse as parse_version
 
 from odev.common import bash, progress, string
+from odev.common.cache import TTLCache
 from odev.common.console import console
 from odev.common.errors import OdevError
 from odev.common.logging import logging, silence_loggers
@@ -82,6 +83,9 @@ class PythonEnv:
     a virtual environment.
     """
 
+    pip_freeze_cache: ClassVar[TTLCache] = TTLCache(ttl=60)
+    """Cache for pip freeze output."""
+
     def __init__(self, path: Path | str | None = None, version: str | None = None):
         """Initialize a python environment.
 
@@ -114,7 +118,7 @@ class PythonEnv:
         if self._global:
             return "Global Interpreter"
 
-        return f"{self.name} - Python {self.version}" if self.exists else ""
+        return f"{self.name}" if self.exists else ""
 
     def __repr__(self) -> str:
         return f"PythonEnv(name={self.name!r}, version={self.version})"
@@ -262,6 +266,9 @@ class PythonEnv:
         """Install packages from a requirements.txt file.
         :param path: Path to the requirements.txt file or the containing directory.
         """
+        if not self.missing_requirements(path):
+            return
+
         requirements_path = self.__check_requirements_path(path)
         self.__pip_install_progress(
             options=f"-r '{requirements_path}'",
@@ -348,14 +355,17 @@ class PythonEnv:
         else:
             logger.info("All python packages are already installed and up-to-date")
 
-    @ttl_cache(ttl=60)
     def __pip_freeze_all(self) -> CompletedProcess:
         """Run pip freeze to list all installed packages."""
+        if (packages := self.pip_freeze_cache.get("pip freeze")) is not None:
+            return packages
+
         packages = bash.execute(f"{self.pip} freeze --all")
 
         if packages is None:
             raise OdevError("Failed to run pip freeze")
 
+        self.pip_freeze_cache.set("pip freeze", packages)
         return packages
 
     def __package_spec(self, package: str) -> tuple[str, str]:

@@ -28,12 +28,11 @@ from typing import (
     cast,
 )
 
-import networkx as nx
 from git import GitCommandError, NoSuchPathError, Repo
+from networkx import DiGraph, NetworkXUnfeasible, topological_sort
 from packaging import version
 
 from odev._version import __version__
-from odev.commands.database.delete import DeleteCommand
 from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseType
@@ -259,8 +258,10 @@ class Odev(Generic[CommandType]):
             self.start_time = start_time
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
-        self.check_release()
-        self.update()
+
+        if self.__should_update_now():
+            self.check_release()
+            self.update()
 
         with progress.spinner("Loading commands"):
             self.register_commands()
@@ -274,10 +275,8 @@ class Odev(Generic[CommandType]):
         :param restart: Whether to restart the framework after updating.
         :param upgrade: Whether to force the upgrade process.
         """
-        upgrade |= self.check_upgrade()
-
         logger.debug(f"Checking for updates in {self.name!r}")
-        upgrade |= self._update(self.path)
+        upgrade = self._update(self.path) and self.check_upgrade()
 
         logger.debug("Checking for updates in plugins")
         plugins_upgrade = any(self._update(path, plugin) for plugin, path, _ in self.plugins)
@@ -316,9 +315,8 @@ class Odev(Generic[CommandType]):
         if git.repository is None:
             raise OdevError(f"Repository for {self.name!r} not found at {path.as_posix()}")
 
-        if not self.__date_check_interval() or not self.__git_branch_behind(git.repository):
-            git.fetch()
-            return False
+        if not self.__git_branch_behind(git.repository):
+            git.fetch(detached=False)
 
         prompt_name = f"plugin {plugin}" if plugin else self.name
         logger.debug(f"Checking for updates in {git.name!r}")
@@ -446,6 +444,7 @@ class Odev(Generic[CommandType]):
         logger.debug(f"Last pruning of databases was {last_pruning} days ago")
 
         if last_pruning >= PRUNING_INTERVAL:
+            from odev.commands.database.delete import DeleteCommand  # noqa: PLC0415
             from odev.common.databases.local import LocalDatabase  # noqa: PLC0415
 
             delete_command_cls = cast(type[CommandType], self.commands.get("delete"))
@@ -587,8 +586,6 @@ class Odev(Generic[CommandType]):
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
 
-            self._install_plugin_requirements(plugin.path)
-
             try:
                 importlib.import_module(f"odev.plugins.{plugin.path.name}")
             except ImportError as error:
@@ -597,13 +594,13 @@ class Odev(Generic[CommandType]):
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
+                action = (
+                    "Registering"
+                    if base_command_class is None or issubclass(base_command_class, command_class)
+                    else "Patching"
+                )
 
-                if base_command_class is None or issubclass(base_command_class, command_class):
-                    action = "Registering new command"
-                else:
-                    action = "Patching existing command"
-
-                logger.debug(f"{action} {command_class._name!r} from plugin {plugin.name!r}")
+                logger.debug(f"{action} command {command_class._name!r}")
 
                 if (
                     command_class._name in self.commands
@@ -669,7 +666,7 @@ class Odev(Generic[CommandType]):
                         plugin_path.symlink_to(repository.path, target_is_directory=True)
 
                     self._load_config()
-                    self._install_plugin_requirements(plugin_path)
+                    PythonEnv().install_requirements(plugin_path)
                     self._setup_plugin(plugin_path, plugin)
                 except Exception as error:
                     plugin_path.unlink(missing_ok=True)
@@ -725,16 +722,6 @@ class Odev(Generic[CommandType]):
             self._load_config()
             self._plugins_dependency_tree.cache_clear()
 
-    def _install_plugin_requirements(self, plugin_path: Path) -> None:
-        """Install the requirements of a plugin.
-
-        :param plugin_path: Path to the plugin to install requirements for
-        """
-        python = PythonEnv()
-
-        if any(python.missing_requirements(plugin_path, raise_if_error=False)):
-            python.install_requirements(plugin_path)
-
     def _setup_plugin(self, plugin_path: Path, plugin: str | None = None) -> None:
         """Run the setup script of a plugin if it exists.
 
@@ -789,7 +776,7 @@ class Odev(Generic[CommandType]):
         """Order plugins by mutual dependencies, the first one in the returned list being the first one that needs to
         be imported to respect the dependency graph.
         """
-        graph = nx.DiGraph()
+        graph = DiGraph()
 
         for plugin_path in self.plugins_path.iterdir():
             manifest = self._load_plugin_manifest(plugin_path)
@@ -799,9 +786,9 @@ class Odev(Generic[CommandType]):
                 graph.add_edge(dependency, manifest["name"])
 
         try:
-            resolved_graph: list[str] = list(nx.topological_sort(graph))
+            resolved_graph: list[str] = list(topological_sort(graph))
             logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
-        except nx.NetworkXUnfeasible as exception:
+        except NetworkXUnfeasible as exception:
             raise OdevError("Circular dependency detected in plugins") from exception
 
         return resolved_graph
@@ -957,7 +944,7 @@ class Odev(Generic[CommandType]):
 
         with contextlib.suppress(GitCommandError):
             repo.checkout(branch)
-            self._install_plugin_requirements(repo.path)
+            PythonEnv().install_requirements(repo.path)
 
     def __filter_commands(self, attribute: Any) -> bool:
         """Filter module attributes to extract commands.
@@ -1059,7 +1046,7 @@ class Odev(Generic[CommandType]):
 
         return bool(diff)
 
-    def __date_check_interval(self) -> bool:
+    def __should_update_now(self) -> bool:
         """Check whether the last check date is older than today minus the check interval.
 
         :return: Whether the last check date is older than today minus the check interval

@@ -10,14 +10,15 @@ from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
     TYPE_CHECKING,
+    ClassVar,
     Literal,
     cast,
 )
 
-from cachetools.func import ttl_cache
 from packaging.version import Version
 
 from odev.common import bash, string
+from odev.common.cache import TTLCache
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
 from odev.common.databases.remote import RemoteDatabase
@@ -71,6 +72,8 @@ def odoo_repositories(enterprise: bool = True) -> Generator[GitConnector, None, 
 
 class OdoobinProcess(OdevFrameworkMixin):
     """Class to manage an odoo-bin process."""
+
+    cache_ps_process: ClassVar[TTLCache] = TTLCache(ttl=1)
 
     def __init__(
         self,
@@ -329,17 +332,29 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._forced_worktree_name = worktree
         return self
 
-    @ttl_cache(ttl=1)
     def _get_ps_process(self) -> str | None:
         """Return the process currently running odoo, if any.
         Grep-ed `ps aux` output.
         """
-        process = bash.execute(
-            f"ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=){self.database.name}(\\s+|$)' || echo -n ''"
-        )
+        if (output := self.cache_ps_process.get("ps aux")) is not None:
+            return self._parse_ps_process(output)
+
+        process = bash.execute("ps aux | grep -E 'odoo-bin\\s+(-d|--database)(\\s+|=)' || echo -n ''")
 
         if process is not None:
-            return process.stdout.decode()
+            output = process.stdout.decode()
+            self.cache_ps_process.set("ps aux", output)
+            return self._parse_ps_process(output)
+
+        return None
+
+    def _parse_ps_process(self, output: str) -> str | None:
+        """Parse the output of `ps aux` to find the process currently running odoo, if any."""
+        regex = re.compile(rf"\s+(-d|--database)(\s+|=){self.database.name}(\s+|$)")
+
+        for line in output.splitlines():
+            if regex.search(line):
+                return line
 
         return None
 
@@ -527,7 +542,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         subcommand_input: str | None = None,
         stream: bool = True,
         progress: Callable[[str], None] | None = None,
-        prepare: bool = True,
+        prepare: bool = False,
     ) -> CompletedProcess | None:
         """Run Odoo on the current database.
 

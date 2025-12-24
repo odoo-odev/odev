@@ -158,25 +158,24 @@ class PostgresTable:
         self.name: str = name or self.name
         """Name of the table in which data is stored, must be set in subclass."""
 
-        with self.database:
-            self.prepare_database_table()
-
         self.database.tables[self.name] = self
 
     def prepare_database_table(self):
         """Prepare the table and ensures it has the correct definition and constraints applied."""
         if self._columns is not None:
-            if not self.database.table_exists(self.name):
-                logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
-                self.database.create_table(self.name, self._columns)
-            elif missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
+            logger.debug(f"Creating table {self.name!r} in database {self.database!r}")
+            self.database.create_table(self.name, self._columns)
+
+            if missing_columns := self.database.columns_exist(self.name, list(self._columns.keys())):
                 for column in missing_columns:
                     self.__add_missing_column(column)
 
-        if self._constraints is not None:
-            for name, definition in self._constraints.items():
-                logger.debug(f"Creating constraint {name!r} on table {self.name!r} in database {self.database.name!r}")
-                self.database.constraint(self.name, name, definition)
+            if self._constraints is not None:
+                for name, definition in self._constraints.items():
+                    logger.debug(
+                        f"Creating constraint {name!r} on table {self.name!r} in database {self.database.name!r}"
+                    )
+                    self.database.constraint(self.name, name, definition)
 
     def clear(self):
         """Clear the table."""
