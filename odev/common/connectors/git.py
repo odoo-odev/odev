@@ -745,7 +745,7 @@ class GitConnector(Connector):
 
                 self.repository.git.fetch("origin", revision)
 
-                if name != revision:
+                if name != revision and not re.match("^[a-f0-9]{40}$", revision):
                     local_revision = f"{revision}-odev-{name}"
                     remote_revision = f"origin/{revision}"
                     self.repository.git.branch(local_revision, remote_revision, "--force")

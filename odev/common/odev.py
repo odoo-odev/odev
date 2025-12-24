@@ -1,6 +1,7 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
 import contextlib
+import importlib
 import inspect
 import os
 import pkgutil
@@ -36,7 +37,7 @@ from odev.commands.database.delete import DeleteCommand
 from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseType
-from odev.common.config import Config
+from odev.common.config import CONFIG_DIR, Config
 from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
 from odev.common.errors import OdevError
@@ -184,7 +185,7 @@ class Odev(Generic[CommandType]):
     @property
     def plugins_path(self) -> Path:
         """Local path to the plugins directory."""
-        return self.base_path / "plugins"
+        return CONFIG_DIR / "plugins"
 
     @property
     def commands_path(self) -> Path:
@@ -335,12 +336,12 @@ class Odev(Generic[CommandType]):
             current_branch = git.repository.active_branch.name
             default_branch = git.default_branch
 
-            if current_branch != default_branch:
+            if current_branch not in (default_branch, "beta"):
                 target = "Odev" if not plugin else f"Plugin {plugin!r}"
                 logger.warning(
                     f"{target} is running from a non-standard branch {current_branch!r}, assuming your are in "
                     "development mode\nUpdates will not be pulled automatically\nConsider switching to branch "
-                    f"{default_branch!r} for regular updates"
+                    f"{default_branch!r} or 'beta' for regular updates"
                 )
                 return True
 
@@ -516,8 +517,12 @@ class Odev(Generic[CommandType]):
             if not isinstance(module_info.module_finder, FileFinder):
                 raise TypeError("Module finder is not a FileFinder instance")
 
-            module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
-            spec = spec_from_file_location(module_path.stem, module_path.as_posix())
+            if module_info.ispkg:
+                module_path = Path(module_info.module_finder.path) / module_info.name / "__init__.py"
+            else:
+                module_path = Path(module_info.module_finder.path) / f"{module_info.name}.py"
+
+            spec = spec_from_file_location(module_info.name, module_path.as_posix())
 
             if spec is None or spec.loader is None:
                 raise ImportError(f"Cannot load module {module_info.name} from {module_path.as_posix()}")
@@ -566,10 +571,28 @@ class Odev(Generic[CommandType]):
 
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
+        # Ensure odev.plugins exists as a module so legacy imports work
+        odev_module = sys.modules.get("odev")
+        if odev_module:
+            if not hasattr(odev_module, "plugins"):
+                odev_module.plugins = ModuleType("odev.plugins")
+                odev_module.plugins.__path__ = []
+                sys.modules["odev.plugins"] = odev_module.plugins
+
+            if str(self.plugins_path) not in odev_module.plugins.__path__:
+                odev_module.plugins.__path__.append(str(self.plugins_path))
+
         for plugin in self.plugins:
             logger.debug(
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
+
+            self._install_plugin_requirements(plugin.path)
+
+            try:
+                importlib.import_module(f"odev.plugins.{plugin.path.name}")
+            except ImportError as error:
+                logger.debug(f"Could not import plugin module {plugin.path.name}: {error}")
 
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
