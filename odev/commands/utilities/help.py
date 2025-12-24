@@ -142,7 +142,7 @@ class HelpCommand(Command):
                             else ""
                         ),
                     )
-                    for command in commands
+                    for command in sorted(commands, key=lambda command: command._name)
                 ],
                 blanks=1,
             ),
