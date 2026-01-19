@@ -25,54 +25,66 @@ done < <(
 IFS=$'\n' python_executables=($(for p_exec in "${python_executables[@]}"; do echo "$(basename "$p_exec" | sed -n 's/.*python3\.\([0-9]\+\)/\1/p') $p_exec"; done | sort -rn | cut -d' ' -f2- | uniq))
 unset IFS
 
-echo "Setting up virtual environment"
+echo "[*] Setting up virtual environment"
 mkdir -p ~/.config/odev
-virtualenv -p "${python_executables[0]:-python3}" ~/.config/odev/venv > /dev/null 2>&1
+virtualenv -p "${python_executables[0]:-python3}" ~/.config/odev/venv
 
 if [ $? -ne 0 ]; then
     echo "Failed to create virtual environment"
     exit 1
 fi
 
-echo "Creating plugins directory"
+echo "[*] Creating plugins directory"
 mkdir -p ~/.config/odev/plugins
 
-echo "Installing dependencies"
-~/.config/odev/venv/bin/pip install -r requirements.txt > /dev/null 2>&1
-~/.config/odev/venv/bin/pip install -r requirements-dev.txt > /dev/null 2>&1
+echo "[*] Installing dependencies"
+~/.config/odev/venv/bin/pip install -r requirements.txt
+~/.config/odev/venv/bin/pip install -r requirements-dev.txt
 
-find ~/.config/odev/plugins/*/ -type f -name 'requirements.txt' | while read reqfile; do
-    ~/.config/odev/venv/bin/pip install -r "$reqfile" > /dev/null 2>&1
+find ~/.config/odev/plugins -type f -name 'requirements.txt' | while read -r reqfile; do
+    ~/.config/odev/venv/bin/pip install -r "$reqfile"
+
     if [ $? -ne 0 ]; then
         echo "Failed to install dependencies from $reqfile"
         exit 1
     fi
 done
 
-if [ $? -ne 0 ]; then
-    echo "Failed to install dependencies"
-    exit 1
-fi
-
-echo "Adding executable to available commands"
+echo "[*] Adding executable to available commands"
 target_dir=""
-for dir in ~/.local/bin /usr/local/bin; do
-    abs_dir=$(eval echo "$dir")
-    if echo "$PATH" | tr ':' '\n' | grep -qx "$abs_dir"; then
-        target_dir="$abs_dir"
+use_sudo=false
+for dir in $(echo "$PATH" | tr ':' '\n'); do
+    if [[ -d "$dir" && -w "$dir" && ("$dir" == /usr/* || "$dir" == "$HOME"/*) ]]; then
+        target_dir="$dir"
         break
     fi
 done
 
+if [ -z "$target_dir" ]; then
+    for dir in $(echo "$PATH" | tr ':' '\n'); do
+    if [[ -d "$dir" && "$dir" == /usr/* ]]; then
+        target_dir="$dir"
+        use_sudo=true
+        echo "You might be prompted for your password to create a symlink in $target_dir"
+        break
+    fi
+done
+fi
+
 if [ -n "$target_dir" ]; then
-    if [ "$target_dir" = "/usr/local/bin" ]; then
-        echo "You might be prompted for your password to create a symlink in /usr/local/bin"
+    if $use_sudo; then
         sudo ln -sf "$(pwd)/odev.sh" "$target_dir/odev"
     else
         ln -sf "$(pwd)/odev.sh" "$target_dir/odev"
     fi
+
+    if [ $? -ne 0 ]; then
+        echo "Failed to add executable to PATH"
+        exit 1
+    fi
 else
     echo "No suitable directory found in PATH. Please add ~/.local/bin or /usr/local/bin to your PATH"
+    exit 1
 fi
 
 if [ $? -ne 0 ]; then
@@ -80,4 +92,4 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Installation complete. You can now run 'odev' from the command line"
+echo "[*] Installation complete. You can now run 'odev' from the command line"
