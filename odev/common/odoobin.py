@@ -273,7 +273,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         """Return the list of Odoo addons paths."""
         return [
             worktree.path / addon
-            for addon in ["", "addons", "odoo/addons", "openerp/addons"]
+            for addon in ["", "addons"]
             for worktree in self.odoo_worktrees
             if OdoobinProcess.check_addons_path(worktree.path / addon)
         ]
