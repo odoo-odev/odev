@@ -259,8 +259,10 @@ class Odev(Generic[CommandType]):
             self.start_time = start_time
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
-        self.check_release()
-        self.update()
+
+        if self.__should_update_now():
+            self.check_release()
+            self.update()
 
         with progress.spinner("Loading commands"):
             self.register_commands()
@@ -274,10 +276,8 @@ class Odev(Generic[CommandType]):
         :param restart: Whether to restart the framework after updating.
         :param upgrade: Whether to force the upgrade process.
         """
-        upgrade |= self.check_upgrade()
-
         logger.debug(f"Checking for updates in {self.name!r}")
-        upgrade |= self._update(self.path)
+        upgrade = self._update(self.path) and self.check_upgrade()
 
         logger.debug("Checking for updates in plugins")
         plugins_upgrade = any(self._update(path, plugin) for plugin, path, _ in self.plugins)
@@ -316,9 +316,8 @@ class Odev(Generic[CommandType]):
         if git.repository is None:
             raise OdevError(f"Repository for {self.name!r} not found at {path.as_posix()}")
 
-        if not self.__date_check_interval() or not self.__git_branch_behind(git.repository):
-            git.fetch()
-            return False
+        if not self.__git_branch_behind(git.repository):
+            git.fetch(detached=False)
 
         prompt_name = f"plugin {plugin}" if plugin else self.name
         logger.debug(f"Checking for updates in {git.name!r}")
@@ -1059,7 +1058,7 @@ class Odev(Generic[CommandType]):
 
         return bool(diff)
 
-    def __date_check_interval(self) -> bool:
+    def __should_update_now(self) -> bool:
         """Check whether the last check date is older than today minus the check interval.
 
         :return: Whether the last check date is older than today minus the check interval
