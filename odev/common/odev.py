@@ -28,12 +28,11 @@ from typing import (
     cast,
 )
 
-import networkx as nx
 from git import GitCommandError, NoSuchPathError, Repo
+from networkx import DiGraph, NetworkXUnfeasible, topological_sort
 from packaging import version
 
 from odev._version import __version__
-from odev.commands.database.delete import DeleteCommand
 from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseType
@@ -445,6 +444,7 @@ class Odev(Generic[CommandType]):
         logger.debug(f"Last pruning of databases was {last_pruning} days ago")
 
         if last_pruning >= PRUNING_INTERVAL:
+            from odev.commands.database.delete import DeleteCommand  # noqa: PLC0415
             from odev.common.databases.local import LocalDatabase  # noqa: PLC0415
 
             delete_command_cls = cast(type[CommandType], self.commands.get("delete"))
@@ -594,13 +594,13 @@ class Odev(Generic[CommandType]):
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
+                action = (
+                    "Registering"
+                    if base_command_class is None or issubclass(base_command_class, command_class)
+                    else "Patching"
+                )
 
-                if base_command_class is None or issubclass(base_command_class, command_class):
-                    action = "Registering new command"
-                else:
-                    action = "Patching existing command"
-
-                logger.debug(f"{action} {command_class._name!r}")
+                logger.debug(f"{action} command {command_class._name!r}")
 
                 if (
                     command_class._name in self.commands
@@ -776,7 +776,7 @@ class Odev(Generic[CommandType]):
         """Order plugins by mutual dependencies, the first one in the returned list being the first one that needs to
         be imported to respect the dependency graph.
         """
-        graph = nx.DiGraph()
+        graph = DiGraph()
 
         for plugin_path in self.plugins_path.iterdir():
             manifest = self._load_plugin_manifest(plugin_path)
@@ -786,9 +786,9 @@ class Odev(Generic[CommandType]):
                 graph.add_edge(dependency, manifest["name"])
 
         try:
-            resolved_graph: list[str] = list(nx.topological_sort(graph))
+            resolved_graph: list[str] = list(topological_sort(graph))
             logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
-        except nx.NetworkXUnfeasible as exception:
+        except NetworkXUnfeasible as exception:
             raise OdevError("Circular dependency detected in plugins") from exception
 
         return resolved_graph
