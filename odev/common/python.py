@@ -8,12 +8,13 @@ from collections.abc import Callable, Generator, Mapping, MutableMapping
 from functools import lru_cache
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
+from typing import ClassVar
 
 import virtualenv
-from cachetools.func import ttl_cache
 from packaging.version import InvalidVersion, Version, parse as parse_version
 
 from odev.common import bash, progress, string
+from odev.common.cache import TTLCache
 from odev.common.console import console
 from odev.common.errors import OdevError
 from odev.common.logging import logging, silence_loggers
@@ -81,6 +82,9 @@ class PythonEnv:
     """Object representation of a local python environment, this could be the global python interpreter or
     a virtual environment.
     """
+
+    pip_freeze_cache: ClassVar[TTLCache] = TTLCache(ttl=60)
+    """Cache for pip freeze output."""
 
     def __init__(self, path: Path | str | None = None, version: str | None = None):
         """Initialize a python environment.
@@ -351,14 +355,17 @@ class PythonEnv:
         else:
             logger.info("All python packages are already installed and up-to-date")
 
-    @ttl_cache(ttl=60)
     def __pip_freeze_all(self) -> CompletedProcess:
         """Run pip freeze to list all installed packages."""
+        if (packages := self.pip_freeze_cache.get("pip freeze")) is not None:
+            return packages
+
         packages = bash.execute(f"{self.pip} freeze --all")
 
         if packages is None:
             raise OdevError("Failed to run pip freeze")
 
+        self.pip_freeze_cache.set("pip freeze", packages)
         return packages
 
     def __package_spec(self, package: str) -> tuple[str, str]:

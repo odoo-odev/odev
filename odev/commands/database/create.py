@@ -184,7 +184,7 @@ class CreateCommand(OdoobinTemplateCommand):
         process.with_worktree(self.worktree)
 
         try:
-            run_process = process.run(args=args, progress=self.odoobin_progress)
+            run_process = process.run(args=args, progress=self.odoobin_progress, prepare=True)
             self.console.print()
         except OdevError as error:
             logger.error(str(error))
