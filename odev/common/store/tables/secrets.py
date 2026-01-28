@@ -200,7 +200,7 @@ class SecretStore(PostgresTable):
             if field == "password":
                 value = console.secret(prompt_label)
             else:
-                with console.no_bypass_prompt():
+                with console.force_bypass_prompt():
                     value = console.text(prompt_label, default=current_value)
 
             setattr(secret, field, value)
