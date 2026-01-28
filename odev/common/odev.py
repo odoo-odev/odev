@@ -586,8 +586,6 @@ class Odev(Generic[CommandType]):
                 f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
             )
 
-            self._install_plugin_requirements(plugin.path)
-
             try:
                 importlib.import_module(f"odev.plugins.{plugin.path.name}")
             except ImportError as error:
@@ -602,7 +600,7 @@ class Odev(Generic[CommandType]):
                 else:
                     action = "Patching existing command"
 
-                logger.debug(f"{action} {command_class._name!r} from plugin {plugin.name!r}")
+                logger.debug(f"{action} {command_class._name!r}")
 
                 if (
                     command_class._name in self.commands
@@ -668,7 +666,7 @@ class Odev(Generic[CommandType]):
                         plugin_path.symlink_to(repository.path, target_is_directory=True)
 
                     self._load_config()
-                    self._install_plugin_requirements(plugin_path)
+                    PythonEnv().install_requirements(plugin_path)
                     self._setup_plugin(plugin_path, plugin)
                 except Exception as error:
                     plugin_path.unlink(missing_ok=True)
@@ -723,16 +721,6 @@ class Odev(Generic[CommandType]):
 
             self._load_config()
             self._plugins_dependency_tree.cache_clear()
-
-    def _install_plugin_requirements(self, plugin_path: Path) -> None:
-        """Install the requirements of a plugin.
-
-        :param plugin_path: Path to the plugin to install requirements for
-        """
-        python = PythonEnv()
-
-        if any(python.missing_requirements(plugin_path, raise_if_error=False)):
-            python.install_requirements(plugin_path)
 
     def _setup_plugin(self, plugin_path: Path, plugin: str | None = None) -> None:
         """Run the setup script of a plugin if it exists.
@@ -956,7 +944,7 @@ class Odev(Generic[CommandType]):
 
         with contextlib.suppress(GitCommandError):
             repo.checkout(branch)
-            self._install_plugin_requirements(repo.path)
+            PythonEnv().install_requirements(repo.path)
 
     def __filter_commands(self, attribute: Any) -> bool:
         """Filter module attributes to extract commands.
