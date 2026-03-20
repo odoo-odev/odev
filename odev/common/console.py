@@ -11,7 +11,6 @@ from typing import (
     ClassVar,
     Literal,
 )
-from warnings import deprecated
 
 from InquirerPy import inquirer
 from InquirerPy.base.control import Choice
@@ -29,6 +28,7 @@ from rich.table import Table
 from rich.theme import Theme
 
 from odev.common import string
+from odev.common.deprecation import deprecated
 
 
 __all__ = ["Colors", "console"]

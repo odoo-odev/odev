@@ -266,7 +266,7 @@ class PythonEnv:
         """Install packages from a requirements.txt file.
         :param path: Path to the requirements.txt file or the containing directory.
         """
-        if not self.missing_requirements(path):
+        if not any(self.missing_requirements(path, raise_if_error=False)):
             return
 
         requirements_path = self.__check_requirements_path(path)

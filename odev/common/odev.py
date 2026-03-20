@@ -276,12 +276,14 @@ class Odev(Generic[CommandType]):
         :param upgrade: Whether to force the upgrade process.
         """
         logger.debug(f"Checking for updates in {self.name!r}")
-        upgrade = self._update(self.path) and self.check_upgrade()
+        repo_updated = self._update(self.path)
 
         logger.debug("Checking for updates in plugins")
         plugins_upgrade = any(self._update(path, plugin) for plugin, path, _ in self.plugins)
 
-        if upgrade or plugins_upgrade:
+        updated = repo_updated or plugins_upgrade or upgrade
+
+        if updated:
             self.config.update.date = datetime.now(UTC)
             self._set_version_after_update()
             self.upgrade()
@@ -289,7 +291,7 @@ class Odev(Generic[CommandType]):
             if restart:
                 self.restart()
 
-        return upgrade
+        return updated
 
     def _update(self, path: Path, plugin: str | None = None) -> bool:
         """Check for updates in the odev repository and download them if necessary.

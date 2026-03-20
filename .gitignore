@@ -23,3 +23,7 @@ tests/plugins/*
 # --- Temporary and testing files
 _*/
 tmp/
+
+# --- AI files
+.cursor/
+.agents/
