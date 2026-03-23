@@ -66,7 +66,7 @@ class FetchCommand(GitCommand):
         for repository in self.repositories:
             try:
                 repository.prune_worktrees()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.debug(f"Failed to prune worktrees for {repository.name!r}: {e}")
             repository.fetch(detached=False)
 
