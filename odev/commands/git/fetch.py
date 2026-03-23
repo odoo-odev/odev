@@ -64,6 +64,10 @@ class FetchCommand(GitCommand):
         changes: dict[str, list[tuple[str, int, int]]] = {}
 
         for repository in self.repositories:
+            try:
+                repository.prune_worktrees()
+            except Exception as e:
+                logger.debug(f"Failed to prune worktrees for {repository.name!r}: {e}")
             repository.fetch(detached=False)
 
         for name, worktrees in self.grouped_worktrees.items():

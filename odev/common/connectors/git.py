@@ -213,10 +213,17 @@ class GitWorktree:
         :return: A tuple of commits behind and ahead.
         :rtype: Tuple[int, int]
         """
+        if self.detached:
+            return 0, 0
         repo = Repo(self.path)
-        rev_list: str = repo.git.rev_list("--left-right", "--count", "@{u}...HEAD")
-        commits_behind, commits_ahead = (int(commits) for commits in rev_list.split("\t"))
-        return commits_behind, commits_ahead
+        try:
+            rev_list: str = repo.git.rev_list("--left-right", "--count", "@{u}...HEAD")
+            commits_behind, commits_ahead = (int(commits) for commits in rev_list.split("\t"))
+            return commits_behind, commits_ahead
+        except GitCommandError as e:
+            if "no upstream configured" in str(e) or "does not point to a branch" in str(e):
+                return 0, 0
+            raise
 
 
 class GitConnector(Connector):
