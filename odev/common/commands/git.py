@@ -4,7 +4,11 @@ from collections.abc import Generator
 from odev.common import args
 from odev.common.commands import Command
 from odev.common.connectors import GitConnector, GitWorktree
+from odev.common.logging import logging
 from odev.common.odoobin import odoo_repositories
+
+
+logger = logging.getLogger(__name__)
 
 
 class GitCommand(Command, ABC):
@@ -21,7 +25,13 @@ class GitCommand(Command, ABC):
     def worktrees(self) -> Generator[GitWorktree, None, None]:
         """Iterate over worktrees in Odoo repositories."""
         for repository in self.repositories:
-            yield from repository.worktrees()
+            for worktree in repository.worktrees():
+                if not worktree.path.exists():
+                    logger.debug(f"Skipping missing worktree {worktree.name!r} at {worktree.path!s}")
+                    continue
+                if hasattr(self, "args") and self.args.version and worktree.name != self.args.version:
+                    continue
+                yield worktree
 
     @property
     def grouped_worktrees(self) -> dict[str, list[GitWorktree]]:
