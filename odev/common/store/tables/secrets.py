@@ -1,3 +1,4 @@
+import os
 from base64 import b64decode, b64encode
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -69,9 +70,13 @@ class SecretStore(PostgresTable):
     @classmethod
     def _list_ssh_keys(cls) -> list[AgentKey]:
         """List all SSH keys available in the ssh-agent."""
-        keys = list(SSHAgent().get_keys())
+        try:
+            keys = list(SSHAgent().get_keys())
+        except (SSHException, ConnectionError) as e:
+            logger.warning(f"Failed to communicate with ssh-agent: {e}")
+            keys = []
 
-        if not keys:
+        if not keys and not os.environ.get("ODEV_NO_SSH_AGENT"):
             raise OdevError("No SSH keys found in ssh-agent, or ssh-agent is not running.")
 
         fingerprint = cls.config.security.encryption_key
@@ -266,7 +271,13 @@ class SecretStore(PostgresTable):
             return None
 
         logger.debug(f"Secret '{name}:{scope}:{platform}' retrieved from storage")
-        return Secret(name, result[0][0], SecretStore.decrypt(result[0][1]), scope, platform)
+        try:
+            password = SecretStore.decrypt(result[0][1])
+        except OdevError:
+            logger.debug(f"Failed to decrypt secret '{name}:{scope}:{platform}', treating as missing")
+            return None
+
+        return Secret(name, result[0][0], password, scope, platform)
 
     def _set(self, secret: Secret):
         """Save a secret to the vault.
