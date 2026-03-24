@@ -252,10 +252,13 @@ class GitConnector(Connector):
         """
         super().__init__()
 
-        self._path: Path | None = path
-        """Forced path to the git repository on the local system."""
+        # If repo looks like an absolute path, use it as the path
+        if not path and repo and Path(repo).is_absolute():
+            path = Path(repo)
 
-        if path:
+        self._path: Path | None = path
+
+        if path and path.joinpath(".git").exists():
             repo_url = Repo(path).remote().url
             self._organization, self._repository = repo_url.removesuffix(".git").split("/")[-2:]
 
@@ -370,6 +373,16 @@ class GitConnector(Connector):
             return None
 
         return self.repository.active_branch.name.split("/")[-1]
+
+    @property
+    def is_dirty(self) -> bool:
+        """Whether the repository has uncommitted changes."""
+        return self.repository.is_dirty(untracked_files=True) if self.exists and self.repository else False
+
+    @property
+    def is_protected_branch(self) -> bool:
+        """Whether the current branch is a protected branch (main or master)."""
+        return self.branch in ("main", "master")
 
     @property
     def requirements_path(self) -> Path:

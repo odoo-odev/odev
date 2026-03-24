@@ -142,6 +142,12 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         if self._database.version:
             return self._database.version
 
+        if self._database.exists and not self._database.is_odoo:
+            logger.warning(
+                f"Database {self._database.name!r} is not an Odoo database. Defaulting to 'master'. "
+                f"Consider using 'odev create -V <version> {self._database.name}' to initialize it properly."
+            )
+
         return OdooVersion("master")
 
     @property

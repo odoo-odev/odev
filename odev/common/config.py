@@ -83,6 +83,17 @@ class PathsSection(Section):
     def dumps(self, value: str | Path):
         self.set("dumps", value.as_posix() if isinstance(value, Path) else value)
 
+    @property
+    def upgrade(self) -> Path:
+        """Path to the directory where Odoo Enterprise migration scripts are stored.
+        Defaults to ~/odoo/repositories/odoo/upgrade.
+        """
+        return Path(cast(str, self.get("upgrade", "~/odoo/repositories/odoo/upgrade"))).expanduser()
+
+    @upgrade.setter
+    def upgrade(self, value: str | Path):
+        self.set("upgrade", value.as_posix() if isinstance(value, Path) else value)
+
 
 class UpdateSection(Section):
     """Configuration for odev auto-updates."""

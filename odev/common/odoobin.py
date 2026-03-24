@@ -49,6 +49,9 @@ ODOO_COMMUNITY_REPOSITORIES: list[str] = [
 
 ODOO_ENTERPRISE_REPOSITORIES: list[str] = ["odoo/enterprise"]
 
+ODOO_UPGRADE_REPOSITORY: str = "odoo/upgrade"
+
+
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
     19: "3.12",
     16: "3.10",
@@ -531,7 +534,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             except CalledProcessError as error:
                 error_message: str = error.stderr.strip().decode().rstrip(".").replace("ERROR: ", "")
                 logger.error(f"Odoo exited with an error: {error_message}")
-                return None
+                return CompletedProcess(error.cmd, error.returncode, error.stdout, error.stderr)
             else:
                 return process
 
@@ -600,7 +603,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                     logger.error(f"STDERR: {error.stderr.decode()}")
 
                 logger.error("Odoo exited with an error, check the output above for more information")
-                return None
+                return CompletedProcess(error.cmd, error.returncode, error.stdout, error.stderr)
             else:
                 return process
 

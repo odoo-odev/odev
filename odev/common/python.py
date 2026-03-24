@@ -551,7 +551,7 @@ class PythonEnv:
         command = f"{self.python} {script_path} {' '.join(args)}"
 
         if script_input is not None:
-            command = f"{script_input} | {command}"
+            command = f"printf '%s' {shlex.quote(script_input)} | {command}"
 
         if not stream:
             return bash.execute(command)
@@ -559,10 +559,17 @@ class PythonEnv:
         if progress is None:
             return bash.run(command)
 
-        for line in bash.stream(command):
-            progress(line)
+        output = []
+        returncode = 0
+        try:
+            for line in bash.stream(command):
+                output.append(line)
+                progress(line)
+        except CalledProcessError as error:
+            returncode = error.returncode
 
-        return CompletedProcess(command, 0)
+        # Note: bash.stream mixes stdout and stderr via PTY, so we return the combined output as stdout.
+        return CompletedProcess(command, returncode, stdout="\n".join(output).encode())
 
     def run(self, command: str) -> CompletedProcess | None:
         """Run a python command.

@@ -176,7 +176,7 @@ def spinner(message: str) -> StackedStatus:
     :param message: The message to display.
     :type message: str
     """
-    if DEBUG_MODE:
+    if DEBUG_MODE or not console.is_interactive:
         logger.info(message)
 
     status = StackedStatus(console.render_str(message), console=console, spinner="arc")

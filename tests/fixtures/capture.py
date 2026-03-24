@@ -74,5 +74,5 @@ class CaptureOutput:
         if self._stderr and not self._stderr.closed:
             self._stderr_value = self._stderr.getvalue()
 
-        self._stderr_value = re.sub(r"\x1b[^m]*m", "", self._stdout_value)
+        self._stderr_value = re.sub(r"\x1b[^m]*m", "", self._stderr_value)
         return self._stderr_value

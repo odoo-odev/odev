@@ -875,9 +875,10 @@ class Odev(Generic[CommandType]):
 
         return not command_errored
 
-    def dispatch(self, argv: list[str] | None = None) -> None:
+    def dispatch(self, argv: list[str] | None = None) -> bool:
         """Handle commands and arguments as received from the terminal.
         :param argv: Optional list of command-line arguments used to override arguments received from the CLI.
+        :return: True if the command were executed successfully, False otherwise.
         """
         argv = (argv or sys.argv)[1:]
 
@@ -895,7 +896,7 @@ class Odev(Generic[CommandType]):
             logger.debug("Help argument or no command provided, falling back to help command")
             argv.insert(0, "help")
 
-        self.run_command(argv[0], *argv[1:], history=True)
+        return self.run_command(argv[0], *argv[1:], history=True)
 
     def check_release(self) -> None:
         """Check if a new release is available."""

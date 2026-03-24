@@ -38,6 +38,11 @@ class TestCommand(OdoobinCommand):
         description="Comma-separated list of modules to install for testing. If not set, install the base module.",
     )
 
+    @property
+    def _database_exists_required(self) -> bool:
+        """Return True if a database has to exist for the command to work."""
+        return not bool(self.args.version)
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.test_files: list[str] = []
@@ -84,8 +89,8 @@ class TestCommand(OdoobinCommand):
         """Return the arguments to pass to the create command."""
         args = ["--bare"]
 
-        if self._database.version is not None:
-            args.extend(["--version", str(self._database.version)])
+        if self.version is not None:
+            args.extend(["--version", str(self.version)])
 
         args.append(self.test_database.name)
         self.odev.run_command("create", *args)
@@ -109,8 +114,14 @@ class TestCommand(OdoobinCommand):
             self.create_test_database()
 
         odoobin = self.test_database.process or OdoobinProcess(self.test_database)
-        odoobin.with_version(self._database.version)
-        odoobin.with_edition(self._database.edition)
+        odoobin.with_version(self.version)
+
+        edition = (
+            "enterprise"
+            if self.args.enterprise or (self._database.exists and self._database.edition == "enterprise")
+            else "community"
+        )
+        odoobin.with_edition(edition)
         odoobin.with_venv(self.venv)
         odoobin.with_worktree(self.worktree)
 
@@ -132,9 +143,13 @@ class TestCommand(OdoobinCommand):
         problematic_test_levels = ("warning", "error", "critical")
         match = self._parse_progress_log_line(line)
 
-        if match is None:
-            if self.last_level in problematic_test_levels:
+        if match is None or not self.args.pretty:
+            if match is None and self.last_level in problematic_test_levels:
                 self.test_buffer.append(line)
+
+            if not self.args.pretty:
+                self.print(line, highlight=False, soft_wrap=False)
+                return
 
             color = f"logging.level.{self.last_level}" if self.last_level in problematic_test_levels else "color.black"
             self.print(string.stylize(line, color), highlight=False, soft_wrap=False)

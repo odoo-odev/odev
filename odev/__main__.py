@@ -35,7 +35,7 @@ def main():
         odev = init_framework()
         odev.start(start_time)
         logger.debug(f"Framework started in {monotonic() - start_time:.3f} seconds")
-        odev.dispatch()
+        sys.exit(0 if odev.dispatch() else 1)
 
     except OdevError as error:
         logger.error(error)

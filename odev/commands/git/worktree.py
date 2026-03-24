@@ -90,7 +90,8 @@ class WorktreeCommand(GitCommand):
         self.__check_name()
 
         if self.args.name in self.grouped_worktrees:
-            raise self.error(f"Worktree with name '{self.args.name}' already exists")
+            logger.info(f"Worktree with name '{self.args.name}' already exists")
+            return
 
         with progress.spinner(f"Creating worktree {self.args.name}"):
             for repository in self.repositories:

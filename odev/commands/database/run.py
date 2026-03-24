@@ -76,4 +76,7 @@ class RunCommand(OdoobinTemplateCommand):
         if self.odoobin.is_running:
             raise self.error(f"Database {self._database.name!r} is already running")
 
-        self.odoobin.run(args=self.args.odoo_args, progress=self.odoobin_progress)
+        process = self.odoobin.run(args=self.args.odoo_args, progress=self.odoobin_progress)
+
+        if process and process.returncode:
+            raise self.error("Odoo process failed")

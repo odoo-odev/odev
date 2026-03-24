@@ -40,7 +40,7 @@ class ClocCommand(OdoobinCommand):
 
         process = self.odoobin.run(args=self.args.odoo_args, subcommand=self._name, stream=False)
 
-        if process is None:
+        if process is None or process.returncode:
             raise self.error("Failed to fetch cloc result.")
 
         headers = [
