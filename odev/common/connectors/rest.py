@@ -269,7 +269,7 @@ class RestConnector(Connector, ABC):
                 logger_message
                 + f" -> [{response.status_code}] {response.reason} ({response.elapsed.total_seconds():.3f} seconds)"
             )
-        except RequestsConnectionError as error:
+        except (RequestsConnectionError, ConnectionResetError) as error:
             if retry_on_error:
                 logger.debug(error)
                 return self._request(
