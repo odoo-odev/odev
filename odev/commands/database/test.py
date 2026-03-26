@@ -137,7 +137,7 @@ class TestCommand(OdoobinCommand):
 
     def odoobin_progress(self, line: str):
         """Handle odoo-bin output and fetch information real-time."""
-        if re.match(r"^(i?pu?db)?>+", line):
+        if re.match(r"^(?:ipdb|pudb|pdb)>+|^\(Pdb\)|(?:^>\s+.*\.(?:py|js)\(\d+\))", line):
             raise self.error("Debugger detected in odoo-bin output, remove breakpoints and try again")
 
         problematic_test_levels = ("warning", "error", "critical")
