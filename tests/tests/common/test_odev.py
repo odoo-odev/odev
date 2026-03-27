@@ -132,3 +132,14 @@ class TestCommonOdev(OdevTestCase):
             self.odev.dispatch()
 
         mock_error.assert_called_once_with("Cannot display help for inexistent command 'invalid-command'")
+
+    def test_13_dispatch_version(self):
+        """Odev should display its version when called with 'version' command."""
+        sys.argv = ["odev", "version"]
+
+        with CaptureOutput() as output:
+            self.odev.dispatch()
+
+        # VersionCommand output includes name, version, and release channel info
+        self.assertIn(self.odev.version, output.stdout)
+        self.assertIn(self.odev.name.capitalize(), output.stdout)

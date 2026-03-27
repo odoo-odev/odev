@@ -70,11 +70,7 @@ class SecretStore(PostgresTable):
     @classmethod
     def _list_ssh_keys(cls) -> list[AgentKey]:
         """List all SSH keys available in the ssh-agent."""
-        try:
-            keys = list(SSHAgent().get_keys())
-        except (SSHException, ConnectionError) as e:
-            logger.warning(f"Failed to communicate with ssh-agent: {e}")
-            keys = []
+        keys = list(SSHAgent().get_keys())
 
         if not keys and not os.environ.get("ODEV_NO_SSH_AGENT"):
             raise OdevError("No SSH keys found in ssh-agent, or ssh-agent is not running.")
@@ -98,8 +94,12 @@ class SecretStore(PostgresTable):
         :rtype: str
         """
         ciphered: str | None = None
+        keys = cls._list_ssh_keys()
 
-        for key in cls._list_ssh_keys():
+        if not keys:
+            return plaintext
+
+        for key in keys:
             try:
                 ciphered = str(b64encode(ssh_encrypt(plaintext, ssh_key=key)).decode()) if plaintext else ""
             except SSHException as e:
@@ -122,8 +122,12 @@ class SecretStore(PostgresTable):
         :rtype: str
         """
         deciphered: str | None = None
+        keys = cls._list_ssh_keys()
 
-        for key in cls._list_ssh_keys():
+        if not keys:
+            return ciphertext
+
+        for key in keys:
             key_desc = f"{key.fingerprint} ({key.name}, {key.comment})"
 
             try:

@@ -76,7 +76,7 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         databases_list: str = string.join_and([f"{db!r}" for db in databases])
         logger.warning(f"You are about to delete the following databases: {databases_list}")
 
-        if not self.console.confirm("Are you sure?", default=False):
+        if not self.console.confirm("Are you sure?", default=self.args.bypass_prompt):
             raise self.error("Command aborted")
 
         tracker = progress.Progress()

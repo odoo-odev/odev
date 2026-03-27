@@ -36,7 +36,9 @@ sudo_password: str | None = None
 # --- Helpers ------------------------------------------------------------------
 
 
-def __run_command(command: str, capture: bool = True, sudo_password: str | None = None) -> CompletedProcess[bytes]:
+def __run_command(
+    command: str, capture: bool = True, sudo_password: str | None = None, env: dict[str, str] | None = None
+) -> CompletedProcess[bytes]:
     """Execute a command as a subprocess.
     If `sudo_password` is provided and not `None`, the command will be executed with
     elevated privileges.
@@ -45,6 +47,7 @@ def __run_command(command: str, capture: bool = True, sudo_password: str | None 
     :param bool capture: Whether to capture the output of the command.
     :param str sudo_password: The password to use when executing the command with
         elevated privileges.
+    :param dict env: The environment variables to use when executing the command.
     :return: The result of the command execution.
     :rtype: CompletedProcess
     """
@@ -58,6 +61,7 @@ def __run_command(command: str, capture: bool = True, sudo_password: str | None 
         check=True,
         capture_output=capture,
         input=sudo_password.encode() if sudo_password is not None else None,
+        env=env,
     )
 
 
@@ -80,7 +84,9 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
 # --- Public API ---------------------------------------------------------------
 
 
-def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> CompletedProcess[bytes] | None:
+def execute(
+    command: str, sudo: bool = False, raise_on_error: bool = True, env: dict[str, str] | None = None
+) -> CompletedProcess[bytes] | None:
     """Execute a command in the operating system and wait for it to complete.
     Output of the command will be captured and returned after the execution completes.
 
@@ -97,7 +103,7 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Co
     """
     try:
         logger.debug(f"Running process: {shlex.quote(command)}")
-        process_result = __run_command(command)
+        process_result = __run_command(command, env=env)
     except CalledProcessError as exception:
         # If already running as root, sudo will not work
         if not sudo or not os.geteuid():
@@ -112,7 +118,7 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Co
             return None
 
         try:
-            process_result = __run_command(command, sudo_password=sudo_password)
+            process_result = __run_command(command, sudo_password=sudo_password, env=env)
         except CalledProcessError as exception:
             sudo_password = None
             __raise_or_log(exception, raise_on_error)
@@ -121,15 +127,16 @@ def execute(command: str, sudo: bool = False, raise_on_error: bool = True) -> Co
     return process_result
 
 
-def run(command: str) -> CompletedProcess:
+def run(command: str, env: dict[str, str] | None = None) -> CompletedProcess:
     """Execute a command in the operating system and wait for it to complete.
     Output of the command will not be captured and will be printed to the console
     in real-time.
 
     :param str command: The command to execute.
+    :param dict env: The environment variables to use when executing the command.
     """
     logger.debug(f"Running process: {shlex.quote(command)}")
-    return __run_command(command, capture=False)
+    return __run_command(command, capture=False, env=env)
 
 
 def detached(command: str) -> Popen[bytes]:
@@ -141,15 +148,16 @@ def detached(command: str) -> Popen[bytes]:
     return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)  # noqa: S602 - intentional use of shell=True
 
 
-def stream(command: str) -> Generator[str, None, None]:  # noqa: PLR0912
+def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, None, None]:  # noqa: PLR0912
     """Execute a command in the operating system and stream its output line by line.
     :param str command: The command to execute.
+    :param dict env: The environment variables to use when executing the command.
     """
     logger.debug(f"Streaming process: {shlex.quote(command)}")
 
     if not sys.stdin.isatty():
         logger.warning("STDIN is not a TTY, running command in non-interactive mode")
-        exec_process = execute(command)
+        exec_process = execute(command, env=env)
 
         if not exec_process:
             yield ""
@@ -164,13 +172,14 @@ def stream(command: str) -> Generator[str, None, None]:  # noqa: PLR0912
     master, slave = pty.openpty()
 
     try:
-        process = Popen(  # noqa: S603
-            shlex.split(command),
+        process = Popen(  # noqa: S602
+            command,
             stdout=slave,
             stderr=slave,
             stdin=slave,
             start_new_session=True,
-            universal_newlines=True,
+            shell=True,
+            env=env,
         )
 
         received_buffer: bytes = b""

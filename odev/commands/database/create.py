@@ -39,6 +39,7 @@ class CreateCommand(OdoobinTemplateCommand):
     )
     version_argument = args.String(
         name="version",
+        aliases=["-V", "--version"],
         description="""The Odoo version to use for the new database.
         If not specified and a template is provided, the version of
         the template database will be used. Otherwise, the version will default to "master".

@@ -403,6 +403,40 @@ class TestDatabaseCommands(OdevCommandTestCase):
         self.assertDatabaseIsOdoo(self.database_name)
         self.assertDatabaseVersionEqual(self.database_name, ODOO_DB_VERSION)
 
+    def test_14_run_empty_db_warning(self):
+        """Command `odev run` should warn the user when running on an empty database without a version."""
+        empty_db = f"{self.database_name}-empty"
+        LocalDatabase(empty_db).create()
+        try:
+            with (
+                self.patch("odev.common.bash", "stream", return_value=iter([])),
+                self.patch("odev.common.bash", "run", return_value=None),
+            ):
+                # odoo-bin will fail on an empty DB, but we've mocked bash to avoid the error
+                stdout, stderr = self.dispatch_command("run", empty_db, "--stop-after-init")
+
+            # Logging goes to stdout in these tests
+            combined_output = stdout + stderr
+            self.assertIn(f"Database {empty_db!r} is not an Odoo database. Defaulting to 'master'.", combined_output)
+            self.assertIn(
+                f"Consider using 'odev create -V <version> {empty_db}' to initialize it properly.", combined_output
+            )
+        finally:
+            LocalDatabase(empty_db).drop()
+
+    def test_15_test_non_existent_db(self):
+        """Command `odev test` should work even if the target database does not exist, provided a version is given."""
+        non_existent_db = f"{self.database_name}-non-existent"
+        self.assertDatabaseNotExist(non_existent_db)
+
+        # Mock run_command to avoid actually running 'create' or 'test'
+        with (
+            self.patch("odev.common.bash", "stream", return_value=iter([])),
+            self.patch("odev.common.odev.Odev", "run_command"),
+        ):
+            # This should not raise SystemExit or any exception
+            self.dispatch_command("test", "-V", ODOO_DB_VERSION, "--tags", ":base", non_existent_db)
+
     # --------------------------------------------------------------------------
     # Test cases - delete
     # Keep at the end to avoid interference with other tests and to cleanup
