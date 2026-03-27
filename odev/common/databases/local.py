@@ -125,7 +125,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if self._venv is None:
             info = self.store.databases.get(self)
 
-            if info is None:
+            if info is None or not info.virtualenv:
                 if self.version is None:
                     return PythonEnv()
 
