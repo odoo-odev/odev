@@ -133,6 +133,19 @@ class RestConnector(Connector, ABC):
                     if cookie:
                         self._connection.cookies.set(key, cookie, domain=domain)
 
+    def _get_cookie_header(self) -> str:
+        """Return the cookies as a string suitable for the 'Cookie' header."""
+        if self._connection is None:
+            return ""
+
+        cookies = []
+        for domain in self.session_domains:
+            for key in self.session_cookies:
+                value = self._connection.cookies.get(key, domain=domain)
+                if value:
+                    cookies.append(f"{key}={value}")
+        return "; ".join(cookies)
+
     def _save_cookies(self):
         """Save session cookies to the secrets vault."""
         if self._connection is None:
@@ -283,11 +296,12 @@ class RestConnector(Connector, ABC):
 
             raise ConnectorError(f"Could not connect to {self.name}", self) from error
 
+        self.cache(cache_key, response)
+        self._save_cookies()
+
         if raise_for_status:
             response.raise_for_status()
 
-        self.cache(cache_key, response)
-        self._save_cookies()
         return response
 
     @abstractmethod
