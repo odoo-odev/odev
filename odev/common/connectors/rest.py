@@ -307,7 +307,7 @@ class RestConnector(Connector, ABC):
     @abstractmethod
     def request(
         self,
-        method: Literal["GET"] | Literal["POST"],
+        method: Literal["GET", "POST", "HEAD"],
         path: str,
         authenticate: bool = True,
         params: dict | None = None,
@@ -347,6 +347,18 @@ class RestConnector(Connector, ABC):
         :rtype: requests.Response
         """
         return self.request("POST", path, params=params, authenticate=authenticate, **kwargs)
+
+    def head(self, path: str, params: dict | None = None, authenticate: bool = True, **kwargs) -> Response:
+        """Perform a HEAD request to the endpoint.
+        Authentication is handled automatically using the Odoo credentials stored in the secrets vault.
+
+        :param path: The path to the resource.
+        :param params: The parameters to pass to the request.
+        :param kwargs: Additional keyword arguments to pass to the request.
+        :return: The response from the endpoint.
+        :rtype: requests.Response
+        """
+        return self.request("HEAD", path, params=params, authenticate=authenticate, **kwargs)
 
     def download(self, path: str, file_path: Path, progress_message: str = "Downloading", **kwargs) -> Path:
         """Download a file from the endpoint.
