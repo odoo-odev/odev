@@ -388,7 +388,7 @@ class RestConnector(Connector, ABC):
         try:
             with (
                 capture_signals(handler=signal_handler_progress),
-                self.get(path, **kwargs, stream=True, authenticate=False) as response,
+                self.get(path, **kwargs, stream=True, authenticate=True) as response,
             ):
                 progress.start()
                 content_length = int(response.headers.get("content-length", 0))

@@ -1,5 +1,4 @@
 import re
-import shlex
 from abc import ABC
 from argparse import Namespace
 from collections.abc import Mapping
@@ -388,9 +387,9 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             raise self.error(f"No odoo-bin process could be instantiated for database {self._database!r}")
 
         if Path(self.args.script).is_file():
-            subcommand_input = f"cat {self.args.script}"
+            subcommand_input = Path(self.args.script).read_text()
         else:
-            subcommand_input = f"echo {shlex.quote(self.args.script)}"
+            subcommand_input = self.args.script
 
         if self.script_run_after:
             run_after: str = self.script_run_after
@@ -398,12 +397,12 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             if not run_after.startswith("print("):
                 run_after = f"print({self.script_run_after})"
 
-            subcommand_input = f"{subcommand_input}; echo {shlex.quote(run_after)}"
+            subcommand_input = f"{subcommand_input}\n{run_after}"
 
         process = self.odoobin.run(
             args=self.args.odoo_args,
             subcommand="shell",
-            subcommand_input=f"{{ {subcommand_input}; }}",
+            subcommand_input=subcommand_input,
             stream=False,
         )
 
