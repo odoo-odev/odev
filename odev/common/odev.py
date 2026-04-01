@@ -29,7 +29,7 @@ from typing import (
 )
 
 from git import GitCommandError, NoSuchPathError, Repo
-from networkx import DiGraph, NetworkXUnfeasible, topological_sort
+from networkx import DiGraph, NetworkXUnfeasible, simple_cycles, topological_sort
 from packaging import version
 
 from odev._version import __version__
@@ -791,6 +791,15 @@ class Odev(Generic[CommandType]):
             resolved_graph: list[str] = list(topological_sort(graph))
             logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
         except NetworkXUnfeasible as exception:
+            cycles = list(simple_cycles(graph))[:20]
+            if cycles:
+                parts: list[str] = []
+                for c in cycles:
+                    if len(c) == 1:
+                        parts.append(f"{c[0]} depends on itself")
+                    else:
+                        parts.append(" → ".join([*c, c[0]]))
+                raise OdevError("Circular dependency detected in plugins: " + "; ".join(parts)) from exception
             raise OdevError("Circular dependency detected in plugins") from exception
 
         return resolved_graph
