@@ -171,6 +171,8 @@ def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, No
     tty.setraw(sys.stdin.fileno())
     master, slave = pty.openpty()
 
+    process: Popen | None = None
+
     try:
         process = Popen(  # noqa: S602
             command,
@@ -226,5 +228,6 @@ def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, No
         os.close(slave)
         os.close(master)
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_tty)
-        if process.returncode:
+
+        if process is not None and process.returncode:
             raise CalledProcessError(process.returncode, command)

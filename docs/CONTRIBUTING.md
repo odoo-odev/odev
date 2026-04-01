@@ -65,11 +65,11 @@ Start with your changes!
 ### Test your changes
 
 Happy with your modifications to the odev codebase? Then it's time to test it and make sure everything still works as
-expected! Run `coverage run -m pytest tests` in your terminal, if any of the tests fails you will need to correct your
-code until it passes.
+expected! Run `coverage run -m pytest tests && coverage report` in your terminal, if any of the tests fails you will need
+to correct your code until it passes.
 
 You implemented a brand new feature? Then it's probably good to implement new tests for it! Check what's inside the
-[tests](./_tests/) directory for examples.
+[tests](../tests/) directory for examples.
 
 If you want to check the coverage of your code, you can now run `coverage html` and open the file `./htmlcov/index.html`
 in your favorite browser.

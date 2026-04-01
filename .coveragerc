@@ -1,5 +1,11 @@
+[run]
+# Trace only odev/ so temp plugin files (e.g. test_16 cycle manifests) are not recorded.
+source = odev
+
 [report]
 omit = */tests/*
+fail_under = 60
+show_missing = true
 exclude_lines =
     pragma: no cover
     raise NotImplementedError

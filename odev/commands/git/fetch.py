@@ -79,7 +79,7 @@ class FetchCommand(GitCommand):
 
         if not changes:
             if self.args.worktree:
-                raise self.error(f"Worktree with name {self.args.name!r} does not exist")
+                raise self.error(f"Worktree with name {self.args.worktree!r} does not exist")
             raise self.error("No worktrees found")
 
         return changes

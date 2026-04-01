@@ -6,8 +6,8 @@ from odev.setup import completion, directories, symlink, update
 from tests.fixtures import OdevTestCase
 
 
-class TestSetupCompletion(OdevTestCase):
-    def test_01_completion(self):
+class TestSetup(OdevTestCase):
+    def test_completion_01_completion(self):
         """Test the setup script responsible of creating a symlink to the bash
         completion script of odev. A symlink should be created on the file system.
         """
@@ -16,9 +16,7 @@ class TestSetupCompletion(OdevTestCase):
 
         self.assertTrue(Path("~/.local/share/bash-completion/completions/complete_odev.sh").expanduser().is_symlink())
 
-
-class TestSetupSymlink(OdevTestCase):
-    def test_01_symlink(self):
+    def test_symlink_01_symlink(self):
         """Test the setup script responsible of creating a symlink to odev.
         A symlink should be created to map the "odev" command to the main file
         of this application.
@@ -27,6 +25,23 @@ class TestSetupSymlink(OdevTestCase):
             symlink.setup(self.odev)
 
         self.assertTrue(Path("~/.local/bin/odev").expanduser().is_symlink())
+
+    def test_update_01_update(self):
+        """Test the setup script responsible of setting the auto-update values for odev.
+        The configuration file should be updated with the new values.
+        """
+        self.odev.config.reset("update")
+        self.assertEqual(self.odev.config.update.mode, "ask", "should have a default value")
+        self.assertEqual(self.odev.config.update.interval, 1, "should have a default value")
+
+        with (
+            self.patch(update.console, "select", return_value="never"),
+            self.patch(update.console, "integer", return_value=5),
+        ):
+            update.setup(self.odev)
+
+        self.assertEqual(self.odev.config.update.mode, "never", "should update the configuration file")
+        self.assertEqual(self.odev.config.update.interval, 5, "should update the configuration file")
 
 
 class TestSetupDirectories(OdevTestCase):
@@ -94,22 +109,3 @@ class TestSetupDirectories(OdevTestCase):
 
         logger_debug.assert_any_call(f"Directory {new_dir_path.as_posix()} exists but is empty, removing it")
         logger_debug.assert_any_call(f"Moving {self.dir_path} to {new_dir_path}")
-
-
-class TestSetupUpdate(OdevTestCase):
-    def test_01_update(self):
-        """Test the setup script responsible of setting the auto-update values for odev.
-        The configuration file should be updated with the new values.
-        """
-        self.odev.config.reset("update")
-        self.assertEqual(self.odev.config.update.mode, "ask", "should have a default value")
-        self.assertEqual(self.odev.config.update.interval, 1, "should have a default value")
-
-        with (
-            self.patch(update.console, "select", return_value="never"),
-            self.patch(update.console, "integer", return_value=5),
-        ):
-            update.setup(self.odev)
-
-        self.assertEqual(self.odev.config.update.mode, "never", "should update the configuration file")
-        self.assertEqual(self.odev.config.update.interval, 5, "should update the configuration file")

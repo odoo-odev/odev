@@ -554,14 +554,14 @@ class OdoobinProcess(OdevFrameworkMixin):
         :param subcommand_input: Input to pipe to the subcommand.
         :param stream: Whether to stream the output of the process.
         :param progress: Callback to call on each line outputted by the process. Ignored if `stream` is False.
-        :param prepare: Whether to prepare the environment before running the process.
+        :param prepare: Whether to prepare the environment before running. A missing venv is always prepared.
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
         """
         if self.is_running and subcommand is None:
             raise OdevError("Odoo is already running on this database")
 
-        if prepare:
+        if prepare or not self.venv.exists:
             with spinner(f"Preparing odoo-bin version {str(self.version)!r} for database {self.database.name!r}"):
                 self.prepare_odoobin()
 

@@ -41,7 +41,7 @@ class Cursor(PsycopgCursor):
         except Exception as e:
             self.execute("ROLLBACK")
             raise e from e
-        finally:
+        else:
             self.execute("COMMIT")
 
 
@@ -107,8 +107,10 @@ class PostgresConnector(Connector):
     def nocache(self):
         """Context manager to disable caching of SQL queries."""
         self.__class__._nocache = True
-        yield
-        self.__class__._nocache = False
+        try:
+            yield
+        finally:
+            self.__class__._nocache = False
 
     def query(
         self,

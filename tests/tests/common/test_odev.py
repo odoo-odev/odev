@@ -1,3 +1,4 @@
+import shutil
 import sys
 from pathlib import Path
 
@@ -133,7 +134,7 @@ class TestCommonOdev(OdevTestCase):
 
         mock_error.assert_called_once_with("Cannot display help for inexistent command 'invalid-command'")
 
-    def test_13_dispatch_version(self):
+    def test_14_dispatch_version(self):
         """Odev should display its version when called with 'version' command."""
         sys.argv = ["odev", "version"]
 
@@ -143,3 +144,40 @@ class TestCommonOdev(OdevTestCase):
         # VersionCommand output includes name, version, and release channel info
         self.assertIn(self.odev.version, output.stdout)
         self.assertIn(self.odev.name.capitalize(), output.stdout)
+
+    def test_15_register_plugin_commands_retries_after_failure(self):
+        """Plugin command registration should retry once after plugin updates."""
+        with (
+            self.patch_property(type(self.odev), "plugins", []),
+            self.patch(
+                self.odev, "_register_plugin_commands", side_effect=[RuntimeError("boom"), None]
+            ) as register_mock,
+            self.patch(logger, "error") as logger_error,
+        ):
+            self.odev.register_plugin_commands()
+
+        self.assertEqual(register_mock.call_count, 2)
+        logger_error.assert_called_once()
+
+    def test_16_plugins_dependency_tree_cycle_raises(self):
+        """Circular plugin dependencies should raise an explicit framework error."""
+        cycle_root = self.run_path / "cycle-plugins"
+        plugin_a = cycle_root / "test_plugin_cycle_a"
+        plugin_b = cycle_root / "test_plugin_cycle_b"
+        plugin_a.mkdir(parents=True, exist_ok=True)
+        plugin_b.mkdir(parents=True, exist_ok=True)
+
+        plugin_a_manifest = "__version__ = '1.0.0'\ndepends = ['cycle-plugins/test_plugin_cycle_b']\n"
+        plugin_b_manifest = "__version__ = '1.0.0'\ndepends = ['cycle-plugins/test_plugin_cycle_a']\n"
+        (plugin_a / "__manifest__.py").write_text(plugin_a_manifest)
+        (plugin_b / "__manifest__.py").write_text(plugin_b_manifest)
+
+        try:
+            self.odev._plugins_dependency_tree.cache_clear()
+            with (
+                self.patch_property(type(self.odev), "plugins_path", cycle_root),
+                self.assertRaisesRegex(Exception, "Circular dependency detected in plugins"),
+            ):
+                self.odev._plugins_dependency_tree()
+        finally:
+            shutil.rmtree(cycle_root, ignore_errors=True)

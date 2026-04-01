@@ -207,6 +207,7 @@ class OdevTestCase(TestCase):
                 ("upgrades_path", cls.odev.tests_path / "resources" / "upgrades"),
                 ("setup_path", cls.odev.tests_path / "resources" / "setup"),
                 ("scripts_path", cls.odev.tests_path / "resources" / "scripts"),
+                ("plugins_path", cls.run_path / "plugins"),
             ],
         )
 

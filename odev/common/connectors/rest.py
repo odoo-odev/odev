@@ -44,6 +44,9 @@ class RestConnector(Connector, ABC):
     _bypass_cache: ClassVar[bool] = False
     """Whether to bypass the cache for the current request."""
 
+    _default_timeout: ClassVar[float] = 30.0
+    """Default timeout in seconds for outbound HTTP requests."""
+
     def __init__(self, url: str):
         """Initialize the connector.
         :param url: The URL of the endpoint.
@@ -215,8 +218,10 @@ class RestConnector(Connector, ABC):
         """Context manager to disable caching of HTTP requests."""
         bypass_cache = RestConnector._bypass_cache
         RestConnector._bypass_cache = True
-        yield
-        RestConnector._bypass_cache = bypass_cache
+        try:
+            yield
+        finally:
+            RestConnector._bypass_cache = bypass_cache
 
     def _request(
         self,
@@ -257,6 +262,7 @@ class RestConnector(Connector, ABC):
             url = self.url + path
 
         kwargs.setdefault("allow_redirects", True)
+        kwargs.setdefault("timeout", self._default_timeout)
         params = kwargs.pop("params", {})
         obfuscate_params = obfuscate_params or []
         obfuscated = {k: "xxxxx" for k in obfuscate_params if k in params}
