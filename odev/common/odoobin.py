@@ -287,11 +287,13 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def addons_paths(self) -> list[Path]:
         """Return the list of addons paths."""
-        return [
-            path.expanduser()
-            for path in self.odoo_addons_paths + self.additional_addons_paths
-            if OdoobinProcess.check_addons_path(path)
-        ]
+        return list(
+            dict.fromkeys(
+                path.expanduser()
+                for path in self.odoo_addons_paths + self.additional_addons_paths
+                if OdoobinProcess.check_addons_path(path)
+            )
+        )
 
     @property
     def addons_requirements(self) -> Generator[Path, None, None]:

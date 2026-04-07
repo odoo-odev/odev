@@ -548,7 +548,8 @@ class PythonEnv:
             raise FileNotFoundError(f"Python script not found at {script_path}")
 
         logger.debug(f"Running python script {script_path}")
-        command = f"{self.python} {script_path} {' '.join(args)}"
+        quoted_args = " ".join(shlex.quote(arg) for arg in args)
+        command = f"{self.python} {script_path} {quoted_args}"
 
         if script_input is not None:
             command = f"printf '%s' {shlex.quote(script_input)} | {command}"

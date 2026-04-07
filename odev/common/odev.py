@@ -13,7 +13,7 @@ from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMappi
 from datetime import datetime
 from functools import lru_cache
 from importlib.abc import Loader
-from importlib.machinery import FileFinder
+from importlib.machinery import FileFinder, ModuleSpec
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from time import monotonic, sleep
@@ -578,6 +578,8 @@ class Odev(Generic[CommandType]):
             if not hasattr(odev_module, "plugins"):
                 odev_module.plugins = ModuleType("odev.plugins")
                 odev_module.plugins.__path__ = []
+                odev_module.plugins.__package__ = "odev.plugins"
+                odev_module.plugins.__spec__ = ModuleSpec("odev.plugins", None, is_package=True)
                 sys.modules["odev.plugins"] = odev_module.plugins
 
             if str(self.plugins_path) not in odev_module.plugins.__path__:

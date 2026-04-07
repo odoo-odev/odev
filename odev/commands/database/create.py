@@ -46,18 +46,15 @@ class CreateCommand(OdoobinTemplateCommand):
         """,
     )
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, args, **kwargs) -> None:
+        if args.new_template and not args.database.endswith(TEMPLATE_SUFFIX):
+            source_name = args.database
+            args.database += TEMPLATE_SUFFIX
 
-        if self.args.from_template and self.args.new_template:
-            raise self.error("The arguments `from_template` and `new_template` are mutually exclusive")
+            if not args.from_template and not args.odoo_args and LocalDatabase(source_name).exists:
+                args.from_template = source_name
 
-        if self.args.new_template:
-            self.args.from_template = self.args.database
-            self.args.database += TEMPLATE_SUFFIX
-            self._database = LocalDatabase(self.args.database)
-
-        self.infer_template_instance()
+        super().__init__(args, **kwargs)
 
     @property
     def _database_exists_required(self) -> bool:

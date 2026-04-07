@@ -263,10 +263,15 @@ class RestConnector(Connector, ABC):
 
         kwargs.setdefault("allow_redirects", True)
         kwargs.setdefault("timeout", self._default_timeout)
+
         params = kwargs.pop("params", {})
         obfuscate_params = obfuscate_params or []
-        obfuscated = {k: "xxxxx" for k in obfuscate_params if k in params}
-        cache_key = f"{method}:{url}:{json.dumps(obfuscated, sort_keys=True)}"
+        # Support both 'json' and 'data' as body for the cache key
+        body = kwargs.get("json") or kwargs.get("data")
+        # Obfuscate sensitive parameters in the cache key
+        obfuscated = params | {k: "xxxxx" for k in obfuscate_params if k in params}
+
+        cache_key = f"{method}:{url}:{json.dumps(obfuscated, sort_keys=True)}:{json.dumps(body, sort_keys=True) if isinstance(body, (dict, list)) else body}"
         cached = self.cache(cache_key)
 
         if cached is not None:
