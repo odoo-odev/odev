@@ -213,7 +213,7 @@ def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, No
                     received_buffer += received
                     continue
 
-                yield received_buffer.decode()
+                line = received_buffer.decode().rstrip("\r")
                 received_buffer = b""
 
                 try:
@@ -223,6 +223,8 @@ def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, No
                         sys.stdout.buffer.write(b"\r")
                     else:
                         sys.stdout.write("\r")
+
+                yield line
 
     finally:
         os.close(slave)

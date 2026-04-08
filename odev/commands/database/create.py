@@ -64,8 +64,9 @@ class CreateCommand(OdoobinTemplateCommand):
     @property
     def version(self) -> OdooVersion:
         """Odoo version to use for the new database."""
-        if self.args.version:
-            return OdooVersion(self.args.version)
+        version = getattr(self.args, "version", None) or getattr(self, "version_argument", None)
+        if version:
+            return OdooVersion(version)
 
         if hasattr(self, "_template") and self._template:
             with self._template:
