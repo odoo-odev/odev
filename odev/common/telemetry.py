@@ -5,14 +5,13 @@ import re
 import threading
 import uuid
 from queue import Queue
-from subprocess import CalledProcessError
 from time import monotonic
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from odev.common import bash
 from odev.common.commands.base import Command
 from odev.common.logging import logging
+from odev.common.utils import EmployeeUtils
 
 
 logger = logging.getLogger(__name__)
@@ -43,21 +42,7 @@ class Telemetry:
 
     def _is_employee(self) -> bool:
         """Check if the user is an Odoo employee."""
-        secret = self.odev.store.secrets.get("accounts.odoo.com", ["login"], scope="user", ask_missing=False)
-
-        if secret:
-            return secret.login.endswith("@odoo.com")
-
-        try:
-            process = bash.execute("git config user.email")
-
-            if not process:
-                return False
-
-            email = process.stdout.decode().strip()
-            return email.endswith("@odoo.com")
-        except (CalledProcessError, UnicodeDecodeError):
-            return False
+        return EmployeeUtils(self.odev).is_employee()
 
     def _prepare_request(self, path: str, payload: dict) -> Request:
         """Prepare a request to send telemetry data."""
