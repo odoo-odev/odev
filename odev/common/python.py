@@ -551,19 +551,16 @@ class PythonEnv:
         quoted_args = " ".join(shlex.quote(arg) for arg in args)
         command = f"{self.python} {script_path} {quoted_args}"
 
-        if script_input is not None:
-            command = f"printf '%s' {shlex.quote(script_input)} | {command}"
-
         if not stream:
-            return bash.execute(command)
+            return bash.execute(command, input_data=script_input)
 
         if progress is None:
-            return bash.run(command)
+            return bash.run(command, input_data=script_input)
 
         output = []
         returncode = 0
         try:
-            for line in bash.stream(command):
+            for line in bash.stream(command, input_data=script_input):
                 output.append(line)
                 progress(line)
         except CalledProcessError as error:

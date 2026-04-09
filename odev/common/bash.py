@@ -37,7 +37,11 @@ sudo_password: str | None = None
 
 
 def __run_command(
-    command: str, capture: bool = True, sudo_password: str | None = None, env: dict[str, str] | None = None
+    command: str,
+    capture: bool = True,
+    sudo_password: str | None = None,
+    env: dict[str, str] | None = None,
+    input_data: bytes | None = None,
 ) -> CompletedProcess[bytes]:
     """Execute a command as a subprocess.
     If `sudo_password` is provided and not `None`, the command will be executed with
@@ -60,7 +64,7 @@ def __run_command(
         shell=True,
         check=True,
         capture_output=capture,
-        input=sudo_password.encode() if sudo_password is not None else None,
+        input=input_data or (sudo_password.encode() if sudo_password is not None else None),
         env=env,
     )
 
@@ -85,7 +89,11 @@ def __raise_or_log(exception: CalledProcessError, do_raise: bool) -> None:
 
 
 def execute(
-    command: str, sudo: bool = False, raise_on_error: bool = True, env: dict[str, str] | None = None
+    command: str,
+    sudo: bool = False,
+    raise_on_error: bool = True,
+    env: dict[str, str] | None = None,
+    input_data: str | bytes | None = None,
 ) -> CompletedProcess[bytes] | None:
     """Execute a command in the operating system and wait for it to complete.
     Output of the command will be captured and returned after the execution completes.
@@ -103,7 +111,9 @@ def execute(
     """
     try:
         logger.debug(f"Running process: {shlex.quote(command)}")
-        process_result = __run_command(command, env=env)
+        if isinstance(input_data, str):
+            input_data = input_data.encode()
+        process_result = __run_command(command, env=env, input_data=input_data)
     except CalledProcessError as exception:
         # If already running as root, sudo will not work
         if not sudo or not os.geteuid():
@@ -127,16 +137,19 @@ def execute(
     return process_result
 
 
-def run(command: str, env: dict[str, str] | None = None) -> CompletedProcess:
+def run(command: str, env: dict[str, str] | None = None, input_data: str | bytes | None = None) -> CompletedProcess:
     """Execute a command in the operating system and wait for it to complete.
     Output of the command will not be captured and will be printed to the console
     in real-time.
 
     :param str command: The command to execute.
     :param dict env: The environment variables to use when executing the command.
+    :param input_data: The data to pass to the command as stdin.
     """
     logger.debug(f"Running process: {shlex.quote(command)}")
-    return __run_command(command, capture=False, env=env)
+    if isinstance(input_data, str):
+        input_data = input_data.encode()
+    return __run_command(command, capture=False, env=env, input_data=input_data)
 
 
 def detached(command: str) -> Popen[bytes]:
@@ -148,23 +161,46 @@ def detached(command: str) -> Popen[bytes]:
     return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)  # noqa: S602 - intentional use of shell=True
 
 
-def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, None, None]:  # noqa: PLR0912
+def _stream_no_tty(
+    command: str, env: dict[str, str] | None = None, input_data: str | bytes | None = None
+) -> Generator[str, None, None]:
+    """Execute a command in non-interactive mode and yield its output."""
+    logger.warning("STDIN is not a TTY, running command in non-interactive mode")
+    exec_process = execute(command, env=env, input_data=input_data)
+
+    if not exec_process:
+        yield ""
+        return
+
+    yield from exec_process.stdout.decode().splitlines()
+
+
+def _write_to_stdout(data: str | bytes) -> None:
+    """Write data to stdout, handling both bytes and strings and falling back to buffer if necessary."""
+    try:
+        if isinstance(data, str):
+            sys.stdout.write(data)
+        else:
+            sys.stdout.buffer.write(data)
+    except OSError:
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout.buffer.write(data if isinstance(data, bytes) else data.encode())
+        else:
+            sys.stdout.write(data if isinstance(data, str) else data.decode())
+
+
+def stream(
+    command: str, env: dict[str, str] | None = None, input_data: str | bytes | None = None
+) -> Generator[str, None, None]:
     """Execute a command in the operating system and stream its output line by line.
     :param str command: The command to execute.
     :param dict env: The environment variables to use when executing the command.
+    :param input_data: The data to pass to the command as stdin.
     """
     logger.debug(f"Streaming process: {shlex.quote(command)}")
 
     if not sys.stdin.isatty():
-        logger.warning("STDIN is not a TTY, running command in non-interactive mode")
-        exec_process = execute(command, env=env)
-
-        if not exec_process:
-            yield ""
-            return
-
-        yield from exec_process.stdout.decode().splitlines()
-
+        yield from _stream_no_tty(command, env, input_data)
         return
 
     original_tty = termios.tcgetattr(sys.stdin)
@@ -183,6 +219,11 @@ def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, No
             shell=True,
             env=env,
         )
+
+        if input_data:
+            if isinstance(input_data, str):
+                input_data = input_data.encode()
+            os.write(master, input_data)
 
         received_buffer: bytes = b""
 
@@ -216,13 +257,7 @@ def stream(command: str, env: dict[str, str] | None = None) -> Generator[str, No
                 line = received_buffer.decode().rstrip("\r")
                 received_buffer = b""
 
-                try:
-                    os.write(sys.stdout.fileno(), b"\r")
-                except OSError:
-                    if hasattr(sys.stdout, "buffer"):
-                        sys.stdout.buffer.write(b"\r")
-                    else:
-                        sys.stdout.write("\r")
+                _write_to_stdout(b"\r")
 
                 yield line
 

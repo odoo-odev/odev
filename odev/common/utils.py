@@ -1,6 +1,10 @@
 """Utility classes and functions for odev."""
 
 from odev.common import bash
+from odev.common.logging import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class EmployeeUtils:
@@ -19,20 +23,18 @@ class EmployeeUtils:
             secret = self.odev.store.secrets.get("accounts.odoo.com", ["login"], scope="user", ask_missing=False)
             if secret and secret.login.endswith("@odoo.com"):
                 return secret.login.split("@")[0]
-        except Exception:  # noqa: BLE001, S110
-            # Silently ignore secret lookup failures
+        except (AttributeError, KeyError):
+            # Ignore missing or malformed secret
             pass
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to retrieve xgram from secrets", exc_info=True)
 
         # 2. Try from git config
-        try:
-            process = bash.execute("git config user.email")
-            if process:
-                email = process.stdout.decode().strip()
-                if email.endswith("@odoo.com"):
-                    return email.split("@")[0]
-        except Exception:  # noqa: BLE001, S110
-            # Silently ignore git config lookup failures
-            pass
+        process = bash.execute("git config user.email", raise_on_error=False)
+        if process:
+            email = process.stdout.decode().strip()
+            if email.endswith("@odoo.com"):
+                return email.split("@")[0]
         return None
 
     def is_employee(self) -> bool:

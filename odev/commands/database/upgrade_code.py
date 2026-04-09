@@ -64,12 +64,6 @@ class UpgradeCodeCommand(OdoobinCommand):
         description="Preview changes without writing.",
     )
 
-    # Redeclare database to ensure its order is correct
-    database_arg = args.String(
-        name="database",
-        description="The database to target (used for version/path resolution).",
-    )
-
     # Catch-all for extra arguments
     odoo_args = args.String(
         nargs="*",
