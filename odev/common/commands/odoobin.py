@@ -1,5 +1,4 @@
 import re
-import shlex
 from abc import ABC
 from argparse import Namespace
 from collections.abc import Mapping
@@ -87,9 +86,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     ODOO_LOG_REGEX: re.Pattern = re.compile(
         r"""
             (?:
-                (?P<date>\d{4}-\d{2}-\d{2})\s
+                ((?P<date>\d{4}-\d{2}-\d{2})\s)?
                 (?P<time>\d{2}:\d{2}:\d{2},\d{3})\s
-                (?P<pid>\d+)\s
+                ((?P<pid>\d+)\s)?
                 (?P<level>[A-Z]+)\s
                 (?P<database>[^\s]+)\s
                 (?P<logger>
@@ -136,8 +135,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     @property
     def version(self) -> OdooVersion:
         """The Odoo version associated with the odoo-bin process."""
-        if self.args.version:
-            return OdooVersion(self.args.version)
+        version = getattr(self.args, "version", None) or getattr(self, "version_argument", None)
+        if version:
+            return OdooVersion(version)
 
         if self._database.version:
             return self._database.version
@@ -153,8 +153,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     @property
     def venv(self) -> PythonEnv:
         """The Python virtual environment associated with the odoo-bin process."""
-        if self.args.venv:
-            return PythonEnv(self.args.venv)
+        venv = getattr(self.args, "venv", None) or getattr(self, "venv_argument", None)
+        if venv:
+            return PythonEnv(venv)
 
         if not self._database.venv._global:
             return self._database.venv
@@ -164,16 +165,26 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     @property
     def worktree(self) -> str:
         """The Git worktree associated with the odoo-bin process."""
-        if self.args.worktree:
-            return self.args.worktree
+        worktree = getattr(self.args, "worktree", None) or getattr(self, "worktree_argument", None)
+        if worktree:
+            return worktree
 
         if self._database.worktree:
             return self._database.worktree
 
-        if self.args.version:
-            return str(OdooVersion(self.args.version))
+        version = getattr(self.args, "version", None) or getattr(self, "version_argument", None)
+        if version:
+            return str(OdooVersion(version))
 
         return str(self._database.version or "master")
+
+    @property
+    def combined_odoo_args(self) -> list[str]:
+        """Aggregate odoo_args and any Odoo option that might have been captured by the positional 'addons' argument."""
+        args = list(self.args.odoo_args)
+        if self.args.addons and self.args.addons.startswith("-"):
+            args.insert(0, self.args.addons)
+        return args
 
     def odoobin_progress(self, line: str):
         """Beautify odoo logs on the fly."""
@@ -228,9 +239,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         if self._database.process is not None and not force:
             return
 
-        version = OdooVersion(self.args.version) if self.args.version else self.version
-        venv = PythonEnv(self.args.venv) if self.args.venv else self.venv
-        worktree = self.args.worktree or self.worktree
+        version = self.version
+        venv = self.venv
+        worktree = self.worktree
         edition: Literal["community", "enterprise"] = (
             "enterprise" if self.args.enterprise or self._database.edition == "enterprise" else "community"
         )
@@ -293,7 +304,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
     def _parse_progress_log_line(self, line: str) -> re.Match | None:
         """Parse a line of odoo-bin output."""
-        return re.match(self.ODOO_LOG_REGEX, string.strip_ansi_colors(line))
+        return re.match(self.ODOO_LOG_REGEX, string.strip_ansi_colors(line).replace("\r", ""))
 
     def _colorize_duration_by_threshold(self, time: str | float, thresholds: Mapping[float, str]) -> str:
         """Colorize the textual representation of a duration according to thresholds.
@@ -378,7 +389,24 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             if result is not None:
                 self.run_script_handle_result(result)
         else:
-            self.odoobin.run(args=self.args.odoo_args, subcommand="shell")
+            args = self.combined_odoo_args
+            subcommand_input = None
+
+            # Check if --command was passed in additional arguments and extract its value
+            # to be used as stdin input for the odoo-bin shell process.
+            for i, arg in enumerate(args):
+                if arg.startswith("--command="):
+                    subcommand_input = arg.split("=", 1)[1]
+                    args.pop(i)
+                    break
+
+                if arg == "--command" and i + 1 < len(args):
+                    subcommand_input = args[i + 1]
+                    args.pop(i + 1)
+                    args.pop(i)
+                    break
+
+            self.odoobin.run(args=args, subcommand="shell", subcommand_input=subcommand_input)
 
     def run_script(self) -> str | None:
         """Run a script inside of odoo-bin shell and exit.
@@ -388,9 +416,9 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             raise self.error(f"No odoo-bin process could be instantiated for database {self._database!r}")
 
         if Path(self.args.script).is_file():
-            subcommand_input = f"cat {self.args.script}"
+            subcommand_input = Path(self.args.script).read_text()
         else:
-            subcommand_input = f"echo {shlex.quote(self.args.script)}"
+            subcommand_input = self.args.script
 
         if self.script_run_after:
             run_after: str = self.script_run_after
@@ -398,12 +426,12 @@ class OdoobinShellCommand(OdoobinCommand, ABC):
             if not run_after.startswith("print("):
                 run_after = f"print({self.script_run_after})"
 
-            subcommand_input = f"{subcommand_input}; echo {shlex.quote(run_after)}"
+            subcommand_input = f"{subcommand_input}\n{run_after}"
 
         process = self.odoobin.run(
             args=self.args.odoo_args,
             subcommand="shell",
-            subcommand_input=f"{{ {subcommand_input}; }}",
+            subcommand_input=subcommand_input,
             stream=False,
         )
 

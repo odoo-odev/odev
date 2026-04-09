@@ -39,7 +39,7 @@ class TestPythonEnv(OdevTestCase):
         """Test run_script with a streaming process that fails."""
         env = PythonEnv(path="/tmp/fake_venv", version="3.10")  # noqa: S108
 
-        def streaming_failure(command):
+        def streaming_failure(command, **_kwargs):
             yield "line 1"
             raise CalledProcessError(1, command)
 

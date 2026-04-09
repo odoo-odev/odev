@@ -5,7 +5,8 @@
 
 for interpreter in ~/.config/odev/venv/bin/python3 /usr/bin/python3; do
     if [ -x "$interpreter" ]; then
-        exec "$interpreter" $(readlink -m $(dirname "$0"/..)/../main.py) "$@"
+        SCRIPT_PATH=$(readlink -f "$0")
+        exec "$interpreter" "$(dirname "$SCRIPT_PATH")/main.py" "$@"
         exit $?
     fi
 done

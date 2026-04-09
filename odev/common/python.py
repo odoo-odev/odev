@@ -548,21 +548,19 @@ class PythonEnv:
             raise FileNotFoundError(f"Python script not found at {script_path}")
 
         logger.debug(f"Running python script {script_path}")
-        command = f"{self.python} {script_path} {' '.join(args)}"
-
-        if script_input is not None:
-            command = f"printf '%s' {shlex.quote(script_input)} | {command}"
+        quoted_args = " ".join(shlex.quote(arg) for arg in args)
+        command = f"{self.python} {script_path} {quoted_args}"
 
         if not stream:
-            return bash.execute(command)
+            return bash.execute(command, input_data=script_input)
 
         if progress is None:
-            return bash.run(command)
+            return bash.run(command, input_data=script_input)
 
         output = []
         returncode = 0
         try:
-            for line in bash.stream(command):
+            for line in bash.stream(command, input_data=script_input):
                 output.append(line)
                 progress(line)
         except CalledProcessError as error:
