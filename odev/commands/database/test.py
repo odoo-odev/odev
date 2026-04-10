@@ -6,6 +6,8 @@ from collections.abc import Mapping, MutableMapping
 from pathlib import Path
 from typing import cast
 
+import requests
+
 from odev.common import args, string
 from odev.common.commands import OdoobinCommand
 from odev.common.console import TableHeader
@@ -37,6 +39,11 @@ class TestCommand(OdoobinCommand):
         default=["base"],
         description="Comma-separated list of modules to install for testing. If not set, install the base module.",
     )
+    no_auto_tags = args.Flag(
+        aliases=["--no-auto-tags"],
+        default=False,
+        description="Do not fetch auto-tags from Runbot. By default, auto-tags are fetched and used to exclude flaky tests.",
+    )
 
     @property
     def _database_exists_required(self) -> bool:
@@ -60,6 +67,9 @@ class TestCommand(OdoobinCommand):
 
         self.test_buffer: list[str] = []
         """Buffer to store the output of odoo-bin running on the test database."""
+
+        self.auto_tags: list[str] = []
+        """List of auto-tags fetched from Runbot."""
 
         self.last_level = ""
 
@@ -166,8 +176,23 @@ class TestCommand(OdoobinCommand):
 
         self._print_progress_log_line(match)
 
+    def apply_auto_tags(self):
+        """Fetch and apply auto-tags from Runbot."""
+        try:
+            logger.info("Fetching auto-tags from Runbot...")
+            response = requests.get("https://runbot.odoo.com/runbot/auto-tags", timeout=10)
+            self.auto_tags = [t.strip() for t in response.text.split(",") if t.strip()]
+
+            for tag in self.auto_tags:
+                if tag not in self.test_tags:
+                    self.test_tags.append(tag)
+        except requests.RequestException as error:
+            logger.warning("Could not fetch auto-tags: %s", error)
+
     def run(self):
         """Run the command."""
+        if not self.args.no_auto_tags:
+            self.apply_auto_tags()
         self.run_test_database()
 
     def cleanup(self):
