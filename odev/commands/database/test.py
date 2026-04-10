@@ -107,7 +107,7 @@ class TestCommand(OdoobinCommand):
 
     def run_test_database(self):
         """Run the test database."""
-        args = ["--stop-after-init", "--test-enable"]
+        args = ["--test-enable", "--stop-after-init"]
 
         if self.test_files:
             args.extend(["--test-file", ",".join(self.test_files)])
