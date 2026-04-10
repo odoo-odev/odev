@@ -25,9 +25,13 @@ class OdoobinMatch(ReMatch):
             arguments = []
 
         subcommand = f"{subcommand} " if subcommand else ""
-        pattern = re.compile(
+        base_pattern = (
             rf"odoo-bin {subcommand}--database {database_name}(?:\-[\w]{{8}})? "
-            rf"--addons-path [a-z0-9.\-/,]+ --log-level \w+ {' '.join(arguments)}"
+            rf"--addons-path [a-z0-9.\-/,]+ --log-level \w+"
         )
+        # Use lookaheads to match arguments in any order
+        # Each argument must be present somewhere after the base pattern
+        args_lookahead = "".join(rf"(?=.*{re.escape(arg)})" for arg in arguments)
+        pattern = re.compile(rf"{base_pattern}{args_lookahead}")
 
         super().__init__(pattern)

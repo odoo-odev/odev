@@ -366,7 +366,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
         stdout, _ = self.dispatch_command("test", "--tags", ":TestSafeEval.test_expr", self.database_name)
 
         def _is_test_run(argv: list[str]) -> bool:
-            return "--test-enable" in argv and ":TestSafeEval.test_expr" in argv
+            return "--test-enable" in argv and any(":TestSafeEval.test_expr" in arg for arg in argv)
 
         assert_any_odoobin_invocation(self, self._odoobin_run_script_calls, predicate=_is_test_run)
 
