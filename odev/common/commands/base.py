@@ -133,17 +133,35 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         """
         cls._arguments = defaultdict(dict)
 
+        # Collect all arguments from the reversed MRO.
+        # Arguments with `*...` nargs must be registered last to avoid greedy capture of optional arguments
+        # defined in sub-commands.
+        arguments_definitions = []
         for parent_cls in cls.__reversed_mro():
-            for argument in parent_cls.ordered_arguments_definitions():
-                argument_dict = argument[1].to_dict(argument[0])
-                argument_name = argument_dict["name"]
-                argument_dict.setdefault("dest", cls._arguments[argument_name].get("dest", argument_name))
-                argument_dict.setdefault("aliases", cls._arguments[argument_name].get("aliases", [argument_name]))
+            arguments_definitions.extend(parent_cls.ordered_arguments_definitions())
 
-                if argument_name not in argument_dict["aliases"] and not argument_dict["aliases"][0].startswith("-"):
-                    argument_dict["aliases"].insert(0, argument_name)
+        arguments_definitions.sort(key=lambda argument: 1 if getattr(argument[1], "nargs", None) == "*..." else 0)
 
-                cls._arguments[argument_name].update(**argument_dict)
+        for argument in arguments_definitions:
+            argument_dict = argument[1].to_dict(argument[0])
+            argument_name = argument_dict["name"]
+            argument_dict.setdefault("dest", cls._arguments[argument_name].get("dest", argument_name))
+            argument_dict.setdefault("aliases", cls._arguments[argument_name].get("aliases", [argument_name]))
+
+            if argument_name not in argument_dict["aliases"] and not argument_dict["aliases"][0].startswith("-"):
+                argument_dict["aliases"].insert(0, argument_name)
+
+            cls._arguments[argument_name].update(**argument_dict)
+
+        # Re-order the internal dictionary to ensure *... arguments are last.
+        # This is necessary because Python dictionaries preserve insertion order and
+        # any argument defined in a subclass would otherwise be registered after
+        # a greedy catch-all argument defined in a parent class.
+        sorted_arguments = sorted(
+            cls._arguments.items(),
+            key=lambda item: 1 if item[1].get("nargs") == "*..." else 0,
+        )
+        cls._arguments = defaultdict(dict, sorted_arguments)
 
     @classmethod
     def ordered_arguments_definitions(cls) -> list[tuple[str, args.Argument]]:
@@ -234,11 +252,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
             if params.get("nargs") == "*...":
                 cls._unknown_arguments_dest = aliases[0]
-
-                # A bug in standard library argparse before python 3.12.7 causes `...` to not work as expected
-                # when used in conjunction with positional and optional arguments.
-                # See: https://github.com/python/cpython/issues/59317
-                params["nargs"] = "*" if sys.version_info < (3, 12, 7) else "..."
+                continue
 
             if "action" in params:
                 params["action"] = ACTIONS_MAPPING.get(params["action"], params["action"])
