@@ -279,6 +279,49 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         return parser
 
     @classmethod
+    def _rescue_positional_from_unknown_flag(
+        cls, arguments: Namespace, unknown: list[str], argv: Sequence[str]
+    ) -> None:
+        """Rescue values captured by optional positional arguments that are actually arguments
+        to unknown flags. When using :meth:`parse_known_args`, argparse does not know the arity
+        of unknown flags. If an unknown flag takes a value (e.g. ``--without-demo all``), argparse
+        puts the flag in ``unknown`` but the value ``all`` is consumed by the next registered
+        optional positional (e.g. ``addons``). We detect this by checking whether the captured
+        positional value appears immediately after one of the unknown flags in the original argv.
+
+        :param arguments: the parsed namespace to inspect and patch.
+        :param unknown: the list of unrecognized argument strings (modified in place).
+        :param argv: the original argument list passed to the parser.
+        """
+        argv_list = list(argv)
+        for arg_name, arg_def in cls._arguments.items():
+            if arg_def.get("nargs") != "?":
+                continue
+            if any(a.startswith("-") for a in arg_def.get("aliases", [arg_name])):
+                continue
+
+            captured = getattr(arguments, arg_name, None)
+            if captured is None:
+                continue
+
+            raw_val = (
+                captured[0]
+                if isinstance(captured, list) and captured
+                else (str(captured) if not isinstance(captured, list) else None)
+            )
+            if raw_val is None:
+                continue
+
+            try:
+                val_idx = argv_list.index(raw_val)
+                if val_idx > 0 and argv_list[val_idx - 1] in unknown:
+                    flag_idx = unknown.index(argv_list[val_idx - 1])
+                    unknown.insert(flag_idx + 1, raw_val)
+                    setattr(arguments, arg_name, None)
+            except ValueError:
+                pass
+
+    @classmethod
     def parse_arguments(cls, argv: Sequence[str]) -> Namespace:
         """Parse arguments for the command subclass.
 
@@ -295,6 +338,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                     arguments = parser.parse_args(argv)
                 else:
                     arguments, unknown = parser.parse_known_args(argv)
+                    cls._rescue_positional_from_unknown_flag(arguments, unknown, argv)
                     setattr(
                         arguments,
                         cls._unknown_arguments_dest,
