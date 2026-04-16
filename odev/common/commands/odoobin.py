@@ -40,13 +40,6 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         and no additional addons are specified, the current directory will be added to the list of addons.
         """,
     )
-    odoo_args = args.String(
-        nargs="*...",
-        description="""Additional arguments to pass to odoo-bin; Check the documentation at
-        https://www.odoo.com/documentation/17.0/fr/developer/cli.html
-        for the list of available arguments.
-        """,
-    )
     enterprise = args.Flag(
         aliases=["-c", "--community"],
         description="Force running the database without enterprise addons.",
@@ -77,6 +70,13 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         aliases=["--no-pretty"],
         description="Do not pretty print the output of odoo-bin but rather display logs as output by the subprocess.",
         default=True,
+    )
+    odoo_args = args.String(
+        nargs="*...",
+        description="""Additional arguments to pass to odoo-bin; Check the documentation at
+        https://www.odoo.com/documentation/17.0/fr/developer/cli.html
+        for the list of available arguments.
+        """,
     )
 
     # --------------------------------------------------------------------------
@@ -141,12 +141,6 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
         if self._database.version:
             return self._database.version
-
-        if self._database.exists and not self._database.is_odoo:
-            logger.warning(
-                f"Database {self._database.name!r} is not an Odoo database. Defaulting to 'master'. "
-                f"Consider using 'odev create -V <version> {self._database.name}' to initialize it properly."
-            )
 
         return OdooVersion("master")
 
@@ -240,6 +234,16 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             return
 
         version = self.version
+        if (
+            not self.args.version
+            and not self._database.version
+            and self._database.exists
+            and not self._database.is_odoo
+        ):
+            logger.warning(
+                f"Database {self._database.name!r} is not an Odoo database. Defaulting to 'master'. "
+                f"Consider using 'odev create -V <version> {self._database.name}' to initialize it properly."
+            )
         venv = self.venv
         worktree = self.worktree
         edition: Literal["community", "enterprise"] = (

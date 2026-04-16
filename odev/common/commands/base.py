@@ -133,17 +133,35 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         """
         cls._arguments = defaultdict(dict)
 
+        # Collect all arguments from the reversed MRO.
+        # Arguments with `*...` nargs must be registered last to avoid greedy capture of optional arguments
+        # defined in sub-commands.
+        arguments_definitions = []
         for parent_cls in cls.__reversed_mro():
-            for argument in parent_cls.ordered_arguments_definitions():
-                argument_dict = argument[1].to_dict(argument[0])
-                argument_name = argument_dict["name"]
-                argument_dict.setdefault("dest", cls._arguments[argument_name].get("dest", argument_name))
-                argument_dict.setdefault("aliases", cls._arguments[argument_name].get("aliases", [argument_name]))
+            arguments_definitions.extend(parent_cls.ordered_arguments_definitions())
 
-                if argument_name not in argument_dict["aliases"] and not argument_dict["aliases"][0].startswith("-"):
-                    argument_dict["aliases"].insert(0, argument_name)
+        arguments_definitions.sort(key=lambda argument: 1 if getattr(argument[1], "nargs", None) == "*..." else 0)
 
-                cls._arguments[argument_name].update(**argument_dict)
+        for argument in arguments_definitions:
+            argument_dict = argument[1].to_dict(argument[0])
+            argument_name = argument_dict["name"]
+            argument_dict.setdefault("dest", cls._arguments[argument_name].get("dest", argument_name))
+            argument_dict.setdefault("aliases", cls._arguments[argument_name].get("aliases", [argument_name]))
+
+            if argument_name not in argument_dict["aliases"] and not argument_dict["aliases"][0].startswith("-"):
+                argument_dict["aliases"].insert(0, argument_name)
+
+            cls._arguments[argument_name].update(**argument_dict)
+
+        # Re-order the internal dictionary to ensure *... arguments are last.
+        # This is necessary because Python dictionaries preserve insertion order and
+        # any argument defined in a subclass would otherwise be registered after
+        # a greedy catch-all argument defined in a parent class.
+        sorted_arguments = sorted(
+            cls._arguments.items(),
+            key=lambda item: 1 if item[1].get("nargs") == "*..." else 0,
+        )
+        cls._arguments = defaultdict(dict, sorted_arguments)
 
     @classmethod
     def ordered_arguments_definitions(cls) -> list[tuple[str, args.Argument]]:
@@ -234,11 +252,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
             if params.get("nargs") == "*...":
                 cls._unknown_arguments_dest = aliases[0]
-
-                # A bug in standard library argparse before python 3.12.7 causes `...` to not work as expected
-                # when used in conjunction with positional and optional arguments.
-                # See: https://github.com/python/cpython/issues/59317
-                params["nargs"] = "*" if sys.version_info < (3, 12, 7) else "..."
+                continue
 
             if "action" in params:
                 params["action"] = ACTIONS_MAPPING.get(params["action"], params["action"])
@@ -265,6 +279,49 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         return parser
 
     @classmethod
+    def _rescue_positional_from_unknown_flag(
+        cls, arguments: Namespace, unknown: list[str], argv: Sequence[str]
+    ) -> None:
+        """Rescue values captured by optional positional arguments that are actually arguments
+        to unknown flags. When using :meth:`parse_known_args`, argparse does not know the arity
+        of unknown flags. If an unknown flag takes a value (e.g. ``--without-demo all``), argparse
+        puts the flag in ``unknown`` but the value ``all`` is consumed by the next registered
+        optional positional (e.g. ``addons``). We detect this by checking whether the captured
+        positional value appears immediately after one of the unknown flags in the original argv.
+
+        :param arguments: the parsed namespace to inspect and patch.
+        :param unknown: the list of unrecognized argument strings (modified in place).
+        :param argv: the original argument list passed to the parser.
+        """
+        argv_list = list(argv)
+        for arg_name, arg_def in cls._arguments.items():
+            if arg_def.get("nargs") != "?":
+                continue
+            if any(a.startswith("-") for a in arg_def.get("aliases", [arg_name])):
+                continue
+
+            captured = getattr(arguments, arg_name, None)
+            if captured is None:
+                continue
+
+            raw_val = (
+                captured[0]
+                if isinstance(captured, list) and captured
+                else (str(captured) if not isinstance(captured, list) else None)
+            )
+            if raw_val is None:
+                continue
+
+            try:
+                val_idx = argv_list.index(raw_val)
+                if val_idx > 0 and argv_list[val_idx - 1] in unknown:
+                    flag_idx = unknown.index(argv_list[val_idx - 1])
+                    unknown.insert(flag_idx + 1, raw_val)
+                    setattr(arguments, arg_name, None)
+            except ValueError:
+                pass
+
+    @classmethod
     def parse_arguments(cls, argv: Sequence[str]) -> Namespace:
         """Parse arguments for the command subclass.
 
@@ -281,6 +338,7 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                     arguments = parser.parse_args(argv)
                 else:
                     arguments, unknown = parser.parse_known_args(argv)
+                    cls._rescue_positional_from_unknown_flag(arguments, unknown, argv)
                     setattr(
                         arguments,
                         cls._unknown_arguments_dest,
