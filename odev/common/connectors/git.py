@@ -66,12 +66,15 @@ class Stash:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Pop changes from the repository stash."""
-        if any((exc_type, exc_val, exc_tb)):
+        if not self.stashed:
             return
 
-        if self.stashed:
-            logger.debug(f"Restoring stashed changes in repository {self.repository.working_dir!r}")
+        logger.debug(f"Restoring stashed changes in repository {self.repository.working_dir!r}")
+
+        try:
             self.repository.git.stash("pop")
+        except GitCommandError as pop_error:
+            logger.warning(f"Failed to restore stashed changes in {self.repository.working_dir!r}: {pop_error}")
 
 
 class GitWorktree:

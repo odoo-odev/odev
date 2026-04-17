@@ -27,3 +27,6 @@ tmp/
 # --- AI files
 .cursor/
 .agents/
+.gemini/
+GEMINI.md
+AGENTS.md

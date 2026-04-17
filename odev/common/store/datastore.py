@@ -55,6 +55,3 @@ class DataStore(PostgresDatabase):
                         raise ValueError(f"Table {obj} does not have a name attribute")
 
                     setattr(self, obj_name, obj(self))
-
-    def __getattribute__(self, name: str) -> PostgresTable:
-        return super().__getattribute__(name)

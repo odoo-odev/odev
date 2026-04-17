@@ -9,7 +9,7 @@ import re
 import sys
 from argparse import Namespace
 from collections import defaultdict
-from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping
+from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping, Sequence
 from datetime import datetime
 from functools import lru_cache
 from importlib.abc import Loader
@@ -62,6 +62,9 @@ PRUNING_INTERVAL = 14
 """Number of days between each database pruning and time limit after which a database
 must be dropped if not used.
 """
+
+MAX_GIT_PULL_RETRIES = 3
+"""Maximum number of retries for a git pull operation."""
 
 HOME_PATH = Path("~").expanduser() / "odev"
 """Local path to the odev home directory containing application data for the current user."""
@@ -293,10 +296,11 @@ class Odev(Generic[CommandType]):
 
         return updated
 
-    def _update(self, path: Path, plugin: str | None = None) -> bool:
+    def _update(self, path: Path, plugin: str | None = None, _retry: int = 0) -> bool:
         """Check for updates in the odev repository and download them if necessary.
 
         :param path: Path to a repository to update
+        :param _retry: Internal retry counter for race condition handling.
         :return: Whether updates were pulled and installed
         :rtype: bool
         """
@@ -343,7 +347,7 @@ class Odev(Generic[CommandType]):
                     "development mode\nUpdates will not be pulled automatically\nConsider switching to branch "
                     f"{default_branch!r} or 'beta' for regular updates"
                 )
-                return True
+                return False
 
             logger.debug(f"Pulling latest changes from {git.name!r} on branch {current_branch!r}")
             install_requirements = self.__requirements_changed(git.repository)
@@ -358,9 +362,12 @@ class Odev(Generic[CommandType]):
                     if "fatal: Cannot rebase onto multiple branches" in str(error):
                         # Likely happening because of a race condition when a detached subprocess is fetching changes
                         # in the same repository, we can safely retry after a short wait
+                        if _retry >= MAX_GIT_PULL_RETRIES:
+                            raise OdevError(error_message) from error
+
                         logger.debug(error_message)
                         sleep(0.5)
-                        return self._update(path, plugin)
+                        return self._update(path, plugin, _retry=_retry + 1)
 
                     raise OdevError(error_message) from error
 
@@ -821,6 +828,31 @@ class Odev(Generic[CommandType]):
             raise command_cls.error(None, str(exception)) from exception
         return arguments
 
+    def _instantiate_command(
+        self,
+        command_cls: type[CommandType],
+        cli_args: Sequence[str],
+        database: DatabaseType | None = None,
+    ) -> tuple[CommandType, Sequence[str]]:
+        """Instantiate a command with the given arguments and database.
+
+        :param command_cls: Command class to instantiate.
+        :param cli_args: Arguments to pass to the command.
+        :param database: Database to pass to the command.
+        :return: A tuple containing the instantiated command and the arguments used.
+        """
+        if database is None:
+            arguments = self.parse_arguments(command_cls, *cli_args)
+            return command_cls(arguments), cli_args
+
+        cli_args = (database.name, *cli_args)
+        arguments = self.parse_arguments(command_cls, *cli_args)
+
+        if "database" in inspect.getfullargspec(command_cls.__init__).args:
+            return command_cls(arguments, database=database), cli_args  # type: ignore [call-arg]
+
+        return command_cls(arguments), cli_args
+
     def run_command(
         self,
         name: str,
@@ -841,28 +873,17 @@ class Odev(Generic[CommandType]):
             logger.error(f"Command {name!r} not found")
             return False
 
-        command: CommandType
+        command: CommandType | None = None
+        telemetry = None
         command_errored: bool = False
 
         try:
-            if database is None:
-                arguments = self.parse_arguments(command_cls, *cli_args)
-                command = command_cls(arguments)
-            else:
-                cli_args = (database.name, *cli_args)
-                arguments = self.parse_arguments(command_cls, *cli_args)
-
-                if "database" in inspect.getfullargspec(command_cls.__init__).args:
-                    command = command_cls(arguments, database=database)  # type: ignore [call-arg]
-                else:
-                    command = command_cls(arguments)
-
+            command, cli_args = self._instantiate_command(command_cls, cli_args, database=database)
             command._argv = cli_args
             logger.debug(f"Running {command!r}")
             self._command_stack.append(command)
             telemetry = self.telemetry.send(command)
             command.run()
-            self._command_stack.pop()
         except OdevError as exception:
             command_errored = True
             logger.error(str(exception))
@@ -870,19 +891,20 @@ class Odev(Generic[CommandType]):
             if history:
                 self.store.history.set(command)
         finally:
-            try:
+            if command is not None:
+                if command in self._command_stack:
+                    self._command_stack.pop()
+
                 logger.debug(f"Cleaning up after {command!r}")
                 command.cleanup()
+                command.console.bypass_prompt = command._bypass_prompt_orig
 
-                if telemetry and self.config.telemetry.enabled:
+                if telemetry is not None and self.config.telemetry.enabled:
                     telemetry[0].join()
                     telemetry_line = telemetry[1].get()
 
                     if telemetry_line is not None:
                         self.telemetry.update(telemetry_line)
-
-            except UnboundLocalError:
-                pass
 
         return not command_errored
 

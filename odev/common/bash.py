@@ -5,7 +5,6 @@ the subsystem.
 import os
 import pty
 import select
-import shlex
 import sys
 import termios
 import tty
@@ -110,7 +109,7 @@ def execute(
     :rtype: Optional[CompletedProcess]
     """
     try:
-        logger.debug(f"Running process: {shlex.quote(command)}")
+        logger.debug(f"Running process: {command}")
         if isinstance(input_data, str):
             input_data = input_data.encode()
         process_result = __run_command(command, env=env, input_data=input_data)
@@ -146,7 +145,7 @@ def run(command: str, env: dict[str, str] | None = None, input_data: str | bytes
     :param dict env: The environment variables to use when executing the command.
     :param input_data: The data to pass to the command as stdin.
     """
-    logger.debug(f"Running process: {shlex.quote(command)}")
+    logger.debug(f"Running process: {command}")
     if isinstance(input_data, str):
         input_data = input_data.encode()
     return __run_command(command, capture=False, env=env, input_data=input_data)
@@ -157,7 +156,7 @@ def detached(command: str) -> Popen[bytes]:
 
     :param str command: The command to execute.
     """
-    logger.debug(f"Running detached process: {shlex.quote(command)}")
+    logger.debug(f"Running detached process: {command}")
     return Popen(command, shell=True, start_new_session=True, stdout=DEVNULL, stderr=DEVNULL)  # noqa: S602 - intentional use of shell=True
 
 
@@ -197,7 +196,7 @@ def stream(
     :param dict env: The environment variables to use when executing the command.
     :param input_data: The data to pass to the command as stdin.
     """
-    logger.debug(f"Streaming process: {shlex.quote(command)}")
+    logger.debug(f"Streaming process: {command}")
 
     if not sys.stdin.isatty():
         yield from _stream_no_tty(command, env, input_data)

@@ -23,7 +23,7 @@ class TTLCache:
         self.cache[key] = {"value": value, "timestamp": datetime.now()}
 
     def __contains__(self, key: str) -> bool:
-        return key in self.cache
+        return self.get(key) is not None
 
     def __len__(self) -> int:
         return len(self.cache)
