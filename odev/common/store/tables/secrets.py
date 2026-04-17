@@ -6,13 +6,13 @@ from typing import Literal
 
 from paramiko.agent import Agent as SSHAgent, AgentKey
 from paramiko.ssh_exception import SSHException
-from ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt  # noqa: N811
 
 from odev.common.config import Config
 from odev.common.console import console
 from odev.common.errors import OdevError
 from odev.common.logging import logging
 from odev.common.postgres import PostgresTable
+from odev.common.ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt  # noqa: N811
 
 
 logger = logging.getLogger(__name__)
