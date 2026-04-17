@@ -87,11 +87,6 @@ repos:
       - id: pretty-format-json
         args: [--autofix]
 
-  - repo: https://github.com/asottile/pyupgrade
-    rev: v3.20.0
-    hooks:
-      - id: pyupgrade
-
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:

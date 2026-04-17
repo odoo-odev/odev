@@ -101,10 +101,6 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         self._bypass_prompt_orig = self.console.bypass_prompt
         self.console.bypass_prompt = self.args.bypass_prompt
 
-    def __del__(self):
-        """Reset the bypass prompt flag."""
-        self.console.bypass_prompt = self._bypass_prompt_orig
-
     def __repr__(self) -> str:
         arguments = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())
         return f"{self.__class__.__name__}({arguments})"
