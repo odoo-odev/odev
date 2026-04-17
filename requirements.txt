@@ -4,12 +4,11 @@ inquirerpy==0.3.4
 networkx>=3.3,<4
 odoo-client-lib>=1.2.4,<2
 packaging>=22.0
-paramiko>=3.4.0
+paramiko>=3.2.0
 psycopg2-binary>=2,<3
 PyGithub>=2.0.0,<3
 pyyaml>=6.0.1
 requests>=2.31.0,<3
 rich>=13.0.0
-ssh-crypt>=1.1,<2
 timeago>=1.0.15,<2
 virtualenv>=20.36.1

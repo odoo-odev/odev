@@ -6,11 +6,10 @@ Migrate stored password from agentcrypt to ssh-crypt
 from base64 import b64decode, b64encode
 from io import StringIO
 
-from ssh_crypt import encrypt as ssh_encrypt
-
 from odev.common.errors import OdevError
 from odev.common.logging import logging
 from odev.common.odev import Odev
+from odev.common.ssh_crypt import encrypt as ssh_encrypt
 
 
 logger = logging.getLogger(__name__)
