@@ -5,7 +5,6 @@ import gzip
 import os
 import re
 import shutil
-import sys
 import tempfile
 from collections.abc import Generator, Mapping
 from datetime import datetime
@@ -600,26 +599,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if self.connector is not None:
             self.connector.invalidate_cache()
 
-    def _restore_zip_filestore(self, tracker: progress.Progress, archive: ZipFile) -> Thread | None:
-        """Restore the filestore from a zip archive.
-        :param archive: The archive to restore the filestore from.
-        :param tracker: An instance of Progress to track the restore process.
+    def _replace_filestore(self, source_dir: Path) -> None:
+        """Replace the existing filestore with the extracted one.
+        If overwrite or doesn't exist, just move the directory
+
+        :param source_dir: The path to the extracted filestore directory.
         """
-        re_filestore_file = re.compile(rf"^{ARCHIVE_FILESTORE}(?P<dirname>[\da-f]{{2}})/(?P<filename>[\da-f]{{40}})$")
-        info: list[tuple[re.Match[str], int]] = []
-
-        for archive_info in archive.filelist:
-            file_match = re_filestore_file.match(archive_info.filename)
-
-            if file_match:
-                info.append((file_match, archive_info.file_size))
-
-        if not info:
-            logger.debug("No filestore found in archive")
-            return None
-
-        logger.debug("Filestore found in archive, restoring")
-
         if self.filestore.path.exists():
             logger.warning(f"A filestore already exists for database {self.name!r}")
             overwrite_mode = cast(
@@ -634,77 +619,17 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                     ],
                 ),
             )
-
             if overwrite_mode == "keep":
-                logger.debug("Keeping existing filestore")
-                return None
-
-            tracker.start()
-
+                return
+            if overwrite_mode == "merge":
+                shutil.copytree(source_dir, self.filestore.path, dirs_exist_ok=True)
+                return
             if overwrite_mode == "overwrite":
                 shutil.rmtree(self.filestore.path)
 
-        thread = Thread(target=self._restore_zip_filestore_threaded, args=(tracker, archive, info))
-        thread.start()
-        return thread
-
-    def _restore_zip_filestore_threaded(
-        self,
-        tracker: progress.Progress,
-        archive: ZipFile,
-        info: list[tuple[re.Match[str], int]],
-    ):
-        """Thread to monitor the restore process of a zipped dump file and update the progress tracker.
-        :param tracker: An instance of Progress to track the restore process.
-        :param archive: The archive to restore the filestore from.
-        :param info: A list of tuples containing the filestore file path and size.
-        """
-        filestore_size: int = sum(size for _, size in info)
-        task_id = tracker.add_task("Extracting filestore from archive", total=filestore_size)
-        tracker.start_task(task_id)
-        tracker.start()
-
-        invalid_blocks: int = 0
-        max_invalid_blocks: int = 10
-
-        for match, size in info:
-            dirname: str = match.group("dirname")
-            filename: str = match.group("filename")
-            filepath = Path(dirname) / filename
-            filestore_file_path: Path = self.filestore.path / filepath
-
-            if not filestore_file_path.exists():
-                try:
-                    archive.getinfo(match.string).filename = filepath.as_posix()
-                    archive.extract(match.string, self.filestore.path)
-                except RuntimeError as ex:
-                    logger.debug(f"Failed to extract filestore file {filepath.as_posix()}: {ex}")
-
-                    if invalid_blocks <= max_invalid_blocks and "invalid stored block lengths" in str(ex):
-                        invalid_blocks += 1
-                        continue
-
-                    if invalid_blocks:
-                        logger.error(f"{invalid_blocks} filestore files failed to extract due to corrupted archive")
-
-                        if sys.version_info <= (3, 12):
-                            logger.warning(
-                                "This could be due to a known limitation of python's zipfile module, "
-                                "consider running odev with python 3.13+"
-                            )
-
-                        raise OdevError("Aborting") from ex
-
-                    raise
-
-            tracker.update(task_id, advance=size)
-
-        logger.info(f"Extracted filestore to {self.filestore.path}")
-
-        if invalid_blocks:
-            logger.warning(f"{invalid_blocks} filestore files failed to extract due to corrupted archive")
-
-        tracker.remove_task(task_id)
+        # If overwrite or doesn't exist, just move the directory
+        shutil.move(source_dir.as_posix(), self.filestore.path.as_posix())
+        logger.info(f"Restored filestore to {self.filestore.path}")
 
     def _restore_buffered_sql(
         self,
@@ -803,30 +728,47 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         :param tracker: An instance of Progress to track the restore process.
         """
         with ZipFile(file, "r") as archive:
-            if ARCHIVE_DUMP not in archive.namelist():
+            namelist = archive.namelist()
+            if ARCHIVE_DUMP not in namelist:
                 logger.error(
                     f"Invalid dump file {file.as_posix()}, "
                     f"missing {string.stylize(f'{ARCHIVE_DUMP!r}', 'color.cyan')} file"
                 )
                 return
+            re_filestore_file = re.compile(
+                rf"^{ARCHIVE_FILESTORE}(?P<dirname>[\da-f]{{2}})/(?P<filename>[\da-f]{{40}})$"
+            )
+            has_valid_filestore = any(re_filestore_file.match(name) for name in namelist)
 
-            threads: list[Thread] = []
+        with tempfile.TemporaryDirectory(dir="/var/tmp") as temp_dir, ZipFile(file, "r") as archive:
+            temp_path = Path(temp_dir)
+            members = archive.infolist()
+            total_size = sum(member.file_size for member in members)
 
-            if ARCHIVE_FILESTORE in archive.namelist():
-                threads.append(self._restore_zip_filestore(tracker, archive))
+            extract_task = tracker.add_task(f"Extracting archive {file.name}...", total=total_size)
+            tracker.start()
 
-            neuter_filestore = None in threads
+            for member in members:
+                archive.extract(member, path=temp_path)
+                tracker.update(extract_task, advance=member.file_size)
 
-            with archive.open(ARCHIVE_DUMP) as dump:
-                threads.append(self._restore_buffered_sql(tracker, dump, archive.getinfo(dump.name).file_size))
+            tracker.remove_task(extract_task)
 
-            [thread.join() for thread in threads if thread is not None and thread.is_alive()]
+            if has_valid_filestore:
+                extracted_filestore = temp_path / ARCHIVE_FILESTORE.strip("/")
+                if extracted_filestore.exists():
+                    self._replace_filestore(extracted_filestore)
 
-            if neuter_filestore:
-                self.neuter_filestore()
-                logger.info("Neutered filestore")
+            extracted_sql = temp_path / ARCHIVE_DUMP
+            if extracted_sql.exists():
+                with extracted_sql.open("rb") as dump_file:
+                    self._restore_buffered_sql(tracker, dump_file, extracted_sql.stat().st_size, "sql")
 
-            tracker.stop()
+        if not has_valid_filestore:
+            self.neuter_filestore()
+            logger.info("Neutered filestore")
+
+        tracker.stop()
 
     def _restore_buffer(self, tracker: progress.Progress, dump: gzip.GzipFile | bz2.BZ2File | IO[bytes]):
         """Restore a database from a stream containing a dump file and optionally a filestore.
