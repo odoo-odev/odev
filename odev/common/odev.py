@@ -653,14 +653,15 @@ class Odev(Generic[CommandType]):
         """
         with progress.spinner(f"Installing plugin{' dependency' if as_dependency else ''} {plugin!r}"):
             repository = GitConnector(plugin)
+            revision = self.config.update.release if self.config.update.release in ["main", "beta"] else None
 
             if repository.exists:
                 repository.update()
             else:
-                repository.clone()
+                repository.clone(revision=revision)
 
-            if self.config.update.release in ["main", "beta"]:
-                self.__checkout_release_channel(repository, self.config.update.release)
+            if revision:
+                self.__checkout_release_channel(repository, revision)
 
             manifest = self._load_plugin_manifest(repository.path)
 
