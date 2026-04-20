@@ -659,6 +659,9 @@ class Odev(Generic[CommandType]):
             else:
                 repository.clone()
 
+            if self.config.update.release in ["main", "beta"]:
+                self.__checkout_release_channel(repository, self.config.update.release)
+
             manifest = self._load_plugin_manifest(repository.path)
 
             if depends := manifest.get("depends"):
