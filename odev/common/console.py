@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -250,6 +251,9 @@ class Console(RichConsole):
         kwargs.setdefault("theme", RICH_THEME)
         kwargs.setdefault("highlighter", OdevReprHighlighter())
         super().__init__(*args, **kwargs)
+
+        if "--headless" in sys.argv or "-H" in sys.argv:
+            self.bypass_prompt = True
 
     @property
     def bypass_prompt(self) -> bool:
