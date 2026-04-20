@@ -657,11 +657,10 @@ class Odev(Generic[CommandType]):
 
             if repository.exists:
                 repository.update()
+                if revision:
+                    self.__checkout_release_channel(repository, revision)
             else:
                 repository.clone(revision=revision)
-
-            if revision:
-                self.__checkout_release_channel(repository, revision)
 
             manifest = self._load_plugin_manifest(repository.path)
 
