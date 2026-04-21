@@ -333,8 +333,8 @@ class GitConnector(Connector):
         try:
             if self.path.is_dir() and (self.path / ".git").exists():
                 return Repo(self.path)
-        except (GitCommandError, InvalidGitRepositoryError, NoSuchPathError):
-            pass
+        except (GitCommandError, InvalidGitRepositoryError, NoSuchPathError) as e:
+            logger.debug(f"Failed to load repository at {self.path}: {e}")
 
         return None
 
