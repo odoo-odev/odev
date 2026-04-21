@@ -11,7 +11,7 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from git import GitCommandError, Remote, RemoteReference, Repo
+from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
 from github import Auth as GithubAuth, Github, GithubException
 
 from odev.common import bash, progress, string
@@ -330,7 +330,13 @@ class GitConnector(Connector):
     @property
     def repository(self) -> Repo | None:
         """The repository object."""
-        return Repo(self.path) if self.exists else None
+        try:
+            if self.path.is_dir() and (self.path / ".git").exists():
+                return Repo(self.path)
+        except (GitCommandError, InvalidGitRepositoryError, NoSuchPathError) as e:
+            logger.debug(f"Failed to load repository at {self.path}: {e}")
+
+        return None
 
     @property
     def remote(self) -> Remote | None:
@@ -512,7 +518,7 @@ class GitConnector(Connector):
         :param revision: The revision to checkout when cloning the repository.
         """
         if self.path.exists():
-            if revision is not None:
+            if revision is not None and self.exists:
                 self.checkout(revision)
 
             return logger.debug(f"Repository {self.name!r} already cloned to {self.path.as_posix()}")
@@ -529,6 +535,10 @@ class GitConnector(Connector):
                 multi_options=self._get_clone_options(revision),
             )
         except GitCommandError as error:
+            if revision and "fatal: Remote branch" in str(error) and "not found" in str(error):
+                logger.warning(f"Branch {revision!r} not found for {self.name!r}, falling back to default branch")
+                return self.clone(revision=None)
+
             message: str = f"Failed to clone repository {self.name!r} to {self.path}"
 
             if error.stderr:
