@@ -244,6 +244,9 @@ class Console(RichConsole):
     _bypass_prompt: ClassVar[bool] = False
     """If True, bypass all prompts and use default values."""
 
+    _headless: ClassVar[bool] = False
+    """If True, run in headless mode (no decorative output)."""
+
     _is_live: ClassVar[bool] = False
     """If True, the console is in live mode and lines clearing will be disabled."""
 
@@ -253,7 +256,18 @@ class Console(RichConsole):
         super().__init__(*args, **kwargs)
 
         if "--headless" in sys.argv or "-H" in sys.argv:
+            self.headless = True
             self.bypass_prompt = True
+
+    @property
+    def headless(self) -> bool:
+        """Return True if the console is running in headless mode."""
+        return Console._headless
+
+    @headless.setter
+    def headless(self, value: bool):
+        """Set the headless property."""
+        Console._headless = value
 
     @property
     def bypass_prompt(self) -> bool:

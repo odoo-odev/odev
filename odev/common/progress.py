@@ -111,7 +111,7 @@ class StackedStatus(Status):
         if self.stack:
             self.stack[-1].stop()
 
-        if DEBUG_MODE or getattr(console, "bypass_prompt", False):
+        if DEBUG_MODE or getattr(console, "headless", False):
             return self
 
         console.is_live = True
@@ -176,7 +176,7 @@ def spinner(message: str) -> StackedStatus:
     :param message: The message to display.
     :type message: str
     """
-    if not getattr(console, "bypass_prompt", False) and (DEBUG_MODE or not console.is_interactive):
+    if not getattr(console, "headless", False) and (DEBUG_MODE or not console.is_interactive):
         logger.info(message)
 
     status = StackedStatus(console.render_str(message), console=console, spinner="arc")
