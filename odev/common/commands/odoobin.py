@@ -176,8 +176,8 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     def combined_odoo_args(self) -> list[str]:
         """Aggregate odoo_args and any Odoo option that might have been captured by the positional 'addons' argument."""
         args = list(self.args.odoo_args)
-        if self.args.addons and self.args.addons.startswith("-"):
-            args.insert(0, self.args.addons)
+        if self.args.addons and self.args.addons[0].startswith("-"):
+            args.insert(0, ",".join(self.args.addons))
         return args
 
     def odoobin_progress(self, line: str):
