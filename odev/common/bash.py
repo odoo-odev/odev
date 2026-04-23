@@ -5,6 +5,7 @@ the subsystem.
 import os
 import pty
 import select
+import signal
 import sys
 import termios
 import tty
@@ -236,7 +237,8 @@ def stream(
                 char = os.read(sys.stdin.fileno(), 1)
 
                 if char == CTRL_C:
-                    process.terminate()
+                    # Kill the entire process group
+                    os.killpg(process.pid, signal.SIGTERM)
 
                 if char in (CTRL_C, CTRL_D):
                     os.write(master, char)
