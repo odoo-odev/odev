@@ -5,7 +5,7 @@ import shlex
 from ast import literal_eval
 from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import nullcontext
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import (
@@ -711,14 +711,10 @@ class OdoobinProcess(OdevFrameworkMixin):
                 repository.create_worktree(f"{self.worktree}/{repository.path.name}", str(self.version or "master"))
 
         # Pull changes once per week, on Monday (or a later day if odev was not run)
-        pull_date = self.odev.config.repositories.date
-        next_monday = pull_date + timedelta(days=(7 - pull_date.weekday()))
-        next_monday = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
-        today = datetime.today()
-
-        if next_monday > today:
+        if not self.odev.config.repositories.is_pull_needed(self.version):
+            next_monday = self.odev.config.repositories.next_pull_date(self.version)
             return logger.debug(
-                f"Skipping worktree update, next pull scheduled in {(next_monday - today).days + 1} days"
+                f"Skipping worktree update, next pull scheduled in {(next_monday - datetime.today()).days + 1} days"
             )
 
         outdated_worktrees = list(self.outdated_odoo_worktrees())
@@ -750,7 +746,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             for worktree in worktrees_to_pull:
                 worktree.connector.pull_worktrees(worktrees_to_pull, force=True)
 
-        self.odev.config.repositories.date = today
+        self.odev.config.repositories.set_date(self.version, datetime.today())
         return None
 
     def clone_repositories(self):

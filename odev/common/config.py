@@ -3,7 +3,7 @@ import inspect
 import sys
 from collections.abc import Iterable
 from configparser import ConfigParser
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import (
     Literal,
@@ -214,6 +214,31 @@ class RepositoriesSection(Section):
     @date.setter
     def date(self, value: str | datetime):
         self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
+
+    def get_date(self, version: str) -> datetime:
+        """Last time a specific version was pulled from GitHub."""
+        value = self.get(f"date_{version}")
+        if not value:
+            return self.date
+        return datetime.strptime(value, DATETIME_FORMAT)
+
+    def set_date(self, version: str, value: datetime):
+        """Set the last time a specific version was pulled from GitHub."""
+        self.set(f"date_{version}", value.strftime(DATETIME_FORMAT))
+        self.date = value
+
+    def is_pull_needed(self, version: str | None) -> bool:
+        """Check whether a pull is needed for the given version."""
+        if not version:
+            return True
+
+        return datetime.today() >= self.next_pull_date(version)
+
+    def next_pull_date(self, version: str) -> datetime:
+        """Get the next scheduled pull date for the given version."""
+        pull_date = self.get_date(version)
+        next_monday = pull_date + timedelta(days=(7 - pull_date.weekday()))
+        return next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 class SecuritySection(Section):
