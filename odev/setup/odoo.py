@@ -98,4 +98,14 @@ def setup(odev: Odev) -> None:  # noqa: PLR0912
         else:
             logger.debug(f"Path {old_repo_path} does not exist, skipping")
 
-    return logger.info(f"Moved {len(repositories)} repositories to {new_parent_path}")
+    logger.info(f"Moved {len(repositories)} repositories to {new_parent_path}")
+
+    pull_interval = console.integer(
+        "How often should odev automatically pull changes for Odoo repositories (in days)?",
+        default=odev.config.repositories.interval,
+        min_value=0,
+    )
+    if pull_interval is not None:
+        odev.config.repositories.interval = pull_interval
+
+    return None

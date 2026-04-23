@@ -1,5 +1,7 @@
 """Pull changes in local worktrees."""
 
+from datetime import datetime
+
 from odev.commands.git.fetch import FetchCommand
 from odev.common import progress
 from odev.common.logging import logging
@@ -12,6 +14,7 @@ class PullCommand(FetchCommand):
     """Pull changes in local worktrees managed by odev."""
 
     _name = "pull"
+    _help = "Pull changes in local worktrees managed by odev."
 
     def run_hook(self, name: str, changes: list[tuple[str, int, int]]):
         """Print a summary of the pending changes for a worktree."""
@@ -44,3 +47,5 @@ class PullCommand(FetchCommand):
             ):
                 worktree.connector.pull_worktrees([worktree], force=True)
                 logger.info(f"Pulled {behind} commits in {worktree.connector.name!r} for version {worktree.branch!r}")
+
+        self.odev.config.repositories.set_date(name, datetime.today())

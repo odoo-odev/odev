@@ -3,7 +3,7 @@ import inspect
 import sys
 from collections.abc import Iterable
 from configparser import ConfigParser
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import (
     Literal,
@@ -214,6 +214,54 @@ class RepositoriesSection(Section):
     @date.setter
     def date(self, value: str | datetime):
         self.set("date", value.strftime(DATETIME_FORMAT) if isinstance(value, datetime) else value)
+
+    def get_date(self, version: str) -> datetime:
+        """Last time a specific version was pulled from GitHub."""
+        value = self.get(f"date_{version}")
+        if not value:
+            return self.date
+        return datetime.strptime(value, DATETIME_FORMAT)
+
+    def set_date(self, version: str, value: datetime):
+        """Set the last time a specific version was pulled from GitHub."""
+        self.set(f"date_{version}", value.strftime(DATETIME_FORMAT))
+        self.date = value
+
+    def is_pull_needed(self, version: str | None) -> bool:
+        """Check whether a pull is needed for the given version."""
+        if not version:
+            return True
+
+        return datetime.today() >= self.next_pull_date(version)
+
+    @property
+    def interval(self) -> int:
+        """Interval between repository pull checks in days.\n        Pulls will be performed once every `interval` day(s).\n        Defaults to 7 days.\n"""
+        return int(cast(str, self.get("interval", "7")))
+
+    @interval.setter
+    def interval(self, value: str | int):
+        if not str(value).isdigit() or int(value) < 0:
+            raise ValueError(f"'repositories.interval' must be a positive integer, got {value!r}")
+
+        self.set("interval", str(value))
+
+    def next_pull_date(self, version: str) -> datetime:
+        """Get the next scheduled pull date for the given version."""
+        pull_date = self.get_date(version)
+        # Start of the week (Monday 00:00) of the last pull
+        start_of_week = (pull_date - timedelta(days=pull_date.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        # Target date based on the interval
+        next_pull = start_of_week + timedelta(days=self.interval)
+
+        # If the interval is short or we've already passed the target day this week,
+        # ensure the next pull is scheduled for the next period.
+        if next_pull <= pull_date:
+            return (pull_date + timedelta(days=self.interval)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        return next_pull
 
 
 class SecuritySection(Section):
