@@ -249,7 +249,19 @@ class RepositoriesSection(Section):
     def next_pull_date(self, version: str) -> datetime:
         """Get the next scheduled pull date for the given version."""
         pull_date = self.get_date(version)
-        return (pull_date + timedelta(days=self.interval)).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Start of the week (Monday 00:00) of the last pull
+        start_of_week = (pull_date - timedelta(days=pull_date.weekday())).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        # Target date based on the interval
+        next_pull = start_of_week + timedelta(days=self.interval)
+
+        # If the interval is short or we've already passed the target day this week,
+        # ensure the next pull is scheduled for the next period.
+        if next_pull <= pull_date:
+            return (pull_date + timedelta(days=self.interval)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+        return next_pull
 
 
 class SecuritySection(Section):
