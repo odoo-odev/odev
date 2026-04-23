@@ -234,11 +234,22 @@ class RepositoriesSection(Section):
 
         return datetime.today() >= self.next_pull_date(version)
 
+    @property
+    def interval(self) -> int:
+        """Interval between repository pull checks in days.\n        Pulls will be performed once every `interval` day(s).\n        Defaults to 7 days.\n"""
+        return int(cast(str, self.get("interval", "7")))
+
+    @interval.setter
+    def interval(self, value: str | int):
+        if not str(value).isdigit() or int(value) < 0:
+            raise ValueError(f"'repositories.interval' must be a positive integer, got {value!r}")
+
+        self.set("interval", str(value))
+
     def next_pull_date(self, version: str) -> datetime:
         """Get the next scheduled pull date for the given version."""
         pull_date = self.get_date(version)
-        next_monday = pull_date + timedelta(days=(7 - pull_date.weekday()))
-        return next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+        return (pull_date + timedelta(days=self.interval)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 class SecuritySection(Section):
