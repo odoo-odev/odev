@@ -219,7 +219,7 @@ class RepositoriesSection(Section):
         """Last time a specific version was pulled from GitHub."""
         value = self.get(f"date_{version}")
         if not value:
-            return self.date
+            return datetime.fromtimestamp(0)
         return datetime.strptime(value, DATETIME_FORMAT)
 
     def set_date(self, version: str, value: datetime):

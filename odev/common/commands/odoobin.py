@@ -83,41 +83,6 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
     # Properties
     # --------------------------------------------------------------------------
 
-    ODOO_LOG_REGEX: re.Pattern = re.compile(
-        r"""
-            (?:
-                ((?P<date>\d{4}-\d{2}-\d{2})\s)?
-                (?P<time>\d{2}:\d{2}:\d{2},\d{3})\s
-                ((?P<pid>\d+)\s)?
-                (?P<level>[A-Z]+)\s
-                (?P<database>[^\s]+)\s
-                (?P<logger>
-                    ((?:odoo\.addons\.)(?P<module>[^\.]+))?[^:]+
-                ):\s
-                (?P<description>.*)
-            )
-        """,
-        re.VERBOSE | re.IGNORECASE,
-    )
-    """Regular expression to match the output of odoo-bin."""
-
-    ODOO_LOG_WERKZEUG_REGEX: re.Pattern = re.compile(
-        r"""
-            (?:
-                (?P<ip>(?:\d{1,3}\.){3}\d{1,3}).+?\]\s\"
-                (?P<verb>\w+)\s
-                (?P<url>.+?(?=\s))\s
-                (?P<http>.+?(?=\"))\"\s
-                (?P<code>\d+)\s-\s
-                (?P<count_query>\d+)\s
-                (?P<time_query>[\d\.]+)\s
-                (?P<time_remaining>[\d\.]+)
-            )
-        """,
-        re.VERBOSE | re.IGNORECASE,
-    )
-    """Regular expression to match the output of odoo-bin Werkzeug-specific logs."""
-
     last_level: str = "INFO"
     """Log-level level of the last line printed by the odoo-bin process."""
 
@@ -264,7 +229,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         logger = match.group("logger")
         description = match.group("description")
 
-        if logger == "werkzeug" and (http_match := re.match(self.ODOO_LOG_WERKZEUG_REGEX, description)):
+        if logger == "werkzeug" and (http_match := re.match(OdoobinProcess.LOG_WERKZEUG_REGEX, description)):
             dash = string.stylize("-", "color.black")
             code = http_match.group("code")
 
@@ -308,7 +273,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
     def _parse_progress_log_line(self, line: str) -> re.Match | None:
         """Parse a line of odoo-bin output."""
-        return re.match(self.ODOO_LOG_REGEX, string.strip_ansi_colors(line).replace("\r", ""))
+        return re.match(OdoobinProcess.LOG_REGEX, string.strip_ansi_colors(line).replace("\r", ""))
 
     def _colorize_duration_by_threshold(self, time: str | float, thresholds: Mapping[float, str]) -> str:
         """Colorize the textual representation of a duration according to thresholds.

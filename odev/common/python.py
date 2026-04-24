@@ -530,6 +530,7 @@ class PythonEnv:
         stream: bool = False,
         progress: Callable[[str], None] | None = None,
         script_input: str | None = None,
+        stream_filter: Callable[[str], str | None] | None = None,
     ) -> CompletedProcess:
         """Run a python script.
 
@@ -561,6 +562,11 @@ class PythonEnv:
         returncode = 0
         try:
             for line in bash.stream(command, input_data=script_input):
+                if stream_filter:
+                    filtered_line = stream_filter(line)
+                    if filtered_line is None:
+                        continue
+                    line = filtered_line
                 output.append(line)
                 progress(line)
         except CalledProcessError as error:
