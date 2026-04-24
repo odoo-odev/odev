@@ -82,14 +82,14 @@ class OdoobinProcess(OdevFrameworkMixin):
     LOG_REGEX: ClassVar[re.Pattern] = re.compile(
         r"""
             (?:
-                ((?P<date>\d{4}-\d{2}-\d{2})\s)?
-                (?P<time>\d{2}:\d{2}:\d{2},\d{3})\s
-                ((?P<pid>\d+)\s)?
-                (?P<level>[A-Z]+)\s
-                (?P<database>[^\s]+)\s
+                ((?P<date>\d{4}-\d{2}-\d{2})\s+)?
+                (?P<time>\d{2}:\d{2}:\d{2},\d{3})\s+
+                ((?P<pid>\d+)\s+)?
+                (?P<level>[A-Z]+)\s+
+                (?P<database>[^\s]+)\s+
                 (?P<logger>
                     ((?:odoo\.addons\.)(?P<module>[^\.]+))?[^:]+
-                ):\s
+                ):\s+
                 (?P<description>.*)
             )
         """,
@@ -617,9 +617,10 @@ class OdoobinProcess(OdevFrameworkMixin):
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
             formatted_command = self.format_command(args, subcommand, subcommand_input)
             info_message = f"Running {odoo_command!r} in version '{self.version!s}' on database {self.database.name!r}"
-            logger.info(f"{info_message} using command:")
-            self.console.print()
-            self.console.print(formatted_command, soft_wrap=True, highlight=False)
+            if os.environ.get("AI_SANDBOX") != "1":
+                logger.info(f"{info_message} using command:")
+                self.console.print()
+                self.console.print(formatted_command, soft_wrap=True, highlight=False)
 
             try:
                 with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
