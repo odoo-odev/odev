@@ -936,7 +936,7 @@ class Odev(Generic[CommandType]):
 
     def check_release(self) -> None:
         """Check if a new release is available."""
-        if not self.git.repository or self.git.repository.head.is_detached:
+        if not self.git.repository or self.git.repository.head.is_detached or os.environ.get("AI_SANDBOX") == "1":
             return
 
         if self.git.repository.active_branch.name != self.config.update.release:
@@ -1091,6 +1091,9 @@ class Odev(Generic[CommandType]):
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
+        if os.environ.get("AI_SANDBOX") == "1" or os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1":
+            return False
+
         return (datetime.today() - self.config.update.date).days >= self.config.update.interval
 
     def __update_prompt(self, name: str) -> bool:
