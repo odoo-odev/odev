@@ -196,7 +196,7 @@ class TestCommand(OdoobinCommand):
         if not self.args.no_auto_tags:
             self.apply_auto_tags()
 
-        if "clic_all" in self.test_tags or "tours" in self.test_tags:
+        if any(tag in self.test_tags for tag in ["clic_all", "click_all", "tours"]):
             chrome = Chrome(self.odev)
             chrome_bin = chrome.provision()
             wrapper = chrome.get_wrapper(chrome_bin)
