@@ -583,7 +583,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         subcommand: str | None = None,
         subcommand_input: str | None = None,
         stream: bool = True,
-        progress: Callable[[str], None] | None = None,
+        stream_filter: Callable[[str], str | None] | None = None,
         prepare: bool = False,
     ) -> CompletedProcess | None:
         """Run Odoo on the current database.
@@ -592,7 +592,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         :param subcommand: Subcommand to pass to odoo-bin.
         :param subcommand_input: Input to pipe to the subcommand.
         :param stream: Whether to stream the output of the process.
-        :param progress: Callback to call on each line outputted by the process. Ignored if `stream` is False.
+        :param stream_filter: Callback to filter/process each line outputted by the process. Ignored if `stream` is False.
         :param prepare: Whether to prepare the environment before running. A missing venv is always prepared.
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
@@ -604,14 +604,14 @@ class OdoobinProcess(OdevFrameworkMixin):
             with spinner(f"Preparing odoo-bin version {str(self.version)!r} for database {self.database.name!r}"):
                 self.prepare_odoobin()
 
-        if stream and progress is not None:
+        if stream and stream_filter is not None:
             with spinner("Looking for calls to interactive debuggers"):
                 debuggers = [f"{file.as_posix()}:{line}" for file, line in self.addons_debuggers()]
 
             if debuggers:
                 logger.warning(f"Interactive debuggers detected in addons:\n{string.join_bullet(debuggers)}")
                 logger.warning("Disabling logs prettifying to avoid interfering with the debugger")
-                progress = None
+                stream_filter = None
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
@@ -625,15 +625,26 @@ class OdoobinProcess(OdevFrameworkMixin):
                     self.database.venv = self.venv
                     self.database.worktree = self.worktree
 
-                    stream_filter = self.get_stream_filter()
+                    internal_filter = self.get_stream_filter()
+                    if internal_filter:
+                        original_filter = stream_filter
+
+                        def combined_filter(line: str) -> str | None:
+                            filtered_line = internal_filter(line)
+                            if filtered_line is not None:
+                                if original_filter:
+                                    return original_filter(filtered_line)
+                                return filtered_line
+                            return None
+
+                        stream_filter = combined_filter
 
                     process = self.venv.run_script(
                         self.odoobin_path,
                         odoobin_args,
                         stream=stream,
-                        progress=progress,
-                        script_input=subcommand_input,
                         stream_filter=stream_filter,
+                        script_input=subcommand_input,
                     )
             except CalledProcessError as error:
                 if not stream:

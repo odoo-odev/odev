@@ -116,7 +116,7 @@ class UpgradeCodeCommand(OdoobinCommand):
             self.odoobin.odoobin_path,
             cmd_args,
             stream=True,
-            progress=lambda line: self.odoobin.console.print(line, end=""),
+            stream_filter=lambda line: (self.odoobin.console.print(line, end=""), line)[1],
         )
         if result.returncode not in (0, 1):
             raise self.error(f"Odoo exited with code {result.returncode}")

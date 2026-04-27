@@ -68,11 +68,11 @@ def _stdout_for_odoo_argv(argv: list[str]) -> bytes:
 
 
 def _recording_run_script(  # noqa: PLR0913
-    call_log: list, self_pyenv, script, args=None, stream=False, progress=None, script_input=None, **kwargs
+    call_log: list, self_pyenv, script, args=None, stream=False, stream_filter=None, script_input=None, **kwargs
 ):
     script_path = Path(script).resolve()
     argv = list(args or [])
-    call_log.append((self_pyenv.python.resolve(), script_path, argv, stream, script_input, kwargs.get("stream_filter")))
+    call_log.append((self_pyenv.python.resolve(), script_path, argv, stream, script_input))
     cmd = f"{self_pyenv.python} {script_path} {' '.join(argv)}"
     out = _stdout_for_odoo_argv(argv)
     return CompletedProcess(cmd, 0, out, b"")
@@ -82,9 +82,9 @@ def start_run_script_recorder(call_log: list):
     """Patch PythonEnv.run_script to record calls and return success without subprocess."""
 
     def fake_run_script(  # noqa: PLR0913
-        self, script, args=None, stream=False, progress=None, script_input=None, **kwargs
+        self, script, args=None, stream=False, stream_filter=None, script_input=None, **kwargs
     ):
-        return _recording_run_script(call_log, self, script, args, stream, progress, script_input, **kwargs)
+        return _recording_run_script(call_log, self, script, args, stream, stream_filter, script_input, **kwargs)
 
     p = patch.object(PythonEnv, "run_script", fake_run_script)
     p.start()
@@ -115,7 +115,7 @@ def assert_last_odoobin_invocation(  # noqa: PLR0913
 ):
     odoos = list(iter_odoobin_calls(call_log))
     test_case.assertTrue(odoos, "expected at least one odoo-bin run_script call")
-    _interp, _script, argv, _stream, _inp, _filter = odoos[-1]
+    _interp, _script, argv, _stream, _inp = odoos[-1]
     test_case.assertEqual(_script.resolve(), FAKE_ODOOBIN_PATH.resolve())
     interp = _interp.resolve()
     sys_py = Path(sys.executable).resolve()
@@ -142,7 +142,7 @@ def assert_any_odoobin_invocation(
     predicate,
 ):
     """Assert at least one odoo call matches predicate(argv)."""
-    for _i, _s, argv, _st, _in, _f in iter_odoobin_calls(call_log):
+    for _i, _s, argv, _st, _in in iter_odoobin_calls(call_log):
         if predicate(argv):
             return
     test_case.fail("no odoo-bin invocation matched predicate")

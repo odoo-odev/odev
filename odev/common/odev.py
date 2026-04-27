@@ -278,7 +278,7 @@ class Odev(Generic[CommandType]):
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
 
-        if self.__should_update_now():
+        if self._should_update_now():
             self.check_release()
             self.update()
 
@@ -952,11 +952,7 @@ class Odev(Generic[CommandType]):
 
     def check_release(self) -> None:
         """Check if a new release is available."""
-        if (
-            not self.git.repository
-            or self.git.repository.head.is_detached
-            or os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1"
-        ):
+        if not self.git.repository or self.git.repository.head.is_detached:
             return
 
         if self.git.repository.active_branch.name != self.config.update.release:
@@ -1105,15 +1101,12 @@ class Odev(Generic[CommandType]):
 
         return bool(diff)
 
-    def __should_update_now(self) -> bool:
+    def _should_update_now(self) -> bool:
         """Check whether the last check date is older than today minus the check interval.
 
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
-        if os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1":
-            return False
-
         return (datetime.today() - self.config.update.date).days >= self.config.update.interval
 
     def __update_prompt(self, name: str) -> bool:

@@ -26,14 +26,14 @@ class TestPythonEnv(OdevTestCase):
             self.patch(PythonEnv, "python", Path("/tmp/fake_venv/bin/python")),  # noqa: S108
             self.patch(bash, "stream", return_value=iter(["line 1", "line 2"])),
         ):
-            progress_mock = MagicMock()
-            result = env.run_script("fake_script.py", stream=True, progress=progress_mock)
+            stream_filter_mock = MagicMock(side_effect=lambda x: x)
+            result = env.run_script("fake_script.py", stream=True, stream_filter=stream_filter_mock)
 
             self.assertIsInstance(result, CompletedProcess)
             self.assertEqual(result.returncode, 0)
-            self.assertEqual(progress_mock.call_count, 2)
-            progress_mock.assert_any_call("line 1")
-            progress_mock.assert_any_call("line 2")
+            self.assertEqual(stream_filter_mock.call_count, 2)
+            stream_filter_mock.assert_any_call("line 1")
+            stream_filter_mock.assert_any_call("line 2")
 
     def test_run_script_streaming_failure(self):
         """Test run_script with a streaming process that fails."""
@@ -49,9 +49,9 @@ class TestPythonEnv(OdevTestCase):
             self.patch(PythonEnv, "python", Path("/tmp/fake_venv/bin/python")),  # noqa: S108
             self.patch(bash, "stream", side_effect=streaming_failure),
         ):
-            progress_mock = MagicMock()
-            result = env.run_script("fake_script.py", stream=True, progress=progress_mock)
+            stream_filter_mock = MagicMock(side_effect=lambda x: x)
+            result = env.run_script("fake_script.py", stream=True, stream_filter=stream_filter_mock)
 
             self.assertIsInstance(result, CompletedProcess)
             self.assertEqual(result.returncode, 1)
-            progress_mock.assert_called_once_with("line 1")
+            stream_filter_mock.assert_called_once_with("line 1")

@@ -420,7 +420,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
             database_name=self.database_name,
             argv_contains=["--stop-after-init"],
         )
-        _interp, _script, argv, _st, _inp, _filter = list(iter_odoobin_calls(self._odoobin_run_script_calls))[-1]
+        _interp, _script, argv, _st, _inp = list(iter_odoobin_calls(self._odoobin_run_script_calls))[-1]
         joined = " ".join(argv)
         self.assertIn(addons_path_end, joined)
         self.assertGreaterEqual(joined.count(addons_path_end), 2)

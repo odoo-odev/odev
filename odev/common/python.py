@@ -523,21 +523,20 @@ class PythonEnv:
             },
         )
 
-    def run_script(  # noqa: PLR0913
+    def run_script(
         self,
         script: Path | str,
         args: list[str] | None = None,
         stream: bool = False,
-        progress: Callable[[str], None] | None = None,
-        script_input: str | None = None,
         stream_filter: Callable[[str], str | None] | None = None,
+        script_input: str | None = None,
     ) -> CompletedProcess:
         """Run a python script.
 
-        :param path: Path to the python script to run.
+        :param script: Path to the python script to run.
         :param args: A list of arguments to pass to the script.
         :param stream: Whether to stream the output of the script to stdout.
-        :param progress: A callback function to call when a line is printed to stdout. Unused if stream is False.
+        :param stream_filter: A callback function to filter/process lines. Return None to skip a line.
         :param script_input: A string to pass to the script as stdin.
         :return: The result of the script execution.
         :rtype: CompletedProcess
@@ -555,21 +554,16 @@ class PythonEnv:
         if not stream:
             return bash.execute(command, input_data=script_input)
 
-        if progress is None:
+        if stream_filter is None:
             return bash.run(command, input_data=script_input)
 
         output = []
         returncode = 0
         try:
             for line in bash.stream(command, input_data=script_input):
-                processed_line = line
-                if stream_filter:
-                    filtered_line = stream_filter(line)
-                    if filtered_line is None:
-                        continue
-                    processed_line = filtered_line
-                output.append(processed_line)
-                progress(processed_line)
+                processed_line = stream_filter(line)
+                if processed_line is not None:
+                    output.append(processed_line)
         except CalledProcessError as error:
             returncode = error.returncode
 

@@ -145,16 +145,17 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             args.insert(0, ",".join(self.args.addons))
         return args
 
-    def odoobin_progress(self, line: str):
+    def odoobin_progress(self, line: str) -> str | None:
         """Beautify odoo logs on the fly."""
         match = self._parse_progress_log_line(line)
 
         if match is None or not self.args.pretty:
             self.print(markup.escape(line), highlight=False, soft_wrap=False)
-            return
+            return line
 
         self.last_level = match.group("level").lower()
         self._print_progress_log_line(match)
+        return line
 
     def _guess_addons_paths(self) -> list[Path]:
         """Guess the addons path."""

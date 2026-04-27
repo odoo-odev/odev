@@ -138,7 +138,7 @@ class TestCommand(OdoobinCommand):
         odoobin.additional_addons_paths = cast(OdoobinProcess, self.odoobin).additional_addons_paths
 
         try:
-            process = odoobin.run(args=args, progress=self.odoobin_progress)
+            process = odoobin.run(args=args, stream_filter=self.odoobin_progress)
 
             if process is not None and process.returncode != 0 and not self.test_buffer:
                 raise self.error("Odoo crashed during initialization. Check the logs above.")
