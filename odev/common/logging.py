@@ -37,17 +37,17 @@ __log_level = re.search(
 )
 
 if __log_level:
-    LOG_LEVEL = str(__log_level.group(1)).upper().replace("-", "_")
-    remove = __log_level.group(0).strip().split()
-    remove_index = sys.argv.index(remove[0])
-    del sys.argv[remove_index : remove_index + len(remove)]
+    potential_log_level = str(__log_level.group(1)).upper().replace("-", "_")
 
-    if LOG_LEVEL not in ("CRITICAL", "ERROR", "WARN", "INFO", "DEBUG", "DEBUG_SQL"):
-        raise ValueError(f"Invalid log level {LOG_LEVEL!r}")
+    if potential_log_level in ("CRITICAL", "ERROR", "WARN", "INFO", "DEBUG", "DEBUG_SQL"):
+        LOG_LEVEL = potential_log_level
+        remove = __log_level.group(0).strip().split()
+        remove_index = sys.argv.index(remove[0])
+        del sys.argv[remove_index : remove_index + len(remove)]
 
-    if LOG_LEVEL == "DEBUG_SQL":
-        LOG_LEVEL = "DEBUG"
-        DEBUG_SQL = True
+        if LOG_LEVEL == "DEBUG_SQL":
+            LOG_LEVEL = "DEBUG"
+            DEBUG_SQL = True
 
 SILENCED_LOGGERS = [
     "asyncio",

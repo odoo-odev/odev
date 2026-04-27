@@ -150,10 +150,10 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
             cls._arguments[argument_name].update(**argument_dict)
 
         # Re-order the internal dictionary to ensure *... arguments are last,
-        # and all other arguments are sorted alphabetically.
-        # This is necessary because Python dictionaries preserve insertion order and
-        # any argument defined in a subclass would otherwise be registered after
-        # a greedy catch-all argument defined in a parent class.
+        # all other arguments are sorted alphabetically for flags, but
+        # positional arguments MUST preserve their declaration order.
+        original_order = {name: i for i, name in enumerate(cls._arguments)}
+
         def argument_sort_key(item):
             name, arg_def = item
             aliases = arg_def.get("aliases", [name])
@@ -166,10 +166,10 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
                 # Prefer long aliases for sorting
                 long_aliases = [a.lstrip("-") for a in aliases if a.startswith("--")]
                 sort_name = min(long_aliases, key=len) if long_aliases else aliases[0].lstrip("-")
-            else:
-                sort_name = name.lstrip("-")
+                return (greedy, positional, sort_name.lower())
 
-            return (greedy, positional, sort_name.lower())
+            # For positional arguments, use the insertion order to preserve declaration sequence
+            return (greedy, positional, original_order[name])
 
         sorted_arguments = sorted(cls._arguments.items(), key=argument_sort_key)
         cls._arguments = defaultdict(dict, sorted_arguments)
