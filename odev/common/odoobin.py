@@ -104,10 +104,12 @@ class OdoobinProcess(OdevFrameworkMixin):
                 (?P<verb>\w+)\s
                 (?P<url>.+?(?=\s))\s
                 (?P<http>.+?(?=\"))\"\s
-                (?P<code>\d+)\s-\s
-                (?P<count_query>\d+)\s
-                (?P<time_query>[\d\.]+)\s
-                (?P<time_remaining>[\d\.]+)
+                (?P<code>\d+)\s-
+                (?:
+                    \s+(?P<count_query>\d+)\s
+                    (?P<time_query>[\d\.]+)\s
+                    (?P<time_remaining>[\d\.]+)
+                )?
             )
         """,
         re.VERBOSE | re.IGNORECASE,

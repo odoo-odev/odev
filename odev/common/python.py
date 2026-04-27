@@ -523,7 +523,7 @@ class PythonEnv:
             },
         )
 
-    def run_script(
+    def run_script(  # noqa: PLR0913
         self,
         script: Path | str,
         args: list[str] | None = None,
@@ -562,13 +562,14 @@ class PythonEnv:
         returncode = 0
         try:
             for line in bash.stream(command, input_data=script_input):
+                processed_line = line
                 if stream_filter:
                     filtered_line = stream_filter(line)
                     if filtered_line is None:
                         continue
-                    line = filtered_line
-                output.append(line)
-                progress(line)
+                    processed_line = filtered_line
+                output.append(processed_line)
+                progress(processed_line)
         except CalledProcessError as error:
             returncode = error.returncode
 

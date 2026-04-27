@@ -71,6 +71,8 @@ class OdevTestCase(TestCase):
         if cls.run_path.exists():
             shutil.rmtree(cls.run_path, ignore_errors=True)
 
+        odev.HOME_PATH = (Path.home() / ".local" / "share" / "odev").resolve()
+
     @classmethod
     def patch(cls, target: Any, attribute: str, return_value: Any = None, **kwargs):
         """Patch an object's attribute.

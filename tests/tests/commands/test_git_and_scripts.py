@@ -8,6 +8,11 @@ from tests.fixtures import OdevCommandTestCase, OdevTestCase
 
 
 class TestGitCommands(OdevCommandTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._patch_object(GitConnector, [("fetch", None), ("prune_worktrees", None), ("_check_repository", None)])
+
     def test_01_clone_requires_target(self):
         _, stderr = self.dispatch_command("clone")
         self.assertIn("You must specify a database or repository to clone", stderr)
