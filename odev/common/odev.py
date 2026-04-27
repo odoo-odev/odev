@@ -259,12 +259,6 @@ class Odev(Generic[CommandType]):
     def odoobin_process_class(self, value: "type[OdoobinProcessType]") -> None:
         self._odoobin_process_class = value
 
-    def should_skip_update(self) -> bool:
-        """Return whether odev and its plugins should skip checking for updates.
-        Can be overridden or extended by plugins.
-        """
-        return os.environ.get("AI_SANDBOX") == "1"
-
     def start(self, start_time: float | None = None) -> None:
         """Start the framework, check for updates and load plugins and commands.
 
@@ -958,7 +952,11 @@ class Odev(Generic[CommandType]):
 
     def check_release(self) -> None:
         """Check if a new release is available."""
-        if not self.git.repository or self.git.repository.head.is_detached or self.should_skip_update():
+        if (
+            not self.git.repository
+            or self.git.repository.head.is_detached
+            or os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1"
+        ):
             return
 
         if self.git.repository.active_branch.name != self.config.update.release:
@@ -1113,7 +1111,7 @@ class Odev(Generic[CommandType]):
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
-        if self.should_skip_update() or os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1":
+        if os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1":
             return False
 
         return (datetime.today() - self.config.update.date).days >= self.config.update.interval
