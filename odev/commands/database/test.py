@@ -123,7 +123,7 @@ class TestCommand(OdoobinCommand):
         if not self.test_database.exists:
             self.create_test_database()
 
-        odoobin = self.test_database.process or OdoobinProcess(self.test_database)
+        odoobin = self.test_database.process or self.odev.odoobin_process_class(self.test_database)
         odoobin.with_version(self.version)
 
         edition = (

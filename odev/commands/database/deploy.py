@@ -32,7 +32,7 @@ class DeployCommand(DatabaseCommand):
         odoobin: OdoobinProcess = (
             self._database.process
             if isinstance(self._database, LocalDatabase)
-            else OdoobinProcess(LocalDatabase(self.odev.name), version=self._database.version)
+            else self.odev.odoobin_process_class(LocalDatabase(self.odev.name), version=self._database.version)
         )
 
         url = self._database.url if isinstance(self._database, RemoteDatabase) else None

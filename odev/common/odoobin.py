@@ -1,6 +1,5 @@
 """Module to manage Odoo processes."""
 
-import os
 import re
 import shlex
 from ast import literal_eval
@@ -619,7 +618,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
             formatted_command = self.format_command(args, subcommand, subcommand_input)
             info_message = f"Running {odoo_command!r} in version '{self.version!s}' on database {self.database.name!r}"
-            if os.environ.get("AI_SANDBOX") != "1":
+            if not self.odev.should_skip_update():
                 logger.info(f"{info_message} using command:")
                 self.console.print()
                 self.console.print(formatted_command, soft_wrap=True, highlight=False)
@@ -629,7 +628,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                     self.database.venv = self.venv
                     self.database.worktree = self.worktree
 
-                    stream_filter = self._ai_sandbox_filter if os.environ.get("AI_SANDBOX") == "1" else None
+                    stream_filter = self.get_stream_filter()
 
                     process = self.venv.run_script(
                         self.odoobin_path,
@@ -987,22 +986,9 @@ class OdoobinProcess(OdevFrameworkMixin):
             else:
                 return process
 
-    def _ai_sandbox_filter(self, line: str) -> str | None:
-        """Filter Odoo logs to reduce token consumption when running in an AI sandbox."""
-        line = string.strip_ansi_colors(line).replace("\r", "")
-        match = self.LOG_REGEX.match(line)
+    def get_stream_filter(self) -> "Callable[[str], str | None] | None":
+        """Return a callable to filter each output line of the Odoo process, or None for no filtering.
 
-        if match:
-            description = match.group("description")
-            logger_name = match.group("logger")
-
-            # Suppress noisy werkzeug logs for successful requests
-            if logger_name == "werkzeug":
-                w_match = self.LOG_WERKZEUG_REGEX.match(description)
-                if w_match and w_match.group("code") in ("200", "304"):
-                    return None
-
-            # Return a cleaned version without date, time, pid, and database name
-            return f"{match.group('level')} {logger_name}: {description}"
-
-        return line
+        Override this method in a subclass to provide custom log filtering behavior.
+        """
+        return None

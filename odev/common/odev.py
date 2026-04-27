@@ -19,6 +19,7 @@ from pathlib import Path
 from time import monotonic, sleep
 from types import ModuleType
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Generic,
@@ -45,6 +46,10 @@ from odev.common.python import PythonEnv
 from odev.common.store import DataStore
 from odev.common.string import join_bullet
 from odev.common.telemetry import Telemetry
+
+
+if TYPE_CHECKING:
+    from odev.common.odoobin import OdoobinProcess as OdoobinProcessType
 
 
 try:
@@ -242,6 +247,23 @@ class Odev(Generic[CommandType]):
             return branch
 
         return f"dev:{branch}"
+
+    @property
+    def odoobin_process_class(self) -> "type[OdoobinProcessType]":
+        """The class used to spawn Odoo processes. Can be overridden by plugins."""
+        from odev.common.odoobin import OdoobinProcess  # noqa: PLC0415
+
+        return getattr(self, "_odoobin_process_class", OdoobinProcess)
+
+    @odoobin_process_class.setter
+    def odoobin_process_class(self, value: "type[OdoobinProcessType]") -> None:
+        self._odoobin_process_class = value
+
+    def should_skip_update(self) -> bool:
+        """Return whether odev and its plugins should skip checking for updates.
+        Can be overridden or extended by plugins.
+        """
+        return os.environ.get("AI_SANDBOX") == "1"
 
     def start(self, start_time: float | None = None) -> None:
         """Start the framework, check for updates and load plugins and commands.
@@ -936,7 +958,7 @@ class Odev(Generic[CommandType]):
 
     def check_release(self) -> None:
         """Check if a new release is available."""
-        if not self.git.repository or self.git.repository.head.is_detached or os.environ.get("AI_SANDBOX") == "1":
+        if not self.git.repository or self.git.repository.head.is_detached or self.should_skip_update():
             return
 
         if self.git.repository.active_branch.name != self.config.update.release:
@@ -1091,7 +1113,7 @@ class Odev(Generic[CommandType]):
         :return: Whether the last check date is older than today minus the check interval
         :rtype: bool
         """
-        if os.environ.get("AI_SANDBOX") == "1" or os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1":
+        if self.should_skip_update() or os.environ.get("ODEV_SKIP_GIT_UPDATE") == "1":
             return False
 
         return (datetime.today() - self.config.update.date).days >= self.config.update.interval

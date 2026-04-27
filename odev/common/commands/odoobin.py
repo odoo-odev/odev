@@ -214,7 +214,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
         edition: Literal["community", "enterprise"] = (
             "enterprise" if self.args.enterprise or self._database.edition == "enterprise" else "community"
         )
-        process = OdoobinProcess(
+        process = self.odev.odoobin_process_class(
             database=self._database,
             version=version,
             venv=venv.name,
