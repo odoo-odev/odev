@@ -618,10 +618,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
             formatted_command = self.format_command(args, subcommand, subcommand_input)
             info_message = f"Running {odoo_command!r} in version '{self.version!s}' on database {self.database.name!r}"
-            if not self.odev.should_skip_update():
-                logger.info(f"{info_message} using command:")
-                self.console.print()
-                self.console.print(formatted_command, soft_wrap=True, highlight=False)
+            self._print_run_info(info_message, formatted_command)
 
             try:
                 with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
@@ -985,6 +982,16 @@ class OdoobinProcess(OdevFrameworkMixin):
                 return None
             else:
                 return process
+
+    def _print_run_info(self, info_message: str, formatted_command: str) -> None:
+        """Print information about the odoo-bin command being run.
+
+        Override this method in a subclass to suppress or customize the output
+        (e.g., inside an AI sandbox where verbose output wastes tokens).
+        """
+        logger.info(f"{info_message} using command:")
+        self.console.print()
+        self.console.print(formatted_command, soft_wrap=True, highlight=False)
 
     def get_stream_filter(self) -> "Callable[[str], str | None] | None":
         """Return a callable to filter each output line of the Odoo process, or None for no filtering.
