@@ -59,18 +59,16 @@ class HelpCommand(Command):
         parser = command.prepare_parser()
         usage = escape(parser.format_usage().replace("usage:", executable).strip())
 
+        message_indent = 12
         message = f"""
             [bold {Colors.PURPLE}]{executable.upper()} {command._name.upper()}[/bold {Colors.PURPLE}]
 
-            {{command._description}}
+{string.indent(command._description, message_indent)}
 
             [bold][underline]Usage:[/underline] [{Colors.CYAN}]{usage}[/{Colors.CYAN}][/bold]
         """
 
-        message_indent = string.min_indent(message)
         message_options_indent = message_indent + 4
-        description = string.indent(command._description, message_indent)[message_indent:]
-        message = message.replace("{command._description}", description)
 
         if command._aliases:
             aliases = f"""
@@ -87,7 +85,7 @@ class HelpCommand(Command):
             positionals = f"""
                 [bold underline]Positional Arguments:[/bold underline]
 
-                {string.format_options_list(positional_arguments, message_options_indent)}
+{string.indent(string.format_options_list(positional_arguments), message_options_indent)}
             """
             message += string.dedent(positionals, message_options_indent - message_indent)
 
@@ -100,7 +98,7 @@ class HelpCommand(Command):
             optionals = f"""
                 [bold underline]Optional Arguments:[/bold underline]
 
-                {string.format_options_list(optional_arguments, message_options_indent)}
+{string.indent(string.format_options_list(optional_arguments), message_options_indent)}
             """
             message += string.dedent(optionals, message_options_indent - message_indent)
 
@@ -147,14 +145,14 @@ class HelpCommand(Command):
                 blanks=1,
             ),
             message_indent,
-        )[message_indent:]
+        )
 
         return f"""
             {message.rstrip()}
 
             [bold underline]The following commands are provided:[/bold underline]
 
-            {commands_list}
+{commands_list}
         """
 
     def command_names(self) -> str:

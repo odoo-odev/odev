@@ -149,14 +149,29 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
 
             cls._arguments[argument_name].update(**argument_dict)
 
-        # Re-order the internal dictionary to ensure *... arguments are last.
+        # Re-order the internal dictionary to ensure *... arguments are last,
+        # and all other arguments are sorted alphabetically.
         # This is necessary because Python dictionaries preserve insertion order and
         # any argument defined in a subclass would otherwise be registered after
         # a greedy catch-all argument defined in a parent class.
-        sorted_arguments = sorted(
-            cls._arguments.items(),
-            key=lambda item: 1 if item[1].get("nargs") == "*..." else 0,
-        )
+        def argument_sort_key(item):
+            name, arg_def = item
+            aliases = arg_def.get("aliases", [name])
+            is_optional = any(a.startswith("-") for a in aliases)
+
+            greedy = 1 if arg_def.get("nargs") == "*..." else 0
+            positional = 0 if not is_optional else 1
+
+            if is_optional:
+                # Prefer long aliases for sorting
+                long_aliases = [a.lstrip("-") for a in aliases if a.startswith("--")]
+                sort_name = min(long_aliases, key=len) if long_aliases else aliases[0].lstrip("-")
+            else:
+                sort_name = name.lstrip("-")
+
+            return (greedy, positional, sort_name.lower())
+
+        sorted_arguments = sorted(cls._arguments.items(), key=argument_sort_key)
         cls._arguments = defaultdict(dict, sorted_arguments)
 
     @classmethod
