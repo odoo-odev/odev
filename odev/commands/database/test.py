@@ -1,5 +1,6 @@
 """Run unit tests on an empty local Odoo database."""
 
+import os
 import re
 from collections import defaultdict
 from collections.abc import Mapping, MutableMapping
@@ -9,6 +10,7 @@ from typing import cast
 import requests
 
 from odev.common import args, string
+from odev.common.browsers import Chrome
 from odev.common.commands import OdoobinCommand
 from odev.common.console import TableHeader
 from odev.common.databases import LocalDatabase
@@ -193,6 +195,13 @@ class TestCommand(OdoobinCommand):
         """Run the command."""
         if not self.args.no_auto_tags:
             self.apply_auto_tags()
+
+        if "clic_all" in self.test_tags or "tours" in self.test_tags:
+            chrome = Chrome(self.odev)
+            chrome_bin = chrome.provision()
+            wrapper = chrome.get_wrapper(chrome_bin)
+            os.environ["ODOO_BROWSER_BIN"] = str(wrapper)
+
         self.run_test_database()
 
     def cleanup(self):
