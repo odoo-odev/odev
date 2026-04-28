@@ -32,7 +32,7 @@ RE_PACKAGE = re.compile(
         (?P<name>[\w_-]+)
         (?:
             (?P<op>[~<>=]+)
-            (?P<version>[\d.*]+)
+            (?P<version>[a-zA-Z\d.*+!_-]+)
         )?
         (?:
             \s*;\s*
@@ -85,6 +85,9 @@ class PythonEnv:
 
     pip_freeze_cache: ClassVar[TTLCache] = TTLCache(ttl=60)
     """Cache for pip freeze output."""
+
+    installed_packages_cache: ClassVar[TTLCache] = TTLCache(ttl=60)
+    """Cache for parsed installed packages."""
 
     def __init__(self, path: Path | str | None = None, version: str | None = None):
         """Initialize a python environment.
@@ -381,8 +384,8 @@ class PythonEnv:
             # Consider:
             #   - Package name:   odoo_upgrade
             #   - Version:        aaa1f0fee6870075e25cb5e6744e4c589bb32b46
-            package_name, package_version = package.split(" @ ") if " @ " in package else (package, package)
-            package_version = package_name.split("@")[-1] if "@" in package_name else "1.0.0"
+            package_name, package_url = package.split(" @ ") if " @ " in package else (package, package)
+            package_version = package_url.split("@")[-1] if "@" in package_url else "1.0.0"
         else:
             raise ValueError(f"Invalid package specification {package!r}")
 
@@ -394,6 +397,9 @@ class PythonEnv:
         :return: The result of the pip command execution.
         :rtype: CompletedProcess
         """
+        if (installed := self.installed_packages_cache.get(self.path.as_posix())) is not None:
+            return installed
+
         freeze = self.__pip_freeze_all()
         packages = freeze.stdout.decode().splitlines()
         installed: MutableMapping[str, Version | str] = {}
@@ -408,6 +414,7 @@ class PythonEnv:
 
             installed[package_name.strip().lower()] = package_version
 
+        self.installed_packages_cache.set(self.path.as_posix(), installed)
         return installed
 
     def missing_requirements(self, path: Path | str, raise_if_error: bool = True) -> Generator[str, None, None]:  # noqa: PLR0912
@@ -437,6 +444,11 @@ class PythonEnv:
                 continue
 
             if "git+" in line:
+                if " @ " not in line:
+                    logger.warning(
+                        f"Git requirement {line!r} is not named. "
+                        "Please use the format 'package_name @ git+url@version' to avoid issues."
+                    )
                 package_name, package_version = self.__package_spec(line)
                 installed_version = installed_packages.get(package_name)
 
