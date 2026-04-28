@@ -78,6 +78,43 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     cache_ps_process: ClassVar[TTLCache] = TTLCache(ttl=1)
 
+    LOG_REGEX: ClassVar[re.Pattern] = re.compile(
+        r"""
+            (?:
+                ((?P<date>\d{4}-\d{2}-\d{2})\s+)?
+                (?P<time>\d{2}:\d{2}:\d{2},\d{3})\s+
+                ((?P<pid>\d+)\s+)?
+                (?P<level>[A-Z]+)\s+
+                (?P<database>[^\s]+)\s+
+                (?P<logger>
+                    ((?:odoo\.addons\.)(?P<module>[^\.]+))?[^:]+
+                ):\s+
+                (?P<description>.*)
+            )
+        """,
+        re.VERBOSE | re.IGNORECASE,
+    )
+    """Regular expression to match the output of odoo-bin."""
+
+    LOG_WERKZEUG_REGEX: ClassVar[re.Pattern] = re.compile(
+        r"""
+            (?:
+                (?P<ip>(?:\d{1,3}\.){3}\d{1,3}).+?\]\s\"
+                (?P<verb>\w+)\s
+                (?P<url>.+?(?=\s))\s
+                (?P<http>.+?(?=\"))\"\s
+                (?P<code>\d+)\s-
+                (?:
+                    \s+(?P<count_query>\d+)\s
+                    (?P<time_query>[\d\.]+)\s
+                    (?P<time_remaining>[\d\.]+)
+                )?
+            )
+        """,
+        re.VERBOSE | re.IGNORECASE,
+    )
+    """Regular expression to match the output of odoo-bin Werkzeug-specific logs."""
+
     def __init__(
         self,
         database: "LocalDatabase",
@@ -122,7 +159,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def __repr__(self) -> str:
         return (
-            "OdoobinProcess("
+            f"{self.__class__.__name__}("
             f"database={self.database.name!r}, "
             f"version={self.version!r}, "
             f"venv={self.venv!r}, "
@@ -546,7 +583,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         subcommand: str | None = None,
         subcommand_input: str | None = None,
         stream: bool = True,
-        progress: Callable[[str], None] | None = None,
+        stream_filter: Callable[[str], str | None] | None = None,
         prepare: bool = False,
     ) -> CompletedProcess | None:
         """Run Odoo on the current database.
@@ -555,7 +592,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         :param subcommand: Subcommand to pass to odoo-bin.
         :param subcommand_input: Input to pipe to the subcommand.
         :param stream: Whether to stream the output of the process.
-        :param progress: Callback to call on each line outputted by the process. Ignored if `stream` is False.
+        :param stream_filter: Callback to filter/process each line outputted by the process. Ignored if `stream` is False.
         :param prepare: Whether to prepare the environment before running. A missing venv is always prepared.
         :return: The return result of the process after completion.
         :rtype: subprocess.CompletedProcess
@@ -567,33 +604,46 @@ class OdoobinProcess(OdevFrameworkMixin):
             with spinner(f"Preparing odoo-bin version {str(self.version)!r} for database {self.database.name!r}"):
                 self.prepare_odoobin()
 
-        if stream and progress is not None:
+        if stream and stream_filter is not None:
             with spinner("Looking for calls to interactive debuggers"):
                 debuggers = [f"{file.as_posix()}:{line}" for file, line in self.addons_debuggers()]
 
             if debuggers:
                 logger.warning(f"Interactive debuggers detected in addons:\n{string.join_bullet(debuggers)}")
                 logger.warning("Disabling logs prettifying to avoid interfering with the debugger")
-                progress = None
+                stream_filter = None
 
         with capture_signals():
             odoo_command = f"odoo-bin {subcommand}" if subcommand is not None else "odoo-bin"
             odoobin_args = self.prepare_odoobin_args(args, subcommand)
             formatted_command = self.format_command(args, subcommand, subcommand_input)
             info_message = f"Running {odoo_command!r} in version '{self.version!s}' on database {self.database.name!r}"
-            logger.info(f"{info_message} using command:")
-            self.console.print()
-            self.console.print(formatted_command, soft_wrap=True, highlight=False)
+            self._print_run_info(info_message, formatted_command)
 
             try:
                 with spinner(info_message) if not stream else nullcontext():  # type: ignore[attr-defined]
                     self.database.venv = self.venv
                     self.database.worktree = self.worktree
+
+                    internal_filter = self.get_stream_filter()
+                    if internal_filter:
+                        original_filter = stream_filter
+
+                        def combined_filter(line: str) -> str | None:
+                            filtered_line = internal_filter(line)
+                            if filtered_line is not None:
+                                if original_filter:
+                                    return original_filter(filtered_line)
+                                return filtered_line
+                            return None
+
+                        stream_filter = combined_filter
+
                     process = self.venv.run_script(
                         self.odoobin_path,
                         odoobin_args,
                         stream=stream,
-                        progress=progress,
+                        stream_filter=stream_filter,
                         script_input=subcommand_input,
                     )
             except CalledProcessError as error:
@@ -943,3 +993,20 @@ class OdoobinProcess(OdevFrameworkMixin):
                 return None
             else:
                 return process
+
+    def _print_run_info(self, info_message: str, formatted_command: str) -> None:
+        """Print information about the odoo-bin command being run.
+
+        Override this method in a subclass to suppress or customize the output
+        (e.g., inside an AI sandbox where verbose output wastes tokens).
+        """
+        logger.info(f"{info_message} using command:")
+        self.console.print()
+        self.console.print(formatted_command, soft_wrap=True, highlight=False)
+
+    def get_stream_filter(self) -> "Callable[[str], str | None] | None":
+        """Return a callable to filter each output line of the Odoo process, or None for no filtering.
+
+        Override this method in a subclass to provide custom log filtering behavior.
+        """
+        return None

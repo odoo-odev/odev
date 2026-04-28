@@ -68,7 +68,7 @@ def _stdout_for_odoo_argv(argv: list[str]) -> bytes:
 
 
 def _recording_run_script(  # noqa: PLR0913
-    call_log: list, self_pyenv, script, args=None, stream=False, progress=None, script_input=None
+    call_log: list, self_pyenv, script, args=None, stream=False, stream_filter=None, script_input=None, **kwargs
 ):
     script_path = Path(script).resolve()
     argv = list(args or [])
@@ -82,9 +82,9 @@ def start_run_script_recorder(call_log: list):
     """Patch PythonEnv.run_script to record calls and return success without subprocess."""
 
     def fake_run_script(  # noqa: PLR0913
-        self, script, args=None, stream=False, progress=None, script_input=None
+        self, script, args=None, stream=False, stream_filter=None, script_input=None, **kwargs
     ):
-        return _recording_run_script(call_log, self, script, args, stream, progress, script_input)
+        return _recording_run_script(call_log, self, script, args, stream, stream_filter, script_input, **kwargs)
 
     p = patch.object(PythonEnv, "run_script", fake_run_script)
     p.start()

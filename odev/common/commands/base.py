@@ -300,12 +300,12 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
             if captured is None:
                 continue
 
-            raw_val = (
-                captured[0]
-                if isinstance(captured, list) and captured
-                else (str(captured) if not isinstance(captured, list) else None)
-            )
-            if raw_val is None:
+            if isinstance(captured, list):
+                raw_val = ",".join(map(str, captured))
+            else:
+                raw_val = str(captured)
+
+            if not raw_val:
                 continue
 
             try:

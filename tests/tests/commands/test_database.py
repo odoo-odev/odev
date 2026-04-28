@@ -500,7 +500,7 @@ class TestDatabaseCommands(OdevCommandTestCase):
         neutralize.assert_called_once_with()
         self.assertIn("has been neutralized", stdout)
 
-    def test_16_dump(self):
+    def test_18_dump(self):
         """Command `odev dump` should report where the dump was saved."""
         dump_file = self.run_path / f"{self.database_name}.zip"
         with self.patch(LocalDatabase, "dump", return_value=dump_file):

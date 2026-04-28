@@ -32,7 +32,7 @@ LOG_LEVEL = "INFO"
 DEBUG_SQL = False
 
 __log_level = re.search(
-    r"\s(?:-v\s?|--log-level(?:\s|=){1})([a-zA-Z-_]+)",
+    r"\s(?:-v|--log-level)(?:\s+|=)([a-zA-Z_]+)",
     " ".join(sys.argv),
 )
 

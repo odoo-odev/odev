@@ -9,7 +9,6 @@ from odev.common.commands import TEMPLATE_SUFFIX, OdoobinTemplateCommand
 from odev.common.databases import LocalDatabase
 from odev.common.errors.odev import OdevError
 from odev.common.odev import logger
-from odev.common.odoobin import OdoobinProcess
 from odev.common.version import OdooVersion
 
 
@@ -176,14 +175,14 @@ class CreateCommand(OdoobinTemplateCommand):
         if not re.search(r"--st(op-after-init)?", joined_args):
             args.append("--stop-after-init")
 
-        process = self.odoobin or OdoobinProcess(self._database)
+        process = self.odoobin or self.odev.odoobin_process_class(self._database)
         process.with_edition("enterprise" if self.args.enterprise else "community")
         process.with_version(self.version)
         process.with_venv(self.venv)
         process.with_worktree(self.worktree)
 
         try:
-            run_process = process.run(args=args, progress=self.odoobin_progress, prepare=True)
+            run_process = process.run(args=args, stream_filter=self.odoobin_progress, prepare=True)
             self.console.print()
         except OdevError as error:
             logger.error(str(error))

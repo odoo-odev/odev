@@ -431,7 +431,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
     def _get_process_instance(self) -> OdoobinProcess:
         """Get the Odoo process for the database."""
-        return OdoobinProcess(
+        return self.odev.odoobin_process_class(
             self,
             (self.venv and self.venv.path.name) or str(self.version),
             self.worktree or (str(self.version) if self.version else None),
