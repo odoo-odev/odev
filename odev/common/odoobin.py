@@ -1000,10 +1000,9 @@ class OdoobinProcess(OdevFrameworkMixin):
         Override this method in a subclass to suppress or customize the output
         (e.g., inside an AI sandbox where verbose output wastes tokens).
         """
-        self.console.print(f"[bold color.purple]odev[/bold color.purple] [color.cyan]{info_message}[/color.cyan]")
+        logger.info(f"{info_message} using command:")
         self.console.print()
         self.console.print(formatted_command, soft_wrap=True, highlight=False)
-        self.console.print()
 
     def get_stream_filter(self) -> "Callable[[str], str | None] | None":
         """Return a callable to filter each output line of the Odoo process, or None for no filtering.
