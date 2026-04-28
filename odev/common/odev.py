@@ -228,12 +228,7 @@ class Odev(Generic[CommandType]):
     def plugins(self) -> Generator[Plugin, None, None]:
         """Yields enabled plugins sorted topologically."""
         for plugin_name in self._plugins_dependency_tree():
-            # Try underscored version first (default)
-            plugin_dir_name = plugin_name.split("/")[-1].replace("-", "_")
-            plugin_path = self.plugins_path / plugin_dir_name
-            if not plugin_path.exists():
-                # Fallback to original name (e.g. with dashes)
-                plugin_path = self.plugins_path / plugin_name.split("/")[-1]
+            plugin_path = self.plugins_path / plugin_name.split("/")[-1].replace("-", "_")
 
             plugin_manifest = self._load_plugin_manifest(plugin_path)
             yield Plugin(plugin_name, plugin_path, plugin_manifest)
