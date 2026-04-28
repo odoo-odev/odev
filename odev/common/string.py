@@ -1,6 +1,7 @@
 """Shared methods for working with strings."""
 
 import datetime
+import inspect
 import random
 import re
 import string as string_module
@@ -35,8 +36,6 @@ def normalize_indent(text: str) -> str:
     """
     if not text:
         return ""
-
-    import inspect  # noqa: PLC0415
 
     return inspect.cleandoc(text).strip()
 
