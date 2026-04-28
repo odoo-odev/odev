@@ -323,14 +323,13 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
             if not raw_val:
                 continue
 
-            try:
-                val_idx = argv_list.index(raw_val)
+            indices = [i for i, x in enumerate(argv_list) if x == raw_val]
+            for val_idx in indices:
                 if val_idx > 0 and argv_list[val_idx - 1] in unknown:
                     flag_idx = unknown.index(argv_list[val_idx - 1])
                     unknown.insert(flag_idx + 1, raw_val)
                     setattr(arguments, arg_name, None)
-            except ValueError:
-                pass
+                    break
 
     @classmethod
     def parse_arguments(cls, argv: Sequence[str]) -> Namespace:
