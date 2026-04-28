@@ -228,7 +228,13 @@ class Odev(Generic[CommandType]):
     def plugins(self) -> Generator[Plugin, None, None]:
         """Yields enabled plugins sorted topologically."""
         for plugin_name in self._plugins_dependency_tree():
-            plugin_path = self.plugins_path / plugin_name.split("/")[-1].replace("-", "_")
+            # Try underscored version first (default)
+            plugin_dir_name = plugin_name.split("/")[-1].replace("-", "_")
+            plugin_path = self.plugins_path / plugin_dir_name
+            if not plugin_path.exists():
+                # Fallback to original name (e.g. with dashes)
+                plugin_path = self.plugins_path / plugin_name.split("/")[-1]
+
             plugin_manifest = self._load_plugin_manifest(plugin_path)
             yield Plugin(plugin_name, plugin_path, plugin_manifest)
 
@@ -283,6 +289,7 @@ class Odev(Generic[CommandType]):
             self.update()
 
         with progress.spinner("Loading commands"):
+            self.load_plugins()
             self.register_commands()
             self.register_plugin_commands()
 
@@ -571,6 +578,57 @@ class Odev(Generic[CommandType]):
             command_class.prepare_command(self)
             self.commands.update(dict.fromkeys(command_names, command_class))
 
+    def load_plugins(self) -> None:
+        """Import all enabled plugins to allow them to patch the framework."""
+        import odev  # noqa: PLC0415
+
+        # Ensure odev.plugins exists as a module so legacy imports work
+        if "odev.plugins" not in sys.modules:
+            plugins_module = ModuleType("odev.plugins")
+            plugins_module.__path__ = [str(self.plugins_path)]
+            plugins_module.__package__ = "odev.plugins"
+            plugins_module.__file__ = None
+            plugins_module.__spec__ = ModuleSpec("odev.plugins", None, is_package=True)
+            sys.modules["odev.plugins"] = plugins_module
+            if hasattr(odev, "__path__"):
+                odev.plugins = plugins_module
+
+        # Add plugins_path to sys.path to allow direct imports of plugin modules
+        if str(self.plugins_path) not in sys.path:
+            sys.path.insert(0, str(self.plugins_path))
+
+        for plugin in self.plugins:
+            logger.debug(
+                f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
+            )
+
+            try:
+                # Module names MUST use underscores even if directories use dashes
+                plugin_module_name = plugin.path.name.replace("-", "_")
+                module_name = f"odev.plugins.{plugin_module_name}"
+
+                # Try to import directly from sys.path first
+                try:
+                    module = importlib.import_module(plugin_module_name)
+                except ImportError:
+                    # Fallback to explicit file loading if direct import fails
+                    init_path = plugin.path / "__init__.py"
+                    if not init_path.exists():
+                        continue
+                    spec = spec_from_file_location(plugin_module_name, init_path)
+                    if not spec or not spec.loader:
+                        continue
+                    module = module_from_spec(spec)
+                    sys.modules[plugin_module_name] = module
+                    spec.loader.exec_module(module)
+
+                # Ensure it's available as odev.plugins.X
+                sys.modules[module_name] = module
+                setattr(sys.modules["odev.plugins"], plugin_module_name, module)
+
+            except Exception as error:  # noqa: BLE001
+                logger.error(f"Could not load plugin module {plugin.path.name}: {error}")
+
     def register_plugin_commands(self) -> None:
         """Register commands for the plugins directories, pulling changes in plugins if an error arises while loading
         the commands.
@@ -595,29 +653,7 @@ class Odev(Generic[CommandType]):
 
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
-        # Ensure odev.plugins exists as a module so legacy imports work
-        odev_module = sys.modules.get("odev")
-        if odev_module:
-            if not hasattr(odev_module, "plugins"):
-                odev_module.plugins = ModuleType("odev.plugins")
-                odev_module.plugins.__path__ = []
-                odev_module.plugins.__package__ = "odev.plugins"
-                odev_module.plugins.__spec__ = ModuleSpec("odev.plugins", None, is_package=True)
-                sys.modules["odev.plugins"] = odev_module.plugins
-
-            if str(self.plugins_path) not in odev_module.plugins.__path__:
-                odev_module.plugins.__path__.append(str(self.plugins_path))
-
         for plugin in self.plugins:
-            logger.debug(
-                f"Loading plugin {plugin.name!r} version {string.stylize(plugin.manifest['version'], 'repr.version')}"
-            )
-
-            try:
-                importlib.import_module(f"odev.plugins.{plugin.path.name}")
-            except ImportError as error:
-                logger.debug(f"Could not import plugin module {plugin.path.name}: {error}")
-
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)

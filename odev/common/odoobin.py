@@ -159,7 +159,7 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     def __repr__(self) -> str:
         return (
-            "OdoobinProcess("
+            f"{self.__class__.__name__}("
             f"database={self.database.name!r}, "
             f"version={self.version!r}, "
             f"venv={self.venv!r}, "
@@ -1003,6 +1003,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         logger.info(f"{info_message} using command:")
         self.console.print()
         self.console.print(formatted_command, soft_wrap=True, highlight=False)
+        self.console.print()
 
     def get_stream_filter(self) -> "Callable[[str], str | None] | None":
         """Return a callable to filter each output line of the Odoo process, or None for no filtering.
