@@ -1,6 +1,7 @@
 """Shared methods for working with strings."""
 
 import datetime
+import inspect
 import random
 import re
 import string as string_module
@@ -36,10 +37,7 @@ def normalize_indent(text: str) -> str:
     if not text:
         return ""
 
-    if "\n" in text.strip():
-        min_indent = min(len(line) - len(line.lstrip()) for line in text.splitlines()[1:] if line.strip())
-        text = " " * min_indent + text
-    return textwrap.dedent(text).strip()
+    return inspect.cleandoc(text).strip()
 
 
 def short_help(name: str, description: str, indent_len: int = 0) -> str:
@@ -60,14 +58,14 @@ def format_options_list(elements: list[tuple[str, str]], indent_len: int = 0, bl
 
     :param elements: The list of elements to format.
         A list of tuples containing the name of the element and its description.
-    :param indent: The number of spaces to indent the list.
+    :param indent_len: The number of spaces to indent the list.
     :param blanks: The number of blank lines to add between elements of the list.
     :return: The list of elements formatted as a string.
     :rtype: str
     """
     elements_indent = max(len(element[0]) for element in elements)
     elements_list: str = ("\n" * (blanks + 1)).join([short_help(*element, elements_indent) for element in elements])
-    return indent(elements_list, indent_len + 4)[indent_len:]
+    return indent(elements_list, indent_len + 4)
 
 
 def indent(text: str, indent: int = 0) -> str:
