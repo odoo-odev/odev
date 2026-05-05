@@ -626,7 +626,7 @@ class OdoobinProcess(OdevFrameworkMixin):
                     self.database.worktree = self.worktree
 
                     internal_filter = self.get_stream_filter()
-                    if internal_filter:
+                    if internal_filter and stream_filter is not None:
                         original_filter = stream_filter
 
                         def combined_filter(line: str) -> str | None:
@@ -892,9 +892,11 @@ class OdoobinProcess(OdevFrameworkMixin):
         """
         odoo_base_path: Path = self.odoo_path / "odoo"
         addons_paths = {(odoo_base_path if odoo_base_path in path.parents else path) for path in self.addons_paths}
+        addons_paths.add(odoo_base_path)
 
         for addon in addons_paths:
-            yield from find_debuggers(addon)
+            if addon.is_dir():
+                yield from find_debuggers(addon)
 
     def save_database_repository(self):
         """Link the database to the first repository in additional addons-paths, allowing for reusing it in subsequent
