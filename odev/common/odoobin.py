@@ -895,7 +895,8 @@ class OdoobinProcess(OdevFrameworkMixin):
         addons_paths.add(odoo_base_path)
 
         for addon in addons_paths:
-            yield from find_debuggers(addon)
+            if addon.is_dir():
+                yield from find_debuggers(addon)
 
     def save_database_repository(self):
         """Link the database to the first repository in additional addons-paths, allowing for reusing it in subsequent
