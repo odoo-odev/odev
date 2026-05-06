@@ -594,6 +594,8 @@ class Odev(Generic[CommandType]):
             except ImportError as error:
                 logger.debug(f"Could not import plugin module {plugin.path.name}: {error}")
 
+            self._import_plugin_common_modules(plugin)
+
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)
@@ -619,6 +621,23 @@ class Odev(Generic[CommandType]):
 
                 command_class.prepare_command(self)
                 self.commands.update(dict.fromkeys(command_names, command_class))
+
+    def _import_plugin_common_modules(self, plugin) -> None:
+        """Import every submodule under a plugin's `common/` directory so their
+        import-time side effects (subclass registration, decorators, patches) run.
+        """
+        common_path = plugin.path / "common"
+        if not common_path.is_dir():
+            return
+
+        for module_info in pkgutil.iter_modules([common_path.as_posix()]):
+            module_name = f"odev.plugins.{plugin.path.name}.common.{module_info.name}"
+            if module_name in sys.modules:
+                continue
+            try:
+                importlib.import_module(module_name)
+            except ImportError as error:
+                logger.debug(f"Could not import common module {module_info.name} from plugin {plugin.name!r}: {error}")
 
     def _load_config(self) -> None:
         """Reload the configuration file."""
