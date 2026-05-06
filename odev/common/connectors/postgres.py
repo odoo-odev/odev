@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DATABASE = "postgres"
 PG_VERSION_15 = 150000
+COLLATION_WHITELIST = ["postgres", "odev", "template1"]
 
 
 class Cursor(PsycopgCursor):
@@ -361,8 +362,7 @@ class PostgresConnector(Connector):
 
         self.__class__._checking_collation = True
         try:
-            whitelist = ["postgres", "odev", "template1"]
-            if self.database not in whitelist and not self.table_exists("ir_module_module"):
+            if self.database not in COLLATION_WHITELIST and not self.table_exists("ir_module_module"):
                 return
 
             has_mismatch = self.__class__._has_collation_mismatch
@@ -432,10 +432,8 @@ class PostgresConnector(Connector):
             if not databases or isinstance(databases, bool):
                 return
 
-            whitelist = ["postgres", "odev", "template1"]
-
             for (db_name,) in databases:
-                if db_name not in whitelist:
+                if db_name not in COLLATION_WHITELIST:
                     try:
                         with PostgresConnector(db_name) as db_psql:
                             if not db_psql.table_exists("ir_module_module"):
