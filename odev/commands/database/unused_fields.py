@@ -74,11 +74,16 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
             self.table(headers, rows, title=f"Unused x_ Fields ({len(unused)} of {len(fields)})")
             self.console.clear_line()
 
+    def _psql(self):
+        """Return a connector to the target database (not the default 'postgres' db)."""
+        return self._database.psql(self._database.name)
+
     def _fetch_x_fields(self) -> list[tuple[str, str, str]]:
         """Return all (model, name, field_description) rows for fields starting with x_."""
-        with self._database.psql() as psql:
+        with self._psql() as psql:
             result = psql.query(
                 "SELECT model, name, field_description FROM ir_model_fields WHERE name LIKE 'x_%'"
+                " AND name NOT LIKE 'x\\_plan%'"
             )
         return result or []
 
@@ -93,7 +98,7 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         """Gather all searchable content from the database and return it as one concatenated string."""
         parts: list[str] = []
 
-        with self._database.psql() as psql:
+        with self._psql() as psql:
             for query, _ in self._CONTENT_QUERIES:
                 rows = psql.query(query) or []
                 for row in rows:
