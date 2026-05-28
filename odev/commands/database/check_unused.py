@@ -52,7 +52,10 @@ class CheckUnusedCommand(LocalDatabaseCommand):
     _CONTENT_QUERIES: list[tuple[str, list[str]]] = [
         ("SELECT arch_db FROM ir_ui_view", ["arch_db"]),
         ("SELECT code FROM ir_act_server WHERE code IS NOT NULL", ["code"]),
-        ("SELECT compute, related FROM ir_model_fields WHERE compute IS NOT NULL OR related IS NOT NULL", ["compute", "related"]),
+        (
+            "SELECT compute, related FROM ir_model_fields WHERE compute IS NOT NULL OR related IS NOT NULL",
+            ["compute", "related"],
+        ),
         ("SELECT domain FROM ir_filters WHERE domain IS NOT NULL", ["domain"]),
         ("SELECT domain_force FROM ir_rule WHERE domain_force IS NOT NULL", ["domain_force"]),
     ]
@@ -61,7 +64,11 @@ class CheckUnusedCommand(LocalDatabaseCommand):
         ("mail_template", "SELECT body_html, subject FROM mail_template", ["body_html", "subject"]),
         ("ir_actions_report", "SELECT help FROM ir_actions_report WHERE help IS NOT NULL", ["help"]),
         ("ir_exports_line", "SELECT name FROM ir_exports_line WHERE name IS NOT NULL", ["name"]),
-        ("base_automation", "SELECT filter_pre_domain, filter_domain FROM base_automation", ["filter_pre_domain", "filter_domain"]),
+        (
+            "base_automation",
+            "SELECT filter_pre_domain, filter_domain FROM base_automation",
+            ["filter_pre_domain", "filter_domain"],
+        ),
     ]
 
     def run(self):
@@ -127,9 +134,7 @@ class CheckUnusedCommand(LocalDatabaseCommand):
         return result or []
 
     def _table_exists(self, psql, table: str) -> bool:
-        result = psql.query(
-            f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table}'"
-        )
+        result = psql.query(f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table}'")
         return bool(result and result[0][0])
 
     def _collect_search_content(self) -> str:
@@ -177,7 +182,7 @@ class CheckUnusedCommand(LocalDatabaseCommand):
         elif ttype in ("integer", "float", "monetary"):
             query = f'SELECT 1 FROM "{table}" WHERE "{field_name}" IS NOT NULL AND "{field_name}" != 0 LIMIT 1'
         elif ttype in ("char", "text", "html", "selection"):
-            query = f"SELECT 1 FROM \"{table}\" WHERE \"{field_name}\" IS NOT NULL AND \"{field_name}\" != '' LIMIT 1"
+            query = f'SELECT 1 FROM "{table}" WHERE "{field_name}" IS NOT NULL AND "{field_name}" != \'\' LIMIT 1'
         elif ttype in ("many2one", "date", "datetime", "reference"):
             query = f'SELECT 1 FROM "{table}" WHERE "{field_name}" IS NOT NULL LIMIT 1'
         else:
@@ -185,8 +190,8 @@ class CheckUnusedCommand(LocalDatabaseCommand):
 
         try:
             return bool(psql.query(query))
-        except Exception:
-            return True
+        except RuntimeError:
+            return True  # table or column does not exist in the DB
 
     def _extract_label(self, description) -> str:
         if isinstance(description, dict):
