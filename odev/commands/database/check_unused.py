@@ -1,8 +1,9 @@
-"""Find custom fields (x_ prefix) that are not referenced anywhere in the database."""
+"""Check a database for unused custom fields."""
 
 import csv
 import re
 from io import StringIO
+from pathlib import Path
 
 from odev.common import args, progress
 from odev.common.commands import LocalDatabaseCommand
@@ -12,25 +13,40 @@ from odev.common.logging import logging
 
 logger = logging.getLogger(__name__)
 
-# Field types where we skip the data-presence check entirely
 _SKIP_DATA_CHECK = frozenset({"binary", "one2many", "many2many"})
 
-# Reason labels shown in output
 _REASON_NOT_REFERENCED = "not referenced"
 _REASON_NO_DATA = "no data"
 
+_DEFAULT_CSV_FILENAME = "unused_fields.csv"
 
-class UnusedFieldsCommand(LocalDatabaseCommand):
-    """Find custom fields (prefixed with x_) that appear unused across views, server actions,
-    automations, filters, record rules, mail templates, reports, exports, and computed/related
-    field definitions. Also flags fields that are referenced in views but contain no meaningful
-    data in the database.
+
+class CheckUnusedCommand(LocalDatabaseCommand):
+    """Check a database for unused custom resources.
+
+    Use --fields to detect x_ custom fields that are either not referenced anywhere
+    (views, server actions, automations, filters, rules, templates, reports, exports)
+    or are referenced but contain no meaningful data.
     """
 
-    _name = "unused-fields"
-    _aliases = ["uf"]
+    _name = "check-unused"
+    _aliases = ["cu"]
 
-    csv = args.Flag(aliases=["--csv"], description="Format output as CSV.")
+    fields = args.Flag(
+        aliases=["--fields"],
+        description="Check for unused x_ custom fields (excludes x_plan fields).",
+    )
+    all_fields = args.Flag(
+        aliases=["--all-fields"],
+        description="Check for unused fields across all non-standard fields, not just x_ ones. (not yet implemented)",
+    )
+    save = args.String(
+        aliases=["--save"],
+        description=f"Save results to a CSV file instead of printing to the terminal. "
+        f"Defaults to '{_DEFAULT_CSV_FILENAME}' when no path is given.",
+        nargs="?",
+        const=_DEFAULT_CSV_FILENAME,
+    )
 
     _CONTENT_QUERIES: list[tuple[str, list[str]]] = [
         ("SELECT arch_db FROM ir_ui_view", ["arch_db"]),
@@ -39,7 +55,6 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         ("SELECT domain FROM ir_filters WHERE domain IS NOT NULL", ["domain"]),
         ("SELECT domain_force FROM ir_rule WHERE domain_force IS NOT NULL", ["domain_force"]),
     ]
-    """Queries that always exist in an Odoo database."""
 
     _OPTIONAL_CONTENT_QUERIES: list[tuple[str, str, list[str]]] = [
         ("mail_template", "SELECT body_html, subject FROM mail_template", ["body_html", "subject"]),
@@ -47,17 +62,29 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         ("ir_exports_line", "SELECT name FROM ir_exports_line WHERE name IS NOT NULL", ["name"]),
         ("base_automation", "SELECT filter_pre_domain, filter_domain FROM base_automation", ["filter_pre_domain", "filter_domain"]),
     ]
-    """Queries that require checking table existence first."""
 
     def run(self):
+        if self.args.all_fields:
+            raise NotImplementedError("--all-fields is not yet implemented.")
+
+        if not self.args.fields:
+            raise self.error("Specify at least one check to run: --fields or --all-fields")
+
+        self._run_fields_check()
+
+    # ------------------------------------------------------------------
+    # Fields check
+    # ------------------------------------------------------------------
+
+    def _run_fields_check(self):
         with progress.spinner("Collecting x_ fields"):
             fields = self._fetch_x_fields()
 
         if not fields:
-            logger.info("No custom fields found in this database.")
+            logger.info("No custom x_ fields found in this database.")
             return
 
-        logger.debug(f"Found {len(fields)} custom field(s), scanning for usage...")
+        logger.debug(f"Found {len(fields)} custom x_ field(s), scanning for usage...")
 
         with progress.spinner("Scanning database for field usage"):
             all_content = self._collect_search_content()
@@ -66,7 +93,7 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
             unused = self._find_unused(fields, all_content)
 
         if not unused:
-            logger.info("All custom fields appear to be in use.")
+            logger.info("All custom x_ fields appear to be in use.")
             return
 
         headers = [
@@ -80,8 +107,8 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
             for model, field_name, description, reason in unused
         ]
 
-        if self.args.csv:
-            self.print(self._format_csv([h.title for h in headers], rows))
+        if self.args.save is not None:
+            self._save_csv(Path(self.args.save), [h.title for h in headers], rows)
         else:
             self.table(headers, rows, title=f"Unused x_ Fields ({len(unused)} of {len(fields)})")
             self.console.clear_line()
@@ -91,7 +118,6 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         return self._database.psql(self._database.name)
 
     def _fetch_x_fields(self) -> list[tuple]:
-        """Return all x_ fields (excluding x_plan) as (model, name, description, ttype, store)."""
         with self._psql() as psql:
             result = psql.query(
                 "SELECT model, name, field_description, ttype, store "
@@ -100,14 +126,12 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         return result or []
 
     def _table_exists(self, psql, table: str) -> bool:
-        """Check whether a table exists in the database."""
         result = psql.query(
             f"SELECT COUNT(*) FROM information_schema.tables WHERE table_name = '{table}'"
         )
         return bool(result and result[0][0])
 
     def _collect_search_content(self) -> str:
-        """Gather all searchable content from the database and return it as one concatenated string."""
         parts: list[str] = []
 
         with self._psql() as psql:
@@ -125,12 +149,6 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         return " ".join(parts)
 
     def _find_unused(self, fields: list[tuple], all_content: str) -> list[tuple]:
-        """Return (model, field_name, description, reason) for all unused fields.
-
-        A field is unused if:
-        - its name does not appear (as a whole word) anywhere in the scanned content, OR
-        - it is referenced in content but is stored and contains no meaningful data.
-        """
         not_referenced: list[tuple] = []
         to_check_data: list[tuple] = []
 
@@ -151,7 +169,6 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         return sorted(not_referenced + empty)
 
     def _field_has_data(self, psql, model: str, field_name: str, ttype: str) -> bool:
-        """Return True if the field has at least one meaningful (non-empty) value in the DB."""
         table = model.replace(".", "_")
 
         if ttype == "boolean":
@@ -163,23 +180,22 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
         elif ttype in ("many2one", "date", "datetime", "reference"):
             query = f'SELECT 1 FROM "{table}" WHERE "{field_name}" IS NOT NULL LIMIT 1'
         else:
-            return True  # unknown type — assume it has data
+            return True
 
         try:
             return bool(psql.query(query))
         except Exception:
-            return True  # table or column missing — skip
+            return True
 
     def _extract_label(self, description) -> str:
-        """Return a plain string label from a field_description value (may be dict or str)."""
         if isinstance(description, dict):
             return description.get("en_US") or next(iter(description.values()), "")
         return description or ""
 
-    def _format_csv(self, headers: list[str], rows: list[list[str]]) -> str:
-        """Format rows as a CSV string."""
+    def _save_csv(self, path: Path, headers: list[str], rows: list[list[str]]) -> None:
         output = StringIO()
         writer = csv.writer(output)
         writer.writerow(headers)
         writer.writerows(rows)
-        return output.getvalue()
+        path.write_text(output.getvalue(), encoding="utf-8")
+        logger.info(f"Results saved to {path.resolve()}")
