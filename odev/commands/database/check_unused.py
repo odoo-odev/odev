@@ -26,7 +26,8 @@ class CheckUnusedCommand(LocalDatabaseCommand):
 
     Use --fields to detect x_ custom fields that are either not referenced anywhere
     (views, server actions, automations, filters, rules, templates, reports, exports)
-    or are referenced but contain no meaningful data.
+    or are referenced but contain no meaningful data. Add --non-custom to extend the
+    scope beyond x_ fields to all non-standard fields (not yet implemented).
     """
 
     _name = "check-unused"
@@ -34,11 +35,11 @@ class CheckUnusedCommand(LocalDatabaseCommand):
 
     fields = args.Flag(
         aliases=["--fields"],
-        description="Check for unused x_ custom fields (excludes x_plan fields).",
+        description="Check for unused custom fields. Without --non-custom, restricted to x_ fields (excludes x_plan).",
     )
-    all_fields = args.Flag(
-        aliases=["--all-fields"],
-        description="Check for unused fields across all non-standard fields, not just x_ ones. (not yet implemented)",
+    non_custom = args.Flag(
+        aliases=["--non-custom"],
+        description="Extend --fields to all non-standard fields, not just x_ ones. (not yet implemented)",
     )
     save = args.String(
         aliases=["--save"],
@@ -64,11 +65,11 @@ class CheckUnusedCommand(LocalDatabaseCommand):
     ]
 
     def run(self):
-        if self.args.all_fields:
-            raise NotImplementedError("--all-fields is not yet implemented.")
-
         if not self.args.fields:
-            raise self.error("Specify at least one check to run: --fields or --all-fields")
+            raise self.error("Specify at least one check to run: --fields")
+
+        if self.args.non_custom:
+            raise NotImplementedError("--fields --non-custom is not yet implemented.")
 
         self._run_fields_check()
 
