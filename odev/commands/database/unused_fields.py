@@ -46,10 +46,10 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
             fields = self._fetch_x_fields()
 
         if not fields:
-            logger.info("No custom x_ fields found in this database.")
+            logger.info("No custom fields found in this database.")
             return
 
-        logger.debug(f"Found {len(fields)} x_ fields, scanning for usage...")
+        logger.debug(f"Found {len(fields)} custom field(s), scanning for usage...")
 
         with progress.spinner("Scanning database for field usage"):
             all_content = self._collect_search_content()
@@ -58,7 +58,7 @@ class UnusedFieldsCommand(LocalDatabaseCommand):
             unused = self._find_unused(fields, all_content)
 
         if not unused:
-            logger.info("All custom x_ fields appear to be in use.")
+            logger.info("All custom fields appear to be in use.")
             return
 
         headers = [
