@@ -30,3 +30,6 @@ tmp/
 .gemini/
 GEMINI.md
 AGENTS.md
+
+# --- Temp macOS files
+.DS_Store
