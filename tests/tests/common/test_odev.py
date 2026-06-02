@@ -197,4 +197,3 @@ class TestCommonOdev(OdevTestCase):
             self.odev.start()
             mock_warning.assert_called_once()
             self.assertIn("located inside the playground folder", mock_warning.call_args[0][0])
-

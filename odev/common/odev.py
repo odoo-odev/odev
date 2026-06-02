@@ -287,7 +287,7 @@ class Odev(Generic[CommandType]):
                     f"Odev repository is located inside the playground folder: {resolved_path}. "
                     "This is not recommended and can cause conflicts."
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
         if self._should_update_now():
