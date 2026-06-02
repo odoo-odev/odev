@@ -304,7 +304,7 @@ class Config:
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
     """
 
-    parser: ConfigParser = ConfigParser()
+    parser: ConfigParser
     """Config parser implementation."""
 
     paths: PathsSection
@@ -329,6 +329,7 @@ class Config:
     """Configuration for security and secrets encryption."""
 
     def __init__(self, name: str = "odev"):
+        self.parser: ConfigParser = ConfigParser()
         self.name: str = name
         """Name of this config manager, also serves as the name of the file
         to save configuration to.
