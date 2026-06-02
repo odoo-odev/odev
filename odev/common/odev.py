@@ -279,6 +279,17 @@ class Odev(Generic[CommandType]):
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
 
+        try:
+            playground_dir = (self.home_path / "playground").resolve()
+            resolved_path = self.path.resolve()
+            if resolved_path == playground_dir or playground_dir in resolved_path.parents:
+                logger.warning(
+                    f"Odev repository is located inside the playground folder: {resolved_path}. "
+                    "This is not recommended and can cause conflicts."
+                )
+        except Exception:
+            pass
+
         if self._should_update_now():
             self.check_release()
             self.update()

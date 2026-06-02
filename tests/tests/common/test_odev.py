@@ -181,3 +181,20 @@ class TestCommonOdev(OdevTestCase):
                 self.odev._plugins_dependency_tree()
         finally:
             shutil.rmtree(cycle_root, ignore_errors=True)
+
+    def test_17_warning_if_in_playground(self):
+        """Odev should display a warning if the repository path is inside the playground directory."""
+        mock_path = self.odev.home_path / "playground" / "my-odev-repo"
+        with (
+            self.patch_property(type(self.odev), "path", mock_path),
+            self.patch(logger, "warning") as mock_warning,
+            self.patch(self.odev, "load_plugins"),
+            self.patch(self.odev, "register_commands"),
+            self.patch(self.odev, "register_plugin_commands"),
+            self.patch(self.odev, "prune_databases"),
+        ):
+            self.odev._started = False
+            self.odev.start()
+            mock_warning.assert_called_once()
+            self.assertIn("located inside the playground folder", mock_warning.call_args[0][0])
+
