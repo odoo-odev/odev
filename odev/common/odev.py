@@ -594,6 +594,14 @@ class Odev(Generic[CommandType]):
             except ImportError as error:
                 logger.debug(f"Could not import plugin module {plugin.path.name}: {error}")
 
+            for common_dir in plugin.path.glob("common/commands/*.py"):
+                # Check below is not needed with the current plugins, but added for future compatibility
+                if common_dir.name != "__init__.py" and common_dir.stem != "__init__":
+                    try:
+                        importlib.import_module(f"odev.plugins.{plugin.path.name}.common.commands.{common_dir.stem}")
+                    except ImportError as err:
+                        logger.debug(f"Could not import plugin common module {plugin.path.name}: {err}")
+
             for command_class in self.import_commands(plugin.path.glob("commands/**")):
                 command_names = [command_class._name] + (list(command_class._aliases) or [])
                 base_command_class = self.commands.get(command_class._name)

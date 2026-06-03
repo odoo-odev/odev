@@ -1,8 +1,10 @@
 """Connector mixins."""
 
 import pkgutil
+import sys
 from importlib import import_module
 from pathlib import Path
+from types import ModuleType
 from typing import cast
 from inspect import isclass
 
@@ -13,15 +15,21 @@ from .postgres import PostgresConnectorMixin
 
 
 # --- Plugins ------------------------------------------------------------------
+from odev.common.config import CONFIG_DIR
+plugins_path = CONFIG_DIR / "plugins"
 
-odev_path = Path(__file__).parent.parent.parent
+odev_module = sys.modules.get("odev")
+if not hasattr(odev_module, "plugins"):
+    odev_module.plugins = ModuleType("odev.plugins")
+    odev_module.plugins.__path__ = [str(plugins_path)]
+    sys.modules["odev.plugins"] = odev_module.plugins
 
-plugins = [path for path in (odev_path / "plugins").glob("*/common/mixins/*") if path.is_dir()]
+plugins = [path for path in plugins_path.glob("*/common/mixins/*") if path.is_dir()]
 modules = pkgutil.iter_modules([directory.as_posix() for directory in plugins])
 
 for module_info in modules:
-    module_path = cast(str, module_info.module_finder.path).replace(str(odev_path.parent) + "/", "").replace("/", ".")  # type: ignore [union-attr]
-    module = import_module(f"{module_path}.{module_info.name}")
+    module_path = cast(str, module_info.module_finder.path).replace(str(plugins_path) + "/", "").replace("/", ".")  # type: ignore [union-attr]
+    module = import_module(f"odev.plugins.{module_path}.{module_info.name}")
 
     for attribute in dir(module):
         obj = getattr(module, attribute)
