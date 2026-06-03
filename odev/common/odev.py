@@ -225,6 +225,11 @@ class Odev(Generic[CommandType]):
         return self.config.paths.dumps
 
     @property
+    def odoo_filestore_path(self) -> Path:
+        """Local path to the Odoo directory containing the filestores."""
+        return Path.home() / ".local" / "share" / "Odoo"
+
+    @property
     def plugins(self) -> Generator[Plugin, None, None]:
         """Yields enabled plugins sorted topologically."""
         for plugin_name in self._plugins_dependency_tree():

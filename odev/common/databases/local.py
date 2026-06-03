@@ -209,7 +209,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     @property
     def filestore(self) -> Filestore:
         if self._filestore is None:
-            path: Path = Path.home() / ".local/share/Odoo/filestore/" / self.name
+            path: Path = self.odev.odoo_filestore_path / "filestore" / self.name
             size: int = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
             self._filestore = Filestore(path=path, size=size)
 
