@@ -264,6 +264,24 @@ class RepositoriesSection(Section):
         return next_pull
 
 
+class RepositoryPathsSection(Section):
+    """Per-repository path overrides.
+    Allows configuring a custom local path for a specific repository instead of
+    the default `<repositories>/<organization>/<name>` structure.
+    """
+
+    _name = "repository_paths"
+
+    def get_path(self, repo: str) -> Path | None:
+        """Return the configured path override for `repo`, or None if not set."""
+        value = self.get(repo)
+        return Path(value).expanduser() if value else None
+
+    def set_path(self, repo: str, path: str | Path):
+        """Set a custom path override for `repo`."""
+        self.set(repo, path.as_posix() if isinstance(path, Path) else path)
+
+
 class SecuritySection(Section):
     """Security configuration."""
 
@@ -324,6 +342,9 @@ class Config:
 
     repositories: RepositoriesSection
     """Configuration for Odoo repositories."""
+
+    repository_paths: RepositoryPathsSection
+    """Per-repository path overrides."""
 
     security: SecuritySection
     """Configuration for security and secrets encryption."""

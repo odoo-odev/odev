@@ -310,7 +310,16 @@ class GitConnector(Connector):
     @property
     def path(self) -> Path:
         """The path to the repository."""
-        return self._path or self.config.paths.repositories / self.name
+        if self._path:
+            return self._path
+        if override := self.config.repository_paths.get_path(self.name):
+            return override
+        standard = self.config.paths.repositories / self.name
+        if not (standard / ".git").exists():
+            flat = self.config.paths.repositories / self._repository
+            if (flat / ".git").exists():
+                return flat
+        return standard
 
     @property
     def exists(self) -> bool:
