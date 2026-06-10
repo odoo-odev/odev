@@ -1,6 +1,5 @@
 """PostgreSQL connector."""
 
-import os
 import sys
 import textwrap
 from collections.abc import Mapping, MutableMapping, Sequence
@@ -356,7 +355,7 @@ class PostgresConnector(Connector):
         )
 
     def _check_collation(self):
-        """Check for collation mismatch by comparing system glibc version with DB version."""
+        """Check for collation mismatch using PostgreSQL's own version tracking."""
         if not self.odev or self.odev.in_test_mode or self.__class__._checking_collation:
             return
 
@@ -373,15 +372,24 @@ class PostgresConnector(Connector):
                         if cr.fetchone()[0] < PG_VERSION_15:
                             return
 
-                        cr.execute("SELECT datcollversion FROM pg_database WHERE datname = current_database()")
-                        db_version = cr.fetchone()[0]
-
-                        try:
-                            sys_version = os.confstr("CS_GNU_LIBC_VERSION").split()[-1]
-                        except (AttributeError, ValueError):
-                            return
-
-                        if db_version and sys_version and db_version != sys_version:
+                        # Ask PostgreSQL what it considers the current collation version
+                        # this avoids a false positive from comparing datcollversion (locale data version)
+                        # against the glibc library version (which is different)
+                        cr.execute(
+                            """
+                            SELECT datcollversion IS DISTINCT FROM
+                                pg_collation_actual_version(
+                                    (SELECT oid FROM pg_collation
+                                     WHERE collname = 'default'
+                                       AND collnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'pg_catalog')
+                                     LIMIT 1)
+                                )
+                            FROM pg_database
+                            WHERE datname = current_database()
+                            """
+                        )
+                        result = cr.fetchone()
+                        if result and result[0]:
                             has_mismatch = True
                 except (psycopg2.Error, RuntimeError):
                     return
@@ -407,11 +415,6 @@ class PostgresConnector(Connector):
 
     def _refresh_all_collations(self):
         """Refresh collation version for local Odev databases with mismatches."""
-        try:
-            sys_version = os.confstr("CS_GNU_LIBC_VERSION").split()[-1]
-        except (AttributeError, ValueError):
-            return
-
         target_psql = self
         if self.database != "postgres":
             target_psql = PostgresConnector("postgres")
@@ -419,13 +422,19 @@ class PostgresConnector(Connector):
 
         try:
             databases = target_psql.query(
-                f"""
-                SELECT datname
-                FROM pg_database
-                WHERE datistemplate = false
-                    AND datcollversion IS NOT NULL
-                    AND datcollversion <> {string.quote(sys_version, force_single=True)}
-                ORDER BY datname
+                """
+                SELECT d.datname
+                FROM pg_database d
+                WHERE d.datistemplate = false
+                    AND d.datcollversion IS NOT NULL
+                    AND d.datcollversion IS DISTINCT FROM
+                        pg_collation_actual_version(
+                            (SELECT oid FROM pg_collation
+                             WHERE collname = 'default'
+                               AND collnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'pg_catalog')
+                             LIMIT 1)
+                        )
+                ORDER BY d.datname
                 """
             )
 
