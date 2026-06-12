@@ -11,7 +11,7 @@ Link the issues that this PR solves, if any:
 
 ## Compliance
 
-- [ ] I have read the [contribution guide](../docs/CONTRIBUTING.md)
+- [ ] I have read the [contribution guide](https://github.com/odoo-odev/odev/blob/main/docs/CONTRIBUTING.md)
 - [ ] I made sure the documentation is up-to-date both in doctrings and the `docs` directory
 - [ ] I have added or modified unit tests where necessary
 - [ ] I have added new libraries to the `requirements.txt` file, if any
