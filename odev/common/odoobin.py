@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 ODOO_COMMUNITY_REPOSITORIES: list[str] = [
     "odoo/odoo",
     "odoo/design-themes",
+    "odoo/iap-apps",
 ]
 
 ODOO_ENTERPRISE_REPOSITORIES: list[str] = ["odoo/enterprise"]

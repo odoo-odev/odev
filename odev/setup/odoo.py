@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 PRIORITY = 30
 
-ODOO_REPOSITORIES = ["odoo", "enterprise", "design-themes"]
+ODOO_REPOSITORIES = ["odoo", "enterprise", "design-themes", "iap-apps"]
 
 
 # --- Setup --------------------------------------------------------------------

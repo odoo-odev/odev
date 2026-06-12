@@ -298,6 +298,7 @@ class Database(OdevFrameworkMixin, ABC):
             "odoo": "N/A",
             "enterprise": "N/A",
             "design-themes": "N/A",
+            "iap-apps": "N/A",
         }
 
 
