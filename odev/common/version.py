@@ -131,6 +131,6 @@ def _cmpkey(master: bool, major: int, minor: int, module: tuple, enterprise: boo
     _saas = int(saas)
 
     # Master versions should sort before non-master versions
-    _master = int(master)
+    _master = -int(master)
 
     return _master, major, minor, _module, enterprise, _saas
