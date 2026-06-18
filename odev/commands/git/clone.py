@@ -34,14 +34,17 @@ class CloneCommand(DatabaseOrRepositoryCommand):
         """Find and clone the correct repository."""
         git = GitConnector(self.args.repository or self._database.repository.full_name)
 
-        if git.path.exists():
-            logger.info(f"Repository {git.name!r} already cloned under {git.path.as_posix()}")
-            git.checkout(revision=self.args.branch or None)
-        else:
-            git.clone(revision=self.args.branch or None)
+        try:
+            if git.path.exists():
+                logger.info(f"Repository {git.name!r} already cloned under {git.path.as_posix()}")
+                git.checkout(revision=self.args.branch or None)
+            else:
+                git.clone(revision=self.args.branch or None)
 
-        if not git.path.exists():
-            raise self.error(f"Failed to clone repository {git.name!r}")
+            if not git.path.exists():
+                raise self.error(f"Failed to clone repository {git.name!r}")
+        except Exception as e:
+            raise self.error(f"An error occurred while cloning the repository: {e}")
 
     def __check_repository(self):
         """Check if a repository is available to clone."""

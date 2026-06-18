@@ -505,11 +505,9 @@ class GitConnector(Connector):
                 multi_options=self._get_clone_options(revision),
             )
         except GitCommandError as error:
-            message: str = f"Failed to clone repository {self.name!r} to {self.path}"
-
+            message: str = f"Failed to clone repository {self.name!r} to {self.path}\n{str(error)}"
             if error.stderr:
                 message += f": {error.stderr}"
-
             raise ConnectorError(message, self) from error
         else:
             logger.info(

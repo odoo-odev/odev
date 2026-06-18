@@ -187,7 +187,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             if version is not None:
                 return OdooVersion(version)
 
-        return OdooVersion("master")
+        return None
 
     @cached_property
     def edition(self) -> Literal["community", "enterprise"] | None:  # type: ignore [override]
@@ -724,6 +724,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if mode == "sql":
             self._buffered_sql_check_restrict(dump)
             self._buffered_sql_enable_extensions(dump)
+            self.ensure_roles()
         elif mode == "dump":
             self.unaccent()
 
@@ -927,13 +928,39 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         :param dump: The dump file to restore SQL data from.
         """
+        immutable_defined = False
         for index, line in enumerate(dump):
-            if index >= SQL_DUMP_IGNORE_LINES_NUMBER or "LANGUAGE sql IMMUTABLE" in line.decode():
+            if index >= SQL_DUMP_IGNORE_LINES_NUMBER:
                 break
-        else:
+            if "LANGUAGE sql IMMUTABLE" in line.decode(errors="ignore"):
+                immutable_defined = True
+                break
+
+        if not immutable_defined:
             self.unaccent()
 
         dump.seek(0)
+
+    @ensure_connected
+    def ensure_roles(self) -> bool:
+        """Create database roles commonly referenced by Odoo SQL dumps.
+
+        Plain SQL dumps often contain ``GRANT ... TO odoo`` statements. When restoring in fast mode
+        (``--single-transaction`` with ``ON_ERROR_STOP=1``), a missing ``odoo`` role raises
+        ``role "odoo" does not exist`` and rolls back the whole restore. Creating the role beforehand
+        keeps those statements valid without falling back to the slower degraded mode.
+        """
+        return self.query(
+            """
+            DO $$
+            BEGIN
+                CREATE ROLE odoo;
+                EXCEPTION
+                    WHEN duplicate_object
+                    THEN null;
+            END; $$
+            """
+        )
 
     @ensure_connected
     def unaccent(self) -> bool:
@@ -982,15 +1009,12 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         try:
             self.query(pg_vector_query)
-        except RuntimeError:
+        except RuntimeError as re:
             link = string.link(
                 "pgextwlist",
                 "https://github.com/dimitri/pgextwlist?tab=readme-ov-file#postgresql-extension-whitelist",
             )
-            logger.error(
-                "Failed to install 'pgvector' extension, please ensure it is installed on your system "
-                f"and whitelisted with {link}"
-            )
+            logger.error(re.args[0])
             return False
 
         return True
