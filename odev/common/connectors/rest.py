@@ -123,6 +123,14 @@ class RestConnector(Connector, ABC):
             "session_id",
         }
 
+    @property
+    def _persistent_cookies(self) -> set[str]:
+        """Cookies that must survive a session invalidation, e.g. browser-fingerprint / anti-bot or
+        device-trust cookies that are not part of the authentication session. Subclasses can extend this
+        so that invalidating an expired session does not wipe cookies required for the next login.
+        """
+        return set()
+
     def _load_cookies(self):
         """Load session cookies from the secrets vault."""
         if self._connection is None:
@@ -162,18 +170,42 @@ class RestConnector(Connector, ABC):
                     self.store.secrets.set(domain, "", cookie, scope=key)
 
     def _clear_cookies(self):
-        """Clear the cookies for the given domain, recursively going up to the parent domain if no cookies exist
-        for the given one.
+        """Clear the session/auth cookies for the session domains, from both the secrets vault and the
+        live connection. Persistent cookies (see `_persistent_cookies`) such as anti-bot or device-trust
+        cookies are preserved so that invalidating an expired session does not break the next login.
         """
         if self._connection is None:
             return
 
+        clearable = self.session_cookies - self._persistent_cookies
+
         for domain in self.session_domains:
-            for scope in self.session_cookies:
+            for scope in clearable:
                 self.store.secrets.invalidate(domain, scope=scope)
 
-            with suppress(KeyError):
-                self._connection.cookies.clear(domain=domain)
+            for cookie in list(self._connection.cookies):
+                if cookie.name in clearable and cookie.domain == domain:
+                    with suppress(KeyError):
+                        self._connection.cookies.clear(cookie.domain, cookie.path, cookie.name)
+
+    def _clear_session_cookie(self):
+        """Clear only the authentication cookie (``session_id``) for the session domains, both from the
+        secrets vault and the live connection, while preserving device-trust and anti-bot cookies
+        (e.g. ``td_id``, ``tz``, ``cids``) so that 2FA "remember me" is not lost.
+
+        Used to drop a stale/half-valid session before logging in, ensuring a clean and predictable
+        login flow instead of the half-authenticated state that fails with a misleading error.
+        """
+        for domain in self.session_domains:
+            self.store.secrets.invalidate(domain, scope="session_id")
+
+        if self._connection is None:
+            return
+
+        for cookie in list(self._connection.cookies):
+            if cookie.name == "session_id" and cookie.domain in self.session_domains:
+                with suppress(KeyError):
+                    self._connection.cookies.clear(cookie.domain, cookie.path, cookie.name)
 
     def connect(self):
         """Open a session to the endpoint."""
@@ -181,6 +213,11 @@ class RestConnector(Connector, ABC):
             return
 
         self._connection = Session()  # type: ignore [assignment]
+        # `requests` pre-fills the User-Agent with "python-requests/<version>", so the lazy
+        # assignment in `_request` (guarded by `if not headers["User-Agent"]`) never runs.
+        # Set our own agent explicitly so requests are never sent as the default python-requests
+        # agent, which some endpoints (e.g. Cloudflare-protected login pages) reject outright.
+        self._connection.headers["User-Agent"] = self.user_agent
         self._load_cookies()
 
     def disconnect(self):
