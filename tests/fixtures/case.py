@@ -1,6 +1,7 @@
 import importlib
 import shutil
 from collections.abc import Callable
+from configparser import ConfigParser
 from pathlib import Path
 from typing import (
     Any,
@@ -12,6 +13,7 @@ from unittest.mock import PropertyMock, _patch, patch
 from testfixtures import Replacer
 
 from odev.common import odev
+from odev.common.config import Config
 from odev.common.string import suid
 
 from tests.fixtures import CaptureOutput
@@ -48,6 +50,7 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def setUpClass(cls):
+        Config.parser = ConfigParser()
         cls.odev = odev.Odev(test=True)
         cls.run_id = suid()
         cls.run_name = f"{cls.odev.name}-{cls.run_id}"
