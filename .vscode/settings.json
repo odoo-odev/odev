@@ -8,7 +8,7 @@
     "files.watcherExclude": {
         "**/odev/plugins/**": true
     },
-    "python.defaultInterpreterPath": "${userHome}/.config/odev/venv/bin/python",
+    "python.defaultInterpreterPath": "~/.config/odev/venv/bin/python",
     "python.testing.pytestArgs": [
         "tests"
     ],
