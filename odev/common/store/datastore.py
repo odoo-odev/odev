@@ -1,12 +1,6 @@
 """Odev datastore (SQL database) with mappings and helpers for data types."""
 
-import pkgutil
-from importlib import import_module
-from inspect import isclass
-from pathlib import Path
-from typing import cast
-
-from odev.common.postgres import PostgresDatabase, PostgresTable
+from odev.common.postgres import PostgresDatabase
 from odev.common.store.tables import DatabaseStore, HistoryStore, SecretStore
 
 
@@ -28,30 +22,8 @@ class DataStore(PostgresDatabase):
         self.history = HistoryStore(self)
         self.secrets = SecretStore(self)
         self.__load_tables()
-        self.__load_plugins_tables()
 
     def __load_tables(self):
         for table in self.tables.values():
             if not self.table_exists(table.name):
                 table.prepare_database_table()
-
-    def __load_plugins_tables(self):
-        odev_path = Path(__file__).parents[2]
-        plugins = [path for path in (odev_path / "plugins").glob("*/datastore") if path.is_dir()]
-        modules = pkgutil.iter_modules([directory.as_posix() for directory in plugins])
-
-        for module_info in modules:
-            module_path = cast(str, module_info.module_finder.path)  # type: ignore [union-attr]
-            module_path = module_path.replace(str(odev_path.parent) + "/", "").replace("/", ".")
-            module = import_module(f"{module_path}.{module_info.name}")
-
-            for attribute in dir(module):
-                obj = getattr(module, attribute)
-
-                if isclass(obj) and issubclass(obj, PostgresTable) and obj is not PostgresTable:
-                    obj_name = getattr(obj, "name", None)
-
-                    if not obj_name:
-                        raise ValueError(f"Table {obj} does not have a name attribute")
-
-                    setattr(self, obj_name, obj(self))
