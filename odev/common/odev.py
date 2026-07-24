@@ -125,6 +125,9 @@ class Odev(Generic[CommandType]):
     _started: bool = False
     """Whether the framework has been started."""
 
+    _plugin_requirements_checked: bool = False
+    """Whether missing python requirements of enabled plugins have already been checked during this run."""
+
     _command_stack: list[CommandType] = []
     """Stack of current commands being executed. Last command in list is the one currently running."""
 
@@ -598,31 +601,86 @@ class Odev(Generic[CommandType]):
             )
 
             try:
-                # Module names MUST use underscores even if directories use dashes
-                plugin_module_name = plugin.path.name.replace("-", "_")
-                module_name = f"odev.plugins.{plugin_module_name}"
+                self._load_plugin_module(plugin)
+            except ModuleNotFoundError as error:
+                logger.debug(f"Missing python package while loading plugin {plugin.name!r}: {error}")
 
-                # Try to import directly from sys.path first
+                if not self._install_missing_plugin_requirements():
+                    logger.error(
+                        f"Could not load plugin module {plugin.path.name}: {error}\n"
+                        "The missing package is not declared in the requirements of any enabled plugin, "
+                        f"consider reporting this issue to the maintainer of plugin {plugin.name!r}"
+                    )
+                    continue
+
                 try:
-                    module = importlib.import_module(plugin_module_name)
-                except ImportError:
-                    # Fallback to explicit file loading if direct import fails
-                    init_path = plugin.path / "__init__.py"
-                    if not init_path.exists():
-                        continue
-                    spec = spec_from_file_location(plugin_module_name, init_path)
-                    if not spec or not spec.loader:
-                        continue
-                    module = module_from_spec(spec)
-                    sys.modules[plugin_module_name] = module
-                    spec.loader.exec_module(module)
-
-                # Ensure it's available as odev.plugins.X
-                sys.modules[module_name] = module
-                setattr(sys.modules["odev.plugins"], plugin_module_name, module)
-
+                    self._load_plugin_module(plugin)
+                except Exception as retry_error:  # noqa: BLE001
+                    logger.error(f"Could not load plugin module {plugin.path.name}: {retry_error}")
             except Exception as error:  # noqa: BLE001
                 logger.error(f"Could not load plugin module {plugin.path.name}: {error}")
+
+    def _load_plugin_module(self, plugin: Plugin) -> None:
+        """Import a plugin module and register it under the `odev.plugins` namespace.
+
+        :param plugin: Plugin whose module should be imported.
+        """
+        # Module names MUST use underscores even if directories use dashes
+        plugin_module_name = plugin.path.name.replace("-", "_")
+        module_name = f"odev.plugins.{plugin_module_name}"
+
+        # Try to import directly from sys.path first
+        try:
+            module = importlib.import_module(plugin_module_name)
+        except ImportError:
+            # Fallback to explicit file loading if direct import fails
+            init_path = plugin.path / "__init__.py"
+            if not init_path.exists():
+                return
+            spec = spec_from_file_location(plugin_module_name, init_path)
+            if not spec or not spec.loader:
+                return
+            module = module_from_spec(spec)
+            sys.modules[plugin_module_name] = module
+
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                # Drop the half-initialized module so a later retry starts from a clean state
+                sys.modules.pop(plugin_module_name, None)
+                raise
+
+        # Ensure it's available as odev.plugins.X
+        sys.modules[module_name] = module
+        setattr(sys.modules["odev.plugins"], plugin_module_name, module)
+
+    def _install_missing_plugin_requirements(self) -> bool:
+        """Install missing python packages from the requirements of all enabled plugins.
+
+        Used to self-heal plugin imports failing on missing python packages, typically after the virtual
+        environment was recreated without reinstalling plugin requirements. Runs at most once per process
+        to avoid repeated pip invocations.
+
+        :return: Whether missing packages were detected and an installation was attempted.
+        """
+        if self._plugin_requirements_checked:
+            return False
+
+        self.__class__._plugin_requirements_checked = True
+        python_env = PythonEnv()
+        plugins_missing_requirements = [
+            plugin for plugin in self.plugins if any(python_env.missing_requirements(plugin.path, raise_if_error=False))
+        ]
+
+        if not plugins_missing_requirements:
+            return False
+
+        logger.warning("Missing python packages detected, installing requirements of enabled plugins")
+
+        for plugin in plugins_missing_requirements:
+            python_env.install_requirements(plugin.path)
+
+        return True
 
     def register_plugin_commands(self) -> None:
         """Register commands for the plugins directories, pulling changes in plugins if an error arises while loading
@@ -644,6 +702,7 @@ class Odev(Generic[CommandType]):
                         git.repository.remotes.origin.fetch()
                         git.repository.remotes.origin.pull(git.branch, rebase=True)
 
+            self._install_missing_plugin_requirements()
             self._register_plugin_commands()
 
     def _register_plugin_commands(self) -> None:
