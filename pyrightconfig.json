@@ -1,0 +1,13 @@
+{
+  "exclude": [
+    "**/__pycache__",
+    "odev/plugins",
+    "odev/upgrades",
+    "tests/resources"
+  ],
+  "extraPaths": [
+    "."
+  ],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "standard"
+}
