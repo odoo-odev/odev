@@ -1,6 +1,8 @@
 [run]
 # Trace only odev/ so temp plugin files (e.g. test_16 cycle manifests) are not recorded.
 source = odev
+# Never traverse the odev/plugins symlink pointing to the installed plugins directory.
+omit = odev/plugins/*
 
 [report]
 omit = */tests/*

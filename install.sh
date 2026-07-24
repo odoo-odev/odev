@@ -37,6 +37,10 @@ fi
 echo "[*] Creating plugins directory"
 mkdir -p ~/.config/odev/plugins
 
+echo "[*] Linking plugins directory into the repository for IDE support"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+ln -sfn "$HOME/.config/odev/plugins" "$script_dir/odev/plugins" || true
+
 echo "[*] Installing dependencies"
 ~/.config/odev/venv/bin/pip install -r requirements.txt
 ~/.config/odev/venv/bin/pip install -r requirements-dev.txt

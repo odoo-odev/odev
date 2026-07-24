@@ -20,14 +20,20 @@ coverage.xml
 # --- Odev plugins, loaded as submodules
 tests/plugins/*
 
+# --- Symlink to the installed plugins, created by install.sh for IDE import resolution
+odev/plugins
+
 # --- Temporary and testing files
 _*/
 tmp/
 
 # --- AI files
+.claude/
+.code-review-graph/
 .cursor/
 .agents/
 .gemini/
+CLAUDE.md
 GEMINI.md
 AGENTS.md
 
