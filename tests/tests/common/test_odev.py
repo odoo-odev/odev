@@ -1,6 +1,8 @@
 import shutil
 import sys
 from pathlib import Path
+from types import ModuleType
+from unittest.mock import patch
 
 from odev._version import __version__
 from odev.common.commands import Command
@@ -239,3 +241,18 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertEqual(register_mock.call_count, 2)
         install_mock.assert_called_once_with()
+
+    def test_20_load_plugins_repoints_preexisting_plugins_module(self):
+        """An `odev.plugins` module resolved before plugins are loaded, as a developer checkout containing an
+        `odev/plugins` symlink makes python do, should be repointed to the configured plugins directory.
+        """
+        stale_module = ModuleType("odev.plugins")
+        stale_module.__path__ = [str(self.run_path / "stale-plugins")]
+
+        with (
+            self.patch_property(type(self.odev), "plugins", []),
+            patch.dict(sys.modules, {"odev.plugins": stale_module}),
+        ):
+            self.odev.load_plugins()
+
+            self.assertEqual(sys.modules["odev.plugins"].__path__, [str(self.odev.plugins_path)])

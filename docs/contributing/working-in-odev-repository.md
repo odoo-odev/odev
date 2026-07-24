@@ -24,11 +24,21 @@ The repository ships configuration files so that most of the development tooling
     After fixing baselined errors, refresh the file with `basedpyright --writebaseline`.
 -   **`.editorconfig`** - Basic editor settings (indentation, line length, line endings) applied by most editors.
 -   **`.ruff.toml`** - Linting and formatting rules, enforced by pre-commit and the CI.
--   **`odev/plugins` symlink** - Created by `install.sh` (and gitignored), it points to `~/.config/odev/plugins` so
-    static analyzers resolve `odev.plugins.*` imports across installed plugins. If it is missing, recreate it with
-    `ln -sfn ~/.config/odev/plugins <path-to-odev-repository>/odev/plugins`.
+-   **`.vscode/settings.json`** - Editor settings shared by all contributors. Everything else under `.vscode/` is
+    gitignored and machine-local.
+-   **`odev/plugins` symlink** - Created by `install-dev.sh` (and gitignored), it points to `~/.config/odev/plugins` so
+    static analyzers resolve `odev.plugins.*` imports across installed plugins. `install.sh` does not create it: end
+    users never need it and Odev does not use it at runtime, it is excluded from `ruff`, `coverage` and `basedpyright`
+    and hidden from the VSCode explorer by `.vscode/settings.json`.
 
-When working on Odev and its plugins together, use a VSCode
-[multi-root workspace](https://code.visualstudio.com/docs/editing/workspaces/multi-root-workspaces) (kept in the
-gitignored `.vscode/` directory) with one folder per plugin repository, and set `basedpyright.analysis.extraPaths` to
-the absolute path of your local Odev repository so plugin folders resolve the `odev` package.
+> [!IMPORTANT]
+>
+> Never browse or edit plugin sources through `odev/plugins`. Editors resolve that path back to the plugin's real
+> location, outside of this repository, which reports every `odev` and `odev.plugins` import as unresolved. Open plugin
+> sources from their own repository instead - go-to-definition already takes you there.
+
+When working on Odev and its plugins together, clone the plugin repositories as siblings of your Odev checkout and use
+a VSCode [multi-root workspace](https://code.visualstudio.com/docs/editing/workspaces/multi-root-workspaces) (kept in
+the gitignored `.vscode/` directory) with one folder per repository. Plugin repositories ship a `pyrightconfig.json`
+declaring `"extraPaths": [".", "../odev"]`, which resolves the `odev` package from within a plugin; the relative
+`../odev` only works if the checkouts are siblings.

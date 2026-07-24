@@ -114,11 +114,13 @@ To import features from the core Odev repository or another dependent module, yo
 
 > [!NOTE]
 >
-> The `install.sh` script creates a gitignored symlink `odev/plugins` pointing to `~/.config/odev/plugins` inside the
-> Odev repository. Thanks to that symlink, static analyzers (basedpyright, pyright, ...) resolve `odev.plugins.*`
-> imports and provide completion and go-to-definition across plugins. Add the path to your local Odev repository to
-> your analyzer's `extraPaths` (see `pyrightconfig.json` in the plugin template) so the `odev` package itself resolves
-> from within a plugin repository. Even without this setup, Odev loads correctly at runtime if the plugins are enabled.
+> The `install-dev.sh` script of the Odev repository creates a gitignored symlink `odev/plugins` pointing to
+> `~/.config/odev/plugins`. Thanks to that symlink, static analyzers (basedpyright, pyright, ...) resolve
+> `odev.plugins.*` imports and provide completion and go-to-definition across plugins. Add the path to your local Odev
+> repository to your analyzer's `extraPaths` (see `pyrightconfig.json` in the plugin template, which uses `"../odev"`
+> and therefore expects your plugin to be checked out next to the Odev repository) so the `odev` package itself
+> resolves from within a plugin repository. Even without this setup, Odev loads correctly at runtime if the plugins are
+> enabled.
 
 > [!TIP]
 >

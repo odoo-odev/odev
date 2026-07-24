@@ -1,0 +1,18 @@
+{
+    // `odev/plugins` is a symlink to the installed plugins, created by `install-dev.sh` so that static analyzers
+    // resolve `odev.plugins.*` imports. Odev never uses it at runtime and browsing into it yields bogus errors:
+    // hide it, and open plugin sources from their own repository instead.
+    "files.exclude": {
+        "odev/plugins": true
+    },
+    "files.watcherExclude": {
+        "**/odev/plugins/**": true
+    },
+    "python.defaultInterpreterPath": "${userHome}/.config/odev/venv/bin/python",
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "xml.symbols.enabled": false
+}

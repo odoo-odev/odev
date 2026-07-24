@@ -5,8 +5,9 @@ __pycache__
 .pytest_cache
 .ruff_cache
 
-# --- Editor config
-.vscode
+# --- Editor config, `settings.json` is shared, everything else is machine-local
+.vscode/*
+!.vscode/settings.json
 
 # --- Misc. operating files
 .history
@@ -20,7 +21,7 @@ coverage.xml
 # --- Odev plugins, loaded as submodules
 tests/plugins/*
 
-# --- Symlink to the installed plugins, created by install.sh for IDE import resolution
+# --- Symlink to the installed plugins, created by install-dev.sh for IDE import resolution
 odev/plugins
 
 # --- Temporary and testing files
