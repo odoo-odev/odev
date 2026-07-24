@@ -46,11 +46,12 @@ can clone the Odev repository locally on your machine.
 
 Install or update to **Python 3.10 or above**.
 
-Install development requirements through `pip` and enable pre-commit hooks in the repository:
+Set up your development environment. This installs the development requirements, enables the pre-commit hooks and links
+the installed plugins into the repository so your editor can resolve them:
 
 ```sh
-pip install --user -r requirements-dev.txt
-pre-commit install
+./install.sh
+./install-dev.sh
 ```
 
 Create a new branch based on the `main` branch and give it a name that accurately represents the changes you are about

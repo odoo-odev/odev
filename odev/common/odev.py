@@ -581,15 +581,22 @@ class Odev(Generic[CommandType]):
         import odev  # noqa: PLC0415
 
         # Ensure odev.plugins exists as a module so legacy imports work
-        if "odev.plugins" not in sys.modules:
+        plugins_module = sys.modules.get("odev.plugins")
+
+        if plugins_module is None:
             plugins_module = ModuleType("odev.plugins")
-            plugins_module.__path__ = [str(self.plugins_path)]
             plugins_module.__package__ = "odev.plugins"
             plugins_module.__file__ = None
             plugins_module.__spec__ = ModuleSpec("odev.plugins", None, is_package=True)
             sys.modules["odev.plugins"] = plugins_module
+
             if hasattr(odev, "__path__"):
                 odev.plugins = plugins_module
+
+        # Always repoint the search path: a developer checkout may contain an `odev/plugins` symlink used for IDE
+        # import resolution, making python resolve `odev.plugins` as a namespace package rooted at the repository.
+        # The plugins directory configured for this run must win over it.
+        plugins_module.__path__ = [str(self.plugins_path)]
 
         # Add plugins_path to sys.path to allow direct imports of plugin modules
         if str(self.plugins_path) not in sys.path:
