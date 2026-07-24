@@ -45,7 +45,7 @@ echo "[*] Installing dependencies"
 ~/.config/odev/venv/bin/pip install -r requirements.txt
 ~/.config/odev/venv/bin/pip install -r requirements-dev.txt
 
-find ~/.config/odev/plugins -type f -name 'requirements.txt' | while read -r reqfile; do
+find -L ~/.config/odev/plugins -type f -name 'requirements.txt' | while read -r reqfile; do
     ~/.config/odev/venv/bin/pip install -r "$reqfile"
 
     if [ $? -ne 0 ]; then

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from odev._version import __version__
 from odev.common.commands import Command
-from odev.common.odev import logger
+from odev.common.odev import Manifest, Plugin, logger
 
 from tests.fixtures import CaptureOutput, OdevTestCase
 
@@ -181,3 +181,61 @@ class TestCommonOdev(OdevTestCase):
                 self.odev._plugins_dependency_tree()
         finally:
             shutil.rmtree(cycle_root, ignore_errors=True)
+
+    def test_17_load_plugins_installs_missing_requirements_and_retries(self):
+        """A plugin import failing on a missing python package should trigger a requirements install and a retry."""
+        fake_manifest = Manifest(name="plugin", description="Test plugin", version="1.0.0", depends=[])
+        fake_plugin = Plugin("test/plugin", Path("/nonexistent/test_plugin"), fake_manifest)
+
+        with (
+            self.patch_property(type(self.odev), "plugins", [fake_plugin]),
+            self.patch(
+                self.odev,
+                "_load_plugin_module",
+                side_effect=[ModuleNotFoundError("No module named 'fake_package'"), None],
+            ) as load_mock,
+            self.patch(self.odev, "_install_missing_plugin_requirements", return_value=True) as install_mock,
+            self.patch(logger, "error") as logger_error,
+        ):
+            self.odev.load_plugins()
+
+        self.assertEqual(load_mock.call_count, 2)
+        install_mock.assert_called_once_with()
+        logger_error.assert_not_called()
+
+    def test_18_load_plugins_logs_error_when_requirements_complete(self):
+        """A missing python package not declared in any plugin requirements should log an actionable error."""
+        fake_manifest = Manifest(name="plugin", description="Test plugin", version="1.0.0", depends=[])
+        fake_plugin = Plugin("test/plugin", Path("/nonexistent/test_plugin"), fake_manifest)
+
+        with (
+            self.patch_property(type(self.odev), "plugins", [fake_plugin]),
+            self.patch(
+                self.odev, "_load_plugin_module", side_effect=ModuleNotFoundError("No module named 'fake_package'")
+            ) as load_mock,
+            self.patch(self.odev, "_install_missing_plugin_requirements", return_value=False) as install_mock,
+            self.patch(logger, "error") as logger_error,
+        ):
+            self.odev.load_plugins()
+
+        self.assertEqual(load_mock.call_count, 1)
+        install_mock.assert_called_once_with()
+        logger_error.assert_called_once()
+        self.assertIn("not declared in the requirements", logger_error.call_args.args[0])
+
+    def test_19_register_plugin_commands_installs_requirements_on_retry(self):
+        """Plugin command registration should install missing requirements before retrying after a failed import."""
+        with (
+            self.patch_property(type(self.odev), "plugins", []),
+            self.patch(
+                self.odev,
+                "_register_plugin_commands",
+                side_effect=[ModuleNotFoundError("No module named 'copier'"), None],
+            ) as register_mock,
+            self.patch(self.odev, "_install_missing_plugin_requirements") as install_mock,
+            self.patch(logger, "error"),
+        ):
+            self.odev.register_plugin_commands()
+
+        self.assertEqual(register_mock.call_count, 2)
+        install_mock.assert_called_once_with()
