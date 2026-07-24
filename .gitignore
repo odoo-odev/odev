@@ -33,6 +33,9 @@ tmp/
 .cursor/
 .agents/
 .gemini/
+.mcp.json
+.cursorrules
+.windsurfrules
 CLAUDE.md
 GEMINI.md
 AGENTS.md
