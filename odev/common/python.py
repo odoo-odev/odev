@@ -11,6 +11,8 @@ from subprocess import CalledProcessError, CompletedProcess
 from typing import ClassVar
 
 import virtualenv
+from packaging.markers import default_environment
+from packaging.requirements import InvalidRequirement, Requirement
 from packaging.version import InvalidVersion, Version, parse as parse_version
 
 from odev.common import bash, progress, string
@@ -465,43 +467,32 @@ class PythonEnv:
 
                 continue
 
-            match = RE_PACKAGE.search(line)
-
-            if match is None:
+            try:
+                requirement = Requirement(line)
+            except InvalidRequirement:
+                logger.debug(f"Ignoring unparsable requirement {line!r}")
                 continue
 
-            if not self.__check_package_conditions(match.group("conditional")):
+            if requirement.marker is not None and not requirement.marker.evaluate(self.marker_environment):
                 continue
 
-            installed_version = installed_packages.get(match.group("name").lower())
+            installed_version = installed_packages.get(requirement.name.lower())
 
             if installed_version is None:
-                logger.debug(f"Missing python package {match.group('name')}")
+                logger.debug(f"Missing python package {requirement.name}")
                 yield line
                 continue
 
             if not isinstance(installed_version, Version):
-                raise TypeError(f"Invalid version {installed_version!r} for python package {match.group('name')}")
+                raise TypeError(f"Invalid version {installed_version!r} for python package {requirement.name}")
 
-            if match.group("version") is None and match.group("op") is None:
+            if not requirement.specifier:
                 continue
 
-            package_operator = match.group("op")
-
-            if package_operator is None:
-                continue
-
-            package_version = match.group("version").split("*", 1)[0].rstrip(".")
-
-            version_locals = {
-                "installed_version": installed_version,
-                "package_version": parse_version(package_version),
-            }
-
-            if not eval(f"installed_version {package_operator} package_version", version_locals):  # noqa: S307 - known values
+            if not requirement.specifier.contains(installed_version, prereleases=True):
                 logger.debug(
-                    f"Incorrect python package version {match.group('name')} "
-                    f"({installed_version} {package_operator} {package_version})"
+                    f"Incorrect python package version {requirement.name} "
+                    f"({installed_version} does not satisfy {requirement.specifier})"
                 )
                 yield line
 
@@ -516,24 +507,36 @@ class PythonEnv:
 
         return requirements_path
 
-    def __check_package_conditions(self, conditional: str | None) -> bool:
-        if conditional is None:
-            return True
+    def satisfies(self, specification: str) -> bool:
+        """Check whether a package installed in this environment satisfies a requirement.
 
-        if "python_version" in conditional:
-            conditional = re.sub(
-                r"(?:'|\")(3.\d+)(?:'|\")",
-                lambda m: m.group(1) and " {} ".format(int(m.group(1).replace(".", ""))),
-                conditional,
-            )
+        :param specification: The requirement to check, e.g. `setuptools>=69.0.0,<82`.
+        :return: True if the package is installed and its version satisfies the requirement.
+        :rtype: bool
+        """
+        requirement = Requirement(specification)
+        installed_version = self.installed_packages().get(requirement.name.lower())
 
-        return eval(  # noqa: S307 - known values and operations
-            conditional,
-            {
-                "sys_platform": sys.platform,
-                "python_version": int(self.version.replace(".", "")),
-            },
-        )
+        if not isinstance(installed_version, Version):
+            return False
+
+        return requirement.specifier.contains(installed_version, prereleases=True)
+
+    @property
+    def marker_environment(self) -> MutableMapping[str, str]:
+        """Environment against which the markers of a requirement are evaluated.
+
+        Requirements are evaluated for the python of *this* environment, not for the one odev
+        itself runs under, so that a requirement conditioned on the python version is resolved
+        for the Odoo installation it is going to be installed in.
+        """
+        version = self.version
+        return {
+            **default_environment(),
+            "python_version": version,
+            "python_full_version": version,
+            "implementation_version": version,
+        }
 
     def run_script(
         self,

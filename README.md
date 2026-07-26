@@ -23,6 +23,16 @@ Before you can run this tool, make sure the below requirements are set on your s
   source install requirements
 - [Other Odoo dependencies](https://www.odoo.com/documentation/19.0/administration/on_premise/source.html#dependencies)
 
+Odoo builds part of its Python dependencies (`gevent`, `lxml`, `python-ldap`, …) from source, which needs the matching
+system development packages. On Debian and Ubuntu, install them from the Odoo sources Odev has cloned:
+
+```sh
+sudo ~/odoo/repositories/odoo/odoo/setup/debinstall.sh
+```
+
+Odev checks for those packages when it creates a virtual environment for a version of Odoo and offers to run the
+script for you if any are missing.
+
 Make sure `git` is properly setup with SSH key authentication before using commands, as Odev will try to connect to
 the Odoo [Community](https://github.com/odoo/odoo) and [Enterprise](https://github.com/odoo/enterprise) repositories
 to pull sources when required.
