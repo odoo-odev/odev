@@ -260,38 +260,84 @@ class GitConnector(Connector):
             path = Path(repo)
 
         self._path: Path | None = path
+        name: tuple[str, str] | None = None
 
-        if path and path.joinpath(".git").exists():
-            repo_url = Repo(path).remote().url
-            self._organization, self._repository = repo_url.removesuffix(".git").split("/")[-2:]
+        if path is not None and path.joinpath(".git").exists():
+            name = self._name_from_remote(path)
 
-            if ":" in self._organization:
-                self._organization = self._organization.split(":")[-1]
-        else:
-            if "@" in repo and ":" in repo:
-                # Assume the repo is in the format git@github.com:organization/repository.git
-                repo = repo.split(":")[-1]
+        self._organization, self._repository = name or self._name_from_string(self._fallback_name(repo, path))
 
-            repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
-            repo_values = repo.split("/")
+    @staticmethod
+    def _fallback_name(repo: str, path: Path | None) -> str:
+        """Best guess of the repository name when it cannot be read from a git remote.
+        :param repo: The repository as passed to the connector.
+        :param path: The path to the repository, if any.
+        :return: The repository name in the format `organization/repository`.
+        """
+        if path is not None and (not repo or Path(repo).is_absolute()):
+            return f"{path.parent.name}/{path.name}"
 
-            if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
-                raise ConnectorError(
-                    "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
-                    + string.join_bullet(
-                        [
-                            string.stylize(url, "color.purple")
-                            for url in (
-                                "organization/repository",
-                                "https://github.com/organization/repository",
-                                "git@github.com:organization/repository.git",
-                            )
-                        ],
-                    ),
-                    self,
-                )
+        return repo
 
-            self._organization, self._repository = repo_values
+    @classmethod
+    def _name_from_remote(cls, path: Path) -> tuple[str, str] | None:
+        """Read the organization and repository names from the remote of a local git repository.
+        The remote is the only reliable source of truth: the directory a repository is cloned to
+        may not follow the `<repositories>/<organization>/<repository>` convention.
+        :param path: The path to the local repository.
+        :return: The organization and repository names, or None if they cannot be determined.
+        """
+        try:
+            remotes = list(Repo(path).remotes)
+        except (GitCommandError, InvalidGitRepositoryError, NoSuchPathError, ValueError) as error:
+            logger.debug(f"Could not read the git repository at {path.as_posix()}: {error}")
+            return None
+
+        remote = next((remote for remote in remotes if remote.name == "origin"), None) or next(iter(remotes), None)
+
+        if remote is None:
+            logger.debug(f"No git remote configured for the repository at {path.as_posix()}")
+            return None
+
+        parts = remote.url.removesuffix(".git").rstrip("/").split("/")
+
+        if len(parts) < GIT_EXPECTED_REPO_PARTS:
+            logger.debug(f"Unexpected git remote URL {remote.url!r} for the repository at {path.as_posix()}")
+            return None
+
+        organization, repository = parts[-2:]
+        return organization.split(":")[-1], repository
+
+    def _name_from_string(self, repo: str) -> tuple[str, str]:
+        """Parse the organization and repository names out of a repository name or git URL.
+        :param repo: The repository in the format `organization/repository` or a valid git URL.
+        :return: The organization and repository names.
+        """
+        if "@" in repo and ":" in repo:
+            # Assume the repo is in the format git@github.com:organization/repository.git
+            repo = repo.split(":")[-1]
+
+        repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
+        repo_values = repo.split("/")
+
+        if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
+            raise ConnectorError(
+                "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
+                + string.join_bullet(
+                    [
+                        string.stylize(url, "color.purple")
+                        for url in (
+                            "organization/repository",
+                            "https://github.com/organization/repository",
+                            "git@github.com:organization/repository.git",
+                        )
+                    ],
+                ),
+                self,
+            )
+
+        organization, repository = repo_values
+        return organization, repository
 
     def __repr__(self) -> str:
         return f"GitConnector({self.name!r})"
