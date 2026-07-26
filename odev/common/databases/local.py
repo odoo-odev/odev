@@ -23,6 +23,7 @@ from typing import (
 from zipfile import ZipFile
 
 from packaging.version import Version
+from psycopg2 import OperationalError
 
 from odev.common import bash, progress, string
 from odev.common.connectors import GitWorktree, PostgresConnector
@@ -116,8 +117,20 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if not self.exists:
             return False
 
-        with self:
-            return self.table_exists("ir_module_module")
+        try:
+            with self:
+                return self.table_exists("ir_module_module")
+
+        except OperationalError:
+            # Any process can drop a database at any time, including between the check above and this
+            # connection. Listing databases inspects each of them in turn and must not fail because one
+            # went away in the meantime; anything else is a genuine connection error. The check has to
+            # reach the server rather than the cache, which is what said the database was still there.
+            with self.psql() as psql, psql.nocache():
+                if psql.database_exists(self.name):
+                    raise
+
+            return False
 
     @property
     def venv(self) -> PythonEnv:
