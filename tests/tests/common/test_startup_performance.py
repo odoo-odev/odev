@@ -70,6 +70,14 @@ class TestStartupPerformance(TestCase):
 
         return str(reported).removeprefix(PROBE_MARKER)
 
+    def warm_up_command_index(self) -> None:
+        """Make sure the commands were already discovered once before measuring.
+
+        The first run of a new version has no index yet and legitimately imports every command to build one. What
+        must stay free is every run after it, so give the index a chance to exist first.
+        """
+        self.probe(f"{PROBE_PREAMBLE}\nframework.start()\nprint(PROBE + 'warmed')\n")
+
     def test_01_importing_the_framework_stays_lean(self):
         """Importing odev must not pull in the dependencies only a few of its commands need."""
         reported = self.probe(
@@ -91,6 +99,8 @@ class TestStartupPerformance(TestCase):
         A command module imports whatever its command needs at module level, so importing all of them to discover
         their names makes every invocation pay for every command, plugins included.
         """
+        self.warm_up_command_index()
+
         reported = self.probe(
             f"{PROBE_PREAMBLE}\n"
             "framework.start()\n"
@@ -103,6 +113,8 @@ class TestStartupPerformance(TestCase):
 
     def test_03_running_a_command_imports_only_that_command(self):
         """Resolving a command must import that command alone, not the ones registered alongside it."""
+        self.warm_up_command_index()
+
         reported = self.probe(
             f"{PROBE_PREAMBLE}\n"
             "framework.start()\n"
