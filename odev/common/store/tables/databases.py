@@ -106,6 +106,17 @@ class DatabaseStore(PostgresTable):
             """
         )
 
+    def set_value(self, database: Database, key: str, value: str):
+        """Set a value for a database."""
+        self.database.query(
+            f"""
+            UPDATE {self.name}
+            SET {key} = {value}
+            WHERE name = {database.name!r}
+                AND platform = {database.platform.name!r}
+            """
+        )
+
     def delete(self, database: Database):
         """Delete the saved values of a database."""
         self.database.query(

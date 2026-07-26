@@ -2,11 +2,9 @@
 
 import pathlib
 import re
+from argparse import BooleanOptionalAction
 from collections.abc import MutableMapping
-from typing import (
-    Any,
-    Literal,
-)
+from typing import Any, Literal
 
 
 class Argument:
@@ -201,7 +199,37 @@ class Flag(Argument):
             name=name,
             aliases=aliases,
             description=description,
-            action="store_false" if default is True else "store_true",
+            action=kwargs.pop("action", None) or ("store_false" if default is True else "store_true"),
+            **kwargs,
+        )
+
+
+class FlagOptional(Flag):
+    """Flag with a boolean value and automatic counter option (--flag and --no-flag)."""
+
+    def __init__(
+        self,
+        name: str | None = None,
+        aliases: list[str] | None = None,
+        description: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Add a flag that has a boolean value which depends on whether it was passed in the command line.
+
+        The default value is inverted if the flag is set.
+        :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
+        :param aliases: The aliases for the argument.
+        :param description: A description for the argument, will be displayed in the `help` command.
+        :param default: The default value for the argument; a default value of `False` will result in the argument
+        being set to `True` if present in the CLI arguments.
+        :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
+            See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
+        """
+        super().__init__(
+            name=name,
+            aliases=aliases,
+            description=description,
+            action=BooleanOptionalAction,
             **kwargs,
         )
 
