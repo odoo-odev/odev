@@ -2,7 +2,7 @@
 
 import pathlib
 import re
-from argparse import BooleanOptionalAction
+from argparse import Action, BooleanOptionalAction
 from collections.abc import MutableMapping
 from typing import Any, Literal
 
@@ -28,7 +28,8 @@ class Argument:
             "store_path",
             "store_regex",
             "store_eval",
-        ] = "store",
+        ]
+        | type[Action] = "store",
         **kwargs: Any,
     ) -> None:
         """Initialize the argument and converts it to a mapping that can be fed to the command's
@@ -195,33 +196,47 @@ class Flag(Argument):
         :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
             See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
+        action = kwargs.pop("action", None)
+
+        if action is None:
+            # A plain flag has no value of its own: the default decides which way toggling it goes,
+            # and argparse infers the resulting default from the action.
+            action = "store_false" if default is True else "store_true"
+        else:
+            # An explicit action consumes the default itself, so it has to be forwarded.
+            kwargs["default"] = default
+
         super().__init__(
             name=name,
             aliases=aliases,
             description=description,
-            action=kwargs.pop("action", None) or ("store_false" if default is True else "store_true"),
+            action=action,
             **kwargs,
         )
 
 
 class FlagOptional(Flag):
-    """Flag with a boolean value and automatic counter option (--flag and --no-flag)."""
+    """Flag with a three-state boolean value, registering both `--flag` and `--no-flag`."""
 
     def __init__(
         self,
         name: str | None = None,
         aliases: list[str] | None = None,
         description: str | None = None,
+        default: bool | None = None,
         **kwargs: Any,
     ) -> None:
-        """Add a flag that has a boolean value which depends on whether it was passed in the command line.
+        """Add a flag that can be set, unset or left alone.
 
-        The default value is inverted if the flag is set.
+        Unlike :class:`Flag`, which is either present or absent, this registers a `--no-` counterpart
+        for each of its aliases, so that `--flag` sets the value to True, `--no-flag` sets it to False
+        and omitting both leaves it at its default, `None` unless specified otherwise. Use it to tell
+        "the user asked for the value to be turned off" apart from "the user did not mention it".
+
         :param name: The name of the argument, will be used in the help command and in the command's class `args` attribute.
         :param aliases: The aliases for the argument.
         :param description: A description for the argument, will be displayed in the `help` command.
-        :param default: The default value for the argument; a default value of `False` will result in the argument
-        being set to `True` if present in the CLI arguments.
+        :param default: The value the argument takes when neither the flag nor its counterpart is present.
         :param kwargs: Additional keyword arguments to pass to the ArgumentParser.
             See: https://docs.python.org/3/library/argparse.html#quick-links-for-add-argument
         """
@@ -230,6 +245,7 @@ class FlagOptional(Flag):
             aliases=aliases,
             description=description,
             action=BooleanOptionalAction,
+            default=default,
             **kwargs,
         )
 
