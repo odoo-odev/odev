@@ -15,7 +15,7 @@ class TestCommandUtilities(OdevCommandTestCase):
     def test_version_01_no_argument(self):
         """Command `odev version` should print the version of the application."""
         stdout, _ = self.dispatch_command("version")
-        self.assertIn(f"Odev-test version {__version__}", stdout)
+        self.assertIn(f"{self.odev.name.capitalize()} version {__version__}", stdout)
 
     def test_config_01_no_argument(self):
         """Run the command without arguments."""

@@ -23,8 +23,9 @@ class TestCommonOdev(OdevTestCase):
 
     def test_01_config_file(self):
         """Config file should have been created in the correct directory."""
-        self.assertEqual(self.odev.config.name, "odev-test")
-        self.assertEqual(self.odev.config.path, Path.home() / ".config/odev/odev-test.cfg")
+        self.assertEqual(self.odev.config.name, self.odev.name)
+        self.assertEqual(self.odev.config.path, self.run_path / f"{self.odev.name}.cfg")
+        self.assertTrue(self.odev.config.path.exists())
 
     def test_02_config_get_set_reset_delete(self):
         """Config manager should be able to get, set and reset values, as well as delete a key or a section.
