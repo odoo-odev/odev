@@ -34,8 +34,12 @@ class OdevTestCase(TestCase):
     run_path: ClassVar[Path]
     """Path to the test case run directory under `/tmp`."""
 
-    _patches: ClassVar[list[_patch]] = []
-    """The patches applied to the test case."""
+    _patches: ClassVar[list[_patch]]
+    """The patches applied to the test case.
+
+    Assigned per class in `setUpClass`: a list defined here would be shared by every subclass through
+    `cls._patches.append(...)`, making each class tear down the patches of all the classes before it.
+    """
 
     __config: str
     """Content of the configuration file to restore after each test case."""
@@ -50,6 +54,7 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls._patches = []
         Config.parser = ConfigParser()
         cls.odev = odev.Odev(test=True)
         cls.run_id = suid()
@@ -152,8 +157,10 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def __unpatch_all(cls):
-        for patched in cls._patches:
-            patched.stop()
+        # `tearDownClass` runs twice, once through `addClassCleanup` and once through unittest itself,
+        # so the patches are dropped as they are stopped.
+        while cls._patches:
+            cls._patches.pop().stop()
 
     @classmethod
     def _patch_object(

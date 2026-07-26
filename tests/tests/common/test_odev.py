@@ -14,6 +14,13 @@ from tests.fixtures import CaptureOutput, OdevTestCase
 class TestCommonOdev(OdevTestCase):
     """Global sanity check of the odev framework."""
 
+    def setUp(self):
+        super().setUp()
+        # Dispatching a command reads `sys.argv`; leaving a command line behind would feed it to whichever
+        # test runs next.
+        argv = sys.argv
+        self.addCleanup(setattr, sys, "argv", argv)
+
     def test_01_config_file(self):
         """Config file should have been created in the correct directory."""
         self.assertEqual(self.odev.config.name, "odev-test")
