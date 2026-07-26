@@ -1,17 +1,26 @@
-"""Telemetry module for odev."""
+"""Telemetry module for odev.
+
+Reporting a command must never delay the CLI: waiting for the telemetry endpoint after a command printed its result
+is directly perceptible to the user. Records are therefore written to a local spool file when a command completes,
+and submitted in the background by a later odev run, which has the whole duration of its own command to do so.
+"""
 
 import json
 import re
 import threading
 import uuid
-from queue import Queue
-from time import monotonic
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from odev.common.commands.base import Command
+from odev.common.config import CONFIG_DIR
 from odev.common.logging import logging
 from odev.common.utils import EmployeeUtils
+
+
+if TYPE_CHECKING:
+    from odev.common.commands.base import Command
 
 
 logger = logging.getLogger(__name__)
@@ -23,12 +32,55 @@ TELEMETRY_ENDPOINT = "https://odev-telemetry.odoo.com"
 # This is not ideal but it will already prevent most automated bots from sending fake data.
 TELEMETRY_KEY = "xEGGxJLlTuRfGO8f5STWpehXKGRB8RbVpo3DgWYA7nJquh16I5Q59SU+ucyhcZoy"
 
+REQUEST_TIMEOUT = 1
+"""Timeout in seconds for a single request to the telemetry endpoint."""
+
+MAX_SPOOLED_RECORDS = 100
+"""Number of records kept in the spool file when the endpoint cannot be reached.
+
+Old records are dropped past this limit so that a long-lasting outage cannot grow the file indefinitely.
+"""
+
+
+class TelemetryRun:
+    """Handle on the telemetry record of a single command.
+
+    The record is only complete once the command finished, since it carries its exit code and execution time.
+    Callers must therefore signal completion through :meth:`finish`, which spools the record for submission.
+    """
+
+    def __init__(self, telemetry: "Telemetry", payload: dict[str, Any]):
+        self.telemetry: Telemetry = telemetry
+        """Telemetry manager this record belongs to."""
+
+        self.payload: dict[str, Any] = payload
+        """Data describing the command being reported."""
+
+    def finish(self, exit_code: int = 0, execution_time: float = 0.0) -> None:
+        """Complete the record with the outcome of the command and spool it for submission.
+
+        :param exit_code: Exit code of the command.
+        :param execution_time: Time the command took to run, in minutes.
+        """
+        self.telemetry.spool(
+            {
+                "payload": self.payload,
+                "exit_code": exit_code,
+                "execution_time": execution_time,
+            }
+        )
+
 
 class Telemetry:
     """Telemetry manager."""
 
     def __init__(self, odev):
         self.odev = odev
+
+    @property
+    def spool_path(self) -> Path:
+        """Path to the file holding the telemetry records awaiting submission."""
+        return CONFIG_DIR / f"{self.odev.name}-telemetry.jsonl"
 
     def _get_client_id(self) -> str:
         """Get or generate the client ID."""
@@ -55,7 +107,24 @@ class Telemetry:
             data=data,
         )
 
-    def _sanitize_arguments(self, command: Command) -> tuple[str, str]:
+    def _send_request(self, path: str, payload: dict) -> dict[str, Any] | None:
+        """Send telemetry data to the given endpoint and return the decoded response.
+
+        :param path: Path of the endpoint to send the data to.
+        :param payload: Data to send.
+        :return: The decoded response, or None if the data could not be sent.
+        """
+        try:
+            with urlopen(self._prepare_request(path, payload), timeout=REQUEST_TIMEOUT) as response:  # noqa: S310
+                return json.loads(response.read())
+        except (URLError, OSError) as error:
+            logger.debug(f"Telemetry failed: {error}")
+        except json.JSONDecodeError as error:
+            logger.debug(f"Telemetry returned an invalid response: {error}")
+
+        return None
+
+    def _sanitize_arguments(self, command: "Command") -> tuple[str, str]:
         """Sanitize arguments for telemetry so that sensitive data is not sent."""
         arguments = " ".join(command._argv) if command._argv else ""
         additional_args = ""
@@ -88,17 +157,25 @@ class Telemetry:
 
         return arguments, additional_args
 
-    def send(self, command: Command) -> tuple[threading.Thread, Queue] | None:
-        """Send telemetry data."""
+    def send(self, command: "Command") -> TelemetryRun | None:
+        """Start recording the execution of a command.
+
+        The returned handle must be completed through :meth:`TelemetryRun.finish` once the command is done, so that
+        its exit code and execution time are recorded as well.
+
+        :param command: The command being run.
+        :return: A handle on the record, or None if this command must not be reported.
+        """
         if len(self.odev._command_stack) != 1 or self.odev.in_test_mode:
             return None
 
+        enabled = self.odev.config.telemetry.enabled
         payload = {
             "client_id": self._get_client_id(),
-            "is_telemetry_agreed": self.odev.config.telemetry.enabled,
+            "is_telemetry_agreed": enabled,
         }
 
-        if self.odev.config.telemetry.enabled:
+        if enabled:
             args, additional_args = self._sanitize_arguments(command)
             payload.update(
                 {
@@ -114,42 +191,100 @@ class Telemetry:
                 }
             )
 
-        def _send(_queue: Queue):
-            try:
-                request = self._prepare_request("odev/telemetry", payload)
+        return TelemetryRun(self, payload)
 
-                with urlopen(request, timeout=1) as response:  # noqa: S310
-                    content = response.read()
+    def spool(self, record: dict[str, Any]) -> None:
+        """Append a record to the spool file, to be submitted by a later run.
 
-                result = json.loads(content).get("result", {}).get("id")
-                _queue.put(result)
-            except (URLError, OSError) as e:
-                logger.debug(f"Telemetry failed: {e}")
-                _queue.put(None)
+        :param record: The record to spool.
+        """
+        try:
+            self.spool_path.parent.mkdir(parents=True, exist_ok=True)
 
-        queue = Queue(maxsize=1)
-        thread = threading.Thread(target=_send, args=(queue,))
-        thread.start()
-        return thread, queue
+            with self.spool_path.open("a", encoding="utf-8") as spool:
+                spool.write(json.dumps(record) + "\n")
+        except OSError as error:
+            logger.debug(f"Failed to spool telemetry: {error}")
 
-    def update(self, line_id: int) -> None:
-        """Update a specific line in the telemetry data."""
-        if len(self.odev._command_stack) != 1 or self.odev.in_test_mode:
+    def flush(self) -> None:
+        """Submit the records spooled by previous runs in a background thread.
+
+        The thread is a daemon: whatever it did not manage to send stays in the spool and is retried by the next
+        run, so that exiting odev never waits on the telemetry endpoint.
+        """
+        if self.odev.in_test_mode or not self.spool_path.is_file():
             return
 
-        payload = {
-            "telemetry_id": line_id,
-            "exit_code": 0,
-            "execution_time": (monotonic() - self.odev.start_time) / 60,
-        }
+        threading.Thread(target=self._flush, name="odev-telemetry", daemon=True).start()
 
-        def _update():
+    def _flush(self) -> None:
+        """Submit every spooled record, keeping in the spool the ones that could not be sent."""
+        records = self._claim_spooled_records()
+
+        if not records:
+            return
+
+        logger.debug(f"Submitting {len(records)} spooled telemetry records")
+        unsent = [record for record in records if not self._submit(record)]
+
+        if unsent:
+            self._respool(unsent)
+
+    def _claim_spooled_records(self) -> list[dict[str, Any]]:
+        """Read the spooled records and empty the spool file so that they are not submitted twice.
+
+        :return: The records that were waiting in the spool.
+        """
+        records: list[dict[str, Any]] = []
+
+        try:
+            with self.spool_path.open("r+", encoding="utf-8") as spool:
+                lines = spool.readlines()
+                spool.seek(0)
+                spool.truncate()
+        except OSError as error:
+            logger.debug(f"Failed to read spooled telemetry: {error}")
+            return records
+
+        for line in lines:
             try:
-                request = self._prepare_request("odev/telemetry/update", payload)
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.debug(f"Discarding malformed telemetry record: {line.strip()!r}")
 
-                with urlopen(request, timeout=1):  # noqa: S310
-                    pass
-            except (URLError, OSError) as e:
-                logger.debug(f"Telemetry failed: {e}")
+        return records
 
-        threading.Thread(target=_update).start()
+    def _respool(self, records: list[dict[str, Any]]) -> None:
+        """Put records that could not be submitted back into the spool.
+
+        :param records: The records to keep for a later run.
+        """
+        for record in records[-MAX_SPOOLED_RECORDS:]:
+            self.spool(record)
+
+    def _submit(self, record: dict[str, Any]) -> bool:
+        """Submit a single spooled record to the telemetry endpoint.
+
+        :param record: The record to submit.
+        :return: Whether the record was submitted successfully.
+        """
+        response = self._send_request("odev/telemetry", record["payload"])
+
+        if response is None:
+            return False
+
+        line_id = response.get("result", {}).get("id")
+
+        if line_id is None or not record["payload"].get("is_telemetry_agreed"):
+            return True
+
+        self._send_request(
+            "odev/telemetry/update",
+            {
+                "telemetry_id": line_id,
+                "exit_code": record["exit_code"],
+                "execution_time": record["execution_time"],
+            },
+        )
+
+        return True

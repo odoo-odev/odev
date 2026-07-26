@@ -10,7 +10,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-import black
 import odoolib  # type: ignore [import]
 
 from odev.common import string
@@ -374,6 +373,9 @@ class RpcConnector(Connector):
                     call += f".with_context({_context})"
 
                 call += f".{args[4]}({', '.join(filter(None, [_args, _kwargs]))})"
+
+                import black  # noqa: PLC0415 - only needed to pretty-print calls in debug mode
+
                 call = black.format_str(call, mode=black.FileMode(line_length=120)).rstrip()
                 logger.debug(f"RPC call to {self.database.platform.display} database {self.database.name!r}")
                 console.code(string.indent(call, indent=4), "python")

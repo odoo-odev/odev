@@ -9,9 +9,10 @@ import re
 import sys
 from argparse import Namespace
 from collections import defaultdict
-from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping, Sequence
+from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
 from datetime import datetime
 from functools import lru_cache
+from hashlib import sha256
 from importlib.abc import Loader
 from importlib.machinery import FileFinder, ModuleSpec
 from importlib.util import module_from_spec, spec_from_file_location
@@ -30,13 +31,13 @@ from typing import (
 )
 
 from git import GitCommandError, NoSuchPathError, Repo
-from networkx import DiGraph, NetworkXUnfeasible, simple_cycles, topological_sort
 from packaging import version
 
 from odev._version import __version__
 from odev.common import progress, string
 from odev.common.commands import CommandType
 from odev.common.commands.database import DatabaseType
+from odev.common.commands.registry import CommandRegistry
 from odev.common.config import CONFIG_DIR, Config
 from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
@@ -116,8 +117,8 @@ class Odev(Generic[CommandType]):
     store: ClassVar[DataStore]
     """Odev data storage."""
 
-    commands: MutableMapping[str, type[CommandType]] = {}
-    """Collection of existing and loaded commands."""
+    commands: "CommandRegistry"
+    """Collection of existing commands, imported on demand."""
 
     executable: ClassVar[Path] = Path(sys.argv[0]).parent.resolve() / "odev.sh"
     """Path to the current executable."""
@@ -141,6 +142,9 @@ class Odev(Generic[CommandType]):
 
         self.in_test_mode = test
         """Whether the framework is in testing mode."""
+
+        self.commands = CommandRegistry(self)
+        """Collection of existing commands, imported on demand."""
 
         self._load_config()
         self.__class__.store = DataStore(self.name)
@@ -288,10 +292,18 @@ class Odev(Generic[CommandType]):
 
         with progress.spinner("Loading commands"):
             self.load_plugins()
-            self.register_commands()
-            self.register_plugin_commands()
+
+            # Importing every command module only to read its name makes each run pay for every command, plugins
+            # included. Do it once and remember the outcome until the commands on disk actually change.
+            fingerprint = self._commands_fingerprint()
+
+            if not self.commands.load(fingerprint):
+                self.register_commands()
+                self.register_plugin_commands()
+                self.commands.save(fingerprint)
 
         self.prune_databases()
+        self.telemetry.flush()
         self._started = True
 
     def update(self, restart: bool = True, upgrade: bool = False) -> bool:
@@ -532,15 +544,15 @@ class Odev(Generic[CommandType]):
         command_dirs = [path for path in sources if path.is_dir() and not path.name.startswith("_")]
         return pkgutil.iter_modules([d.as_posix() for d in command_dirs])
 
-    def import_commands(self, sources: Iterable[Path]) -> list[type[CommandType]]:
+    def import_commands(self, sources: Iterable[Path]) -> list[tuple[type[CommandType], Path]]:
         """Import all commands from the source directories.
 
         :param sources: Source directories to search for commands.
-        :return: List of imported command classes
-        :rtype: List[CommandType]
+        :return: List of imported command classes, paired with the module they were defined in
+        :rtype: List[Tuple[CommandType, Path]]
         """
         command_modules = self.list_commands(sources)
-        command_classes: list[type[CommandType]] = []
+        command_classes: list[tuple[type[CommandType], Path]] = []
 
         for module_info in command_modules:
             if not isinstance(module_info.module_finder, FileFinder):
@@ -558,23 +570,18 @@ class Odev(Generic[CommandType]):
 
             command_module: ModuleType = module_from_spec(spec)
             spec.loader.exec_module(command_module)
-            command_classes.extend(command[1] for command in inspect.getmembers(command_module, self.__filter_commands))
+            command_classes.extend(
+                (command[1], module_path) for command in inspect.getmembers(command_module, self.__filter_commands)
+            )
 
         return command_classes
 
     def register_commands(self) -> None:
         """Register all commands from the commands directory."""
-        for command_class in self.import_commands(self.commands_path.iterdir()) + self.import_commands(
+        for command_class, module_path in self.import_commands(self.commands_path.iterdir()) + self.import_commands(
             [self.commands_path]
         ):
-            logger.debug(f"Registering command {command_class._name!r}")
-            command_names = [command_class._name] + (list(command_class._aliases) or [])
-
-            if any(name in command_names for name in self.commands):
-                raise ValueError(f"Another command {command_class._name!r} is already registered")
-
-            command_class.prepare_command(self)
-            self.commands.update(dict.fromkeys(command_names, command_class))
+            self.commands.register(command_class, module_path)
 
     def load_plugins(self) -> None:
         """Import all enabled plugins to allow them to patch the framework."""
@@ -715,31 +722,31 @@ class Odev(Generic[CommandType]):
     def _register_plugin_commands(self) -> None:
         """Register all commands from the plugins directories."""
         for plugin in self.plugins:
-            for command_class in self.import_commands(plugin.path.glob("commands/**")):
-                command_names = [command_class._name] + (list(command_class._aliases) or [])
-                base_command_class = self.commands.get(command_class._name)
-                action = (
-                    "Registering"
-                    if base_command_class is None or issubclass(base_command_class, command_class)
-                    else "Patching"
-                )
+            for command_class, module_path in self.import_commands(plugin.path.glob("commands/**")):
+                self.commands.patch(command_class, module_path)
 
-                logger.debug(f"{action} command {command_class._name!r}")
+    def _commands_fingerprint(self) -> list[Any]:
+        """Compute a cheap signature of the command modules available to odev.
 
-                if (
-                    command_class._name in self.commands
-                    and base_command_class is not None
-                    and command_class.__bases__ != base_command_class.__bases__
-                ):
+        Walking the command directories for their names and modification times costs a fraction of what importing
+        them does, so the commands are only discovered again once one of them was added, removed, renamed or
+        modified.
 
-                    class PatchedCommand(command_class, base_command_class, *base_command_class.__bases__):
-                        pass
+        :return: The odev version, the version of each enabled plugin, and the state of the command directories
+        :rtype: List[Any]
+        """
+        modules: list[str] = []
 
-                    command_class = PatchedCommand  # noqa: PLW2901 - we want to override the variable
-                    PatchedCommand.__name__ = base_command_class.__name__
+        for commands_path in [self.commands_path, *(plugin.path / "commands" for plugin in self.plugins)]:
+            modules.extend(
+                f"{module_path.as_posix()}:{module_path.stat().st_mtime}" for module_path in commands_path.rglob("*.py")
+            )
 
-                command_class.prepare_command(self)
-                self.commands.update(dict.fromkeys(command_names, command_class))
+        return [
+            self.version,
+            {plugin.name: plugin.manifest["version"] for plugin in self.plugins},
+            sha256("\n".join(sorted(modules)).encode()).hexdigest(),
+        ]
 
     def _load_config(self) -> None:
         """Reload the configuration file."""
@@ -903,31 +910,102 @@ class Odev(Generic[CommandType]):
         """Order plugins by mutual dependencies, the first one in the returned list being the first one that needs to
         be imported to respect the dependency graph.
         """
-        graph = DiGraph()
+        dependents: dict[str, list[str]] = {}
 
         for plugin_path in self.plugins_path.iterdir():
             manifest = self._load_plugin_manifest(plugin_path)
-            graph.add_node(manifest["name"])
+            dependents.setdefault(manifest["name"], [])
 
             for dependency in manifest["depends"]:
-                graph.add_edge(dependency, manifest["name"])
+                dependents.setdefault(dependency, []).append(manifest["name"])
 
-        try:
-            resolved_graph: list[str] = list(topological_sort(graph))
-            logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
-        except NetworkXUnfeasible as exception:
-            cycles = list(simple_cycles(graph))[:20]
-            if cycles:
-                parts: list[str] = []
-                for c in cycles:
-                    if len(c) == 1:
-                        parts.append(f"{c[0]} depends on itself")
-                    else:
-                        parts.append(" → ".join([*c, c[0]]))
-                raise OdevError("Circular dependency detected in plugins: " + "; ".join(parts)) from exception
-            raise OdevError("Circular dependency detected in plugins") from exception
+        resolved_graph = self.__topological_sort(dependents)
+        logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
 
         return resolved_graph
+
+    @classmethod
+    def __topological_sort(cls, dependents: Mapping[str, list[str]]) -> list[str]:
+        """Order nodes of a dependency graph so that each one comes after the nodes it depends on.
+
+        :param dependents: Mapping of each node to the nodes that directly depend on it.
+        :return: The ordered nodes.
+        :rtype: List[str]
+        :raise OdevError: If the graph contains a circular dependency.
+        """
+        indegrees = dict.fromkeys(dependents, 0)
+
+        for node_dependents in dependents.values():
+            for dependent in node_dependents:
+                indegrees[dependent] += 1
+
+        ordered: list[str] = []
+        generation = [node for node, indegree in indegrees.items() if not indegree]
+
+        while generation:
+            ordered.extend(generation)
+            next_generation: list[str] = []
+
+            for node in generation:
+                for dependent in dependents[node]:
+                    indegrees[dependent] -= 1
+
+                    if not indegrees[dependent]:
+                        next_generation.append(dependent)
+
+            generation = next_generation
+
+        if len(ordered) == len(dependents):
+            return ordered
+
+        cycles = cls.__find_cycles(dependents, set(dependents) - set(ordered))
+
+        if not cycles:
+            raise OdevError("Circular dependency detected in plugins")
+
+        described = [
+            f"{cycle[0]} depends on itself" if len(cycle) == 1 else " → ".join([*cycle, cycle[0]]) for cycle in cycles
+        ]
+
+        raise OdevError("Circular dependency detected in plugins: " + "; ".join(described))
+
+    @staticmethod
+    def __find_cycles(dependents: Mapping[str, list[str]], nodes: set[str], limit: int = 20) -> list[list[str]]:
+        """Find the circular dependencies formed by the given nodes, for reporting purposes.
+
+        :param dependents: Mapping of each node to the nodes that directly depend on it.
+        :param nodes: The nodes known to take part in a cycle.
+        :param limit: Maximum number of cycles to report.
+        :return: The cycles found, each as the list of nodes it goes through.
+        :rtype: List[List[str]]
+        """
+        cycles: list[list[str]] = []
+        reported: set[tuple[str, ...]] = set()
+
+        def walk(path: list[str]) -> None:
+            if len(cycles) >= limit:
+                return
+
+            for dependent in dependents.get(path[-1], []):
+                if dependent not in nodes:
+                    continue
+
+                if dependent not in path:
+                    walk([*path, dependent])
+                    continue
+
+                cycle = path[path.index(dependent) :]
+                start = cycle.index(min(cycle))
+                canonical = tuple(cycle[start:] + cycle[:start])
+
+                if canonical not in reported:
+                    reported.add(canonical)
+                    cycles.append(list(canonical))
+
+        for node in sorted(nodes):
+            walk([node])
+
+        return cycles
 
     def parse_arguments(self, command_cls: type[CommandType], *args) -> Namespace:
         """Parse arguments for a command.
@@ -1015,12 +1093,11 @@ class Odev(Generic[CommandType]):
                 command.cleanup()
                 command.console.bypass_prompt = command._bypass_prompt_orig
 
-                if telemetry is not None and self.config.telemetry.enabled:
-                    telemetry[0].join()
-                    telemetry_line = telemetry[1].get()
-
-                    if telemetry_line is not None:
-                        self.telemetry.update(telemetry_line)
+                if telemetry is not None:
+                    telemetry.finish(
+                        exit_code=int(command_errored),
+                        execution_time=(monotonic() - self.start_time) / 60,
+                    )
 
         return not command_errored
 
