@@ -22,15 +22,15 @@ class PostgresDatabase(PostgresConnectorMixin):
     connector: PostgresConnector
     """Instance of the connector to the database engine."""
 
-    tables: MutableMapping[str, "PostgresTable"] = {}
-    """Mapping of tables in the database."""
-
     def __init__(self, name: str):
         """Initialize the database."""
         super().__init__()
 
         self.name: str = name
         """The name of the database."""
+
+        self.tables: MutableMapping[str, PostgresTable] = {}
+        """Mapping of tables in the database, keyed by table name."""
 
         self.prepare_database()
 
