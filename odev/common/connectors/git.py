@@ -3,6 +3,7 @@
 import re
 import shutil
 from collections.abc import Callable, Generator, Mapping, Sequence
+from itertools import islice
 from pathlib import Path
 from types import FrameType
 from typing import (
@@ -12,7 +13,8 @@ from typing import (
 from urllib.parse import urlparse
 
 from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
-from github import Auth as GithubAuth, Github, GithubException
+from github import Auth as GithubAuth, Github, GithubException, UnknownObjectException
+from github.Repository import Repository
 
 from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
@@ -31,6 +33,9 @@ GIT_FETCH_REMOTE_ORIGIN_ALL = "+refs/heads/*:refs/remotes/origin/*"
 
 GIT_EXPECTED_REPO_PARTS = 2
 """The expected number of parts in a git repository name (organization/repository)."""
+
+GITHUB_SEARCH_DEFAULT_LIMIT = 20
+"""The default maximum number of repositories returned by a search on the GitHub API."""
 
 # Git progress opcodes, used for progress reporting
 GIT_OPCODE_DOWNLOAD = 33
@@ -230,14 +235,155 @@ class GitWorktree:
             return commits_behind, commits_ahead
 
 
-class GitConnector(Connector):
-    """A class for connecting to the Github API."""
+class GithubConnector(Connector):
+    """A class for connecting to the Github API, without any repository context."""
 
     _token: str | None = None
     """The Github API token for the current session."""
 
     _connection: Github | None = None
     """The connection to the Github API."""
+
+    @property
+    def url(self) -> str:
+        """The URL to the Github API."""
+        return f"https://api.{GITHUB_DOMAIN}"
+
+    @property
+    def authenticated(self) -> bool:
+        """Whether the current session is authenticated."""
+        if self._connection is None:
+            return False
+
+        try:
+            self._connection.get_user().login  # noqa: B018 - login is a property
+        except GithubException:
+            return False
+        else:
+            return True
+
+    def connect(self):
+        """Connect to the Github API."""
+        if self._token is None:
+
+            def get_token(prompt: bool) -> str | None:
+                return self.store.secrets.get(
+                    GITHUB_DOMAIN,
+                    scope="api",
+                    fields=["password"],
+                    prompt_format="GitHub API token:",
+                    ask_missing=prompt,
+                ).password
+
+            token = get_token(prompt=False)
+
+            if not token:
+                logger.info(
+                    """Connection to your GitHub account is necessary to pursue this operation, please configure a
+                    Personal Access Token (classic) on https://github.com/settings/tokens with the following permissions:
+                    - repo (all)
+                    - user:
+                        - read:user
+                        - user:email
+                    """
+                )
+                token = get_token(prompt=True)
+
+            self._token = token
+
+        if not self.connected:
+            self._connection = Github(auth=GithubAuth.Token(self._token))  # type: ignore [assignment]
+
+        if not self.authenticated:
+            logger.warning("Failed to connect to Github API, please check your token is valid")
+            self.store.secrets.invalidate(GITHUB_DOMAIN, scope="api")
+            self._disconnect()
+            self.connect()
+            return
+
+        logger.debug("Connected to Github API")
+
+    def disconnect(self):
+        """Disconnect from the Github API."""
+        self._disconnect()
+        logger.debug("Disconnected from Github API")
+
+    def _disconnect(self):
+        """Disconnect from the Github API."""
+        self._token = None
+        del self._connection
+
+    def search_repositories(
+        self,
+        query: str,
+        limit: int = GITHUB_SEARCH_DEFAULT_LIMIT,
+        sort: str | None = None,
+        order: str = "desc",
+    ) -> list[Repository]:
+        """Search for repositories on GitHub.
+
+        :param query: The search query, using the GitHub search syntax.
+        :param limit: The maximum number of repositories to return.
+        :param sort: How to sort the results, one of `stars`, `forks` or `updated`; defaults to best match.
+        :param order: The direction of the sort, one of `asc` or `desc`.
+        :return: The repositories matching the search query.
+        """
+        if limit <= 0:
+            return []
+
+        with self:
+            results = cast(Github, self._connection).search_repositories(
+                query,
+                **({"sort": sort, "order": order} if sort else {}),
+            )
+
+            return list(islice(results, limit))
+
+    def get_repository(self, name: str) -> Repository | None:
+        """Fetch a repository from GitHub by its full name, without cloning it.
+
+        :param name: The full name of the repository, in the format `organization/repository`.
+        :return: The repository, or `None` if it does not exist or cannot be accessed.
+        """
+        with self:
+            try:
+                return cast(Github, self._connection).get_repo(name)
+            except UnknownObjectException:
+                return None
+            except GithubException as error:
+                logger.debug(f"Failed to fetch repository {name!r}: {error}")
+                return None
+
+    @staticmethod
+    def get_repository_file(repository: Repository, path: str, ref: str | None = None) -> str | None:
+        """Fetch the content of a file inside a remote repository, without cloning it.
+
+        :param repository: The remote repository to fetch the file from.
+        :param path: The path to the file, relative to the root of the repository.
+        :param ref: The branch, tag or commit to fetch the file from; defaults to the default branch.
+        :return: The decoded content of the file, or `None` if it does not exist or cannot be read.
+        """
+        try:
+            contents = repository.get_contents(path, **({"ref": ref} if ref else {}))
+        except UnknownObjectException:
+            return None
+        except GithubException as error:
+            logger.debug(f"Failed to fetch {path!r} from repository {repository.full_name!r}: {error}")
+            return None
+
+        if isinstance(contents, list):
+            return None
+
+        try:
+            return contents.decoded_content.decode("utf-8")
+        except (AssertionError, UnicodeDecodeError):
+            # Contents are not base64-encoded for files bigger than 1 MB, which `decoded_content` asserts
+            logger.debug(f"Could not decode {path!r} from repository {repository.full_name!r}")
+            return None
+
+
+class GitConnector(GithubConnector):
+    """A class for connecting to a git repository hosted on GitHub."""
 
     _organization: str
     """The organization to which the repository belongs."""
@@ -399,19 +545,6 @@ class GitConnector(Connector):
         return self.path / "requirements.txt"
 
     @property
-    def authenticated(self) -> bool:
-        """Whether the current session is authenticated."""
-        if self._connection is None:
-            return False
-
-        try:
-            self._connection.get_user().login  # noqa: B018 - login is a property
-        except GithubException:
-            return False
-        else:
-            return True
-
-    @property
     def worktrees_path(self) -> Path:
         """Path to the worktrees directory."""
         return self.odev.home_path / "worktrees"
@@ -423,57 +556,6 @@ class GitConnector(Connector):
             self.pull()
             self.fetch()
             self.fetch_worktrees()
-
-    def connect(self):
-        """Connect to the Github API."""
-        if self._token is None:
-
-            def get_token(prompt: bool) -> str | None:
-                return self.store.secrets.get(
-                    GITHUB_DOMAIN,
-                    scope="api",
-                    fields=["password"],
-                    prompt_format="GitHub API token:",
-                    ask_missing=prompt,
-                ).password
-
-            token = get_token(prompt=False)
-
-            if not token:
-                logger.info(
-                    """Connection to your GitHub account is necessary to pursue this operation, please configure a
-                    Personal Access Token (classic) on https://github.com/settings/tokens with the following permissions:
-                    - repo (all)
-                    - user:
-                        - read:user
-                        - user:email
-                    """
-                )
-                token = get_token(prompt=True)
-
-            self._token = token
-
-        if not self.connected:
-            self._connection = Github(auth=GithubAuth.Token(self._token))  # type: ignore [assignment]
-
-        if not self.authenticated:
-            logger.warning("Failed to connect to Github API, please check your token is valid")
-            self.store.secrets.invalidate(GITHUB_DOMAIN, scope="api")
-            self._disconnect()
-            self.connect()
-            return
-
-        logger.debug("Connected to Github API")
-
-    def disconnect(self):
-        """Disconnect from the Github API."""
-        self._disconnect()
-        logger.debug("Disconnected from Github API")
-
-    def _disconnect(self):
-        """Disconnect from the Github API."""
-        self._token = None
-        del self._connection
 
     def _check_repository(self, force_clone: bool = False):
         """Check whether the repository exists locally."""
