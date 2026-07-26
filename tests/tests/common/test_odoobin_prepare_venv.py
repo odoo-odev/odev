@@ -1,11 +1,13 @@
 """Tests for the python and system packages odev needs to prepare an Odoo installation."""
 
+from collections.abc import Sequence
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from packaging.requirements import Requirement
 from packaging.version import Version
 
+from odev.common import system
 from odev.common.odoobin import DEBIAN_INSTALL_SCRIPT, SETUPTOOLS_REQUIREMENT, OdoobinProcess
 from odev.common.python import PythonEnv
 
@@ -133,7 +135,7 @@ class TestSatisfies(OdevTestCase):
 
 
 class TestSystemDependencies(OdevTestCase):
-    """The system dependencies check must stay silent where it cannot apply, and never sudo alone."""
+    """The system dependencies check must work on any unix and never install anything itself."""
 
     def setUp(self):
         super().setUp()
@@ -145,42 +147,81 @@ class TestSystemDependencies(OdevTestCase):
     def write_script(self):
         (self.odoo_path / DEBIAN_INSTALL_SCRIPT).write_text("#!/bin/sh\n", encoding="utf-8")
 
-    def missing(self, platform: str = "linux", which: bool = True) -> list[str]:
-        with (
-            self.patch_property(OdoobinProcess, "odoo_path", self.odoo_path),
-            patch("odev.common.odoobin.sys.platform", platform),
-            patch("odev.common.odoobin.shutil.which", return_value="/usr/bin/apt-get" if which else None),
-        ):
-            return self.process.missing_system_dependencies()
+    def missing(
+        self,
+        platform: str = "linux",
+        on_path: Sequence[str] = (),
+        debian_packages: list[str] | None = None,
+        headers: bool = True,
+    ) -> list[str]:
+        """Return the names of the dependencies reported as missing on a simulated system.
 
-    def test_no_check_outside_linux(self):
-        self.write_script()
-        self.assertEqual(self.missing(platform="darwin"), [])
-
-    def test_no_check_without_the_script(self):
-        self.assertEqual(self.missing(), [])
-
-    def test_no_check_without_apt(self):
-        self.write_script()
-        self.assertEqual(self.missing(which=False), [])
-
-    def test_never_escalates_without_a_confirmation(self):
-        """Prompts return their default when running with `--force`, headless, or under tests, so
-        the check must not reach `sudo` on its own.
+        :param platform: The value of `sys.platform` to simulate.
+        :param on_path: The executables available on the `PATH`.
+        :param debian_packages: The packages Odoo declares and that are missing, None on a system
+            where they cannot be listed.
+        :param headers: Whether the interpreter ships its development headers.
         """
-        self.write_script()
-        run = MagicMock()
+        venv = MagicMock(exists=True, version="3.10", has_development_headers=headers)
 
         with (
-            self.patch(OdoobinProcess, "missing_system_dependencies", return_value=["libpq-dev"]),
             self.patch_property(OdoobinProcess, "odoo_path", self.odoo_path),
+            self.patch_property(OdoobinProcess, "venv", venv),
+            self.patch(OdoobinProcess, "missing_debian_packages", return_value=debian_packages),
+            patch("odev.common.odoobin.sys.platform", platform),
+            patch("odev.common.system.shutil.which", side_effect=lambda command: command in on_path or None),
+        ):
+            return [dependency.name for dependency in self.process.missing_system_dependencies()]
+
+    def test_probes_run_where_odoo_lists_no_package(self):
+        """Regression guard: a system that is not Debian-based used to be reported as complete, and
+        the user only found out when the build of gevent failed in the compiler.
+        """
+        self.assertEqual(
+            self.missing(platform="darwin"),
+            [system.C_COMPILER.name, system.POSTGRESQL_HEADERS.name],
+        )
+
+    def test_probes_are_satisfied_by_any_of_their_commands(self):
+        self.assertEqual(self.missing(platform="darwin", on_path=["clang"]), [system.POSTGRESQL_HEADERS.name])
+        self.assertEqual(self.missing(platform="darwin", on_path=["clang", "pg_config"]), [])
+
+    def test_packages_declared_by_odoo_take_over_the_probes(self):
+        self.assertEqual(self.missing(debian_packages=["libpq-dev", "libsasl2-dev"]), ["libpq-dev", "libsasl2-dev"])
+
+    def test_headers_are_checked_even_where_odoo_lists_its_packages(self):
+        """`debian/control` asks for `python3-dev`, not for the headers of the version of python the
+        Odoo installation is actually built against.
+        """
+        self.assertEqual(self.missing(debian_packages=[], headers=False), [system.PYTHON_HEADERS.name])
+
+    def test_no_check_outside_unix(self):
+        self.assertEqual(self.missing(platform="win32", headers=False), [])
+
+    def test_nothing_reported_on_a_complete_system(self):
+        self.assertEqual(self.missing(debian_packages=[]), [])
+
+    def test_never_installs_anything(self):
+        """The machine odev runs on belongs to the user: the check reports and never escalates."""
+        run, execute = MagicMock(), MagicMock()
+        venv = MagicMock(exists=True, version="3.10", has_development_headers=False)
+
+        with (
+            self.patch_property(OdoobinProcess, "venv", venv),
+            self.patch(
+                OdoobinProcess,
+                "missing_system_dependencies",
+                return_value=[system.C_COMPILER, system.POSTGRESQL_HEADERS],
+            ),
             patch("odev.common.odoobin.bash.run", run),
+            patch("odev.common.odoobin.bash.execute", execute),
         ):
             self.process.check_system_dependencies()
 
         run.assert_not_called()
+        execute.assert_not_called()
 
-    def test_nothing_happens_when_no_package_is_missing(self):
+    def test_nothing_happens_when_no_dependency_is_missing(self):
         run = MagicMock()
 
         with (

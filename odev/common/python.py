@@ -15,7 +15,7 @@ from packaging.markers import default_environment
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.version import InvalidVersion, Version, parse as parse_version
 
-from odev.common import bash, progress, string
+from odev.common import bash, progress, string, system
 from odev.common.cache import TTLCache
 from odev.common.console import console
 from odev.common.errors import OdevError
@@ -45,23 +45,11 @@ RE_PACKAGE = re.compile(
     re.VERBOSE | re.IGNORECASE,
 )
 
-OS_PACKAGES = {
-    "dnf": [
-        "gcc",
-        "libpq-devel",
-        "openldap-devel",
-        "python{version}-devel",
-        "python{version}",
-    ],
-    "apt": [
-        "gcc",
-        "libldap2-dev",
-        "libpq-dev",
-        "libsasl2-dev",
-        "python{version}-dev",
-        "python{version}",
-    ],
-}
+INSTALLABLE_PACKAGE_MANAGERS: frozenset[str] = frozenset({"apt-get", "dnf"})
+"""Package managers odev installs packages with on its own. Anywhere else it only reports what is
+missing and lets the user install it, as installing the wrong package under `sudo` on a system odev
+has never been tested against is worse than saying nothing.
+"""
 
 
 @lru_cache
@@ -196,7 +184,11 @@ class PythonEnv:
                     ):
                         raise OdevError("Failed to create virtual environment") from error
 
-                    self.install_system_packages()
+                    # Only retry if something was actually installed, otherwise the same question
+                    # would be asked over and over on a system odev cannot install packages on
+                    if not self.install_system_packages():
+                        raise OdevError("Failed to create virtual environment") from error
+
                     return self.create()
 
                 raise OdevError("Failed to create virtual environment") from error
@@ -215,21 +207,34 @@ class PythonEnv:
 
         return logger.info(f"Removed {venv_description}")
 
-    def install_system_packages(self) -> None:
-        """Install system packages for the current python version."""
+    def install_system_packages(self) -> bool:
+        """Install the system packages needed to run and build against the current python version.
+
+        Odev only installs packages on the systems it has been tested against; on any other one it
+        reports what is missing and how to install it, and leaves it to the user.
+
+        :return: Whether packages were installed, so that callers know a retry is worth it.
+        :rtype: bool
+        """
         if self._global:
             raise OdevError("Cannot install system packages for the global python interpreter")
 
+        package_manager = system.package_manager()
+
+        if package_manager not in INSTALLABLE_PACKAGE_MANAGERS:
+            logger.warning(
+                f"Odev cannot install packages on this system, python {self.version} and the packages "
+                "needed to build Odoo's dependencies have to be installed manually:\n"
+                + system.install_instructions(system.ODOO_SYSTEM_DEPENDENCIES, version=self.version)
+            )
+            return False
+
         with progress.spinner("Installing system packages"):
-            package_manager = next((pkg for pkg in OS_PACKAGES if shutil.which(pkg)), None)
-
-            if not package_manager:
-                raise OdevError(
-                    f"Neither {string.join_or(list(OS_PACKAGES.keys()))} package managers found on the system, "
-                    "cannot install packages"
-                )
-
-            packages = " ".join([pkg.format(version=self.version) for pkg in OS_PACKAGES[package_manager]])
+            packages = " ".join(
+                package
+                for dependency in system.ODOO_SYSTEM_DEPENDENCIES
+                if (package := dependency.package(package_manager, version=self.version))
+            )
             logger.info(
                 f"The following packages will be installed using {package_manager}:\n"
                 + string.join_bullet(packages.split())
@@ -237,7 +242,7 @@ class PythonEnv:
 
             if not console.confirm("Continue?", default=True):
                 logger.warning("Aborting system package installation")
-                return
+                return False
 
             try:
                 bash.execute(f"{package_manager} install -y {packages}", sudo=True)
@@ -257,6 +262,27 @@ class PythonEnv:
                     bash.execute(f"ln -s {lldap} {lldap_r}", sudo=True)
 
         logger.info(f"Installed system packages for python {self.version}")
+        return True
+
+    @property
+    def has_development_headers(self) -> bool:
+        """Whether the C headers needed to build python extensions are available for this interpreter.
+
+        `INCLUDEPY` points to the headers of the interpreter this environment was created from, which
+        most distributions ship in a separate package (`python3.10-dev`, `python3.10-devel`). Building
+        `gevent` or `python-ldap` from source fails without them, with an error naming a missing
+        `Python.h` rather than the package that provides it.
+        """
+        headers = bash.execute(
+            f"{self.python} -c 'import sysconfig; print(sysconfig.get_config_var(\"INCLUDEPY\"))'",
+            raise_on_error=False,
+        )
+
+        if headers is None:
+            # Never warn on a guess: an interpreter that cannot be questioned is assumed complete
+            return True
+
+        return Path(headers.stdout.decode().strip(), "Python.h").is_file()
 
     def install_packages(self, packages: list[str], options: list[str] | None = None) -> None:
         """Install python packages.

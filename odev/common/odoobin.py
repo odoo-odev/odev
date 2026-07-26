@@ -19,7 +19,7 @@ from typing import (
 
 from packaging.version import Version
 
-from odev.common import bash, string
+from odev.common import bash, string, system
 from odev.common.cache import TTLCache
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
@@ -31,6 +31,7 @@ from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.progress import spinner
 from odev.common.python import PythonEnv
 from odev.common.signal_handling import capture_signals
+from odev.common.system import SystemDependency
 from odev.common.version import OdooVersion
 
 
@@ -62,6 +63,12 @@ Below 82 because it removed `pkg_resources`, which Odoo 15.0 and 16.0 import unc
 
 DEBIAN_INSTALL_SCRIPT: str = "setup/debinstall.sh"
 """Path of the script listing and installing Odoo's system dependencies, relative to the Odoo sources."""
+
+PROBED_DEPENDENCIES: Sequence[SystemDependency] = (system.C_COMPILER, system.POSTGRESQL_HEADERS)
+"""System dependencies looked for on systems where Odoo does not list its own packages. Restricted
+to the ones an executable on the `PATH` proves present, so that nothing is ever reported as missing
+on a distribution that just names it differently.
+"""
 
 
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
@@ -723,28 +730,23 @@ class OdoobinProcess(OdevFrameworkMixin):
             if f" {package}" not in installed_packages:
                 yield package
 
-    def missing_system_dependencies(self) -> list[str]:
-        """List the system packages Odoo needs to build its python dependencies and that are missing.
+    def missing_debian_packages(self) -> list[str] | None:
+        """List the packages Odoo declares in `debian/control` and that are not installed.
 
-        Detection is only possible on Debian-based systems, where Odoo ships a script listing them;
-        anywhere else, and for versions of Odoo predating that script, an empty list is returned.
-
-        :return: The names of the missing packages.
-        :rtype: List[str]
+        :return: The names of the missing packages, or None on a system where Odoo does not
+            describe them or where they cannot be queried.
+        :rtype: Optional[List[str]]
         """
         script = self.odoo_path / DEBIAN_INSTALL_SCRIPT
 
-        if sys.platform != "linux" or not script.is_file():
-            return []
-
-        if not (shutil.which("apt-get") and shutil.which("dpkg-query")):
-            return []
+        if not script.is_file() or not shutil.which("dpkg-query"):
+            return None
 
         # `--list` only prints the package names parsed out of `debian/control`, it needs no privileges
         listed = bash.execute(f"sh {shlex.quote(script.as_posix())} --list", raise_on_error=False)
 
         if listed is None:
-            return []
+            return None
 
         packages = listed.stdout.decode().split()
         installed = bash.execute(
@@ -758,36 +760,51 @@ class OdoobinProcess(OdevFrameworkMixin):
         }
         return [package for package in packages if package not in satisfied]
 
-    def check_system_dependencies(self) -> None:
-        """Warn about the system packages Odoo needs to build its python dependencies, and offer
-        to install them.
+    def missing_system_dependencies(self) -> list[SystemDependency]:
+        """List what Odoo needs to build its python dependencies from source and that is missing.
 
-        Building gevent, python-ldap or lxml from source fails with errors that do not point at the
-        missing system library, so this is checked upfront, when a virtual environment is created.
+        Odev runs on systems it does not control, so this never assumes a distribution: where Odoo
+        describes its own packages they are used, and anywhere else only what can be proven missing
+        is reported.
+
+        :return: The missing dependencies.
+        :rtype: List[SystemDependency]
+        """
+        if sys.platform not in {"linux", "darwin"}:
+            return []
+
+        debian_packages = self.missing_debian_packages()
+
+        if debian_packages is None:
+            missing = [dependency for dependency in PROBED_DEPENDENCIES if not dependency.found]
+        else:
+            missing = [SystemDependency(name=package, packages={"apt-get": package}) for package in debian_packages]
+
+        # Checked everywhere: `debian/control` asks for `python3-dev`, which is not necessarily the
+        # version of python the Odoo installation is built against
+        if self.venv.exists and not self.venv.has_development_headers:
+            missing.append(system.PYTHON_HEADERS)
+
+        return missing
+
+    def check_system_dependencies(self) -> None:
+        """Warn about what Odoo needs to build its python dependencies from source and that is
+        missing from the system.
+
+        Building gevent, python-ldap or lxml from source fails with errors naming a missing header
+        rather than the package providing it, so this is checked when a virtual environment is
+        created. Nothing is installed: the machine odev runs on belongs to the user.
         """
         missing = self.missing_system_dependencies()
 
         if not missing:
             return
 
-        script = self.odoo_path / DEBIAN_INSTALL_SCRIPT
         logger.warning(
-            f"{len(missing)} system packages required by Odoo are not installed, building its python "
-            "dependencies from source is likely to fail:\n" + string.join_bullet(missing)
+            f"{len(missing)} system dependencies required by Odoo are missing, building its python "
+            "dependencies from source is likely to fail:\n"
+            + system.install_instructions(missing, version=self.venv.version)
         )
-
-        # Never escalate privileges without a real answer: prompts return their default value when
-        # running with `--force`, in headless mode and during tests
-        if self.console.bypass_prompt or not sys.stdin.isatty():
-            logger.info(f"Install them by running: sudo {script.as_posix()}")
-            return
-
-        if not self.console.confirm(f"Run {script.as_posix()} now? This requires sudo.", default=False):
-            return
-
-        # Not `bash.execute(sudo=True)`: the script silently downgrades to a dry run when it is not
-        # run as root and exits successfully, so it would never be retried with elevated privileges
-        bash.run(f"sudo {shlex.quote(script.as_posix())}")
 
     def prepare_venv(self):
         """Prepare the virtual environment of the Odoo installation."""
@@ -795,8 +812,10 @@ class OdoobinProcess(OdevFrameworkMixin):
             raise OdevError("Database does not exist")
 
         if not self.venv.exists:
-            self.check_system_dependencies()
             self.venv.create()
+            # After creating the environment: the interpreter it was created from is the one whose
+            # development headers matter, and the warning still precedes the installs that need them
+            self.check_system_dependencies()
             self.venv.install_packages(["wheel", SETUPTOOLS_REQUIREMENT, "pip", "cython<3.0.0"])
             self.venv.install_packages(["pyyaml==5.4.1"], ["--no-build-isolation"])
 
