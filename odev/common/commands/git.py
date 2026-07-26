@@ -29,7 +29,7 @@ class GitCommand(Command, ABC):
                 if not worktree.path.exists():
                     logger.debug(f"Skipping missing worktree {worktree.name!r} at {worktree.path!s}")
                     continue
-                if hasattr(self, "args") and self.args.version and worktree.name != self.args.version:
+                if getattr(getattr(self, "args", None), "version", None) and worktree.name != self.args.version:
                     continue
                 yield worktree
 
