@@ -18,7 +18,7 @@ class UpdateCommand(Command):
     _aliases = ["u"]
 
     def run(self):
-        from_version = self.config.update.version
+        from_version = self.odev.version
         logger.info(f"Current version: {string.stylize(from_version, 'repr.version')}")
         update_mode = self.odev.config.update.mode
         self.odev.config.update.mode = "always"

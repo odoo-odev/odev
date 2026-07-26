@@ -2,13 +2,19 @@ import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from odev._version import __version__
 from odev.common.commands import Command
-from odev.common.odev import Manifest, Plugin, logger
+from odev.common.odev import Manifest, Odev, Plugin, logger
 
 from tests.fixtures import CaptureOutput, OdevTestCase
+
+
+REAL_UPDATE = Odev._update
+"""Reference to the real implementation of `Odev._update`, taken before the test fixtures patch it away to
+prevent tests from running git operations on the odev repository.
+"""
 
 
 class TestCommonOdev(OdevTestCase):
@@ -256,3 +262,72 @@ class TestCommonOdev(OdevTestCase):
             self.odev.load_plugins()
 
             self.assertEqual(sys.modules["odev.plugins"].__path__, [str(self.odev.plugins_path)])
+
+    def test_21_update_skipped_when_up_to_date(self):
+        """Nothing should be pulled, and the user should not be prompted, when the local branch has no incoming
+        changes left after fetching.
+        """
+        manifest = Manifest(name="odev", description="Odev", version=__version__, depends=[])
+
+        with (
+            self.patch("odev.common.odev", "Repo", return_value=MagicMock()),
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock()) as git_connector,
+            self.patch(self.odev, "_load_plugin_manifest", return_value=manifest),
+            self.patch(self.odev, "_Odev__git_branch_behind", return_value=False),
+            self.patch(self.odev, "_Odev__update_prompt", return_value=True) as update_prompt,
+        ):
+            self.assertFalse(REAL_UPDATE(self.odev, self.odev.path))
+            git_connector.return_value.fetch.assert_called_once_with(detached=False)
+
+        update_prompt.assert_not_called()
+
+    def test_22_update_records_check_date_when_up_to_date(self):
+        """The date of the last update check should be recorded even when there was nothing to update, so that
+        checks are not run again on every single command.
+        """
+        self.odev.config.update.date = "1995-12-21 00:00:00"
+
+        with self.patch(self.odev, "_update", return_value=False):
+            self.assertFalse(self.odev.update(restart=False))
+
+        self.assertGreater(self.odev.config.update.date.year, 1995)
+
+    def test_23_update_available(self):
+        """An update should be reported only when the repository has incoming commits and none of its own."""
+        for rev_list, expected in [("2\t0", True), ("0\t0", False), ("1\t3", False)]:
+            repository = MagicMock(working_dir=str(self.odev.path))
+            repository.head.is_detached = False
+            repository.git.rev_list.return_value = rev_list
+
+            with (
+                self.subTest(rev_list=rev_list),
+                self.patch_property(type(self.odev), "git", MagicMock(repository=repository)),
+            ):
+                self.assertEqual(self.odev.update_available(), expected)
+
+    def test_24_update_available_without_repository(self):
+        """No update should be reported when odev does not run from a git repository."""
+        with self.patch_property(type(self.odev), "git", MagicMock(repository=None)):
+            self.assertFalse(self.odev.update_available())
+
+    def test_25_update_available_detached_head(self):
+        """No update should be reported on a detached HEAD, which has no branch to compare with its remote."""
+        repository = MagicMock(working_dir=str(self.odev.path))
+        repository.head.is_detached = True
+
+        with self.patch_property(type(self.odev), "git", MagicMock(repository=repository)):
+            self.assertFalse(self.odev.update_available())
+
+        repository.active_branch.tracking_branch.assert_not_called()
+
+    def test_26_upgrade_version_ahead_of_current(self):
+        """A recorded version ahead of the running one, as left over by a switch back from the 'beta' release
+        channel, should be reset instead of being reported as a newer version forever.
+        """
+        self.odev.config.update.version = "999.0.0"
+
+        with CaptureOutput() as output:
+            self.odev.upgrade()
+
+        self.assertEqual(output.stdout, "")
+        self.assertEqual(self.odev.config.update.version, __version__)
