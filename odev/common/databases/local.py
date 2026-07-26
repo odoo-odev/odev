@@ -61,9 +61,6 @@ NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")
 class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
 
-    connector: PostgresConnector | None = None
-    """The PostgreSQL connector of the database."""
-
     _whitelisted: bool = False
     """Whether the database is whitelisted and should not be removed automatically."""
 
@@ -102,11 +99,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.whitelisted = info is not None and info.whitelisted
 
     def __enter__(self):
-        self.connector = self.psql(self.name).__enter__()  # type: ignore [assignment]
+        self._enter_connector(self.name)
         return self
 
     def __exit__(self, *args):
-        self.psql(self.name).__exit__(*args)
+        self._exit_connector(*args)
 
     @property
     def rpc_port(self):
@@ -609,7 +606,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         tracker.stop()
 
-        if self.connector is not None:
+        # The attribute holds the connector class until a block connects for the first time, so the check
+        # is on the type rather than on `None`, as in `drop`.
+        if isinstance(self.connector, PostgresConnector):
             self.connector.invalidate_cache()
 
     def _replace_filestore(self, source_dir: Path) -> None:
