@@ -265,6 +265,32 @@ class SampleCommand(Command):
 
 ![odev sample](img/command-sample-08.png)
 
+### Flags that can be turned off
+
+A flag defined with `args.Flag` is either present or absent, so a command cannot tell "the user asked for the value to
+be turned off" apart from "the user did not mention it". When that distinction matters, typically for a command editing
+a value that already exists, use `args.FlagOptional` instead: it registers a `--no-` counterpart for each of its
+aliases.
+
+```python
+class SampleCommand(Command):
+    """Example command used for tutorials purposes."""
+
+    _name = "sample"
+    _aliases = ["example"]
+
+    flag = args.FlagOptional(aliases=["--flag"], description="Sample three-state flag argument")
+
+    def run(self):
+        if self.args.flag is None:
+            self.console.print("The flag was not mentioned, leaving the value as it is")
+        else:
+            self.console.print(f"The flag was set to {self.args.flag}")
+```
+
+`--flag` sets the value to `True`, `--no-flag` sets it to `False`, and omitting both leaves it at its default, `None`
+unless another one is given to the argument.
+
 ### Unknown arguments
 
 By default, Odev will treat any unknown argument received as invalid and raise an error.
