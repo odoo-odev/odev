@@ -18,6 +18,7 @@ In this basic tutorial, we'll see how we can define a brand new command to print
     -   [Going further...](#going-further)
         -   [Extended command classes](#extended-command-classes)
         -   [Mutually exclusive arguments](#mutually-exclusive-arguments)
+        -   [Flags that can be turned off](#flags-that-can-be-turned-off)
         -   [Unknown arguments](#unknown-arguments)
         -   [Raising errors](#raising-errors)
 
