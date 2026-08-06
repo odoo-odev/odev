@@ -7,12 +7,15 @@ by the sweep at the start of the next run.
 """
 
 import atexit
+import logging
 from collections.abc import Callable
 from signal import SIGINT, SIGTERM, Signals, signal
 from typing import Any
 from unittest.mock import patch
 
 import pytest
+
+from odev.common.logging import OdevRichHandler
 
 from tests.fixtures import sandbox
 
@@ -52,7 +55,7 @@ class InterruptRecorder:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Make the suite stoppable, whichever way it is asked to stop."""
+    """Make the suite stoppable, whichever way it is asked to stop, and leave the logs to pytest."""
 
     def terminate(*args):
         pytest.exit(INTERRUPT_MESSAGE, returncode=TERMINATED_EXIT_CODE)
@@ -62,6 +65,27 @@ def pytest_configure(config: pytest.Config) -> None:
     installer = patch(SIGNAL_INSTALLER, new=install_handler)
     installer.start()
     config.add_cleanup(installer.stop)
+
+    detach_odev_log_handler()
+
+
+def detach_odev_log_handler() -> None:
+    """Take odev's own logging handler off the root logger for the duration of the suite.
+
+    `odev.common.logging` configures logging when it is imported, but `logging.basicConfig` is a no-op
+    once the root logger has handlers: whether odev's handler ends up installed depends on whether that
+    import happens before or after pytest sets its own up. Importing anything from odev in this module,
+    as the sandbox does, is enough to tip it one way.
+
+    The handler renders through the console, so leaving it on makes every record reach the output twice —
+    once rendered by odev and once through whatever the test is capturing — and turns a plain `logger.info`
+    into a `console.print` that tests patching the console then have to account for. Records are left to
+    the handlers pytest and the test cases install, which is what the suite asserts on.
+    """
+    root = logging.getLogger()
+
+    for handler in [handler for handler in root.handlers if isinstance(handler, OdevRichHandler)]:
+        root.removeHandler(handler)
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

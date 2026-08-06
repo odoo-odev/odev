@@ -1,6 +1,6 @@
 """PostgreSQL database class."""
 
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping, Sequence
 from contextlib import nullcontext
 
 from psycopg2.errors import InvalidTableDefinition
@@ -119,10 +119,15 @@ class PostgresDatabase(PostgresConnectorMixin):
         return self.connector.create_column(table, column, definition)
 
     @ensure_connected
-    def query(self, query: str, nocache: bool = False):
-        """Execute a query on the database."""
+    def query(self, query: str, params: Sequence | None = None, nocache: bool = False):
+        """Execute a query on the database.
+
+        :param query: The query to execute.
+        :param params: Values to bind to the placeholders of the query.
+        :param nocache: Whether to bypass the query cache.
+        """
         with self.connector.nocache() if nocache else nullcontext():
-            return self.connector.query(query)
+            return self.connector.query(query, params)
 
     @ensure_connected
     def constraint(self, table: str, name: str, definition: str):
