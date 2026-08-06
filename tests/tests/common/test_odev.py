@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from odev._version import __version__
 from odev.common.commands import Command
-from odev.common.odev import Manifest, Plugin, logger
+from odev.common.odev import Manifest, Plugin, logger, parse_plugin_manifest, plugin_module_name
 
 from tests.fixtures import CaptureOutput, OdevTestCase
 
@@ -262,3 +262,55 @@ class TestCommonOdev(OdevTestCase):
             self.odev.load_plugins()
 
             self.assertEqual(sys.modules["odev.plugins"].__path__, [str(self.odev.plugins_path)])
+
+    def test_21_plugin_module_name(self):
+        """The module name of a plugin should drop the organization and use underscores."""
+        self.assertEqual(plugin_module_name("odoo-odev/odev-plugin-editor-base"), "odev_plugin_editor_base")
+        self.assertEqual(plugin_module_name("odev-plugin-ai"), "odev_plugin_ai")
+
+    def test_22_parse_plugin_manifest(self):
+        """The manifest of a plugin should be parsed into its name, version, description and dependencies."""
+        manifest = parse_plugin_manifest(
+            '"""Some plugin."""\n\n__version__ = "1.2.3"\n\ndepends = ["test/test-plugin", 42]\n',
+            "test/test-plugin-dep",
+        )
+
+        self.assertEqual(
+            manifest,
+            {
+                "name": "test/test-plugin-dep",
+                "version": "1.2.3",
+                "description": "Some plugin.",
+                "depends": ["test/test-plugin"],
+            },
+        )
+
+    def test_23_parse_plugin_manifest_invalid(self):
+        """A source that is not a valid plugin manifest should be rejected."""
+        self.assertIsNone(parse_plugin_manifest('"""No version."""\n\ndepends = []\n', "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest("def invalid(:\n", "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest("__version__ = 1.0\n", "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest('{"name": "Sales", "version": "17.0"}\n', "test/test-addons"))
+
+    def test_24_parse_plugin_manifest_does_not_execute_code(self):
+        """Parsing the manifest of an untrusted repository should never execute its content."""
+        with self.patch("odev.common.odev.logger", "warning") as logger_warning:
+            manifest = parse_plugin_manifest(
+                '"""Malicious plugin."""\n'
+                "import odev.common.odev as target\n"
+                'target.logger.warning("executed")\n'
+                "raise SystemExit(1)\n"
+                '__version__ = "6.6.6"\n',
+                "evil/plugin",
+            )
+
+        self.assertEqual(
+            manifest,
+            {
+                "name": "evil/plugin",
+                "version": "6.6.6",
+                "description": "Malicious plugin.",
+                "depends": [],
+            },
+        )
+        logger_warning.assert_not_called()
