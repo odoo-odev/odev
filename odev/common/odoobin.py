@@ -167,8 +167,10 @@ class OdoobinProcess(OdevFrameworkMixin):
         self.repository: GitConnector = GitConnector("odoo/odoo")
         """Github repository of Odoo."""
 
-        self._additional_addons_paths: list[Path] = []
-        """List of additional addons paths to use when starting the Odoo process."""
+        self._additional_addons_paths: list[Path] | None = None
+        """List of additional addons paths to use when starting the Odoo process.
+        None until derived from the repository linked to the database, or assigned explicitly.
+        """
 
         self._venv: PythonEnv | None = None
         """Cached python virtual environment used by the Odoo installation."""
@@ -301,12 +303,14 @@ class OdoobinProcess(OdevFrameworkMixin):
 
     @property
     def additional_addons_paths(self) -> list[Path]:
-        """Return the list of additional addons paths."""
-        if not self._additional_addons_paths and self.database.repository:
-            repository = GitConnector(self.database.repository.full_name)
-
-            if repository.path not in self._additional_addons_paths:
-                self._additional_addons_paths.append(repository.path)
+        """Return the list of additional addons paths.
+        Derived once from the repository linked to the database, unless assigned explicitly.
+        """
+        if self._additional_addons_paths is None:
+            repository = self.database.repository
+            self._additional_addons_paths = (
+                self.expand_addons_paths([GitConnector(repository.full_name).path]) if repository else []
+            )
 
         return self._additional_addons_paths
 
@@ -924,6 +928,21 @@ class OdoobinProcess(OdevFrameworkMixin):
         return path.is_dir() and any(
             manifest.is_file() and (manifest.parent / "__init__.py").is_file() for glob in globs for manifest in glob
         )
+
+    @classmethod
+    def expand_addons_paths(cls, paths: Sequence[Path]) -> list[Path]:
+        """Expand paths to the actual Odoo addons directories they contain.
+
+        Modules are looked up recursively so that repositories keeping their modules in
+        subdirectories are handled the same way as those keeping them at their root.
+
+        :param paths: Paths to expand.
+        :return: Sorted list of unique valid addons paths.
+        :rtype: List[Path]
+        """
+        globs = (path.glob(f"**/__{manifest}__.py") for path in paths for manifest in ["manifest", "openerp"])
+        candidates = {manifest.parents[1] for glob in globs for manifest in glob}
+        return sorted(path for path in candidates if cls.check_addons_path(path))
 
     @classmethod
     def check_addon_path(cls, path: Path) -> bool:
