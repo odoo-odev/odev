@@ -2,7 +2,9 @@ ipdb
 phonenumbers
 pudb
 pydevd-odoo
+# setuptools 58-59 cannot serve as a PEP 517 backend for current pip, which breaks
+# `pip install --no-build-isolation` for gevent and other source distributions.
+# Capped below 82, which removed `pkg_resources`; Odoo 15.0 and 16.0 import it unconditionally.
+setuptools>=69.0.0,<82; python_version >= '3.8'
 setuptools<58.0.0; python_version < '3.8'
-setuptools>=58.0.0, <59.0.0; python_version >= '3.8' and python_version < '3.12'
-setuptools>59.0.0; python_version >= '3.12'
 websocket-client
