@@ -178,14 +178,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
     def _set_addons_paths(self) -> None:
         """Find additional addons paths from the database repository if any."""
-        addons_paths = self._guess_addons_paths()
-
-        globs = [path.glob(f"**/__{manifest}__.py") for path in addons_paths for manifest in ["manifest", "openerp"]]
-        addons_paths = [
-            path.parents[1] for path in (p for g in globs for p in g) if self.odoobin.check_addons_path(path.parents[1])
-        ]
-
-        self.odoobin.additional_addons_paths = sorted(set(addons_paths))
+        self.odoobin.additional_addons_paths = self.odoobin.expand_addons_paths(self._guess_addons_paths())
         self.odoobin.save_database_repository()
 
     def _set_odoobin_process(self, force=False) -> None:

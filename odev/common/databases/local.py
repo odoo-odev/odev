@@ -6,7 +6,7 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, MutableMapping
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
@@ -493,12 +493,13 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def neutralize(self):
         """Neutralize the database."""
         max_retries = 5
+        retries = 0
 
         with self.connector.nocache():
             # Artificially wait for SQL transaction to be committed and for the process to be ready
             # before running the neutralize command
             # This is not clean but it works, I guess
-            while (not self.process or not self.version) and (retries := 0) < max_retries:
+            while (not self.process or not self.version) and retries < max_retries:
                 retries += 1
                 sleep(0.2)
 
@@ -525,24 +526,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.process.run(["-d", self.name], subcommand="neutralize")
             self.console.print()
 
-        installed_modules: set[str] = set(self.installed_modules) & {
-            path.name for path in self.process.additional_addons_paths
-        }
-        scripts: list[Path] = [self.odev.static_path / "neutralize-pre.sql"]
-
-        with progress.spinner(f"Looking up neutralization scripts in {len(installed_modules)} installed modules"):
-            for addon in self.process.additional_addons_paths:
-                for module in installed_modules:
-                    neutralize_path: Path = addon / module / "data" / "neutralize.sql"
-
-                    if neutralize_path.is_file():
-                        scripts.append(neutralize_path)
-
-        scripts.append(self.odev.static_path / "neutralize-post.sql")
-
-        if self.version < NEUTRALIZE_BEFORE_ODOO_VERSION:
-            scripts.append(self.odev.static_path / "neutralize-post-before-15.0.sql")
-
+        scripts = self._neutralize_scripts()
         tracker = progress.Progress()
 
         task = tracker.add_task(f"Running {len(scripts)} neutralization scripts", total=len(scripts))
@@ -553,6 +537,38 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.query(python_file.read_text())
 
         tracker.stop()
+
+    def _neutralize_scripts(self) -> list[Path]:
+        """Return the neutralization scripts to run, including those shipped by the custom modules
+        installed in the database.
+
+        :return: The paths to the neutralization scripts, in the order they must be run.
+        :rtype: List[Path]
+        """
+        addons_paths = self.process.additional_addons_paths if self.process else []
+        modules: MutableMapping[str, Path] = {
+            module.name: module
+            for path in addons_paths
+            if path.is_dir()
+            for module in path.iterdir()
+            if module.is_dir()
+        }
+        installed_modules: set[str] = set(self.installed_modules) & modules.keys()
+        scripts: list[Path] = [self.odev.static_path / "neutralize-pre.sql"]
+
+        with progress.spinner(f"Looking up neutralization scripts in {len(installed_modules)} installed modules"):
+            scripts.extend(
+                script
+                for module in sorted(installed_modules)
+                if (script := modules[module] / "data" / "neutralize.sql").is_file()
+            )
+
+        scripts.append(self.odev.static_path / "neutralize-post.sql")
+
+        if self.version < NEUTRALIZE_BEFORE_ODOO_VERSION:
+            scripts.append(self.odev.static_path / "neutralize-post-before-15.0.sql")
+
+        return scripts
 
     def dump(self, filestore: bool = False, path: Path | None = None) -> Path:
         if path is None:
