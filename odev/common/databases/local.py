@@ -25,7 +25,7 @@ from zipfile import ZipFile
 from packaging.version import Version
 
 from odev.common import bash, progress, string
-from odev.common.connectors import GitWorktree, PostgresConnector
+from odev.common.connectors import GitConnector, GitWorktree, PostgresConnector
 from odev.common.databases import Branch, Database, Filestore, Repository
 from odev.common.databases.base import DatabaseInfoSection
 from odev.common.errors import OdevError
@@ -362,10 +362,35 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         return self._repository
 
     @repository.setter
-    def repository(self, value: Repository):
+    def repository(self, value: Repository | None):
         """Set the repository of the database."""
         self._repository = value
+        # The branch is a branch *of the repository*, keeping a cached one would persist
+        # the branch of the previous repository under the new one.
+        self._branch = None
         self.store.databases.set(self)
+
+    def link_repository(self, repository: str | Repository | GitConnector | None) -> Repository | None:
+        """Link a git repository to this database and save the link in the data store.
+
+        The value is normalized through :class:`GitConnector`, so repository names, HTTPS and SSH
+        URLs and paths to local clones are all accepted and stored as `organization/repository`.
+
+        :param repository: The repository to link, or None to unlink the current one.
+        :return: The linked repository, or None if it was unlinked.
+        :rtype: Optional[Repository]
+        """
+        if repository is None:
+            self.repository = None
+            return None
+
+        if not isinstance(repository, GitConnector):
+            repository = GitConnector(
+                repository.full_name if isinstance(repository, Repository) else repository,
+            )
+
+        self.repository = Repository(name=repository._repository, organization=repository._organization)
+        return self._repository
 
     @property
     def branch(self) -> Branch | None:
