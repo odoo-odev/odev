@@ -23,6 +23,18 @@ Before you can run this tool, make sure the below requirements are set on your s
   source install requirements
 - [Other Odoo dependencies](https://www.odoo.com/documentation/19.0/administration/on_premise/source.html#dependencies)
 
+Odoo builds part of its Python dependencies (`gevent`, `lxml`, `python-ldap`, …) from source, which needs a C compiler
+and the matching development packages: the headers of the Python version Odoo runs on, the PostgreSQL client library
+and the OpenLDAP and SASL headers. On Debian and Ubuntu, install them all from the Odoo sources Odev has cloned:
+
+```sh
+sudo ~/odoo/repositories/odoo/odoo/setup/debinstall.sh
+```
+
+On Fedora, Arch, openSUSE, Alpine or macOS, install the equivalents with your own package manager. Odev checks
+whenever it creates a virtual environment for a version of Odoo and, whatever the system, tells you what is missing
+along with the command that installs it. It never installs anything itself.
+
 Make sure `git` is properly setup with SSH key authentication before using commands, as Odev will try to connect to
 the Odoo [Community](https://github.com/odoo/odoo) and [Enterprise](https://github.com/odoo/enterprise) repositories
 to pull sources when required.
