@@ -1,5 +1,6 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
+import ast
 import contextlib
 import importlib
 import inspect
@@ -61,7 +62,7 @@ except ImportError:  # UTC is only available in Python 3.11+
     UTC = timezone.utc
 
 
-__all__ = ["Odev"]
+__all__ = ["Odev", "parse_plugin_manifest", "plugin_module_name"]
 
 
 PRUNING_INTERVAL = 14
@@ -80,6 +81,9 @@ VENVS_DIRNAME = "virtualenvs"
 
 MIN_ARGV_LENGTH = 2
 """Minimum number of command line arguments required (command and subcommand)."""
+
+PLUGIN_MANIFEST_FILENAME = "__manifest__.py"
+"""Name of the manifest file located at the root of a plugin repository."""
 
 
 class Manifest(TypedDict):
@@ -100,6 +104,67 @@ class Plugin(NamedTuple):
 
 
 logger = logging.getLogger(__name__)
+
+
+def plugin_module_name(plugin: str) -> str:
+    """Convert the name of a plugin to the name of the module it is linked to under the plugins directory.
+
+    :param plugin: Name of the plugin, in the format `organization/repository`
+    :return: Name of the python module for this plugin
+    """
+    return plugin.split("/")[-1].replace("-", "_")
+
+
+def parse_plugin_manifest(source: str, name: str) -> Manifest | None:
+    """Extract the metadata of a plugin from the source of its manifest, without executing it.
+
+    Only the module docstring and top-level assignments of literal values are read, which makes this function safe
+    to use on manifests originating from untrusted repositories. A source that does not define a top-level
+    `__version__` string is not considered a valid odev plugin manifest.
+
+    :param source: Content of the `__manifest__.py` file
+    :param name: Name of the plugin, in the format `organization/repository`
+    :return: Manifest of the plugin, or `None` if the source is not a valid odev plugin manifest
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError, RecursionError):
+        logger.debug(f"Failed to parse the manifest of plugin {name!r}")
+        return None
+
+    assignments: dict[str, Any] = {}
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        else:
+            continue
+
+        try:
+            literal = ast.literal_eval(value)
+        except (SyntaxError, TypeError, ValueError, MemoryError, RecursionError):
+            continue
+
+        assignments.update({target.id: literal for target in targets if isinstance(target, ast.Name)})
+
+    manifest_version = assignments.get("__version__")
+
+    if not isinstance(manifest_version, str):
+        logger.debug(f"Manifest of plugin {name!r} does not declare a version number")
+        return None
+
+    depends = assignments.get("depends")
+
+    return {
+        "name": name,
+        "version": manifest_version,
+        "description": (ast.get_docstring(tree) or "").strip(),
+        "depends": [dependency for dependency in depends if isinstance(dependency, str)]
+        if isinstance(depends, list)
+        else [],
+    }
 
 
 class Odev(Generic[CommandType]):
@@ -235,7 +300,7 @@ class Odev(Generic[CommandType]):
     def plugins(self) -> Generator[Plugin, None, None]:
         """Yields enabled plugins sorted topologically."""
         for plugin_name in self._plugins_dependency_tree():
-            plugin_path = self.plugins_path / plugin_name.split("/")[-1].replace("-", "_")
+            plugin_path = self.plugins_path / plugin_module_name(plugin_name)
 
             plugin_manifest = self._load_plugin_manifest(plugin_path)
             yield Plugin(plugin_name, plugin_path, plugin_manifest)
@@ -640,33 +705,33 @@ class Odev(Generic[CommandType]):
         :param plugin: Plugin whose module should be imported.
         """
         # Module names MUST use underscores even if directories use dashes
-        plugin_module_name = plugin.path.name.replace("-", "_")
-        module_name = f"odev.plugins.{plugin_module_name}"
+        module_basename = plugin.path.name.replace("-", "_")
+        module_name = f"odev.plugins.{module_basename}"
 
         # Try to import directly from sys.path first
         try:
-            module = importlib.import_module(plugin_module_name)
+            module = importlib.import_module(module_basename)
         except ImportError:
             # Fallback to explicit file loading if direct import fails
             init_path = plugin.path / "__init__.py"
             if not init_path.exists():
                 return
-            spec = spec_from_file_location(plugin_module_name, init_path)
+            spec = spec_from_file_location(module_basename, init_path)
             if not spec or not spec.loader:
                 return
             module = module_from_spec(spec)
-            sys.modules[plugin_module_name] = module
+            sys.modules[module_basename] = module
 
             try:
                 spec.loader.exec_module(module)
             except Exception:
                 # Drop the half-initialized module so a later retry starts from a clean state
-                sys.modules.pop(plugin_module_name, None)
+                sys.modules.pop(module_basename, None)
                 raise
 
         # Ensure it's available as odev.plugins.X
         sys.modules[module_name] = module
-        setattr(sys.modules["odev.plugins"], plugin_module_name, module)
+        setattr(sys.modules["odev.plugins"], module_basename, module)
 
     def _install_missing_plugin_requirements(self) -> bool:
         """Install missing python packages from the requirements of all enabled plugins.
@@ -788,7 +853,7 @@ class Odev(Generic[CommandType]):
                 for dependency in depends:
                     self.install_plugin(dependency, as_dependency=True)
 
-            plugin_path = self.plugins_path / repository._repository.replace("-", "_")
+            plugin_path = self.plugins_path / plugin_module_name(repository.name)
             self.plugins_path.mkdir(parents=True, exist_ok=True)
 
             if self._plugin_is_installed(plugin):
@@ -830,7 +895,7 @@ class Odev(Generic[CommandType]):
                 if installed_plugin == plugin:
                     continue
 
-                installed_plugin_path = self.plugins_path / installed_plugin.split("/")[-1].replace("-", "_")
+                installed_plugin_path = self.plugins_path / plugin_module_name(installed_plugin)
                 manifest = self._load_plugin_manifest(installed_plugin_path)
 
                 if any(dep in manifest.get("depends", []) for dep in dependents | {plugin}):
@@ -848,7 +913,7 @@ class Odev(Generic[CommandType]):
                 raise OdevError("Aborting plugin uninstallation")
 
             for dependent in dependents | {plugin}:
-                plugin_path = self.plugins_path / dependent.split("/")[-1].replace("-", "_")
+                plugin_path = self.plugins_path / plugin_module_name(dependent)
                 plugin_path.unlink(missing_ok=True)
                 self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != dependent}
                 logger.info(f"Uninstalled plugin {dependent!r}")
@@ -887,13 +952,15 @@ class Odev(Generic[CommandType]):
             "depends": [],
         }
 
-        if not (plugin_path / "__manifest__.py").exists():
+        manifest_path = plugin_path / PLUGIN_MANIFEST_FILENAME
+
+        if not manifest_path.exists():
             return defaults
 
-        spec = spec_from_file_location(f"{plugin_path.name}.__manifest__", (plugin_path / "__manifest__.py").as_posix())
+        spec = spec_from_file_location(f"{plugin_path.name}.__manifest__", manifest_path.as_posix())
 
         if spec is None:
-            raise ImportError(f"Cannot load manifest module from {(plugin_path / '__manifest__.py').as_posix()}")
+            raise ImportError(f"Cannot load manifest module from {manifest_path.as_posix()}")
 
         manifest = module_from_spec(spec)
         cast(Loader, spec.loader).exec_module(manifest)
