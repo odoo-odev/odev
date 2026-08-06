@@ -18,6 +18,12 @@ class DataStore(PostgresDatabase):
 
     def __init__(self, name: str = "odev"):
         super().__init__(name)
+
+        # Every command reads the store, and it lives as long as the process does: its connection is
+        # opened once here and held, rather than reopened for each of the reads a single run makes.
+        # Holding it from this point also covers the tables prepared below.
+        self.hold_connection()
+
         self.databases = DatabaseStore(self)
         self.history = HistoryStore(self)
         self.secrets = SecretStore(self)

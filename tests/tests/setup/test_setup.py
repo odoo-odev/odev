@@ -1,5 +1,5 @@
 import shutil
-from pathlib import Path
+from unittest.mock import patch
 
 from odev.setup import completion, directories, symlink, update
 
@@ -7,24 +7,44 @@ from tests.fixtures import OdevTestCase
 
 
 class TestSetup(OdevTestCase):
+    """Test the setup scripts run when installing odev.
+
+    Both scripts link odev into the shell of the user, at `~/.local/bin/odev` and in the bash completion
+    directory. Left to their real destinations they would repoint the `odev` command of the developer at
+    whichever checkout the suite happens to run from, and two suites running at once would fight over the
+    same two links, so they are redirected into the sandbox of the run.
+    """
+
     def test_completion_01_completion(self):
         """Test the setup script responsible of creating a symlink to the bash
         completion script of odev. A symlink should be created on the file system.
         """
-        with self.patch(completion.console, "confirm", return_value=True):
+        completion_path = self.run_path / "completions" / "complete_odev.sh"
+
+        with (
+            patch.object(completion, "comp_path", completion_path),
+            self.patch(completion.console, "confirm", return_value=True),
+        ):
             completion.setup(self.odev)
 
-        self.assertTrue(Path("~/.local/share/bash-completion/completions/complete_odev.sh").expanduser().is_symlink())
+        self.assertTrue(completion_path.is_symlink())
+        self.assertEqual(completion_path.resolve(), self.odev.path / "complete_odev.sh")
 
     def test_symlink_01_symlink(self):
         """Test the setup script responsible of creating a symlink to odev.
         A symlink should be created to map the "odev" command to the main file
         of this application.
         """
-        with self.patch(symlink.console, "confirm", return_value=True):
+        command_path = self.run_path / "bin" / "odev"
+
+        with (
+            self.patch(symlink, "link_path", return_value=command_path),
+            self.patch(symlink.console, "confirm", return_value=True),
+        ):
             symlink.setup(self.odev)
 
-        self.assertTrue(Path("~/.local/bin/odev").expanduser().is_symlink())
+        self.assertTrue(command_path.is_symlink())
+        self.assertEqual(command_path.resolve(), self.odev.path / "odev.sh")
 
     def test_update_01_update(self):
         """Test the setup script responsible of setting the auto-update values for odev.

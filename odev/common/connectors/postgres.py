@@ -314,27 +314,31 @@ class PostgresConnector(Connector):
         return bool(self.query(f"CREATE TABLE IF NOT EXISTS {table} ({sql_columns})"))
 
     def columns_exist(self, table: str, columns: list[str]) -> list[str]:
-        """Check whether a column exists in a table.
+        """List the columns missing from a table, among the ones requested.
 
         :param table: The name of the table to check.
-        :param columns: The name of the column to check.
-        :return: Whether the column exists.
+        :param columns: The names of the columns to look for.
+        :return: The requested columns that do not exist in the table, in the order they were requested.
         :rtype: list[str]
         """
         if not isinstance(columns, list):
             raise TypeError("Columns should be a list of strings")
 
+        if not columns:
+            return []
+
         results = self.query(
             f"""
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_name = '{table}' AND column_name IN ({",".join([f"'{c}'" for c in columns])})
+            WHERE table_name = '{table}' AND column_name IN ({",".join([f"'{column}'" for column in columns])})
             """,
         )
 
-        if results and isinstance(results, list) and columns:
-            return [c for c in columns if c not in [r[0] for r in results]]
-        return []
+        # An empty result means none of the requested columns exist, not that none are missing.
+        existing = {result[0] for result in results} if isinstance(results, list) else set()
+
+        return [column for column in columns if column not in existing]
 
     def create_column(self, table: str, column: str, attributes: str) -> bool:
         """Create a column in a table.

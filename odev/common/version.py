@@ -86,7 +86,9 @@ class OdooVersion(_BaseVersion):
 
     def __bool__(self) -> bool:
         """Return True if the version is not empty."""
-        return bool(self.major or self.minor or self.module or self.master)
+        # `module` is padded to `MIN_VERSION_LENGTH` and is therefore never an empty tuple:
+        # it has to be tested on its values rather than on its own truthiness.
+        return bool(self.major or self.minor or any(self.module) or self.master)
 
     @property
     def major(self) -> int:
@@ -130,7 +132,8 @@ def _cmpkey(master: bool, major: int, minor: int, module: tuple, enterprise: boo
     # Saas versions should sort after non-saas versions
     _saas = int(saas)
 
-    # Master versions should sort before non-master versions
+    # Master is the development version and therefore sorts after every numbered version, hence it comes
+    # first in the key so that it outweighs the major number.
     _master = int(master)
 
     return _master, major, minor, _module, enterprise, _saas

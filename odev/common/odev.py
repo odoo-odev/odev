@@ -25,7 +25,6 @@ from typing import (
     Any,
     ClassVar,
     Generic,
-    Literal,
     NamedTuple,
     TypedDict,
     cast,
@@ -197,16 +196,20 @@ class Odev(Generic[CommandType]):
     _command_stack: list[CommandType] = []
     """Stack of current commands being executed. Last command in list is the one currently running."""
 
-    def __init__(self, test: bool = False):
+    def __init__(self, test: bool = False, name: str | None = None):
         """Initialize the framework.
 
         :param test: Whether the framework is being initialized for testing purposes
+        :param name: Namespace of the framework, overriding the one inferred from the test mode
         """
         self.start_time = monotonic()
         """Time when the framework was started."""
 
         self.in_test_mode = test
         """Whether the framework is in testing mode."""
+
+        self._name = name
+        """Namespace explicitly assigned to this instance, if any."""
 
         self.commands = CommandRegistry(self)
         """Collection of existing commands, imported on demand."""
@@ -225,8 +228,15 @@ class Odev(Generic[CommandType]):
         return GitConnector(f"{self.path.parent.name}/{self.path.name}", self.path)
 
     @property
-    def name(self) -> Literal["odev", "odev-test"]:
-        """Name of the framework."""
+    def name(self) -> str:
+        """Name of the framework, and the namespace of everything it owns.
+
+        The configuration file and the datastore database are both named after it, so an instance given an
+        explicit name works on its own resources rather than on the ones of the user.
+        """
+        if self._name is not None:
+            return self._name
+
         return "odev" if not self.in_test_mode else "odev-test"
 
     @property

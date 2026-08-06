@@ -23,6 +23,7 @@ from typing import (
 from zipfile import ZipFile
 
 from packaging.version import Version
+from psycopg2 import OperationalError
 
 from odev.common import bash, progress, string
 from odev.common.connectors import GitConnector, GitWorktree, PostgresConnector
@@ -59,9 +60,6 @@ NEUTRALIZE_BEFORE_ODOO_VERSION = OdooVersion("15.0")
 
 class LocalDatabase(PostgresConnectorMixin, Database):
     """Class for manipulating PostgreSQL (local) databases."""
-
-    connector: PostgresConnector | None = None
-    """The PostgreSQL connector of the database."""
 
     _whitelisted: bool = False
     """Whether the database is whitelisted and should not be removed automatically."""
@@ -101,11 +99,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             self.whitelisted = info is not None and info.whitelisted
 
     def __enter__(self):
-        self.connector = self.psql(self.name).__enter__()  # type: ignore [assignment]
+        self._enter_connector(self.name)
         return self
 
     def __exit__(self, *args):
-        self.psql(self.name).__exit__(*args)
+        self._exit_connector(*args)
 
     @property
     def rpc_port(self):
@@ -116,8 +114,20 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if not self.exists:
             return False
 
-        with self:
-            return self.table_exists("ir_module_module")
+        try:
+            with self:
+                return self.table_exists("ir_module_module")
+
+        except OperationalError:
+            # Any process can drop a database at any time, including between the check above and this
+            # connection. Listing databases inspects each of them in turn and must not fail because one
+            # went away in the meantime; anything else is a genuine connection error. The check has to
+            # reach the server rather than the cache, which is what said the database was still there.
+            with self.psql() as psql, psql.nocache():
+                if psql.database_exists(self.name):
+                    raise
+
+            return False
 
     @property
     def venv(self) -> PythonEnv:
@@ -637,7 +647,9 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         tracker.stop()
 
-        if self.connector is not None:
+        # The attribute holds the connector class until a block connects for the first time, so the check
+        # is on the type rather than on `None`, as in `drop`.
+        if isinstance(self.connector, PostgresConnector):
             self.connector.invalidate_cache()
 
     def _replace_filestore(self, source_dir: Path) -> None:

@@ -5,6 +5,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from odev.common.connectors.postgres import Cursor, PostgresConnector
 from odev.common.connectors.rest import RestConnector
+from odev.common.postgres import PostgresDatabase
 
 from tests.fixtures import OdevTestCase
 
@@ -106,3 +107,69 @@ class TestConnectors(OdevTestCase):
             raise RuntimeError("boom")
 
         self.assertEqual(cursor.calls, ["BEGIN", "ROLLBACK"])
+
+
+class TestPostgresConnectionLifecycle(OdevTestCase):
+    """A block has to close the connection it opened, and nested blocks have to share one.
+
+    `ensure_connected` wraps every method of a database in `with self:`, so anything less means a fresh
+    PostgreSQL backend per call: enough of them at once and the server runs out of connection slots.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.database = PostgresDatabase(self.odev.name)
+        """A handle on the datastore database, connected and disconnected by the tests."""
+
+    def backends(self, name: str) -> int:
+        """Count the backends PostgreSQL currently holds for a database."""
+        with PostgresConnector() as psql, psql.nocache():
+            result = psql.query(f"SELECT count(*) FROM pg_stat_activity WHERE datname = '{name}'")
+
+        return result[0][0] if isinstance(result, list) else 0
+
+    def test_01_block_closes_what_it_opened(self):
+        """Leaving a block should disconnect the connector the block connected."""
+        with self.database:
+            self.assertTrue(self.database.connector.connected)
+
+        self.assertFalse(self.database.connector.connected)
+
+    def test_02_nested_blocks_share_one_connection(self):
+        """An inner block should join the connection of the outer one instead of opening its own."""
+        with self.database:
+            connector = self.database.connector
+
+            with self.database:
+                self.assertIs(self.database.connector, connector, "the inner block should reuse the connector")
+
+            self.assertTrue(connector.connected, "the inner block should not close what the outer one uses")
+
+        self.assertFalse(connector.connected, "the outermost block should close it")
+
+    def test_03_repeated_calls_do_not_pile_up_backends(self):
+        """Decorated methods each open a block, and those should not accumulate connections."""
+        baseline = self.backends(self.database.name)
+
+        for _ in range(20):
+            self.database.table_exists("history")
+
+        self.assertLessEqual(
+            self.backends(self.database.name),
+            baseline,
+            "connections opened by the calls should have been closed again",
+        )
+
+    def test_04_store_keeps_a_single_connection(self):
+        """The datastore is read by every command and holds its connection rather than reopening it."""
+        connector = self.odev.store.connector
+        self.assertTrue(connector.connected, "the store should be connected as soon as it exists")
+
+        backends = self.backends(self.odev.store.name)
+
+        for _ in range(20):
+            self.odev.store.table_exists("history")
+
+        self.assertIs(self.odev.store.connector, connector, "the store should keep the same connector")
+        self.assertTrue(connector.connected, "a block should not close the connection the store holds")
+        self.assertEqual(self.backends(self.odev.store.name), backends, "the store should hold a single backend")
