@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from odev._version import __version__
 from odev.common.commands import Command
-from odev.common.odev import Manifest, Odev, Plugin, logger
+from odev.common.odev import Manifest, Odev, Plugin, logger, parse_plugin_manifest, plugin_module_name
 
 from tests.fixtures import CaptureOutput, OdevTestCase
 
@@ -87,9 +87,15 @@ class TestCommonOdev(OdevTestCase):
         class SecondCommand(Command):
             _name = "duplicate"
 
+        module_path = Path(__file__)
+
         with (
             self.assertRaises(ValueError) as error,
-            self.patch(self.odev, "import_commands", return_value=[FirstCommand, SecondCommand]),
+            self.patch(
+                self.odev,
+                "import_commands",
+                return_value=[(FirstCommand, module_path), (SecondCommand, module_path)],
+            ),
         ):
             self.odev.register_commands()
 
@@ -263,7 +269,59 @@ class TestCommonOdev(OdevTestCase):
 
             self.assertEqual(sys.modules["odev.plugins"].__path__, [str(self.odev.plugins_path)])
 
-    def test_21_update_skipped_when_up_to_date(self):
+    def test_21_plugin_module_name(self):
+        """The module name of a plugin should drop the organization and use underscores."""
+        self.assertEqual(plugin_module_name("odoo-odev/odev-plugin-editor-base"), "odev_plugin_editor_base")
+        self.assertEqual(plugin_module_name("odev-plugin-ai"), "odev_plugin_ai")
+
+    def test_22_parse_plugin_manifest(self):
+        """The manifest of a plugin should be parsed into its name, version, description and dependencies."""
+        manifest = parse_plugin_manifest(
+            '"""Some plugin."""\n\n__version__ = "1.2.3"\n\ndepends = ["test/test-plugin", 42]\n',
+            "test/test-plugin-dep",
+        )
+
+        self.assertEqual(
+            manifest,
+            {
+                "name": "test/test-plugin-dep",
+                "version": "1.2.3",
+                "description": "Some plugin.",
+                "depends": ["test/test-plugin"],
+            },
+        )
+
+    def test_23_parse_plugin_manifest_invalid(self):
+        """A source that is not a valid plugin manifest should be rejected."""
+        self.assertIsNone(parse_plugin_manifest('"""No version."""\n\ndepends = []\n', "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest("def invalid(:\n", "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest("__version__ = 1.0\n", "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest('{"name": "Sales", "version": "17.0"}\n', "test/test-addons"))
+
+    def test_24_parse_plugin_manifest_does_not_execute_code(self):
+        """Parsing the manifest of an untrusted repository should never execute its content."""
+        with self.patch("odev.common.odev.logger", "warning") as logger_warning:
+            manifest = parse_plugin_manifest(
+                '"""Malicious plugin."""\n'
+                "import odev.common.odev as target\n"
+                'target.logger.warning("executed")\n'
+                "raise SystemExit(1)\n"
+                '__version__ = "6.6.6"\n',
+                "evil/plugin",
+            )
+
+        self.assertEqual(
+            manifest,
+            {
+                "name": "evil/plugin",
+                "version": "6.6.6",
+                "description": "Malicious plugin.",
+                "depends": [],
+            },
+        )
+        logger_warning.assert_not_called()
+
+    def test_25_update_skipped_when_up_to_date(self):
         """Nothing should be pulled, and the user should not be prompted, when the local branch has no incoming
         changes left after fetching.
         """
@@ -281,7 +339,7 @@ class TestCommonOdev(OdevTestCase):
 
         update_prompt.assert_not_called()
 
-    def test_22_update_records_check_date_when_up_to_date(self):
+    def test_26_update_records_check_date_when_up_to_date(self):
         """The date of the last update check should be recorded even when there was nothing to update, so that
         checks are not run again on every single command.
         """
@@ -292,7 +350,7 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertGreater(self.odev.config.update.date.year, 1995)
 
-    def test_23_update_available(self):
+    def test_27_update_available(self):
         """An update should be reported only when the repository has incoming commits and none of its own."""
         for rev_list, expected in [("2\t0", True), ("0\t0", False), ("1\t3", False)]:
             repository = MagicMock(working_dir=str(self.odev.path))
@@ -305,12 +363,12 @@ class TestCommonOdev(OdevTestCase):
             ):
                 self.assertEqual(self.odev.update_available(), expected)
 
-    def test_24_update_available_without_repository(self):
+    def test_28_update_available_without_repository(self):
         """No update should be reported when odev does not run from a git repository."""
         with self.patch_property(type(self.odev), "git", MagicMock(repository=None)):
             self.assertFalse(self.odev.update_available())
 
-    def test_25_update_available_detached_head(self):
+    def test_29_update_available_detached_head(self):
         """No update should be reported on a detached HEAD, which has no branch to compare with its remote."""
         repository = MagicMock(working_dir=str(self.odev.path))
         repository.head.is_detached = True
@@ -320,7 +378,7 @@ class TestCommonOdev(OdevTestCase):
 
         repository.active_branch.tracking_branch.assert_not_called()
 
-    def test_26_upgrade_version_ahead_of_current(self):
+    def test_30_upgrade_version_ahead_of_current(self):
         """A recorded version ahead of the running one, as left over by a switch back from the 'beta' release
         channel, should be reset instead of being reported as a newer version forever.
         """

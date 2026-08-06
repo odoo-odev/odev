@@ -9,6 +9,10 @@ To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
 
 -   [Plugins](#plugins)
     -   [Table of contents](#table-of-contents)
+    -   [Finding and managing plugins](#finding-and-managing-plugins)
+        -   [Searching for plugins](#searching-for-plugins)
+        -   [Listing local plugins](#listing-local-plugins)
+        -   [Inspecting a plugin](#inspecting-a-plugin)
     -   [Creating a new plugin](#creating-a-new-plugin)
         -   [Plugin structure](#plugin-structure)
             -   [The manifest](#the-manifest)
@@ -17,6 +21,64 @@ To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
         -   [Cross-module imports](#cross-module-imports)
         -   [Adding a new command](#adding-a-new-command)
         -   [Extending a command](#extending-a-command)
+
+## Finding and managing plugins
+
+### Searching for plugins
+
+Run `odev plugin --search` to look for plugins published on GitHub. Odev queries the GitHub search API for the `odev`
+and `plugin` keywords, then keeps only the repositories exposing a valid [manifest](#the-manifest) at their root, so
+unrelated repositories never show up in the results.
+
+Add a term to narrow the search down, quoting it if it contains several words:
+
+```sh
+odev plugin --search editor
+odev plugin --search "upgrade code"
+```
+
+The results are displayed in a table showing, for each plugin, the version declared on its default branch, its number
+of stars and whether it is already available locally. Archived repositories and the
+[template repository](https://github.com/odoo-odev/odev-plugin-template), which cannot be installed, are left out.
+`--limit` caps how many repositories are inspected (20 by default) to stay within the GitHub API rate limits.
+
+> [!NOTE]
+>
+> Searching never installs anything. Copy the name of a plugin from the results and run
+> `odev plugin --enable <organization>/<repository>` to install it.
+
+### Listing local plugins
+
+Run `odev plugin --list` to display every plugin available on your machine, in one of the following states:
+
+| State      | Meaning                                                                                       |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| `enabled`  | The plugin is loaded by odev.                                                                   |
+| `shadowed` | The plugin is enabled but another plugin already uses its module name, so it cannot be loaded.  |
+| `missing`  | The plugin is enabled but its link under `~/.config/odev/plugins` is gone.                      |
+| `disabled` | The plugin was downloaded previously but is not enabled; re-enabling it will not clone it again. |
+
+### Inspecting a plugin
+
+Use `odev plugin --show <organization>/<repository>` to get the details of a single plugin: its state, version,
+branch, path, dependencies and description. Without an argument, `--show` details every plugin available locally, in
+the same order as `--list`.
+
+A plugin that is not on your machine is looked up on GitHub, so `--show` also describes plugins you have not installed
+yet, or that you uninstalled and whose clone you deleted:
+
+```sh
+odev plugin --show odoo-odev/odev-plugin-editor-vscode
+```
+
+Plugins already available locally are read from disk and never trigger a request to GitHub. The full
+`<organization>/<repository>` name is required to look a plugin up remotely: a repository name on its own is only
+matched against the plugins present on your machine, as long as it is not ambiguous.
+
+> [!NOTE]
+>
+> When GitHub cannot be reached — no token configured, no network, rate limit exceeded — `--show` silently falls back
+> to the information available locally instead of failing.
 
 ## Creating a new plugin
 
@@ -51,6 +113,9 @@ Each plugin needs a manifest file which will describe its usage, keep track of i
 Create a new file `__manifest__.py` at the root of your plugin with the following content (copied from the template
 repository). Replace the docstring by a summary of your module's features. This will be read by Odev and displayed when
 required by the `odev plugin` command.
+
+The `__version__` assignment is also what makes a repository recognizable as a plugin: a repository without a root
+`__manifest__.py` declaring it is ignored by `odev plugin --search`.
 
 If any, add the dependencies (other plugins) of your own plugin. For example, `odoo-odev/odev-plugin-editor-vscode`
 depends on the abstract plugin `odoo-odev/odev-plugin-editor-base` which is therefore required for the plugin to work:

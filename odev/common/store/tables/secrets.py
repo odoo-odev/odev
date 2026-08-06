@@ -2,17 +2,17 @@ import os
 from base64 import b64decode, b64encode
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
-
-from paramiko.agent import Agent as SSHAgent, AgentKey
-from paramiko.ssh_exception import SSHException
+from typing import TYPE_CHECKING, Literal
 
 from odev.common.config import Config
 from odev.common.console import console
 from odev.common.errors import OdevError
 from odev.common.logging import logging
 from odev.common.postgres import PostgresTable
-from odev.common.ssh_crypt import E as ssh_decrypt, encrypt as ssh_encrypt  # noqa: N811
+
+
+if TYPE_CHECKING:
+    from paramiko.agent import AgentKey
 
 
 logger = logging.getLogger(__name__)
@@ -68,8 +68,10 @@ class SecretStore(PostgresTable):
     """Configuration parameters."""
 
     @classmethod
-    def _list_ssh_keys(cls) -> list[AgentKey]:
+    def _list_ssh_keys(cls) -> list["AgentKey"]:
         """List all SSH keys available in the ssh-agent."""
+        from paramiko.agent import Agent as SSHAgent  # noqa: PLC0415 - importing paramiko is expensive
+
         keys = list(SSHAgent().get_keys())
 
         if not keys and not os.environ.get("ODEV_NO_SSH_AGENT"):
@@ -93,6 +95,10 @@ class SecretStore(PostgresTable):
         :return: The encrypted string.
         :rtype: str
         """
+        from paramiko.ssh_exception import SSHException  # noqa: PLC0415 - importing paramiko is expensive
+
+        from odev.common.ssh_crypt import encrypt as ssh_encrypt  # noqa: PLC0415
+
         ciphered: str | None = None
         keys = cls._list_ssh_keys()
 
@@ -121,6 +127,10 @@ class SecretStore(PostgresTable):
         :return: The decrypted string.
         :rtype: str
         """
+        from paramiko.ssh_exception import SSHException  # noqa: PLC0415 - importing paramiko is expensive
+
+        from odev.common.ssh_crypt import E as ssh_decrypt  # noqa: N811, PLC0415
+
         deciphered: str | None = None
         keys = cls._list_ssh_keys()
 
