@@ -37,10 +37,15 @@ class FetchCommand(GitCommand):
         for worktree in sorted_worktree:
             self.run_hook(worktree, changes_by_worktree[worktree])
 
+        # Drop the blank line trailing the output of the last worktree.
         self.console.clear_line()
 
     def run_hook(self, worktree: str, changes: list[tuple[str, int, int]]):
-        """Print a summary of the pending changes for a worktree."""
+        """Print a summary of the pending changes for a worktree.
+
+        Overrides must terminate their output with a blank line, separating consecutive worktrees and letting
+        :meth:`run` clear the last one.
+        """
         self.table(
             [
                 TableHeader("Repository", min_width=max(len(repository.name) for repository in self.repositories)),

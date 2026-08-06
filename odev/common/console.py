@@ -392,6 +392,20 @@ class Console(RichConsole):
         else:
             super().print(renderable, *args, **kwargs)
 
+    def title_rule(self, title: str) -> None:
+        """Print a left-aligned rule introducing a section of output.
+
+        :param title: Text to display inside the rule.
+        """
+        rule_char: str = "─"
+
+        self.rule(
+            f"{rule_char} {string.stylize(title, 'bold color.cyan')}",
+            align="left",
+            style="",
+            characters=rule_char,
+        )
+
     def table(
         self,
         headers: Sequence[TableHeader],
@@ -408,13 +422,7 @@ class Console(RichConsole):
         :param kwargs: Additional keyword arguments to pass to the Rich Table.
         """
         if title is not None:
-            rule_char: str = "─"
-            self.rule(
-                f"{rule_char} {string.stylize(title, 'bold color.cyan')}",
-                align="left",
-                style="",
-                characters=rule_char,
-            )
+            self.title_rule(title)
             return self.table(headers, rows, totals, show_header=any(header.title for header in headers), box=None)
 
         kwargs.setdefault("show_header", True)

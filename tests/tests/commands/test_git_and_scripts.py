@@ -1,6 +1,7 @@
 from argparse import Namespace
 from unittest.mock import MagicMock
 
+from odev.commands.git.pull import PullCommand
 from odev.commands.scripts.assets import PathfinderCommand as AssetsCommand
 from odev.commands.scripts.pathfinder import PathfinderCommand
 from odev.common.connectors.git import GitConnector
@@ -32,6 +33,28 @@ class TestGitCommands(OdevCommandTestCase):
     def test_04_worktree_name_required_for_create(self):
         _, stderr = self.dispatch_command("worktree", "--create")
         self.assertIn("provide a name for the worktree", stderr)
+
+    def test_05_pull_output_ends_with_blank_line(self):
+        """`FetchCommand.run` clears the line trailing the last worktree, so `run_hook` must end on a blank one."""
+        worktree = MagicMock(name="17.0", detached=False, branch="17.0")
+        worktree.name = "17.0"
+        worktree.connector.name = "odoo/odoo"
+
+        command = PullCommand.__new__(PullCommand)
+        printed: list[str] = []
+        titled: list[str] = []
+
+        with (
+            self.patch_property(PullCommand, "worktrees", [worktree]),
+            self.patch(
+                self.odev.console, "print", side_effect=lambda renderable="", *_, **__: printed.append(renderable)
+            ),
+            self.patch(self.odev.console, "title_rule", side_effect=titled.append),
+        ):
+            command.run_hook("17.0", [("odoo/odoo", 0, 0)])
+
+        self.assertEqual(titled, ["17.0"])
+        self.assertEqual(printed, [""])
 
 
 class TestScriptCommands(OdevTestCase):
