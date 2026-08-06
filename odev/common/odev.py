@@ -383,9 +383,9 @@ class Odev(Generic[CommandType]):
         plugins_upgrade = any(self._update(path, plugin) for plugin, path, _ in self.plugins)
 
         updated = repo_updated or plugins_upgrade or upgrade
+        self.config.update.date = datetime.now()
 
         if updated:
-            self.config.update.date = datetime.now(UTC)
             self._set_version_after_update()
             self.upgrade()
 
@@ -419,11 +419,15 @@ class Odev(Generic[CommandType]):
         if git.repository is None:
             raise OdevError(f"Repository for {self.name!r} not found at {path.as_posix()}")
 
+        prompt_name = f"plugin {plugin}" if plugin else self.name
+        logger.debug(f"Checking for updates in {git.name!r}")
+
         if not self.__git_branch_behind(git.repository):
             git.fetch(detached=False)
 
-        prompt_name = f"plugin {plugin}" if plugin else self.name
-        logger.debug(f"Checking for updates in {git.name!r}")
+            if not self.__git_branch_behind(git.repository):
+                logger.debug(f"No update available for {git.name!r}")
+                return False
 
         if not self.__update_prompt(prompt_name):
             return False
@@ -514,6 +518,21 @@ class Odev(Generic[CommandType]):
         spec.loader.exec_module(version_module)
         self.__class__.version = version_module.__version__
 
+    def _reconcile_recorded_version(self) -> bool:
+        """Reset the recorded version if it is ahead of the version currently running, which happens
+        after switching release channel, checking out an older revision or downgrading odev.
+
+        :return: Whether the recorded version was reset
+        :rtype: bool
+        """
+        if version.parse(self.config.update.version) <= version.parse(self.version):
+            return False
+
+        recorded_version = string.stylize(self.config.update.version, "repr.version")
+        logger.debug(f"Recorded version {recorded_version} is ahead of the current version, resetting it")
+        self.config.update.version = self.version
+        return True
+
     def check_upgrade(self) -> bool:
         """Check whether the current version of odev is the latest available version.
 
@@ -528,6 +547,9 @@ class Odev(Generic[CommandType]):
 
     def upgrade(self) -> None:
         """Upgrade the current version of odev."""
+        if self._reconcile_recorded_version():
+            return
+
         if not self.check_upgrade():
             return
 
@@ -1204,6 +1226,20 @@ class Odev(Generic[CommandType]):
                 "release channel"
             )
 
+    def update_available(self) -> bool:
+        """Check whether newer changes are available for odev in its remote repository.
+
+        Based on the remote tracking branch as of the last time changes were fetched by the periodic
+        update check, this does not reach out to the network.
+
+        :return: Whether newer changes are available
+        :rtype: bool
+        """
+        if self.git.repository is None:
+            return False
+
+        return self.__git_branch_behind(self.git.repository)
+
     def switch_release_channel(self, branch: str) -> None:
         """Switch the release channel to the given branch."""
         with progress.spinner(f"Switching odev to {branch!r} release channel"):
@@ -1214,6 +1250,8 @@ class Odev(Generic[CommandType]):
                 self.__checkout_release_channel(GitConnector(plugin.name), branch)
 
         self.config.update.release = branch
+        self._set_version_after_update()
+        self._reconcile_recorded_version()
         logger.info(f"Switched release channel to {branch!r}")
 
     # --- Private methods ------------------------------------------------------
@@ -1265,6 +1303,9 @@ class Odev(Generic[CommandType]):
         :return: Whether the branch is behind the remote tracking branch
         :rtype: bool
         """
+        if repository.head.is_detached:
+            return False
+
         remote_branch = repository.active_branch.tracking_branch()
 
         if remote_branch is None:
