@@ -1,6 +1,6 @@
 """PostgreSQL database class."""
 
-from collections.abc import Mapping, MutableMapping
+from collections.abc import Mapping, MutableMapping, Sequence
 from contextlib import nullcontext
 
 from psycopg2.errors import InvalidTableDefinition
@@ -22,9 +22,6 @@ class PostgresDatabase(PostgresConnectorMixin):
     connector: PostgresConnector
     """Instance of the connector to the database engine."""
 
-    tables: MutableMapping[str, "PostgresTable"] = {}
-    """Mapping of tables in the database."""
-
     def __init__(self, name: str):
         """Initialize the database."""
         super().__init__()
@@ -32,14 +29,25 @@ class PostgresDatabase(PostgresConnectorMixin):
         self.name: str = name
         """The name of the database."""
 
+        self.tables: MutableMapping[str, PostgresTable] = {}
+        """Mapping of tables in the database, keyed by table name."""
+
         self.prepare_database()
 
     def __enter__(self):
-        self.connector = self._connector_class(self.name).__enter__()
+        self._enter_connector(self.name)
         return self
 
     def __exit__(self, *args):
-        self._connector_class(self.name).__exit__(*args)
+        self._exit_connector(*args)
+
+    def hold_connection(self) -> None:
+        """Keep the connection open for the lifetime of this object rather than for that of a block.
+
+        Meant for a database read often enough that reconnecting for each operation is wasteful, and
+        long-lived enough that holding a backend for it is not.
+        """
+        self._enter_connector(self.name)
 
     def __repr__(self):
         """Return the representation of the database."""
@@ -111,10 +119,15 @@ class PostgresDatabase(PostgresConnectorMixin):
         return self.connector.create_column(table, column, definition)
 
     @ensure_connected
-    def query(self, query: str, nocache: bool = False):
-        """Execute a query on the database."""
+    def query(self, query: str, params: Sequence | None = None, nocache: bool = False):
+        """Execute a query on the database.
+
+        :param query: The query to execute.
+        :param params: Values to bind to the placeholders of the query.
+        :param nocache: Whether to bypass the query cache.
+        """
         with self.connector.nocache() if nocache else nullcontext():
-            return self.connector.query(query)
+            return self.connector.query(query, params)
 
     @ensure_connected
     def constraint(self, table: str, name: str, definition: str):

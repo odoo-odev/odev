@@ -568,11 +568,13 @@ class TestDatabaseCommands(OdevCommandTestCase):
         """Command `odev delete` should delete databases matching a regular expression."""
         self.assertDatabaseExist(self.database_name)
 
+        # The expression runs against the real PostgreSQL instance, so it has to be scoped to the sandbox
+        # of this run: a broader one would delete the databases of a suite running alongside this one.
         with self.patch(self.odev.console, "confirm", return_value=True):
             stdout, _ = self.dispatch_command(
                 "delete",
                 "--expression",
-                "^odev-test-[a-z0-9]{8}",
+                f"^{self.odev.name}-[a-z0-9]{{8}}",
                 "--include-whitelisted",
             )
 

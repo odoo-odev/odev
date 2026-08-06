@@ -20,7 +20,7 @@ from rich.style import StyleType
 
 from odev.common import string
 from odev.common.console import console
-from odev.common.debug import DEBUG_MODE
+from odev.common.debug import debug_mode, debuggers
 from odev.common.logging import OdevRichHandler, logging
 
 
@@ -30,11 +30,31 @@ __all__ = ["Progress", "StackedStatus", "spinner"]
 logger = logging.getLogger(__name__)
 
 
-if DEBUG_MODE:
-    logger.warning(
-        "Disabling live status due to debugger usage:\n"
-        + string.join_bullet(["Progress bars will not be shown", "Spinners will be replaced with log messages"])
-    )
+_debug_warning_shown: bool = False
+"""Whether the user was already told that live statuses are disabled."""
+
+
+def live_status_disabled() -> bool:
+    """Whether live statuses must be degraded to plain log messages.
+
+    An interactive debugger and a live display cannot share the terminal, so the presence of a call to a debugger
+    in odev's sources disables spinners and progress bars. The check is only performed when a live status is about
+    to be displayed: scanning the sources is far too expensive to pay on every odev invocation.
+    """
+    global _debug_warning_shown  # noqa: PLW0603
+
+    if not debug_mode():
+        return False
+
+    if not _debug_warning_shown:
+        _debug_warning_shown = True
+        logger.warning(f"Interactive debuggers detected:\n{string.join_bullet(debuggers())}")
+        logger.warning(
+            "Disabling live status due to debugger usage:\n"
+            + string.join_bullet(["Progress bars will not be shown", "Spinners will be replaced with log messages"])
+        )
+
+    return True
 
 
 class Progress(RichProgress):
@@ -111,7 +131,7 @@ class StackedStatus(Status):
         if self.stack:
             self.stack[-1].stop()
 
-        if DEBUG_MODE or getattr(console, "headless", False):
+        if getattr(console, "headless", False) or live_status_disabled():
             return self
 
         console.is_live = True
@@ -176,7 +196,7 @@ def spinner(message: str) -> StackedStatus:
     :param message: The message to display.
     :type message: str
     """
-    if not getattr(console, "headless", False) and (DEBUG_MODE or not console.is_interactive):
+    if not getattr(console, "headless", False) and (not console.is_interactive or live_status_disabled()):
         logger.info(message)
 
     status = StackedStatus(console.render_str(message), console=console, spinner="arc")
