@@ -7,14 +7,13 @@ from itertools import islice
 from pathlib import Path
 from types import FrameType
 from typing import (
+    TYPE_CHECKING,
     ClassVar,
     cast,
 )
 from urllib.parse import urlparse
 
 from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
-from github import Auth as GithubAuth, Github, GithubException, UnknownObjectException
-from github.Repository import Repository
 
 from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
@@ -23,6 +22,11 @@ from odev.common.errors import ConnectorError
 from odev.common.logging import logging, silence_loggers
 from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
+
+
+if TYPE_CHECKING:
+    from github import Github
+    from github.Repository import Repository
 
 
 GITHUB_DOMAIN = "github.com"
@@ -241,7 +245,7 @@ class GithubConnector(Connector):
     _token: str | None = None
     """The Github API token for the current session."""
 
-    _connection: Github | None = None
+    _connection: "Github | None" = None
     """The connection to the Github API."""
 
     @property
@@ -255,6 +259,8 @@ class GithubConnector(Connector):
         if self._connection is None:
             return False
 
+        from github import GithubException  # noqa: PLC0415 - importing the GitHub API client is expensive
+
         try:
             self._connection.get_user().login  # noqa: B018 - login is a property
         except GithubException:
@@ -264,6 +270,8 @@ class GithubConnector(Connector):
 
     def connect(self):
         """Connect to the Github API."""
+        from github import Auth as GithubAuth, Github  # noqa: PLC0415 - importing the GitHub API client is expensive
+
         if self._token is None:
 
             def get_token(prompt: bool) -> str | None:
@@ -319,7 +327,7 @@ class GithubConnector(Connector):
         limit: int = GITHUB_SEARCH_DEFAULT_LIMIT,
         sort: str | None = None,
         order: str = "desc",
-    ) -> list[Repository]:
+    ) -> "list[Repository]":
         """Search for repositories on GitHub.
 
         :param query: The search query, using the GitHub search syntax.
@@ -332,22 +340,24 @@ class GithubConnector(Connector):
             return []
 
         with self:
-            results = cast(Github, self._connection).search_repositories(
+            results = cast("Github", self._connection).search_repositories(
                 query,
                 **({"sort": sort, "order": order} if sort else {}),
             )
 
             return list(islice(results, limit))
 
-    def get_repository(self, name: str) -> Repository | None:
+    def get_repository(self, name: str) -> "Repository | None":
         """Fetch a repository from GitHub by its full name, without cloning it.
 
         :param name: The full name of the repository, in the format `organization/repository`.
         :return: The repository, or `None` if it does not exist or cannot be accessed.
         """
+        from github import GithubException, UnknownObjectException  # noqa: PLC0415 - the GitHub client is expensive
+
         with self:
             try:
-                return cast(Github, self._connection).get_repo(name)
+                return cast("Github", self._connection).get_repo(name)
             except UnknownObjectException:
                 return None
             except GithubException as error:
@@ -355,7 +365,7 @@ class GithubConnector(Connector):
                 return None
 
     @staticmethod
-    def get_repository_file(repository: Repository, path: str, ref: str | None = None) -> str | None:
+    def get_repository_file(repository: "Repository", path: str, ref: str | None = None) -> str | None:
         """Fetch the content of a file inside a remote repository, without cloning it.
 
         :param repository: The remote repository to fetch the file from.
@@ -363,6 +373,8 @@ class GithubConnector(Connector):
         :param ref: The branch, tag or commit to fetch the file from; defaults to the default branch.
         :return: The decoded content of the file, or `None` if it does not exist or cannot be read.
         """
+        from github import GithubException, UnknownObjectException  # noqa: PLC0415 - the GitHub client is expensive
+
         try:
             contents = repository.get_contents(path, **({"ref": ref} if ref else {}))
         except UnknownObjectException:
@@ -519,7 +531,7 @@ class GitConnector(GithubConnector):
             return self.repository.heads[0].name.split("/")[-1]
 
         with self:
-            return cast(Github, self._connection).get_repo(self.name).default_branch
+            return cast("Github", self._connection).get_repo(self.name).default_branch
 
     @property
     def branch(self) -> str | None:
@@ -1078,7 +1090,7 @@ class GitConnector(GithubConnector):
         :rtype: List[str]
         """
         with self:
-            branches = cast(Github, self._connection).get_repo(self.name).get_branches()
+            branches = cast("Github", self._connection).get_repo(self.name).get_branches()
 
         return [branch.name for branch in branches]
 

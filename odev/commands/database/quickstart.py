@@ -64,16 +64,31 @@ class QuickStartCommand(DatabaseCommand):
                 raise self.error(f"Database {self._database.name!r} could not be restored")
 
             new_database = LocalDatabase(self.args.name or self._database.name)
+
+            # Link the repository before restoring: `restore` neutralizes the database, and
+            # neutralization looks for `data/neutralize.sql` scripts in the custom modules found
+            # under the addons paths derived from the repository linked to the database.
+            self.link_repository(new_database)
             self.odev.run_command("restore", dump_file.as_posix(), database=new_database)
 
-            if self._database.repository:
-                if isinstance(self._database.repository, Repository):
-                    repo_org = self._database.repository.organization
-                    repo_name = self._database.repository.name
-                else:
-                    repo_org, repo_name = self._database.repository.name.split("/")
+            # `restore` drops and recreates the database, clearing its entry in the data store.
+            self.link_repository(new_database)
 
-                new_database.repository = Repository(repo_name, repo_org)
+    def link_repository(self, database: LocalDatabase) -> None:
+        """Link the repository of the source database to the target local database.
+
+        :param database: The database to link the repository to.
+        """
+        if not self._database.repository:
+            return
+
+        if isinstance(self._database.repository, Repository):
+            repo_org = self._database.repository.organization
+            repo_name = self._database.repository.name
+        else:
+            repo_org, repo_name = self._database.repository.name.split("/")
+
+        database.repository = Repository(repo_name, repo_org)
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
         """Return the keyword arguments to pass to Database.get_dump_filename()."""

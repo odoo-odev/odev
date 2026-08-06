@@ -125,22 +125,23 @@ class HelpCommand(Command):
             arguments without brackets ('arg') are required.
         """
 
-        commands = [command for name, command in self.odev.commands.items() if name == command._name]
+        # Read the registry's index rather than the command classes: listing every command must not import them all.
+        commands = self.odev.commands.summaries()
         message_indent = string.min_indent(message)
         commands_list = string.indent(
             string.format_options_list(
                 [
                     (
-                        command._name,
-                        command._help
+                        command.name,
+                        command.help
                         + (
                             f"\nAliases: "
-                            f"{string.join_and([f'[italic]{alias}[/italic]' for alias in sorted(command._aliases)])}"
-                            if command._aliases
+                            f"{string.join_and([f'[italic]{alias}[/italic]' for alias in sorted(command.aliases)])}"
+                            if command.aliases
                             else ""
                         ),
                     )
-                    for command in sorted(commands, key=lambda command: command._name)
+                    for command in commands
                 ],
                 blanks=1,
             ),

@@ -24,6 +24,7 @@ class CaptureOutput:
         self._stderr_value = ""
         self._stdout_handler = None
         self._stderr_handler = None
+        self._root_level = logging.NOTSET
 
     def __enter__(self):
         self._stdout = StringIO()
@@ -33,12 +34,18 @@ class CaptureOutput:
         sys.stdout = self._stdout
         sys.stderr = self._stderr
 
+        # Capture on the root logger rather than on each existing one: command modules are only imported when their
+        # command runs, so their logger does not exist yet when the capture starts.
+        root = logging.getLogger()
+        self._root_level = root.level
+        root.setLevel(logging.INFO)
+        root.addHandler(self._stdout_handler)
+        root.addHandler(self._stderr_handler)
+
         for logger in logging.Logger.manager.loggerDict.values():
             if isinstance(logger, logging.Logger):
                 logger.propagate = True
                 logger.setLevel(logging.INFO)
-                logger.addHandler(self._stdout_handler)
-                logger.addHandler(self._stderr_handler)
 
         return self
 
@@ -46,10 +53,10 @@ class CaptureOutput:
         if self._stdout_handler is None or self._stderr_handler is None:
             raise AssertionError("CaptureOutput not properly initialized")
 
-        for logger in logging.Logger.manager.loggerDict.values():
-            if isinstance(logger, logging.Logger):
-                logger.removeHandler(self._stdout_handler)
-                logger.removeHandler(self._stderr_handler)
+        root = logging.getLogger()
+        root.removeHandler(self._stdout_handler)
+        root.removeHandler(self._stderr_handler)
+        root.setLevel(self._root_level)
 
         if self._stderr is None or self._stdout is None:
             raise AssertionError("CaptureOutput streams not properly initialized")
