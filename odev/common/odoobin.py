@@ -324,7 +324,10 @@ class OdoobinProcess(OdevFrameworkMixin):
         """Return the list of additional repositories linked to this database."""
         for path in self.additional_addons_paths:
             if (path / ".git").exists() and self.check_addons_path(path):
-                yield GitConnector(f"{path.parent.name}/{path.name}")
+                # Pass the path so the name is read from the git remote: a repository cloned outside of
+                # the `<repositories>/<organization>/<repository>` convention would otherwise be named
+                # after the directories it lives in, and resolved back to a path that does not exist.
+                yield GitConnector(f"{path.parent.name}/{path.name}", path)
 
     @property
     def odoo_worktrees(self) -> Generator[GitWorktree, None, None]:
