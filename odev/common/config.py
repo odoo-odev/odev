@@ -19,6 +19,8 @@ __all__ = ["Config"]
 
 CONFIG_DIR: Path = Path.home() / ".config" / "odev"
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+XGRAM_UNKNOWN = "<unknown>"
+"""Marker stored in the configuration while the user's trigram has never been resolved."""
 
 
 class Section:
@@ -297,6 +299,23 @@ class TelemetrySection(Section):
     @enabled.setter
     def enabled(self, value: bool):
         self.set("enabled", "true" if value else "false")
+
+
+class UserSection(Section):
+    """Configuration about the developer running odev."""
+
+    @property
+    def xgram(self) -> str:
+        """Odoo trigram of the current user, cached across runs.
+
+        Resolving it requires a vault lookup and a call to git, which is too expensive to repeat on every command.
+        An empty value means the user is known not to be an Odoo employee, `<unknown>` that the check never ran.
+        """
+        return cast(str, self.get("xgram", XGRAM_UNKNOWN))
+
+    @xgram.setter
+    def xgram(self, value: str):
+        self.set("xgram", value)
 
 
 class Config:

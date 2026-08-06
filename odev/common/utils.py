@@ -1,6 +1,7 @@
 """Utility classes and functions for odev."""
 
 from odev.common import bash
+from odev.common.config import XGRAM_UNKNOWN
 from odev.common.logging import logging
 
 
@@ -15,6 +16,22 @@ class EmployeeUtils:
 
     def get_xgram(self) -> str | None:
         """Get the user's xgram from their Odoo email.
+
+        The result is cached in the configuration file: resolving it requires a vault lookup and a call to git,
+        which would otherwise be paid on every single odev invocation.
+        """
+        cached = self.odev.config.user.xgram
+
+        if cached != XGRAM_UNKNOWN:
+            return cached or None
+
+        xgram = self._resolve_xgram()
+        self.odev.config.user.xgram = xgram or ""
+
+        return xgram
+
+    def _resolve_xgram(self) -> str | None:
+        """Resolve the user's xgram from their Odoo email.
 
         Checks secrets first, then falls back to git configuration.
         """

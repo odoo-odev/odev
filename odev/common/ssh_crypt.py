@@ -8,11 +8,15 @@ import base64
 import random
 from collections import deque
 from hashlib import sha3_256
+from typing import TYPE_CHECKING
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from paramiko.agent import AgentKey
+
+
+if TYPE_CHECKING:
+    from paramiko.agent import AgentKey
 
 
 VALID_SSH_NAME = ["ssh-rsa", "ssh-ed25519"]
@@ -105,7 +109,7 @@ class DecryptingCipher:
 class Encryptor:
     """High-level encryptor using SSH agent."""
 
-    def __init__(self, ssh_key: AgentKey, binary: bool = False):
+    def __init__(self, ssh_key: "AgentKey", binary: bool = False):
         """Initialize the encryptor.
 
         :param ssh_key: The SSH key to use for signing.
@@ -143,7 +147,7 @@ class Encryptor:
 class Decryptor:
     """High-level decryptor using SSH agent."""
 
-    def __init__(self, ssh_key: AgentKey, binary: bool = False):
+    def __init__(self, ssh_key: "AgentKey", binary: bool = False):
         """Initialize the decryptor.
 
         :param ssh_key: The SSH key to use for signing.
@@ -200,7 +204,7 @@ class Decryptor:
         return self.decoder.decode(raw_data)
 
 
-def encrypt(data: str | bytes, ssh_key: AgentKey, binary: bool = False) -> bytes:
+def encrypt(data: str | bytes, ssh_key: "AgentKey", binary: bool = False) -> bytes:
     """Encrypt data using an SSH key.
 
     :param data: The data to encrypt.
@@ -218,7 +222,7 @@ def encrypt(data: str | bytes, ssh_key: AgentKey, binary: bool = False) -> bytes
 class E:
     """A wrapper for decrypting data lazily or as a string."""
 
-    def __init__(self, data: str | bytes, ssh_key: AgentKey, binary: bool = False):
+    def __init__(self, data: str | bytes, ssh_key: "AgentKey", binary: bool = False):
         """Initialize the decryptor wrapper.
 
         :param data: The encrypted data.

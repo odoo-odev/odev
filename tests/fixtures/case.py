@@ -182,8 +182,8 @@ class OdevTestCase(TestCase):
     def __patch_cli(cls):
         """Patch interactions with the CLI to avoid waiting for user input or showing live status during tests."""
         cls._patch_object("odev.common.console.Console", properties=[("bypass_prompt", True)])
-        cls._patch_object("odev.common.debug", [("DEBUG_MODE", True)])
-        cls._patch_object("odev.common.progress", [("DEBUG_MODE", True)])
+        cls._patch_object("odev.common.debug", [("debug_mode", True)])
+        cls._patch_object("odev.common.progress", [("live_status_disabled", True)])
 
     @classmethod
     def __patch_framework(cls):

@@ -6,13 +6,13 @@ from collections.abc import Callable, Generator, Mapping, Sequence
 from pathlib import Path
 from types import FrameType
 from typing import (
+    TYPE_CHECKING,
     ClassVar,
     cast,
 )
 from urllib.parse import urlparse
 
 from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
-from github import Auth as GithubAuth, Github, GithubException
 
 from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
@@ -21,6 +21,10 @@ from odev.common.errors import ConnectorError
 from odev.common.logging import logging, silence_loggers
 from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
+
+
+if TYPE_CHECKING:
+    from github import Github
 
 
 GITHUB_DOMAIN = "github.com"
@@ -236,7 +240,7 @@ class GitConnector(Connector):
     _token: str | None = None
     """The Github API token for the current session."""
 
-    _connection: Github | None = None
+    _connection: "Github | None" = None
     """The connection to the Github API."""
 
     _organization: str
@@ -373,7 +377,7 @@ class GitConnector(Connector):
             return self.repository.heads[0].name.split("/")[-1]
 
         with self:
-            return cast(Github, self._connection).get_repo(self.name).default_branch
+            return cast("Github", self._connection).get_repo(self.name).default_branch
 
     @property
     def branch(self) -> str | None:
@@ -404,6 +408,8 @@ class GitConnector(Connector):
         if self._connection is None:
             return False
 
+        from github import GithubException  # noqa: PLC0415 - importing the GitHub API client is expensive
+
         try:
             self._connection.get_user().login  # noqa: B018 - login is a property
         except GithubException:
@@ -426,6 +432,8 @@ class GitConnector(Connector):
 
     def connect(self):
         """Connect to the Github API."""
+        from github import Auth as GithubAuth, Github  # noqa: PLC0415 - importing the GitHub API client is expensive
+
         if self._token is None:
 
             def get_token(prompt: bool) -> str | None:
@@ -996,7 +1004,7 @@ class GitConnector(Connector):
         :rtype: List[str]
         """
         with self:
-            branches = cast(Github, self._connection).get_repo(self.name).get_branches()
+            branches = cast("Github", self._connection).get_repo(self.name).get_branches()
 
         return [branch.name for branch in branches]
 

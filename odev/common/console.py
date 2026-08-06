@@ -6,19 +6,15 @@ import sys
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Literal,
 )
 
-from InquirerPy import inquirer
-from InquirerPy.base.control import Choice
-from InquirerPy.base.simple import BaseSimplePrompt
-from InquirerPy.utils import get_style
-from InquirerPy.validator import EmptyInputValidator, NumberValidator, PathValidator
-from prompt_toolkit.validation import ValidationError
 from rich import box
 from rich.console import Console as RichConsole, RenderableType
 from rich.control import Control
@@ -30,6 +26,11 @@ from rich.theme import Theme
 
 from odev.common import string
 from odev.common.deprecation import deprecated
+
+
+if TYPE_CHECKING:
+    from InquirerPy.utils import InquirerPyStyle
+    from InquirerPy.validator import PathValidator
 
 
 __all__ = ["Colors", "console"]
@@ -173,19 +174,29 @@ RICH_THEME = Theme(
 
 INQUIRER_MARK = "[?]"
 
-INQUIRER_STYLE = get_style(
-    style_override=False,
-    style={
-        "questionmark": f"fg:{Colors.PURPLE} bold",
-        "answermark": f"fg:{Colors.PURPLE} bold",
-        "answer": Colors.PURPLE,
-        "input": Colors.CYAN,
-        "pointer": Colors.CYAN,
-        "validator": f"fg:{Colors.RED} bg: bold",
-        "skipped": Colors.GRAY,
-        "checkbox": Colors.CYAN,
-    },
-)
+
+@cache
+def inquirer_style() -> "InquirerPyStyle":
+    """Style applied to every prompt shown to the user.
+
+    Building it requires InquirerPy, which pulls in prompt_toolkit and is by far the most expensive dependency of
+    this module. Since odev only prompts in interactive sessions, it is imported on first use rather than on import.
+    """
+    from InquirerPy.utils import get_style  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
+    return get_style(
+        style_override=False,
+        style={
+            "questionmark": f"fg:{Colors.PURPLE} bold",
+            "answermark": f"fg:{Colors.PURPLE} bold",
+            "answer": Colors.PURPLE,
+            "input": Colors.CYAN,
+            "pointer": Colors.CYAN,
+            "validator": f"fg:{Colors.RED} bg: bold",
+            "skipped": Colors.GRAY,
+            "checkbox": Colors.CYAN,
+        },
+    )
 
 
 # --- Logging highlighter customization ----------------------------------------
@@ -211,24 +222,36 @@ class OdevReprHighlighter(ReprHighlighter):
 # Validators for inquirer prompts.
 
 
-class PurportedPathValidator(PathValidator):
-    """Path validator that doesn't check if the path exists."""
+@cache
+def purported_path_validator() -> type["PathValidator"]:
+    """Build the validator accepting paths that do not exist yet.
 
-    def validate(self, document) -> None:
-        """Check if user input is a valid path."""
-        path = Path(document.text).expanduser()
+    It derives from an InquirerPy class, so it can only be declared once InquirerPy has been imported, which this
+    module defers until the user is actually prompted.
+    """
+    from InquirerPy.validator import PathValidator  # noqa: PLC0415 - importing prompt_toolkit is expensive
+    from prompt_toolkit.validation import ValidationError  # noqa: PLC0415
 
-        if self._is_file and path.is_dir():
-            raise ValidationError(
-                message=self._message,
-                cursor_position=document.cursor_position,
-            )
+    class PurportedPathValidator(PathValidator):
+        """Path validator that doesn't check if the path exists."""
 
-        if self._is_dir and path.is_file():
-            raise ValidationError(
-                message=self._message,
-                cursor_position=document.cursor_position,
-            )
+        def validate(self, document) -> None:
+            """Check if user input is a valid path."""
+            path = Path(document.text).expanduser()
+
+            if self._is_file and path.is_dir():
+                raise ValidationError(
+                    message=self._message,
+                    cursor_position=document.cursor_position,
+                )
+
+            if self._is_dir and path.is_file():
+                raise ValidationError(
+                    message=self._message,
+                    cursor_position=document.cursor_position,
+                )
+
+    return PurportedPathValidator
 
 
 # --- Rich console -------------------------------------------------------------
@@ -472,17 +495,19 @@ class Console(RichConsole):
         kwargs.setdefault("theme", "github-dark")
         self.print(Syntax(text, language, **kwargs))
 
-    def __prompt_factory(self, prompt_type: type[BaseSimplePrompt], message: str, **kwargs) -> Any:
+    def __prompt_factory(self, prompt_name: str, message: str, **kwargs) -> Any:
         """Create a prompt object.
-        :param prompt_type: Type of prompt to create.
+        :param prompt_name: Name of the InquirerPy prompt to create.
         :param message: Prompt message.
         :param kwargs: Keyword arguments to pass to the prompt constructor.
         :return: The result of the prompt.
         """
+        from InquirerPy import inquirer  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         self.pause_live()
-        prompt = prompt_type(
+        prompt = getattr(inquirer, prompt_name)(
             raise_keyboard_interrupt=True,
-            style=INQUIRER_STYLE,
+            style=inquirer_style(),
             amark=INQUIRER_MARK,
             qmark=INQUIRER_MARK,
             message=message,
@@ -492,7 +517,7 @@ class Console(RichConsole):
 
         def patched_run():
             if self.bypass_prompt:
-                default_key = "defaults" if prompt_type == "checkbox" else "default"
+                default_key = "defaults" if prompt_name == "checkbox" else "default"
 
                 if default_key in kwargs:
                     prompt.status = {
@@ -527,8 +552,10 @@ class Console(RichConsole):
         :return: The text entered by the user
         :rtype: str
         """
+        from InquirerPy.validator import EmptyInputValidator  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         return self.__prompt_factory(
-            inquirer.text,
+            "text",
             message=message,
             default=default,
             validate=EmptyInputValidator(),
@@ -550,8 +577,10 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: int or None
         """
+        from InquirerPy.validator import NumberValidator  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         return self.__prompt_factory(
-            inquirer.number,
+            "number",
             message=message,
             default=default,
             min_allowed=min_value,
@@ -577,8 +606,10 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: float or None
         """
+        from InquirerPy.validator import NumberValidator  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         return self.__prompt_factory(
-            inquirer.number,
+            "number",
             message=message,
             default=default,
             min_allowed=min_value,
@@ -598,7 +629,7 @@ class Console(RichConsole):
         :rtype: str
         """
         return self.__prompt_factory(
-            inquirer.secret,
+            "secret",
             message=message,
             mandatory=True,
             mandatory_message="A value is required",
@@ -613,7 +644,7 @@ class Console(RichConsole):
         :rtype: bool
         """
         return self.__prompt_factory(
-            inquirer.confirm,
+            "confirm",
             message=message,
             default=default,
         )
@@ -627,11 +658,11 @@ class Console(RichConsole):
         :rtype: str or None
         """
         return self.__prompt_factory(
-            inquirer.filepath,
+            "filepath",
             message=message,
             default=default,
             only_directories=True,
-            validate=PurportedPathValidator(message="Path must not be a file", is_dir=True),
+            validate=purported_path_validator()(message="Path must not be a file", is_dir=True),
         )
 
     def filepath(self, message: str, default: str | None = None) -> str | None:
@@ -643,11 +674,11 @@ class Console(RichConsole):
         :rtype: str or None
         """
         return self.__prompt_factory(
-            inquirer.filepath,
+            "filepath",
             message=message,
             default=default,
             only_directories=True,
-            validate=PurportedPathValidator(message="Path must not be a directory", is_file=True),
+            validate=purported_path_validator()(message="Path must not be a directory", is_file=True),
         )
 
     def select(
@@ -663,8 +694,10 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: str or None
         """
+        from InquirerPy.base.control import Choice  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         return self.__prompt_factory(
-            inquirer.select,
+            "select",
             message=message,
             choices=[Choice(choice[0], name=choice[-1]) for choice in choices],
             default=default,
@@ -681,10 +714,12 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: str or None
         """
+        from InquirerPy.base.control import Choice  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         defaults = defaults or []
 
         return self.__prompt_factory(
-            inquirer.checkbox,
+            "checkbox",
             message=message,
             choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in defaults) for choice in choices],
             transformer=lambda selected: string.join_and(selected) if selected else "None",
@@ -701,8 +736,10 @@ class Console(RichConsole):
         :return: The selected choice
         :rtype: str or None
         """
+        from InquirerPy.base.control import Choice  # noqa: PLC0415 - importing prompt_toolkit is expensive
+
         return self.__prompt_factory(
-            inquirer.fuzzy,
+            "fuzzy",
             message=message,
             choices=[Choice(choice[0], name=choice[-1]) for choice in choices],
             default=default,

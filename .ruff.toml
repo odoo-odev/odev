@@ -106,6 +106,9 @@ ignore = [
     "F403",     # ignore * imports
     "I001",     # ignore unsorted imports
 ]
+"tools/*" = [
+    "T201",     # standalone developer scripts report their results on stdout
+]
 
 [lint.pydocstyle]
 convention = "pep257"

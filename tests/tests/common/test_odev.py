@@ -81,9 +81,15 @@ class TestCommonOdev(OdevTestCase):
         class SecondCommand(Command):
             _name = "duplicate"
 
+        module_path = Path(__file__)
+
         with (
             self.assertRaises(ValueError) as error,
-            self.patch(self.odev, "import_commands", return_value=[FirstCommand, SecondCommand]),
+            self.patch(
+                self.odev,
+                "import_commands",
+                return_value=[(FirstCommand, module_path), (SecondCommand, module_path)],
+            ),
         ):
             self.odev.register_commands()
 
