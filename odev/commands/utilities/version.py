@@ -1,4 +1,3 @@
-from odev._version import __version__
 from odev.common import args, string
 from odev.common.commands import Command
 from odev.common.connectors.git import GitConnector
@@ -19,11 +18,11 @@ class VersionCommand(Command):
     def run(self):
         """Print the current version of the application."""
         name = self.odev.name.capitalize()
-        version = string.stylize(self.odev.config.update.version, "repr.version")
+        version = string.stylize(self.odev.version, "repr.version")
         channel = string.stylize(f"({self.odev.release})", "color.black")
         logger.info(f"{name} version {version} {channel}")
 
-        if self.odev.config.update.version != __version__:
+        if self.odev.update_available():
             logger.warning(f"A newer version is available, consider running '{self.odev.name} update'")
 
         if self.show_plugins:

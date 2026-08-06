@@ -17,9 +17,23 @@ GITHUB_PATH = "odev.common.connectors.git.GithubConnector"
 
 class TestCommandUtilities(OdevCommandTestCase):
     def test_version_01_no_argument(self):
-        """Command `odev version` should print the version of the application."""
-        stdout, _ = self.dispatch_command("version")
+        """Command `odev version` should print the version of the application and stay silent when there is
+        nothing new to pull.
+        """
+        with self.patch(self.odev, "update_available", return_value=False):
+            stdout, stderr = self.dispatch_command("version")
+
         self.assertIn(f"Odev-test version {__version__}", stdout)
+        self.assertNotIn("A newer version is available", stderr)
+
+    def test_version_02_update_available(self):
+        """Command `odev version` should warn about a newer version only when the repository has incoming
+        changes.
+        """
+        with self.patch(self.odev, "update_available", return_value=True):
+            _, stderr = self.dispatch_command("version")
+
+        self.assertIn("A newer version is available", stderr)
 
     def test_config_01_no_argument(self):
         """Run the command without arguments."""
@@ -173,7 +187,10 @@ class TestCommandUtilities(OdevCommandTestCase):
         def upgrade():
             self.odev.config.update.version = __version__
 
-        with self.patch(self.odev, "upgrade", side_effect=upgrade):
+        with (
+            self.patch_property(type(self.odev), "version", "3.0.0"),
+            self.patch(self.odev, "upgrade", side_effect=upgrade),
+        ):
             stdout, _ = self.dispatch_command("update")
 
         self.assertEqual(self.odev.config.update.version, __version__)
