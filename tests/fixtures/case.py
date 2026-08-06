@@ -16,7 +16,7 @@ from odev.common import odev
 from odev.common.config import Config
 from odev.common.string import suid
 
-from tests.fixtures import CaptureOutput
+from tests.fixtures import CaptureOutput, sandbox
 
 
 class OdevTestCase(TestCase):
@@ -32,10 +32,14 @@ class OdevTestCase(TestCase):
     """Name of the test case run, used for environment preparation."""
 
     run_path: ClassVar[Path]
-    """Path to the test case run directory under `/tmp`."""
+    """Path to the test case run directory, inside the sandbox of the current suite run."""
 
-    _patches: ClassVar[list[_patch]] = []
-    """The patches applied to the test case."""
+    _patches: ClassVar[list[_patch]]
+    """The patches applied to the test case.
+
+    Assigned per class in `setUpClass`: a list defined here would be shared by every subclass through
+    `cls._patches.append(...)`, making each class tear down the patches of all the classes before it.
+    """
 
     __config: str
     """Content of the configuration file to restore after each test case."""
@@ -50,11 +54,17 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        Config.parser = ConfigParser()
-        cls.odev = odev.Odev(test=True)
+        cls._patches = []
         cls.run_id = suid()
-        cls.run_name = f"{cls.odev.name}-{cls.run_id}"
-        cls.run_path = Path(f"/tmp/{cls.run_name}")  # noqa: S108
+        cls.run_path = sandbox.SESSION_PATH / cls.run_id
+        cls.run_name = f"{sandbox.SESSION_NAME}-{cls.run_id}"
+
+        # The framework reads its name and its configuration directory while being constructed, so both
+        # have to point inside the sandbox before the instance exists.
+        cls.__patch_paths()
+
+        Config.parser = ConfigParser()
+        cls.odev = odev.Odev(test=True, name=sandbox.SESSION_NAME)
         cls.res_path = cls.odev.tests_path / "resources"
         cls.replacer = Replacer()
         cls.__patch_cli()
@@ -62,6 +72,7 @@ class OdevTestCase(TestCase):
         cls.__patch_framework()
         cls.addClassCleanup(cls.tearDownClass)
         cls.odev.start()
+        cls.__sandbox_config_paths()
 
     @classmethod
     def tearDownClass(cls):
@@ -69,10 +80,11 @@ class OdevTestCase(TestCase):
         cls.replacer.restore()
         cls.odev.commands.clear()
         cls.odev.store.drop()
-        cls.odev.config.path.unlink(missing_ok=True)
 
-        if cls.run_path.exists():
-            shutil.rmtree(cls.run_path, ignore_errors=True)
+        # The configuration file lives in the run directory, and goes away with it. Whatever this misses,
+        # because the run was interrupted or because a test left a database behind, is picked up by the
+        # sandbox: either when the suite ends or at the start of the next one.
+        shutil.rmtree(cls.run_path, ignore_errors=True)
 
         odev.HOME_PATH = (Path.home() / ".local" / "share" / "odev").resolve()
 
@@ -152,8 +164,10 @@ class OdevTestCase(TestCase):
 
     @classmethod
     def __unpatch_all(cls):
-        for patched in cls._patches:
-            patched.stop()
+        # `tearDownClass` runs twice, once through `addClassCleanup` and once through unittest itself,
+        # so the patches are dropped as they are stopped.
+        while cls._patches:
+            cls._patches.pop().stop()
 
     @classmethod
     def _patch_object(
@@ -177,6 +191,29 @@ class OdevTestCase(TestCase):
             patched = cls.patch_property(target, attribute, value, **kwargs)
             cls._patches.append(patched)
             patched.start()
+
+    @classmethod
+    def __patch_paths(cls):
+        """Redirect the configuration directory into the run directory.
+
+        The config file, and the plugin `config.py` modules `Config` discovers next to it, then come from
+        the sandbox instead of `~/.config/odev`: the suite writes nothing outside of it, and behaves the
+        same whether or not the developer running it has plugins installed.
+        """
+        patched = patch("odev.common.config.CONFIG_DIR", cls.run_path)
+        cls._patches.append(patched)
+        patched.start()
+
+    @classmethod
+    def __sandbox_config_paths(cls):
+        """Point the directories odev reads from its configuration at the sandbox.
+
+        They default to `~/odoo`, where a test cloning a repository or downloading a dump would land in
+        the middle of the checkouts of the user — and in the way of a suite running alongside this one.
+        """
+        cls.odev.config.paths.repositories = cls.run_path / "repositories"
+        cls.odev.config.paths.dumps = cls.run_path / "dumps"
+        cls.odev.config.paths.upgrade = cls.run_path / "repositories" / "odoo" / "upgrade"
 
     @classmethod
     def __patch_cli(cls):
@@ -208,7 +245,6 @@ class OdevTestCase(TestCase):
                 ("_update", False),
             ],
             [
-                ("name", "odev-test"),
                 ("upgrades_path", cls.odev.tests_path / "resources" / "upgrades"),
                 ("setup_path", cls.odev.tests_path / "resources" / "setup"),
                 ("scripts_path", cls.odev.tests_path / "resources" / "scripts"),
