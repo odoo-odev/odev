@@ -23,7 +23,7 @@ class TestCommandUtilities(OdevCommandTestCase):
         with self.patch(self.odev, "update_available", return_value=False):
             stdout, stderr = self.dispatch_command("version")
 
-        self.assertIn(f"Odev-test version {__version__}", stdout)
+        self.assertIn(f"{self.odev.name.capitalize()} version {__version__}", stdout)
         self.assertNotIn("A newer version is available", stderr)
 
     def test_version_02_update_available(self):

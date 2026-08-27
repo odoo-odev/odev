@@ -93,11 +93,13 @@ def dedent(text: str, dedent: int = 0) -> str:
 def min_indent(text: str) -> int:
     """Return the smallest indentation in a text.
 
+    A text without any non-blank line has no indentation to speak of and returns zero.
+
     :param text: The text to get the minimum indentation from.
     :return: The minimum indentation of the text.
     :rtype: int
     """
-    return min(len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip())
+    return min((len(line) - len(line.lstrip()) for line in text.splitlines() if line.strip()), default=0)
 
 
 def bytes_size(size: int | float) -> str:
@@ -281,18 +283,27 @@ def ago(date: datetime.datetime) -> str:
 def quote(string: str, dirty_only: bool = False, force_single: bool = False) -> str:
     """Quote a string.
 
+    The quote character is chosen so that it does not appear in the string: a string containing single
+    quotes is wrapped in double quotes, and the other way around.
+
+    **Warning** This helper picks a delimiter, it does not escape. A string containing both quote
+    characters, or containing the delimiter imposed by `force_single`, cannot be represented and comes
+    back with an unbalanced delimiter. Do not use it to interpolate untrusted input into SQL or shell
+    commands; use `shlex.quote` or query parameters instead.
+
     :param string: The string to quote.
     :param dirty_only: Do not quote strings that have no quotes to begin with.
     :param force_single: Force single quotes.
     :return: The quoted string.
     :rtype: str
     """
-    index = max(string.find(char) for char in ("'", '"'))
+    contains_single = "'" in string
+    contains_double = '"' in string
 
-    if dirty_only and index == -1:
+    if dirty_only and not contains_single and not contains_double:
         return string
 
-    double = not force_single and (index == -1 or string[index] == "'")
+    double = not force_single and (contains_single or not contains_double)
     return f'"{string}"' if double else f"'{string}'"
 
 
