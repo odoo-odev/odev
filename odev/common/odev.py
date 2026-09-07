@@ -796,31 +796,120 @@ class Odev(Generic[CommandType]):
     def register_plugin_commands(self) -> None:
         """Register commands for the plugins directories, pulling changes in plugins if an error arises while loading
         the commands.
+
+        The usual cause of a plugin failing to load is a checkout left behind by an update of odev itself, hence the
+        one retry after pulling the plugins. Whatever survives that retry is reported and skipped: a single broken
+        plugin makes its own commands unavailable, not the whole of odev.
         """
+        failures = self._register_plugin_commands(self.plugins)
+
+        if not failures:
+            return
+
+        for plugin, error in failures:
+            logger.error(f"Error while loading commands of plugin {plugin.name!r}: {error}")
+
+        with progress.spinner("Updating plugins"):
+            # A plugin can also fail because one of its dependencies is outdated, so all of them are refreshed and
+            # not only the ones that failed.
+            updated = [self._pull_plugin(plugin) for plugin in self.plugins]
+
+        if not any(updated):
+            return
+
+        self._install_missing_plugin_requirements()
+
+        for plugin, error in self._register_plugin_commands([plugin for plugin, _ in failures]):
+            logger.error(
+                f"Could not load commands of plugin {plugin.name!r} after updating: {error}\n"
+                f"Fix the repository in {plugin.path.as_posix()} or disable the plugin with "
+                f"'odev plugin --remove {plugin.name}'"
+            )
+
+    def _register_plugin_commands(self, plugins: Iterable[Plugin]) -> list[tuple[Plugin, Exception]]:
+        """Register all commands from the given plugins.
+
+        :param plugins: Plugins whose commands should be registered.
+        :return: The plugins whose commands could not be imported, each paired with the error that stopped it
+        :rtype: List[Tuple[Plugin, Exception]]
+        """
+        failures: list[tuple[Plugin, Exception]] = []
+
+        for plugin in plugins:
+            try:
+                for command_class, module_path in self.import_commands(plugin.path.glob("commands/**")):
+                    self.commands.patch(command_class, module_path)
+            except Exception as error:  # noqa: BLE001
+                failures.append((plugin, error))
+
+        return failures
+
+    def _pull_plugin(self, plugin: Plugin) -> bool:
+        """Pull the latest changes of a plugin repository, as a recovery attempt after its commands failed to load.
+
+        Only plugins following a standard branch are updated: a checkout in a detached state, on a branch without a
+        remote counterpart or on a development branch belongs to whoever is working in it, and pulling it would at
+        best fail and at worst rebase work in progress.
+
+        :param plugin: Plugin to update.
+        :return: Whether changes were pulled, making another attempt at loading the commands worthwhile
+        :rtype: bool
+        """
+        git = GitConnector(plugin.name)
+        repository = git.repository
+
+        if repository is None:
+            logger.warning(f"Repository for plugin {plugin.name!r} not found at {plugin.path.as_posix()}")
+            return False
+
+        if repository.head.is_detached:
+            logger.warning(f"Not updating plugin {plugin.name!r}: its repository is in a detached HEAD state")
+            return False
+
+        branch = repository.active_branch
+        remote_branch = branch.tracking_branch()
+
+        if remote_branch is None:
+            logger.warning(
+                f"Not updating plugin {plugin.name!r}: its branch {branch.name!r} does not track a remote branch"
+            )
+            return False
+
+        if branch.name not in self.__standard_branches(git):
+            logger.warning(
+                f"Not updating plugin {plugin.name!r}: it is running from the non-standard branch {branch.name!r}, "
+                "assuming you are in development mode"
+            )
+            return False
+
+        with Stash(repository):
+            try:
+                # The tracked ref, and not the local branch name, is what the remote knows this branch as.
+                remote = repository.remote(remote_branch.remote_name)
+                remote.fetch()
+                remote.pull(remote_branch.remote_head, rebase=True)
+            except (GitCommandError, ValueError) as error:
+                logger.warning(f"Error while pulling latest changes for plugin {plugin.name!r}: {error}")
+                return False
+
+        return True
+
+    def __standard_branches(self, git: GitConnector) -> set[str]:
+        """List the branches of a repository odev is allowed to update on its own.
+
+        :param git: Connector to the repository.
+        :return: Names of the branches considered standard for this repository
+        :rtype: Set[str]
+        """
+        default_branch: str | None = None
+
         try:
-            self._register_plugin_commands()
-        except Exception as error:
-            logger.error(f"Error while loading plugins commands: {error}")
+            default_branch = git.default_branch
+        except Exception as error:  # noqa: BLE001
+            # Resolving the default branch goes through the Github API, which the recovery path cannot depend on.
+            logger.debug(f"Could not resolve the default branch of {git.name!r}: {error}")
 
-            with progress.spinner("Updating plugins"):
-                for plugin, _, _ in self.plugins:
-                    git = GitConnector(plugin)
-
-                    if git.repository is None:
-                        raise OdevError(f"Repository for plugin {plugin!r} not found") from error
-
-                    with Stash(git.repository):
-                        git.repository.remotes.origin.fetch()
-                        git.repository.remotes.origin.pull(git.branch, rebase=True)
-
-            self._install_missing_plugin_requirements()
-            self._register_plugin_commands()
-
-    def _register_plugin_commands(self) -> None:
-        """Register all commands from the plugins directories."""
-        for plugin in self.plugins:
-            for command_class, module_path in self.import_commands(plugin.path.glob("commands/**")):
-                self.commands.patch(command_class, module_path)
+        return {branch for branch in (default_branch, "main", "master", "beta") if branch}
 
     def _commands_fingerprint(self) -> list[Any]:
         """Compute a cheap signature of the command modules available to odev.
