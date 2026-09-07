@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from odev.common.databases import Database, LocalDatabase
 from odev.common.postgres import PostgresTable
@@ -104,6 +104,30 @@ class DatabaseStore(PostgresTable):
             ON CONFLICT (name, platform) DO
                 UPDATE SET {", ".join(f"{key} = {value}" for key, value in values.items())}
             """
+        )
+
+    def set_value(self, database: Database, key: str, value: Any):
+        """Set a single value for a database, leaving its other values untouched.
+
+        Unlike :meth:`set`, this does not go through the database properties, which makes it the
+        only way to clear a value: the properties fall back to reading the data store when their
+        cached value is empty, and would write the cleared value straight back.
+
+        :param database: The database to set the value for.
+        :param key: The name of the column to set.
+        :param value: The value to set, bound as a query parameter.
+        """
+        if key not in self._columns:
+            raise ValueError(f"Unknown column {key!r} in table {self.name!r}")
+
+        self.database.query(
+            f"""
+            UPDATE {self.name}
+            SET {key} = %s
+            WHERE name = %s
+                AND platform = %s
+            """,
+            (value, database.name, database.platform.name),
         )
 
     def delete(self, database: Database):

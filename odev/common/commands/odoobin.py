@@ -168,24 +168,39 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
                     "Some additional addons paths are invalid, they will be ignored:\n"
                     + string.join_bullet([path.as_posix() for path in invalid_paths])
                 )
-        elif self._database.repository:
-            addons_paths = [GitConnector(self._database.repository.full_name).path.resolve()]
+        elif (repository_path := self._database_addons_path) is not None:
+            addons_paths = [repository_path]
         else:
             current_path = Path().resolve()
             addons_paths = [current_path] if self.odoobin.check_addons_path(current_path) else []
 
         return addons_paths
 
+    @property
+    def _database_addons_path(self) -> Path | None:
+        """Path to the repository linked to the database, if it exists on the filesystem.
+        Databases linked to a repository that cannot be found locally fall back to detecting
+        the repository from the current directory, so that a wrong link can be fixed by running
+        the command again from within the repository.
+        """
+        if not self._database.repository:
+            return None
+
+        path = GitConnector(self._database.repository.full_name).path.resolve()
+
+        if not path.is_dir():
+            logger.warning(
+                f"Repository {self._database.repository.full_name!r} linked to database "
+                f"{self._database.name!r} was not found at {path.as_posix()}, "
+                "falling back to the current directory"
+            )
+            return None
+
+        return path
+
     def _set_addons_paths(self) -> None:
         """Find additional addons paths from the database repository if any."""
-        addons_paths = self._guess_addons_paths()
-
-        globs = [path.glob(f"**/__{manifest}__.py") for path in addons_paths for manifest in ["manifest", "openerp"]]
-        addons_paths = [
-            path.parents[1] for path in (p for g in globs for p in g) if self.odoobin.check_addons_path(path.parents[1])
-        ]
-
-        self.odoobin.additional_addons_paths = sorted(set(addons_paths))
+        self.odoobin.additional_addons_paths = self.odoobin.expand_addons_paths(self._guess_addons_paths())
         self.odoobin.save_database_repository()
 
     def _set_odoobin_process(self, force=False) -> None:

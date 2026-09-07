@@ -3,16 +3,17 @@
 import re
 import shutil
 from collections.abc import Callable, Generator, Mapping, Sequence
+from itertools import islice
 from pathlib import Path
 from types import FrameType
 from typing import (
+    TYPE_CHECKING,
     ClassVar,
     cast,
 )
 from urllib.parse import urlparse
 
 from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
-from github import Auth as GithubAuth, Github, GithubException
 
 from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
@@ -23,6 +24,11 @@ from odev.common.progress import Progress, spinner
 from odev.common.signal_handling import capture_signals
 
 
+if TYPE_CHECKING:
+    from github import Github
+    from github.Repository import Repository
+
+
 GITHUB_DOMAIN = "github.com"
 """The domain of the GitHub API."""
 
@@ -31,6 +37,9 @@ GIT_FETCH_REMOTE_ORIGIN_ALL = "+refs/heads/*:refs/remotes/origin/*"
 
 GIT_EXPECTED_REPO_PARTS = 2
 """The expected number of parts in a git repository name (organization/repository)."""
+
+GITHUB_SEARCH_DEFAULT_LIMIT = 20
+"""The default maximum number of repositories returned by a search on the GitHub API."""
 
 # Git progress opcodes, used for progress reporting
 GIT_OPCODE_DOWNLOAD = 33
@@ -74,7 +83,19 @@ class Stash:
         try:
             self.repository.git.stash("pop")
         except GitCommandError as pop_error:
-            logger.warning(f"Failed to restore stashed changes in {self.repository.working_dir!r}: {pop_error}")
+            # A conflicting pop leaves conflict markers in the working tree while keeping the stash entry, which is
+            # how a checkout ends up with unparsable python files. Restore the tree instead and let the developer
+            # replay the stash by hand, where the conflicts can actually be resolved.
+            if self.repository.index.unmerged_blobs():
+                try:
+                    self.repository.git.reset("--hard", "HEAD")
+                except GitCommandError as reset_error:
+                    logger.warning(f"Failed to clean up {self.repository.working_dir!r}: {reset_error}")
+
+            logger.warning(
+                f"Failed to restore stashed changes in {self.repository.working_dir!r}: {pop_error}\n"
+                "Your changes are kept in the stash, restore them with 'git stash pop'"
+            )
 
 
 class GitWorktree:
@@ -230,14 +251,163 @@ class GitWorktree:
             return commits_behind, commits_ahead
 
 
-class GitConnector(Connector):
-    """A class for connecting to the Github API."""
+class GithubConnector(Connector):
+    """A class for connecting to the Github API, without any repository context."""
 
     _token: str | None = None
     """The Github API token for the current session."""
 
-    _connection: Github | None = None
+    _connection: "Github | None" = None
     """The connection to the Github API."""
+
+    @property
+    def url(self) -> str:
+        """The URL to the Github API."""
+        return f"https://api.{GITHUB_DOMAIN}"
+
+    @property
+    def authenticated(self) -> bool:
+        """Whether the current session is authenticated."""
+        if self._connection is None:
+            return False
+
+        from github import GithubException  # noqa: PLC0415 - importing the GitHub API client is expensive
+
+        try:
+            self._connection.get_user().login  # noqa: B018 - login is a property
+        except GithubException:
+            return False
+        else:
+            return True
+
+    def connect(self):
+        """Connect to the Github API."""
+        from github import Auth as GithubAuth, Github  # noqa: PLC0415 - importing the GitHub API client is expensive
+
+        if self._token is None:
+
+            def get_token(prompt: bool) -> str | None:
+                return self.store.secrets.get(
+                    GITHUB_DOMAIN,
+                    scope="api",
+                    fields=["password"],
+                    prompt_format="GitHub API token:",
+                    ask_missing=prompt,
+                ).password
+
+            token = get_token(prompt=False)
+
+            if not token:
+                logger.info(
+                    """Connection to your GitHub account is necessary to pursue this operation, please configure a
+                    Personal Access Token (classic) on https://github.com/settings/tokens with the following permissions:
+                    - repo (all)
+                    - user:
+                        - read:user
+                        - user:email
+                    """
+                )
+                token = get_token(prompt=True)
+
+            self._token = token
+
+        if not self.connected:
+            self._connection = Github(auth=GithubAuth.Token(self._token))  # type: ignore [assignment]
+
+        if not self.authenticated:
+            logger.warning("Failed to connect to Github API, please check your token is valid")
+            self.store.secrets.invalidate(GITHUB_DOMAIN, scope="api")
+            self._disconnect()
+            self.connect()
+            return
+
+        logger.debug("Connected to Github API")
+
+    def disconnect(self):
+        """Disconnect from the Github API."""
+        self._disconnect()
+        logger.debug("Disconnected from Github API")
+
+    def _disconnect(self):
+        """Disconnect from the Github API."""
+        self._token = None
+        del self._connection
+
+    def search_repositories(
+        self,
+        query: str,
+        limit: int = GITHUB_SEARCH_DEFAULT_LIMIT,
+        sort: str | None = None,
+        order: str = "desc",
+    ) -> "list[Repository]":
+        """Search for repositories on GitHub.
+
+        :param query: The search query, using the GitHub search syntax.
+        :param limit: The maximum number of repositories to return.
+        :param sort: How to sort the results, one of `stars`, `forks` or `updated`; defaults to best match.
+        :param order: The direction of the sort, one of `asc` or `desc`.
+        :return: The repositories matching the search query.
+        """
+        if limit <= 0:
+            return []
+
+        with self:
+            results = cast("Github", self._connection).search_repositories(
+                query,
+                **({"sort": sort, "order": order} if sort else {}),
+            )
+
+            return list(islice(results, limit))
+
+    def get_repository(self, name: str) -> "Repository | None":
+        """Fetch a repository from GitHub by its full name, without cloning it.
+
+        :param name: The full name of the repository, in the format `organization/repository`.
+        :return: The repository, or `None` if it does not exist or cannot be accessed.
+        """
+        from github import GithubException, UnknownObjectException  # noqa: PLC0415 - the GitHub client is expensive
+
+        with self:
+            try:
+                return cast("Github", self._connection).get_repo(name)
+            except UnknownObjectException:
+                return None
+            except GithubException as error:
+                logger.debug(f"Failed to fetch repository {name!r}: {error}")
+                return None
+
+    @staticmethod
+    def get_repository_file(repository: "Repository", path: str, ref: str | None = None) -> str | None:
+        """Fetch the content of a file inside a remote repository, without cloning it.
+
+        :param repository: The remote repository to fetch the file from.
+        :param path: The path to the file, relative to the root of the repository.
+        :param ref: The branch, tag or commit to fetch the file from; defaults to the default branch.
+        :return: The decoded content of the file, or `None` if it does not exist or cannot be read.
+        """
+        from github import GithubException, UnknownObjectException  # noqa: PLC0415 - the GitHub client is expensive
+
+        try:
+            contents = repository.get_contents(path, **({"ref": ref} if ref else {}))
+        except UnknownObjectException:
+            return None
+        except GithubException as error:
+            logger.debug(f"Failed to fetch {path!r} from repository {repository.full_name!r}: {error}")
+            return None
+
+        if isinstance(contents, list):
+            return None
+
+        try:
+            return contents.decoded_content.decode("utf-8")
+        except (AssertionError, UnicodeDecodeError):
+            # Contents are not base64-encoded for files bigger than 1 MB, which `decoded_content` asserts
+            logger.debug(f"Could not decode {path!r} from repository {repository.full_name!r}")
+            return None
+
+
+class GitConnector(GithubConnector):
+    """A class for connecting to a git repository hosted on GitHub."""
 
     _organization: str
     """The organization to which the repository belongs."""
@@ -260,38 +430,84 @@ class GitConnector(Connector):
             path = Path(repo)
 
         self._path: Path | None = path
+        name: tuple[str, str] | None = None
 
-        if path and path.joinpath(".git").exists():
-            repo_url = Repo(path).remote().url
-            self._organization, self._repository = repo_url.removesuffix(".git").split("/")[-2:]
+        if path is not None and path.joinpath(".git").exists():
+            name = self._name_from_remote(path)
 
-            if ":" in self._organization:
-                self._organization = self._organization.split(":")[-1]
-        else:
-            if "@" in repo and ":" in repo:
-                # Assume the repo is in the format git@github.com:organization/repository.git
-                repo = repo.split(":")[-1]
+        self._organization, self._repository = name or self._name_from_string(self._fallback_name(repo, path))
 
-            repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
-            repo_values = repo.split("/")
+    @staticmethod
+    def _fallback_name(repo: str, path: Path | None) -> str:
+        """Best guess of the repository name when it cannot be read from a git remote.
+        :param repo: The repository as passed to the connector.
+        :param path: The path to the repository, if any.
+        :return: The repository name in the format `organization/repository`.
+        """
+        if path is not None and (not repo or Path(repo).is_absolute()):
+            return f"{path.parent.name}/{path.name}"
 
-            if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
-                raise ConnectorError(
-                    "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
-                    + string.join_bullet(
-                        [
-                            string.stylize(url, "color.purple")
-                            for url in (
-                                "organization/repository",
-                                "https://github.com/organization/repository",
-                                "git@github.com:organization/repository.git",
-                            )
-                        ],
-                    ),
-                    self,
-                )
+        return repo
 
-            self._organization, self._repository = repo_values
+    @classmethod
+    def _name_from_remote(cls, path: Path) -> tuple[str, str] | None:
+        """Read the organization and repository names from the remote of a local git repository.
+        The remote is the only reliable source of truth: the directory a repository is cloned to
+        may not follow the `<repositories>/<organization>/<repository>` convention.
+        :param path: The path to the local repository.
+        :return: The organization and repository names, or None if they cannot be determined.
+        """
+        try:
+            remotes = list(Repo(path).remotes)
+        except (GitCommandError, InvalidGitRepositoryError, NoSuchPathError, ValueError) as error:
+            logger.debug(f"Could not read the git repository at {path.as_posix()}: {error}")
+            return None
+
+        remote = next((remote for remote in remotes if remote.name == "origin"), None) or next(iter(remotes), None)
+
+        if remote is None:
+            logger.debug(f"No git remote configured for the repository at {path.as_posix()}")
+            return None
+
+        parts = remote.url.removesuffix(".git").rstrip("/").split("/")
+
+        if len(parts) < GIT_EXPECTED_REPO_PARTS:
+            logger.debug(f"Unexpected git remote URL {remote.url!r} for the repository at {path.as_posix()}")
+            return None
+
+        organization, repository = parts[-2:]
+        return organization.split(":")[-1], repository
+
+    def _name_from_string(self, repo: str) -> tuple[str, str]:
+        """Parse the organization and repository names out of a repository name or git URL.
+        :param repo: The repository in the format `organization/repository` or a valid git URL.
+        :return: The organization and repository names.
+        """
+        if "@" in repo and ":" in repo:
+            # Assume the repo is in the format git@github.com:organization/repository.git
+            repo = repo.split(":")[-1]
+
+        repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
+        repo_values = repo.split("/")
+
+        if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
+            raise ConnectorError(
+                "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
+                + string.join_bullet(
+                    [
+                        string.stylize(url, "color.purple")
+                        for url in (
+                            "organization/repository",
+                            "https://github.com/organization/repository",
+                            "git@github.com:organization/repository.git",
+                        )
+                    ],
+                ),
+                self,
+            )
+
+        organization, repository = repo_values
+        return organization, repository
 
     def __repr__(self) -> str:
         return f"GitConnector({self.name!r})"
@@ -373,7 +589,7 @@ class GitConnector(Connector):
             return self.repository.heads[0].name.split("/")[-1]
 
         with self:
-            return cast(Github, self._connection).get_repo(self.name).default_branch
+            return cast("Github", self._connection).get_repo(self.name).default_branch
 
     @property
     def branch(self) -> str | None:
@@ -399,19 +615,6 @@ class GitConnector(Connector):
         return self.path / "requirements.txt"
 
     @property
-    def authenticated(self) -> bool:
-        """Whether the current session is authenticated."""
-        if self._connection is None:
-            return False
-
-        try:
-            self._connection.get_user().login  # noqa: B018 - login is a property
-        except GithubException:
-            return False
-        else:
-            return True
-
-    @property
     def worktrees_path(self) -> Path:
         """Path to the worktrees directory."""
         return self.odev.home_path / "worktrees"
@@ -423,57 +626,6 @@ class GitConnector(Connector):
             self.pull()
             self.fetch()
             self.fetch_worktrees()
-
-    def connect(self):
-        """Connect to the Github API."""
-        if self._token is None:
-
-            def get_token(prompt: bool) -> str | None:
-                return self.store.secrets.get(
-                    GITHUB_DOMAIN,
-                    scope="api",
-                    fields=["password"],
-                    prompt_format="GitHub API token:",
-                    ask_missing=prompt,
-                ).password
-
-            token = get_token(prompt=False)
-
-            if not token:
-                logger.info(
-                    """Connection to your GitHub account is necessary to pursue this operation, please configure a
-                    Personal Access Token (classic) on https://github.com/settings/tokens with the following permissions:
-                    - repo (all)
-                    - user:
-                        - read:user
-                        - user:email
-                    """
-                )
-                token = get_token(prompt=True)
-
-            self._token = token
-
-        if not self.connected:
-            self._connection = Github(auth=GithubAuth.Token(self._token))  # type: ignore [assignment]
-
-        if not self.authenticated:
-            logger.warning("Failed to connect to Github API, please check your token is valid")
-            self.store.secrets.invalidate(GITHUB_DOMAIN, scope="api")
-            self._disconnect()
-            self.connect()
-            return
-
-        logger.debug("Connected to Github API")
-
-    def disconnect(self):
-        """Disconnect from the Github API."""
-        self._disconnect()
-        logger.debug("Disconnected from Github API")
-
-    def _disconnect(self):
-        """Disconnect from the Github API."""
-        self._token = None
-        del self._connection
 
     def _check_repository(self, force_clone: bool = False):
         """Check whether the repository exists locally."""
@@ -996,7 +1148,7 @@ class GitConnector(Connector):
         :rtype: List[str]
         """
         with self:
-            branches = cast(Github, self._connection).get_repo(self.name).get_branches()
+            branches = cast("Github", self._connection).get_repo(self.name).get_branches()
 
         return [branch.name for branch in branches]
 

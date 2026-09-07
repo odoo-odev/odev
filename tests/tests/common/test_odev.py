@@ -2,22 +2,49 @@ import shutil
 import sys
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+from git import GitCommandError
 
 from odev._version import __version__
 from odev.common.commands import Command
-from odev.common.odev import Manifest, Plugin, logger
+from odev.common.odev import Manifest, Odev, Plugin, logger, parse_plugin_manifest, plugin_module_name
 
 from tests.fixtures import CaptureOutput, OdevTestCase
+
+
+REAL_UPDATE = Odev._update
+"""Reference to the real implementation of `Odev._update`, taken before the test fixtures patch it away to
+prevent tests from running git operations on the odev repository.
+"""
 
 
 class TestCommonOdev(OdevTestCase):
     """Global sanity check of the odev framework."""
 
+    def setUp(self):
+        super().setUp()
+        # Dispatching a command reads `sys.argv`; leaving a command line behind would feed it to whichever
+        # test runs next.
+        argv = sys.argv
+        self.addCleanup(setattr, sys, "argv", argv)
+
+    @staticmethod
+    def plugin_fixture(name: str = "test/plugin") -> Plugin:
+        """Build a plugin record pointing nowhere, for tests that never read its files.
+
+        :param name: Name of the plugin, in the `organization/repository` format.
+        :return: The plugin record
+        :rtype: Plugin
+        """
+        manifest = Manifest(name=name, description="Test plugin", version="1.0.0", depends=[])
+        return Plugin(name, Path("/nonexistent") / name.replace("/", "_"), manifest)
+
     def test_01_config_file(self):
         """Config file should have been created in the correct directory."""
-        self.assertEqual(self.odev.config.name, "odev-test")
-        self.assertEqual(self.odev.config.path, Path.home() / ".config/odev/odev-test.cfg")
+        self.assertEqual(self.odev.config.name, self.odev.name)
+        self.assertEqual(self.odev.config.path, self.run_path / f"{self.odev.name}.cfg")
+        self.assertTrue(self.odev.config.path.exists())
 
     def test_02_config_get_set_reset_delete(self):
         """Config manager should be able to get, set and reset values, as well as delete a key or a section.
@@ -81,9 +108,15 @@ class TestCommonOdev(OdevTestCase):
         class SecondCommand(Command):
             _name = "duplicate"
 
+        module_path = Path(__file__)
+
         with (
             self.assertRaises(ValueError) as error,
-            self.patch(self.odev, "import_commands", return_value=[FirstCommand, SecondCommand]),
+            self.patch(
+                self.odev,
+                "import_commands",
+                return_value=[(FirstCommand, module_path), (SecondCommand, module_path)],
+            ),
         ):
             self.odev.register_commands()
 
@@ -148,18 +181,80 @@ class TestCommonOdev(OdevTestCase):
         self.assertIn(self.odev.name.capitalize(), output.stdout)
 
     def test_15_register_plugin_commands_retries_after_failure(self):
-        """Plugin command registration should retry once after plugin updates."""
+        """Plugin command registration should retry the failing plugins once after plugin updates."""
+        plugin = self.plugin_fixture()
+
         with (
-            self.patch_property(type(self.odev), "plugins", []),
+            self.patch_property(type(self.odev), "plugins", [plugin]),
             self.patch(
-                self.odev, "_register_plugin_commands", side_effect=[RuntimeError("boom"), None]
+                self.odev, "_register_plugin_commands", side_effect=[[(plugin, RuntimeError("boom"))], []]
             ) as register_mock,
+            self.patch(self.odev, "_pull_plugin", return_value=True) as pull_mock,
+            self.patch(self.odev, "_install_missing_plugin_requirements"),
             self.patch(logger, "error") as logger_error,
         ):
             self.odev.register_plugin_commands()
 
         self.assertEqual(register_mock.call_count, 2)
+        self.assertEqual(register_mock.call_args.args[0], [plugin])
+        pull_mock.assert_called_once_with(plugin)
         logger_error.assert_called_once()
+
+    def test_15_1_register_plugin_commands_isolates_broken_plugins(self):
+        """A plugin whose commands cannot be imported should not prevent the other plugins from registering theirs."""
+        broken = self.plugin_fixture(name="test/broken")
+        working = self.plugin_fixture(name="test/working")
+
+        with (
+            self.patch(
+                self.odev,
+                "import_commands",
+                side_effect=[
+                    SyntaxError("invalid syntax (mixins.py, line 28)"),
+                    [(MagicMock(), Path("/nonexistent/command.py"))],
+                ],
+            ),
+            self.patch(self.odev.commands, "patch") as patch_mock,
+        ):
+            failures = self.odev._register_plugin_commands([broken, working])
+
+        self.assertEqual([plugin for plugin, _ in failures], [broken])
+        patch_mock.assert_called_once()
+
+    def test_15_2_register_plugin_commands_skips_update_of_development_branches(self):
+        """A plugin checked out on a branch odev does not own should be left alone instead of being pulled."""
+        plugin = self.plugin_fixture()
+        repository = MagicMock()
+        repository.head.is_detached = False
+        repository.active_branch.name = "copilot/local-20260901-odev-plugin-ai"
+
+        with (
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock(repository=repository)),
+            self.patch(logger, "warning") as logger_warning,
+        ):
+            self.assertFalse(self.odev._pull_plugin(plugin))
+
+        repository.remote.assert_not_called()
+        self.assertIn("non-standard branch", logger_warning.call_args.args[0])
+
+    def test_15_3_register_plugin_commands_survives_a_failing_pull(self):
+        """A plugin whose repository cannot be pulled should be reported, not crash the run."""
+        plugin = self.plugin_fixture()
+        repository = MagicMock()
+        repository.head.is_detached = False
+        repository.active_branch.name = "beta"
+        repository.is_dirty.return_value = False
+        repository.remote.return_value.pull.side_effect = GitCommandError(
+            "git pull", 1, b"fatal: couldn't find remote ref beta"
+        )
+
+        with (
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock(repository=repository)),
+            self.patch(logger, "warning") as logger_warning,
+        ):
+            self.assertFalse(self.odev._pull_plugin(plugin))
+
+        self.assertIn("Error while pulling latest changes", logger_warning.call_args.args[0])
 
     def test_16_plugins_dependency_tree_cycle_raises(self):
         """Circular plugin dependencies should raise an explicit framework error."""
@@ -227,13 +322,16 @@ class TestCommonOdev(OdevTestCase):
 
     def test_19_register_plugin_commands_installs_requirements_on_retry(self):
         """Plugin command registration should install missing requirements before retrying after a failed import."""
+        plugin = self.plugin_fixture()
+
         with (
-            self.patch_property(type(self.odev), "plugins", []),
+            self.patch_property(type(self.odev), "plugins", [plugin]),
             self.patch(
                 self.odev,
                 "_register_plugin_commands",
-                side_effect=[ModuleNotFoundError("No module named 'copier'"), None],
+                side_effect=[[(plugin, ModuleNotFoundError("No module named 'copier'"))], []],
             ) as register_mock,
+            self.patch(self.odev, "_pull_plugin", return_value=True),
             self.patch(self.odev, "_install_missing_plugin_requirements") as install_mock,
             self.patch(logger, "error"),
         ):
@@ -241,6 +339,24 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertEqual(register_mock.call_count, 2)
         install_mock.assert_called_once_with()
+
+    def test_19_1_register_plugin_commands_skips_retry_without_update(self):
+        """Nothing having been pulled, retrying the import would only repeat the same error."""
+        plugin = self.plugin_fixture()
+
+        with (
+            self.patch_property(type(self.odev), "plugins", [plugin]),
+            self.patch(
+                self.odev, "_register_plugin_commands", side_effect=[[(plugin, RuntimeError("boom"))], []]
+            ) as register_mock,
+            self.patch(self.odev, "_pull_plugin", return_value=False),
+            self.patch(self.odev, "_install_missing_plugin_requirements") as install_mock,
+            self.patch(logger, "error"),
+        ):
+            self.odev.register_plugin_commands()
+
+        self.assertEqual(register_mock.call_count, 1)
+        install_mock.assert_not_called()
 
     def test_20_load_plugins_repoints_preexisting_plugins_module(self):
         """An `odev.plugins` module resolved before plugins are loaded, as a developer checkout containing an
@@ -256,3 +372,124 @@ class TestCommonOdev(OdevTestCase):
             self.odev.load_plugins()
 
             self.assertEqual(sys.modules["odev.plugins"].__path__, [str(self.odev.plugins_path)])
+
+    def test_21_plugin_module_name(self):
+        """The module name of a plugin should drop the organization and use underscores."""
+        self.assertEqual(plugin_module_name("odoo-odev/odev-plugin-editor-base"), "odev_plugin_editor_base")
+        self.assertEqual(plugin_module_name("odev-plugin-ai"), "odev_plugin_ai")
+
+    def test_22_parse_plugin_manifest(self):
+        """The manifest of a plugin should be parsed into its name, version, description and dependencies."""
+        manifest = parse_plugin_manifest(
+            '"""Some plugin."""\n\n__version__ = "1.2.3"\n\ndepends = ["test/test-plugin", 42]\n',
+            "test/test-plugin-dep",
+        )
+
+        self.assertEqual(
+            manifest,
+            {
+                "name": "test/test-plugin-dep",
+                "version": "1.2.3",
+                "description": "Some plugin.",
+                "depends": ["test/test-plugin"],
+            },
+        )
+
+    def test_23_parse_plugin_manifest_invalid(self):
+        """A source that is not a valid plugin manifest should be rejected."""
+        self.assertIsNone(parse_plugin_manifest('"""No version."""\n\ndepends = []\n', "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest("def invalid(:\n", "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest("__version__ = 1.0\n", "test/test-plugin"))
+        self.assertIsNone(parse_plugin_manifest('{"name": "Sales", "version": "17.0"}\n', "test/test-addons"))
+
+    def test_24_parse_plugin_manifest_does_not_execute_code(self):
+        """Parsing the manifest of an untrusted repository should never execute its content."""
+        with self.patch("odev.common.odev.logger", "warning") as logger_warning:
+            manifest = parse_plugin_manifest(
+                '"""Malicious plugin."""\n'
+                "import odev.common.odev as target\n"
+                'target.logger.warning("executed")\n'
+                "raise SystemExit(1)\n"
+                '__version__ = "6.6.6"\n',
+                "evil/plugin",
+            )
+
+        self.assertEqual(
+            manifest,
+            {
+                "name": "evil/plugin",
+                "version": "6.6.6",
+                "description": "Malicious plugin.",
+                "depends": [],
+            },
+        )
+        logger_warning.assert_not_called()
+
+    def test_25_update_skipped_when_up_to_date(self):
+        """Nothing should be pulled, and the user should not be prompted, when the local branch has no incoming
+        changes left after fetching.
+        """
+        manifest = Manifest(name="odev", description="Odev", version=__version__, depends=[])
+
+        with (
+            self.patch("odev.common.odev", "Repo", return_value=MagicMock()),
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock()) as git_connector,
+            self.patch(self.odev, "_load_plugin_manifest", return_value=manifest),
+            self.patch(self.odev, "_Odev__git_branch_behind", return_value=False),
+            self.patch(self.odev, "_Odev__update_prompt", return_value=True) as update_prompt,
+        ):
+            self.assertFalse(REAL_UPDATE(self.odev, self.odev.path))
+            git_connector.return_value.fetch.assert_called_once_with(detached=False)
+
+        update_prompt.assert_not_called()
+
+    def test_26_update_records_check_date_when_up_to_date(self):
+        """The date of the last update check should be recorded even when there was nothing to update, so that
+        checks are not run again on every single command.
+        """
+        self.odev.config.update.date = "1995-12-21 00:00:00"
+
+        with self.patch(self.odev, "_update", return_value=False):
+            self.assertFalse(self.odev.update(restart=False))
+
+        self.assertGreater(self.odev.config.update.date.year, 1995)
+
+    def test_27_update_available(self):
+        """An update should be reported only when the repository has incoming commits and none of its own."""
+        for rev_list, expected in [("2\t0", True), ("0\t0", False), ("1\t3", False)]:
+            repository = MagicMock(working_dir=str(self.odev.path))
+            repository.head.is_detached = False
+            repository.git.rev_list.return_value = rev_list
+
+            with (
+                self.subTest(rev_list=rev_list),
+                self.patch_property(type(self.odev), "git", MagicMock(repository=repository)),
+            ):
+                self.assertEqual(self.odev.update_available(), expected)
+
+    def test_28_update_available_without_repository(self):
+        """No update should be reported when odev does not run from a git repository."""
+        with self.patch_property(type(self.odev), "git", MagicMock(repository=None)):
+            self.assertFalse(self.odev.update_available())
+
+    def test_29_update_available_detached_head(self):
+        """No update should be reported on a detached HEAD, which has no branch to compare with its remote."""
+        repository = MagicMock(working_dir=str(self.odev.path))
+        repository.head.is_detached = True
+
+        with self.patch_property(type(self.odev), "git", MagicMock(repository=repository)):
+            self.assertFalse(self.odev.update_available())
+
+        repository.active_branch.tracking_branch.assert_not_called()
+
+    def test_30_upgrade_version_ahead_of_current(self):
+        """A recorded version ahead of the running one, as left over by a switch back from the 'beta' release
+        channel, should be reset instead of being reported as a newer version forever.
+        """
+        self.odev.config.update.version = "999.0.0"
+
+        with CaptureOutput() as output:
+            self.odev.upgrade()
+
+        self.assertEqual(output.stdout, "")
+        self.assertEqual(self.odev.config.update.version, __version__)

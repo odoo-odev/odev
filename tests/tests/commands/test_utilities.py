@@ -1,5 +1,8 @@
+import os
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from odev._version import __version__
 from odev.common.python import PythonEnv
@@ -9,13 +12,28 @@ from tests.fixtures import OdevCommandTestCase
 
 POSTGRES_PATH = "odev.common.connectors.PostgresConnector"
 GIT_PATH = "odev.common.connectors.git.GitConnector"
+GITHUB_PATH = "odev.common.connectors.git.GithubConnector"
 
 
 class TestCommandUtilities(OdevCommandTestCase):
     def test_version_01_no_argument(self):
-        """Command `odev version` should print the version of the application."""
-        stdout, _ = self.dispatch_command("version")
-        self.assertIn(f"Odev-test version {__version__}", stdout)
+        """Command `odev version` should print the version of the application and stay silent when there is
+        nothing new to pull.
+        """
+        with self.patch(self.odev, "update_available", return_value=False):
+            stdout, stderr = self.dispatch_command("version")
+
+        self.assertIn(f"{self.odev.name.capitalize()} version {__version__}", stdout)
+        self.assertNotIn("A newer version is available", stderr)
+
+    def test_version_02_update_available(self):
+        """Command `odev version` should warn about a newer version only when the repository has incoming
+        changes.
+        """
+        with self.patch(self.odev, "update_available", return_value=True):
+            _, stderr = self.dispatch_command("version")
+
+        self.assertIn("A newer version is available", stderr)
 
     def test_config_01_no_argument(self):
         """Run the command without arguments."""
@@ -169,7 +187,10 @@ class TestCommandUtilities(OdevCommandTestCase):
         def upgrade():
             self.odev.config.update.version = __version__
 
-        with self.patch(self.odev, "upgrade", side_effect=upgrade):
+        with (
+            self.patch_property(type(self.odev), "version", "3.0.0"),
+            self.patch(self.odev, "upgrade", side_effect=upgrade),
+        ):
             stdout, _ = self.dispatch_command("update")
 
         self.assertEqual(self.odev.config.update.version, __version__)
@@ -239,6 +260,221 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn(f"Uninstalling plugin {plugin!r} will also uninstall the following dependent plugins", stdout)
         self.assertFalse(self.odev._plugin_is_installed(plugin))
         self.assertFalse(self.odev._plugin_is_installed(dependent))
+
+    def test_plugin_04_list(self):
+        """Run the command to list plugins, showing enabled and downloaded ones alike."""
+        self.__enable_test_plugin()
+        stdout, _ = self.__dispatch_plugin("--list")
+
+        self.assertRegex(stdout, r"Plugin\s+Version\s+Branch\s+State\s+Depends")
+        self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+enabled")
+        self.assertRegex(stdout, r"test/test-plugin-dep\s+1\.0\.0\s+disabled\s+test-plugin")
+        self.assertNotIn("test/test-addons", stdout)
+
+    def test_plugin_05_list_shadowed(self):
+        """Run the command to list plugins when two enabled plugins share the same module name."""
+        self.__enable_test_plugin()
+        self.odev.config.plugins.enabled = [*self.odev.config.plugins.enabled, "other/test-plugin"]
+
+        stdout, _ = self.__dispatch_plugin("--list")
+
+        self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+enabled")
+        self.assertRegex(stdout, r"other/test-plugin\s+shadowed")
+        self.assertIn("other/test-plugin (shadowed by test/test-plugin)", stdout)
+
+    def test_plugin_06_search(self):
+        """Run the command to search plugins on GitHub, keeping only valid plugin repositories."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        manifest = (self.res_path / "repositories" / "test" / "test-plugin" / "__manifest__.py").read_text()
+        repositories = [
+            self.__github_repository("test/archived-plugin", archived=True),
+            self.__github_repository("odoo-odev/odev-plugin-template"),
+            self.__github_repository("test/test-plugin", stars=3),
+            self.__github_repository("other/remote-plugin"),
+            self.__github_repository("other/not-a-plugin", description="Not a plugin at all"),
+        ]
+
+        with (
+            self.patch(GITHUB_PATH, "search_repositories", return_value=repositories) as search,
+            self.patch(GITHUB_PATH, "get_repository_file", side_effect=[manifest, manifest, None]),
+        ):
+            stdout, _ = self.__dispatch_plugin("--search")
+
+        self.assertRegex(stdout, r"Plugin\s+Version\s+Stars\s+State\s+Description")
+        self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+3\s+disabled")
+        self.assertRegex(stdout, r"other/remote-plugin\s+1\.0\.0\s+0\s+not downloaded")
+        self.assertNotIn("other/not-a-plugin", stdout)
+        self.assertNotIn("test/archived-plugin", stdout)
+        self.assertNotIn("odev-plugin-template", stdout)
+        self.assertTrue(search.call_args.args[0].startswith("odev plugin"))
+
+    def test_plugin_07_search_terms(self):
+        """Run the command to search plugins with additional terms, showing the state of enabled plugins."""
+        self.__enable_test_plugin()
+        manifest = (self.res_path / "repositories" / "test" / "test-plugin" / "__manifest__.py").read_text()
+
+        with (
+            self.patch(
+                GITHUB_PATH,
+                "search_repositories",
+                return_value=[self.__github_repository("test/test-plugin")],
+            ) as search,
+            self.patch(GITHUB_PATH, "get_repository_file", return_value=manifest),
+        ):
+            stdout, _ = self.__dispatch_plugin("--search", "editor")
+
+        self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+0\s+enabled")
+        self.assertIn("editor", search.call_args.args[0])
+
+    def test_plugin_08_search_no_result(self):
+        """Run the command to search plugins when no repository exposes a valid manifest."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+
+        with (
+            self.patch(
+                GITHUB_PATH,
+                "search_repositories",
+                return_value=[self.__github_repository("other/not-a-plugin")],
+            ),
+            self.patch(GITHUB_PATH, "get_repository_file", return_value=None),
+        ):
+            _, stderr = self.dispatch_command("plugin", "--search", "unknown")
+
+        self.assertIn("No odev plugin found matching 'unknown'", stderr)
+
+    def test_plugin_09_show_qualified_name(self):
+        """Run the command to show a plugin using its fully qualified name."""
+        self.__enable_test_plugin()
+
+        stdout, _ = self.dispatch_command("plugin", "--show", "test/test-plugin")
+        self.assertIn("Plugin 'test/test-plugin' is enabled", stdout)
+
+        stdout, _ = self.dispatch_command("plugin", "--show", "test-plugin")
+        self.assertIn("Plugin 'test/test-plugin' is enabled", stdout)
+
+    def test_plugin_10_show_downloaded(self):
+        """Run the command to show a plugin available locally but not enabled, without querying GitHub."""
+        self.__enable_test_plugin()
+
+        with self.patch(GITHUB_PATH, "get_repository", return_value=None) as get_repository:
+            stdout, _ = self.__dispatch_plugin("--show", "test/test-plugin-dep")
+
+        self.assertIn("Plugin 'test/test-plugin-dep' is disabled", stdout)
+        self.assertRegex(stdout, r"Version:\s+1\.0\.0")
+        self.assertRegex(stdout, r"Depends:\s+test/test-plugin")
+        self.assertRegex(stdout, r"Path:\s+.*test-plugin-dep")
+        self.assertRegex(stdout, r"URL:\s+https://github\.com/test/test-plugin-dep")
+        get_repository.assert_not_called()
+
+    def test_plugin_11_show_not_downloaded(self):
+        """Run the command to show a plugin that is not available locally, fetching its manifest from GitHub."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        manifest = (self.res_path / "repositories" / "test" / "test-plugin" / "__manifest__.py").read_text()
+
+        with (
+            self.patch(
+                GITHUB_PATH,
+                "get_repository",
+                return_value=self.__github_repository("other/remote-plugin", stars=42),
+            ) as get_repository,
+            self.patch(GITHUB_PATH, "get_repository_file", return_value=manifest) as get_repository_file,
+        ):
+            stdout, _ = self.__dispatch_plugin("--show", "other/remote-plugin")
+
+        self.assertIn("Plugin 'other/remote-plugin' is not downloaded", stdout)
+        self.assertRegex(stdout, r"Version:\s+1\.0\.0")
+        self.assertRegex(stdout, r"Branch:\s+main")
+        self.assertRegex(stdout, r"Stars:\s+42")
+        self.assertNotIn("Path:", stdout)
+        self.assertIn("Run 'odev plugin --enable other/remote-plugin' to install this plugin", stdout)
+        get_repository.assert_called_once_with("other/remote-plugin")
+        self.assertEqual(get_repository_file.call_args.args[1], "__manifest__.py")
+
+    def test_plugin_12_show_archived_and_excluded(self):
+        """Run the command to show plugins that can be found on GitHub but should not be installed."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        manifest = (self.res_path / "repositories" / "test" / "test-plugin" / "__manifest__.py").read_text()
+
+        with (
+            self.patch(
+                GITHUB_PATH,
+                "get_repository",
+                return_value=self.__github_repository("other/archived-plugin", archived=True),
+            ),
+            self.patch(GITHUB_PATH, "get_repository_file", return_value=manifest),
+        ):
+            stdout, _ = self.__dispatch_plugin("--show", "other/archived-plugin")
+
+        self.assertIn("Repository 'other/archived-plugin' is archived", stdout)
+
+        with (
+            self.patch(
+                GITHUB_PATH,
+                "get_repository",
+                return_value=self.__github_repository("odoo-odev/odev-plugin-template"),
+            ),
+            self.patch(GITHUB_PATH, "get_repository_file", return_value=manifest),
+        ):
+            stdout, _ = self.__dispatch_plugin("--show", "odoo-odev/odev-plugin-template")
+
+        self.assertIn("is a template used to create new plugins and cannot be installed", stdout)
+        self.assertNotIn("--enable odoo-odev/odev-plugin-template", stdout)
+
+    def test_plugin_13_show_unknown(self):
+        """Run the command to show a plugin that is neither available locally nor on GitHub."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+
+        with self.patch(GITHUB_PATH, "get_repository", return_value=None):
+            stdout, _ = self.__dispatch_plugin("--show", "other/unknown-plugin")
+
+        self.assertIn("Plugin 'other/unknown-plugin' is not downloaded", stdout)
+        self.assertNotIn("Version:", stdout)
+
+        with self.patch(GITHUB_PATH, "get_repository", return_value=None) as get_repository:
+            stdout, _ = self.__dispatch_plugin("--show", "unknown-plugin")
+
+        self.assertIn("Plugin 'unknown-plugin' is not downloaded", stdout)
+        self.assertIn("Use the full name of the plugin", stdout)
+        get_repository.assert_not_called()
+
+    def test_plugin_14_show_all(self):
+        """Run the command to show all plugins available locally, enabled or not."""
+        self.__enable_test_plugin()
+
+        with self.patch(GITHUB_PATH, "get_repository", return_value=None) as get_repository:
+            stdout, _ = self.__dispatch_plugin("--show")
+
+        self.assertIn("Plugin 'test/test-plugin' is enabled", stdout)
+        self.assertIn("Plugin 'test/test-plugin-dep' is disabled", stdout)
+        get_repository.assert_not_called()
+
+    def __dispatch_plugin(self, *arguments: str) -> tuple[str, str]:
+        """Run the plugin command on a wide terminal so table columns are not cropped."""
+        with patch.dict(os.environ, {"COLUMNS": "200"}):
+            return self.dispatch_command("plugin", *arguments)
+
+    def __enable_test_plugin(self):
+        """Enable the test plugin from the local test resources and unlink it after the test."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        plugin_link = Path(self.odev.plugins_path) / "test_plugin"
+        self.addCleanup(plugin_link.unlink, missing_ok=True)
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            self.dispatch_command("plugin", "--enable", "test/test-plugin")
+
+    def __github_repository(self, full_name: str, description: str = "", stars: int = 0, archived: bool = False):
+        """Build a stand-in for a repository as returned by the GitHub API."""
+        return SimpleNamespace(
+            full_name=full_name,
+            html_url=f"https://github.com/{full_name}",
+            description=description,
+            stargazers_count=stars,
+            archived=archived,
+            default_branch="main",
+        )
 
 
 class TestCommandUtilitiesVenv(OdevCommandTestCase):
