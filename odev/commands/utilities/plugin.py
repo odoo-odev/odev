@@ -145,6 +145,13 @@ class PluginCommand(Command):
         default=GITHUB_SEARCH_DEFAULT_LIMIT,
         description="Maximum number of repositories to inspect when searching for plugins.",
     )
+    branch = args.String(
+        aliases=["-b", "--branch"],
+        description="""Git revision (branch, tag or commit) to check out when enabling a plugin.
+        Takes precedence over the release channel set in the 'update.release' configuration key.
+        Only the plugin being enabled is affected, its dependencies keep following the release channel.
+        """,
+    )
     plugin = args.String(
         description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
@@ -163,6 +170,9 @@ class PluginCommand(Command):
         if not self.args.plugin and not (self.args.show or self.args.search or self.args.list):
             raise self.error("Missing argument: plugin")
 
+        if self.args.branch and not self.args.enable:
+            raise self.error("Argument --branch can only be used together with --enable")
+
     def run(self):
         """Search, list, enable or disable plugins."""
         if self.args.search:
@@ -175,7 +185,10 @@ class PluginCommand(Command):
             self.show_plugins()
 
         if self.args.enable:
-            self.odev.install_plugin(self.__resolve_plugin_name(self.args.plugin))
+            self.odev.install_plugin(
+                self.__resolve_plugin_name(self.args.plugin),
+                revision=self.args.branch or None,
+            )
 
         if self.args.disable:
             self.odev.uninstall_plugin(self.__resolve_plugin_name(self.args.plugin))

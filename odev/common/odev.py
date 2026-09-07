@@ -862,22 +862,31 @@ class Odev(Generic[CommandType]):
 
         return plugin.path.is_symlink() or plugin.path.is_dir()
 
-    def install_plugin(self, plugin: str, as_dependency: bool = False) -> None:
+    def install_plugin(self, plugin: str, as_dependency: bool = False, revision: str | None = None) -> None:
         """Install a new plugin from a git repository.
 
         :param plugin: Git repository of the plugin to install
         :param as_dependency: Whether the plugin is being installed as a dependency of another plugin
+        :param revision: Git revision to check out instead of the configured release channel. Dependencies of the
+            plugin are left alone and keep following the release channel.
         """
         with progress.spinner(f"Installing plugin{' dependency' if as_dependency else ''} {plugin!r}"):
             repository = GitConnector(plugin)
-            revision = self.config.update.release if self.config.update.release in ["main", "beta"] else None
+            channel = self.config.update.release if self.config.update.release in ["main", "beta"] else None
 
-            if repository.exists:
-                repository.update()
+            if not repository.exists:
+                repository.clone(revision=revision or channel)
+
                 if revision:
-                    self.__checkout_release_channel(repository, revision)
+                    self.__check_plugin_revision(repository, revision)
+            elif revision:
+                repository.checkout(revision)
+                repository.update()
             else:
-                repository.clone(revision=revision)
+                repository.update()
+
+                if channel:
+                    self.__checkout_release_channel(repository, channel)
 
             manifest = self._load_plugin_manifest(repository.path)
 
@@ -1265,6 +1274,24 @@ class Odev(Generic[CommandType]):
         logger.info(f"Switched release channel to {branch!r}")
 
     # --- Private methods ------------------------------------------------------
+
+    def __check_plugin_revision(self, repository: GitConnector, revision: str) -> None:
+        """Ensure a freshly cloned plugin ended up on the revision that was explicitly requested.
+
+        Cloning falls back to the default branch of the repository when the requested branch does not exist
+        on the remote, which would silently install the plugin from a revision the user did not ask for.
+
+        :param repository: Repository the plugin was cloned to
+        :param revision: Revision that was requested
+        """
+        if repository.repository is None or repository.repository.head.is_detached:
+            # A tag or a commit hash leaves the repository in a detached state, there is no branch to compare
+            return
+
+        checked_out = repository.repository.active_branch.name
+
+        if checked_out != revision:
+            raise OdevError(f"Revision {revision!r} not found in repository {repository.name!r}, got {checked_out!r}")
 
     def __checkout_release_channel(self, repo: GitConnector, branch: str) -> None:
         """Checkout the release channel."""
