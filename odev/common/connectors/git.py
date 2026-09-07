@@ -83,7 +83,19 @@ class Stash:
         try:
             self.repository.git.stash("pop")
         except GitCommandError as pop_error:
-            logger.warning(f"Failed to restore stashed changes in {self.repository.working_dir!r}: {pop_error}")
+            # A conflicting pop leaves conflict markers in the working tree while keeping the stash entry, which is
+            # how a checkout ends up with unparsable python files. Restore the tree instead and let the developer
+            # replay the stash by hand, where the conflicts can actually be resolved.
+            if self.repository.index.unmerged_blobs():
+                try:
+                    self.repository.git.reset("--hard", "HEAD")
+                except GitCommandError as reset_error:
+                    logger.warning(f"Failed to clean up {self.repository.working_dir!r}: {reset_error}")
+
+            logger.warning(
+                f"Failed to restore stashed changes in {self.repository.working_dir!r}: {pop_error}\n"
+                "Your changes are kept in the stash, restore them with 'git stash pop'"
+            )
 
 
 class GitWorktree:

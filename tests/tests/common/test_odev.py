@@ -4,6 +4,8 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
+from git import GitCommandError
+
 from odev._version import __version__
 from odev.common.commands import Command
 from odev.common.odev import Manifest, Odev, Plugin, logger, parse_plugin_manifest, plugin_module_name
@@ -26,6 +28,17 @@ class TestCommonOdev(OdevTestCase):
         # test runs next.
         argv = sys.argv
         self.addCleanup(setattr, sys, "argv", argv)
+
+    @staticmethod
+    def plugin_fixture(name: str = "test/plugin") -> Plugin:
+        """Build a plugin record pointing nowhere, for tests that never read its files.
+
+        :param name: Name of the plugin, in the `organization/repository` format.
+        :return: The plugin record
+        :rtype: Plugin
+        """
+        manifest = Manifest(name=name, description="Test plugin", version="1.0.0", depends=[])
+        return Plugin(name, Path("/nonexistent") / name.replace("/", "_"), manifest)
 
     def test_01_config_file(self):
         """Config file should have been created in the correct directory."""
@@ -168,18 +181,80 @@ class TestCommonOdev(OdevTestCase):
         self.assertIn(self.odev.name.capitalize(), output.stdout)
 
     def test_15_register_plugin_commands_retries_after_failure(self):
-        """Plugin command registration should retry once after plugin updates."""
+        """Plugin command registration should retry the failing plugins once after plugin updates."""
+        plugin = self.plugin_fixture()
+
         with (
-            self.patch_property(type(self.odev), "plugins", []),
+            self.patch_property(type(self.odev), "plugins", [plugin]),
             self.patch(
-                self.odev, "_register_plugin_commands", side_effect=[RuntimeError("boom"), None]
+                self.odev, "_register_plugin_commands", side_effect=[[(plugin, RuntimeError("boom"))], []]
             ) as register_mock,
+            self.patch(self.odev, "_pull_plugin", return_value=True) as pull_mock,
+            self.patch(self.odev, "_install_missing_plugin_requirements"),
             self.patch(logger, "error") as logger_error,
         ):
             self.odev.register_plugin_commands()
 
         self.assertEqual(register_mock.call_count, 2)
+        self.assertEqual(register_mock.call_args.args[0], [plugin])
+        pull_mock.assert_called_once_with(plugin)
         logger_error.assert_called_once()
+
+    def test_15_1_register_plugin_commands_isolates_broken_plugins(self):
+        """A plugin whose commands cannot be imported should not prevent the other plugins from registering theirs."""
+        broken = self.plugin_fixture(name="test/broken")
+        working = self.plugin_fixture(name="test/working")
+
+        with (
+            self.patch(
+                self.odev,
+                "import_commands",
+                side_effect=[
+                    SyntaxError("invalid syntax (mixins.py, line 28)"),
+                    [(MagicMock(), Path("/nonexistent/command.py"))],
+                ],
+            ),
+            self.patch(self.odev.commands, "patch") as patch_mock,
+        ):
+            failures = self.odev._register_plugin_commands([broken, working])
+
+        self.assertEqual([plugin for plugin, _ in failures], [broken])
+        patch_mock.assert_called_once()
+
+    def test_15_2_register_plugin_commands_skips_update_of_development_branches(self):
+        """A plugin checked out on a branch odev does not own should be left alone instead of being pulled."""
+        plugin = self.plugin_fixture()
+        repository = MagicMock()
+        repository.head.is_detached = False
+        repository.active_branch.name = "copilot/local-20260901-odev-plugin-ai"
+
+        with (
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock(repository=repository)),
+            self.patch(logger, "warning") as logger_warning,
+        ):
+            self.assertFalse(self.odev._pull_plugin(plugin))
+
+        repository.remote.assert_not_called()
+        self.assertIn("non-standard branch", logger_warning.call_args.args[0])
+
+    def test_15_3_register_plugin_commands_survives_a_failing_pull(self):
+        """A plugin whose repository cannot be pulled should be reported, not crash the run."""
+        plugin = self.plugin_fixture()
+        repository = MagicMock()
+        repository.head.is_detached = False
+        repository.active_branch.name = "beta"
+        repository.is_dirty.return_value = False
+        repository.remote.return_value.pull.side_effect = GitCommandError(
+            "git pull", 1, b"fatal: couldn't find remote ref beta"
+        )
+
+        with (
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock(repository=repository)),
+            self.patch(logger, "warning") as logger_warning,
+        ):
+            self.assertFalse(self.odev._pull_plugin(plugin))
+
+        self.assertIn("Error while pulling latest changes", logger_warning.call_args.args[0])
 
     def test_16_plugins_dependency_tree_cycle_raises(self):
         """Circular plugin dependencies should raise an explicit framework error."""
@@ -247,13 +322,16 @@ class TestCommonOdev(OdevTestCase):
 
     def test_19_register_plugin_commands_installs_requirements_on_retry(self):
         """Plugin command registration should install missing requirements before retrying after a failed import."""
+        plugin = self.plugin_fixture()
+
         with (
-            self.patch_property(type(self.odev), "plugins", []),
+            self.patch_property(type(self.odev), "plugins", [plugin]),
             self.patch(
                 self.odev,
                 "_register_plugin_commands",
-                side_effect=[ModuleNotFoundError("No module named 'copier'"), None],
+                side_effect=[[(plugin, ModuleNotFoundError("No module named 'copier'"))], []],
             ) as register_mock,
+            self.patch(self.odev, "_pull_plugin", return_value=True),
             self.patch(self.odev, "_install_missing_plugin_requirements") as install_mock,
             self.patch(logger, "error"),
         ):
@@ -261,6 +339,24 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertEqual(register_mock.call_count, 2)
         install_mock.assert_called_once_with()
+
+    def test_19_1_register_plugin_commands_skips_retry_without_update(self):
+        """Nothing having been pulled, retrying the import would only repeat the same error."""
+        plugin = self.plugin_fixture()
+
+        with (
+            self.patch_property(type(self.odev), "plugins", [plugin]),
+            self.patch(
+                self.odev, "_register_plugin_commands", side_effect=[[(plugin, RuntimeError("boom"))], []]
+            ) as register_mock,
+            self.patch(self.odev, "_pull_plugin", return_value=False),
+            self.patch(self.odev, "_install_missing_plugin_requirements") as install_mock,
+            self.patch(logger, "error"),
+        ):
+            self.odev.register_plugin_commands()
+
+        self.assertEqual(register_mock.call_count, 1)
+        install_mock.assert_not_called()
 
     def test_20_load_plugins_repoints_preexisting_plugins_module(self):
         """An `odev.plugins` module resolved before plugins are loaded, as a developer checkout containing an
