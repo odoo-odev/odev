@@ -1,6 +1,7 @@
 import os
 from base64 import b64decode, b64encode
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Literal
 
@@ -68,22 +69,28 @@ class SecretStore(PostgresTable):
     """Configuration parameters."""
 
     @classmethod
-    def _list_ssh_keys(cls) -> list[AgentKey]:
-        """List all SSH keys available in the ssh-agent."""
-        keys = list(SSHAgent().get_keys())
+    @contextmanager
+    def _ssh_keys(cls) -> Iterator[list[AgentKey]]:
+        """Yield SSH keys and close the agent connection on exit."""
+        agent = SSHAgent()
 
-        if not keys and not os.environ.get("ODEV_NO_SSH_AGENT"):
-            raise OdevError("No SSH keys found in ssh-agent, or ssh-agent is not running.")
+        try:
+            keys = list(agent.get_keys())
 
-        fingerprint = cls.config.security.encryption_key
+            if not keys and not os.environ.get("ODEV_NO_SSH_AGENT"):
+                raise OdevError("No SSH keys found in ssh-agent, or ssh-agent is not running.")
 
-        if fingerprint:
-            for i, key in enumerate(keys):
-                if key.fingerprint == fingerprint:
-                    keys.insert(0, keys.pop(i))
-                    break
+            fingerprint = cls.config.security.encryption_key
 
-        return keys
+            if fingerprint:
+                for i, key in enumerate(keys):
+                    if key.fingerprint == fingerprint:
+                        keys.insert(0, keys.pop(i))
+                        break
+
+            yield keys
+        finally:
+            agent.close()
 
     @classmethod
     def encrypt(cls, plaintext: str) -> str:
@@ -94,19 +101,19 @@ class SecretStore(PostgresTable):
         :rtype: str
         """
         ciphered: str | None = None
-        keys = cls._list_ssh_keys()
 
-        if not keys:
-            return plaintext
+        with cls._ssh_keys() as keys:
+            if not keys:
+                return plaintext
 
-        for key in keys:
-            try:
-                ciphered = str(b64encode(ssh_encrypt(plaintext, ssh_key=key)).decode()) if plaintext else ""
-            except SSHException as e:
-                logger.debug(f"Failed to encrypt with key {key.fingerprint} ({key.name}, {key.comment}): {e}")
-            else:
-                cls.config.security.encryption_key = key.fingerprint
-                break
+            for key in keys:
+                try:
+                    ciphered = str(b64encode(ssh_encrypt(plaintext, ssh_key=key)).decode()) if plaintext else ""
+                except SSHException as e:
+                    logger.debug(f"Failed to encrypt with key {key.fingerprint} ({key.name}, {key.comment}): {e}")
+                else:
+                    cls.config.security.encryption_key = key.fingerprint
+                    break
 
         if ciphered is None:
             raise OdevError("Encryption failed, no key could be used for signing.")
@@ -122,27 +129,27 @@ class SecretStore(PostgresTable):
         :rtype: str
         """
         deciphered: str | None = None
-        keys = cls._list_ssh_keys()
 
-        if not keys:
-            return ciphertext
+        with cls._ssh_keys() as keys:
+            if not keys:
+                return ciphertext
 
-        for key in keys:
-            key_desc = f"{key.fingerprint} ({key.name}, {key.comment})"
+            for key in keys:
+                key_desc = f"{key.fingerprint} ({key.name}, {key.comment})"
 
-            try:
-                deciphered = (
-                    str(ssh_decrypt(b64decode(ciphertext.encode()).decode(), ssh_key=key)) if ciphertext else ""
-                )
-            except SSHException as e:
-                logger.debug(f"Failed to decrypt with key {key_desc}: {e}")
-            except UnicodeDecodeError as e:
-                logger.debug(f"Failed to decode decrypted string with key {key_desc}: {e}")
-            except ValueError as e:
-                logger.debug(f"Unexpected error when trying to handle SSH key {key_desc}: {e}")
-            else:
-                cls.config.security.encryption_key = key.fingerprint
-                break
+                try:
+                    deciphered = (
+                        str(ssh_decrypt(b64decode(ciphertext.encode()).decode(), ssh_key=key)) if ciphertext else ""
+                    )
+                except SSHException as e:
+                    logger.debug(f"Failed to decrypt with key {key_desc}: {e}")
+                except UnicodeDecodeError as e:
+                    logger.debug(f"Failed to decode decrypted string with key {key_desc}: {e}")
+                except ValueError as e:
+                    logger.debug(f"Unexpected error when trying to handle SSH key {key_desc}: {e}")
+                else:
+                    cls.config.security.encryption_key = key.fingerprint
+                    break
 
         if deciphered is None:
             raise OdevError("Decryption failed, no key could be used")
