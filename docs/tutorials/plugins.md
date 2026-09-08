@@ -13,6 +13,7 @@ To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
         -   [Searching for plugins](#searching-for-plugins)
         -   [Listing local plugins](#listing-local-plugins)
         -   [Inspecting a plugin](#inspecting-a-plugin)
+        -   [Purging a plugin](#purging-a-plugin)
     -   [Creating a new plugin](#creating-a-new-plugin)
         -   [Plugin structure](#plugin-structure)
             -   [The manifest](#the-manifest)
@@ -79,6 +80,31 @@ matched against the plugins present on your machine, as long as it is not ambigu
 >
 > When GitHub cannot be reached — no token configured, no network, rate limit exceeded — `--show` silently falls back
 > to the information available locally instead of failing.
+
+### Purging a plugin
+
+`odev plugin --disable <organization>/<repository>` only unlinks a plugin and drops it from the configuration: its
+clone is kept under the repositories directory so re-enabling it never downloads it again, which is also why it keeps
+showing up as `disabled` in `--list`.
+
+Use `odev plugin --purge <organization>/<repository>` to get rid of it for good. Purging removes the link, the entry
+in the configuration and the local clone of the repository, so the plugin disappears from `--list` entirely.
+
+```sh
+odev plugin --purge odoo-odev/odev-plugin-editor-vscode
+```
+
+The plugins depending on the purged one, directly or through another plugin, are purged along with it: without
+their dependency they could not be loaded anymore. They are listed before the confirmation is asked.
+
+Contrary to `--disable`, purging never imports a plugin: the manifests it needs to find the dependent plugins are
+read from disk without being executed. It is therefore the way out when a broken plugin prevents odev from running at
+all.
+
+> [!WARNING]
+>
+> The local clones are deleted, uncommitted work included. The command asks for a confirmation first, which `--force`
+> bypasses.
 
 ## Creating a new plugin
 

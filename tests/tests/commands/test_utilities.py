@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from odev._version import __version__
+from odev.common.odev import plugin_module_name
 from odev.common.python import PythonEnv
 
 from tests.fixtures import OdevCommandTestCase
@@ -447,6 +448,107 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn("Plugin 'test/test-plugin' is enabled", stdout)
         self.assertIn("Plugin 'test/test-plugin-dep' is disabled", stdout)
         get_repository.assert_not_called()
+
+    def test_plugin_15_purge(self):
+        """Run the command to purge a plugin, removing its link, its configuration entry and its clone."""
+        plugin = "test/test-plugin"
+        repositories_path = self.__sandbox_repositories()
+        plugin_link = Path(self.odev.plugins_path) / "test_plugin"
+        self.addCleanup(plugin_link.unlink, missing_ok=True)
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            self.dispatch_command("plugin", "--enable", plugin)
+
+        self.assertTrue(plugin_link.is_symlink())
+
+        with self.patch(self.odev.console, "confirm", return_value=True):
+            stdout, _ = self.dispatch_command("plugin", "--purge", "test-plugin")
+
+        self.assertIn(f"Purged plugin {plugin!r}", stdout)
+        self.assertNotIn(plugin, self.odev.config.plugins.enabled)
+        self.assertFalse(plugin_link.is_symlink())
+        self.assertFalse((repositories_path / plugin).exists())
+
+    def test_plugin_16_purge_aborted(self):
+        """Run the command to purge a plugin and refuse the confirmation, leaving the clone untouched."""
+        plugin = "test/test-plugin"
+        repositories_path = self.__sandbox_repositories()
+
+        with self.patch(self.odev.console, "confirm", return_value=False):
+            _, stderr = self.dispatch_command("plugin", "--purge", plugin)
+
+        self.assertIn("Aborting plugin purge", stderr)
+        self.assertTrue((repositories_path / plugin).is_dir())
+
+    def test_plugin_17_purge_dependents(self):
+        """Run the command to purge a plugin, purging the plugins depending on it as well."""
+        plugin = "test/test-plugin"
+        dependent = "test/test-plugin-dep"
+        repositories_path = self.__sandbox_repositories()
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            self.dispatch_command("plugin", "--enable", dependent)
+
+        for name in (plugin, dependent):
+            self.addCleanup(Path(self.odev.plugins_path / plugin_module_name(name)).unlink, missing_ok=True)
+
+        self.assertTrue(self.odev._plugin_is_installed(dependent))
+
+        with self.patch(self.odev.console, "confirm", return_value=True):
+            stdout, stderr = self.dispatch_command("plugin", "--purge", plugin)
+
+        self.assertIn(f"Purging plugin {plugin!r} will also purge the following dependent plugins", stderr)
+        self.assertIn(dependent, stderr)
+        self.assertIn(f"Purged plugin {dependent!r}", stdout)
+
+        for name in (plugin, dependent):
+            self.assertNotIn(name, self.odev.config.plugins.enabled)
+            self.assertFalse((repositories_path / name).exists())
+            self.assertFalse((self.odev.plugins_path / plugin_module_name(name)).is_symlink())
+
+    def test_plugin_18_purge_broken_manifest(self):
+        """Run the command to purge a plugin whose own manifest is broken, still finding its dependents."""
+        plugin = "test/test-plugin"
+        dependent = "test/test-plugin-dep"
+        repositories_path = self.__sandbox_repositories()
+        (repositories_path / plugin / "__manifest__.py").write_text("this is not valid python(")
+
+        with self.patch(self.odev.console, "confirm", return_value=True):
+            self.dispatch_command("plugin", "--purge", plugin)
+
+        self.assertFalse((repositories_path / plugin).exists())
+        self.assertFalse((repositories_path / dependent).exists())
+
+    def test_plugin_19_purge_forced(self):
+        """Run the command to purge a plugin with `--force`, bypassing the confirmation prompt."""
+        plugin = "test/test-plugin"
+        repositories_path = self.__sandbox_repositories()
+
+        stdout, _ = self.dispatch_command("plugin", "--purge", "--force", plugin)
+
+        self.assertIn(f"Purged plugin {plugin!r}", stdout)
+        self.assertFalse((repositories_path / plugin).exists())
+
+    def test_plugin_20_purge_unknown(self):
+        """Run the command to purge a plugin by repository name only when no such clone exists locally."""
+        self.__sandbox_repositories()
+        _, stderr = self.dispatch_command("plugin", "--purge", "unknown-plugin")
+        self.assertIn("No plugin named 'unknown-plugin' found locally", stderr)
+
+    def __sandbox_repositories(self) -> Path:
+        """Copy the plugin test resources to a throwaway repositories directory, safe to delete from."""
+        repositories_path = self.run_path / "repositories"
+        shutil.rmtree(repositories_path, ignore_errors=True)
+        shutil.copytree(self.res_path / "repositories", repositories_path)
+        self.addCleanup(shutil.rmtree, repositories_path, ignore_errors=True)
+        self.odev.config.paths.repositories = repositories_path
+        return repositories_path
 
     def __dispatch_plugin(self, *arguments: str) -> tuple[str, str]:
         """Run the plugin command on a wide terminal so table columns are not cropped."""

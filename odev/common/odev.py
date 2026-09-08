@@ -7,6 +7,7 @@ import inspect
 import os
 import pkgutil
 import re
+import shutil
 import sys
 from argparse import Namespace
 from collections import defaultdict
@@ -1041,6 +1042,133 @@ class Odev(Generic[CommandType]):
 
             self._load_config()
             self._plugins_dependency_tree.cache_clear()
+
+    def purge_plugin(self, plugin: str) -> None:
+        """Remove every trace of a plugin from the system, link, configuration entry and local clone alike.
+
+        The plugins depending on the purged one, directly or through another plugin, are purged along with it: they
+        could not be loaded anymore once their dependency is gone. Their manifests are read from disk without being
+        executed and nothing about the plugins themselves is imported, which keeps purging usable as a last resort
+        when a broken plugin prevents odev from running.
+
+        :param plugin: Name of the plugin to purge
+        """
+        plugins = [plugin, *self._plugin_dependents(plugin)]
+
+        if dependents := plugins[1:]:
+            logger.warning(
+                f"Purging plugin {plugin!r} will also purge the following dependent plugins:\n"
+                f"{string.join_bullet(dependents)}"
+            )
+
+        repository_paths = [self.config.paths.repositories / name for name in plugins]
+        logger.warning(
+            f"You are about to purge {'these plugins' if dependents else f'the plugin {plugin!r}'}, removing "
+            f"{'them' if dependents else 'it'} from the configuration and deleting the following local "
+            f"{'clones' if dependents else 'clone'}:\n"
+            f"{string.join_bullet([path.as_posix() for path in repository_paths])}"
+        )
+
+        if not self.console.confirm("Do you want to continue?", default=self.console.bypass_prompt):
+            raise OdevError("Aborting plugin purge")
+
+        with progress.spinner(f"Purging plugin {plugin!r}"):
+            for name in plugins:
+                self.__purge_plugin_files(name)
+                self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != name}
+                logger.info(f"Purged plugin {name!r}")
+
+            self._load_config()
+            self._plugins_dependency_tree.cache_clear()
+
+    def __purge_plugin_files(self, plugin: str) -> None:
+        """Delete the link of a plugin under the plugins directory and its local clone.
+
+        :param plugin: Name of the plugin to delete the files of
+        """
+        plugin_path = self.plugins_path / plugin_module_name(plugin)
+        repository_path = self.config.paths.repositories / plugin
+
+        if plugin_path.is_symlink() or plugin_path.is_file():
+            logger.debug(f"Removing plugin link {plugin_path.as_posix()}")
+            plugin_path.unlink()
+        elif plugin_path.is_dir():
+            logger.debug(f"Removing plugin directory {plugin_path.as_posix()}")
+            shutil.rmtree(plugin_path, ignore_errors=True)
+
+        if repository_path.is_dir():
+            logger.debug(f"Removing repository {repository_path.as_posix()}")
+            shutil.rmtree(repository_path, ignore_errors=True)
+
+            # The organization directory is created by the clone, remove it once its last repository is gone.
+            with contextlib.suppress(OSError):
+                repository_path.parent.rmdir()
+
+    def _plugin_dependents(self, plugin: str) -> list[str]:
+        """List the plugins depending on the given plugin, directly or through another plugin.
+
+        :param plugin: Name of the plugin whose dependents are looked up
+        :return: Names of the dependent plugins, the closest dependencies first
+        """
+        dependencies = {name: set(self.__plugin_depends(name)) for name in self.__known_plugin_names()}
+        dependencies.pop(plugin, None)
+        removed = {plugin}
+        dependents: list[str] = []
+
+        # A plugin can depend on the purged one through any number of intermediate plugins, so sweep the manifests
+        # again after each round of dependents until one of them brings nothing new.
+        while found := sorted(name for name, depends in dependencies.items() if depends & removed):
+            dependents += found
+            removed |= set(found)
+
+            for name in found:
+                del dependencies[name]
+
+        return dependents
+
+    def __known_plugin_names(self) -> set[str]:
+        """List the plugins known locally, whether they are enabled or only available as a clone.
+
+        :return: Names of the plugins, in the format `organization/repository`
+        """
+        plugins = set(self.config.plugins.enabled)
+        repositories_path = self.config.paths.repositories
+
+        if repositories_path.is_dir():
+            plugins.update(
+                f"{path.parent.parent.name}/{path.parent.name}"
+                for path in repositories_path.glob(f"*/*/{PLUGIN_MANIFEST_FILENAME}")
+            )
+
+        return plugins
+
+    def __plugin_depends(self, plugin: str) -> list[str]:
+        """Read the dependencies declared in the manifest of a plugin, without executing it.
+
+        A manifest that cannot be found or parsed yields no dependency: an unreadable plugin must not keep a purge
+        from going through, as purging is precisely what fixes a broken installation.
+
+        :param plugin: Name of the plugin to read the dependencies of
+        :return: Names of the plugins it depends on
+        """
+        paths = (
+            self.config.paths.repositories / plugin / PLUGIN_MANIFEST_FILENAME,
+            self.plugins_path / plugin_module_name(plugin) / PLUGIN_MANIFEST_FILENAME,
+        )
+
+        for path in paths:
+            try:
+                source = path.read_text()
+            except OSError:
+                continue
+
+            manifest = parse_plugin_manifest(source, plugin)
+
+            if manifest is not None:
+                return manifest["depends"]
+
+        logger.debug(f"Could not read the dependencies of plugin {plugin!r}")
+        return []
 
     def _setup_plugin(self, plugin_path: Path, plugin: str | None = None) -> None:
         """Run the setup script of a plugin if it exists.

@@ -1,4 +1,4 @@
-"""Search, enable and disable plugins to add new features and commands."""
+"""Search, enable, disable and purge plugins to add new features and commands."""
 
 import textwrap
 from collections.abc import Mapping
@@ -117,14 +117,22 @@ class PluginInfo:
 
 
 class PluginCommand(Command):
-    """Search, enable and disable plugins to add new features and commands."""
+    """Search, enable, disable and purge plugins to add new features and commands."""
 
     _name = "plugin"
     _aliases = ["plugins"]
-    _exclusive_arguments = [("enable", "disable", "show", "search", "list")]
+    _exclusive_arguments = [("enable", "disable", "purge", "show", "search", "list")]
 
     enable = args.Flag(aliases=["-e", "--enable"], description="Download and enable an inactive plugin.")
     disable = args.Flag(aliases=["-d", "--disable"], description="Disable an active plugin.")
+    purge = args.Flag(
+        aliases=["-p", "--purge"],
+        description="""Remove a plugin from the system entirely, deleting its local clone.
+        The plugins depending on it are purged as well, as they could not be loaded anymore.
+        Nothing about the plugins is loaded or inspected, which makes this usable when a broken plugin
+        prevents odev from running.
+        """,
+    )
     show = args.Flag(
         aliases=["-s", "--show"],
         description="Show the state of a plugin and its description if available.",
@@ -146,7 +154,7 @@ class PluginCommand(Command):
         description="Maximum number of repositories to inspect when searching for plugins.",
     )
     plugin = args.String(
-        description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
+        description="""Plugin to enable, disable or purge, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
         If `--show` is used and no plugin is provided, show the state of all enabled plugins.
         If `--search` is used, this is the term to search for; quote it to search for multiple terms.
@@ -179,6 +187,9 @@ class PluginCommand(Command):
 
         if self.args.disable:
             self.odev.uninstall_plugin(self.__resolve_plugin_name(self.args.plugin))
+
+        if self.args.purge:
+            self.odev.purge_plugin(self.__resolve_purged_plugin_name(self.args.plugin))
 
     # --- Searching plugins on GitHub ------------------------------------------
 
@@ -611,6 +622,33 @@ class PluginCommand(Command):
             raise self.error(f"Plugin name {name!r} is ambiguous, use one of:\n{string.join_bullet(candidates)}")
 
         return candidates[0] if candidates else name
+
+    def __resolve_purged_plugin_name(self, name: str) -> str:
+        """Resolve the name of a plugin to purge, without relying on the plugins discovered locally.
+
+        Discovery reads the manifest of every local repository, which a plugin left in a broken state can make
+        fail, so a name given without its organization is only matched against the directories present under the
+        repositories path.
+
+        :param name: The name of the plugin, either fully qualified or the name of its repository only.
+        :return: The fully qualified name of the plugin.
+        """
+        if "/" in name:
+            return name
+
+        candidates = sorted(
+            f"{path.parent.name}/{path.name}"
+            for path in self.config.paths.repositories.glob(f"*/{name}")
+            if path.is_dir()
+        )
+
+        if len(candidates) > 1:
+            raise self.error(f"Plugin name {name!r} is ambiguous, use one of:\n{string.join_bullet(candidates)}")
+
+        if not candidates:
+            raise self.error(f"No plugin named {name!r} found locally, use its <organization>/<repository> name")
+
+        return candidates[0]
 
     def __shorten(self, description: str) -> str:
         """Collapse a description to a single line fitting the width of a table column.
