@@ -1,4 +1,4 @@
-"""Search, enable and disable plugins to add new features and commands."""
+"""Search, enable and delete plugins to add new features and commands."""
 
 import textwrap
 from collections.abc import Mapping
@@ -17,11 +17,10 @@ from odev.common.connectors.git import GITHUB_DOMAIN, GITHUB_SEARCH_DEFAULT_LIMI
 from odev.common.console import TableHeader
 from odev.common.errors import ConnectorError
 from odev.common.logging import logging
-from odev.common.odev import (
+from odev.common.plugins import (
     PLUGIN_MANIFEST_FILENAME,
     Manifest,
     parse_plugin_manifest,
-    plugin_module_name,
 )
 
 
@@ -44,33 +43,23 @@ used as a starting point to create new plugins.
 STATE_ENABLED = "enabled"
 """The plugin is linked under the plugins directory and loaded by the framework."""
 
-STATE_SHADOWED = "shadowed"
-"""The plugin is enabled in the configuration but another plugin already uses its module name."""
+STATE_BROKEN = "broken"
+"""The plugin is linked under the plugins directory but could not be loaded."""
 
-STATE_MISSING = "missing"
-"""The plugin is enabled in the configuration but is not linked under the plugins directory."""
-
-STATE_DISABLED = "disabled"
-"""The plugin is available locally but is not enabled."""
-
-STATE_NOT_DOWNLOADED = "not downloaded"
-"""The plugin exists on GitHub but is not available locally."""
+STATE_NOT_INSTALLED = "not installed"
+"""The plugin exists on GitHub but is not linked under the plugins directory."""
 
 STATE_STYLES: Mapping[str, str] = {
     STATE_ENABLED: "color.green",
-    STATE_SHADOWED: "color.yellow",
-    STATE_MISSING: "color.red",
-    STATE_DISABLED: "color.black",
-    STATE_NOT_DOWNLOADED: "color.black",
+    STATE_BROKEN: "color.red",
+    STATE_NOT_INSTALLED: "color.black",
 }
 """Style used to render each possible state of a plugin."""
 
 STATE_ORDER: tuple[str, ...] = (
     STATE_ENABLED,
-    STATE_SHADOWED,
-    STATE_MISSING,
-    STATE_DISABLED,
-    STATE_NOT_DOWNLOADED,
+    STATE_BROKEN,
+    STATE_NOT_INSTALLED,
 )
 """Order in which plugins are sorted in tables, most relevant states first."""
 
@@ -106,9 +95,6 @@ class PluginInfo:
     description: str = ""
     """Description of the plugin, taken from the docstring of its manifest."""
 
-    shadowed_by: str = ""
-    """Plugin already using the module name of this one, preventing it from being loaded."""
-
     stars: int | None = None
     """Number of stars of the repository, `None` if it was not looked up on GitHub."""
 
@@ -117,14 +103,20 @@ class PluginInfo:
 
 
 class PluginCommand(Command):
-    """Search, enable and disable plugins to add new features and commands."""
+    """Search, enable and delete plugins to add new features and commands."""
 
     _name = "plugin"
     _aliases = ["plugins"]
-    _exclusive_arguments = [("enable", "disable", "show", "search", "list")]
+    _exclusive_arguments = [("enable", "delete", "show", "search", "list")]
 
     enable = args.Flag(aliases=["-e", "--enable"], description="Download and enable an inactive plugin.")
-    disable = args.Flag(aliases=["-d", "--disable"], description="Disable an active plugin.")
+    delete = args.Flag(
+        aliases=["-d", "--delete"],
+        description="""Delete an installed plugin, removing the link that makes odev load it.
+        The plugins depending on it are deleted as well, as they could not be loaded anymore.
+        The local clone is left untouched, so enabling the plugin again never downloads it a second time.
+        """,
+    )
     show = args.Flag(
         aliases=["-s", "--show"],
         description="Show the state of a plugin and its description if available.",
@@ -146,7 +138,7 @@ class PluginCommand(Command):
         description="Maximum number of repositories to inspect when searching for plugins.",
     )
     plugin = args.String(
-        description="""Plugin to enable or disable, must be a git repository hosted on GitHub.
+        description="""Plugin to enable or delete, must be a git repository hosted on GitHub.
         Use format <organization>/<repository>.
         If `--show` is used and no plugin is provided, show the state of all enabled plugins.
         If `--search` is used, this is the term to search for; quote it to search for multiple terms.
@@ -164,7 +156,7 @@ class PluginCommand(Command):
             raise self.error("Missing argument: plugin")
 
     def run(self):
-        """Search, list, enable or disable plugins."""
+        """Search, list, enable or delete plugins."""
         if self.args.search:
             self.search_plugins()
 
@@ -177,8 +169,8 @@ class PluginCommand(Command):
         if self.args.enable:
             self.odev.install_plugin(self.__resolve_plugin_name(self.args.plugin))
 
-        if self.args.disable:
-            self.odev.uninstall_plugin(self.__resolve_plugin_name(self.args.plugin))
+        if self.args.delete:
+            self.odev.delete_plugin(self.__resolve_plugin_name(self.args.plugin))
 
     # --- Searching plugins on GitHub ------------------------------------------
 
@@ -198,7 +190,7 @@ class PluginCommand(Command):
                 if manifest is None:
                     continue
 
-                state = states.get(repository.full_name, STATE_NOT_DOWNLOADED)
+                state = states.get(repository.full_name, STATE_NOT_INSTALLED)
                 rows.append(
                     [
                         string.link(repository.full_name, repository.html_url),
@@ -291,11 +283,11 @@ class PluginCommand(Command):
         self.table(headers, rows, title="Plugins")
         self.console.clear_line()
 
-        if shadowed := [plugin for plugin in plugins if plugin.state == STATE_SHADOWED]:
+        if broken := [plugin for plugin in plugins if plugin.state == STATE_BROKEN]:
             logger.warning(
-                "The following plugins are enabled but cannot be loaded as another plugin already uses their "
-                "module name:\n"
-                + string.join_bullet([f"{plugin.name} (shadowed by {plugin.shadowed_by})" for plugin in shadowed])
+                "The following plugins are installed but could not be loaded, delete them with "
+                "'odev plugin --delete <organization>/<repository>':\n"
+                + string.join_bullet([plugin.name for plugin in broken])
             )
 
     # --- Showing a single plugin ----------------------------------------------
@@ -318,9 +310,7 @@ class PluginCommand(Command):
         plugin = self.__plugin_info(name)
 
         if plugin is None:
-            logger.info(
-                f"Plugin {name!r} is {string.stylize(STATE_NOT_DOWNLOADED, STATE_STYLES[STATE_NOT_DOWNLOADED])}"
-            )
+            logger.info(f"Plugin {name!r} is {string.stylize(STATE_NOT_INSTALLED, STATE_STYLES[STATE_NOT_INSTALLED])}")
 
             if "/" not in name:
                 logger.info("Use the full name of the plugin as '<organization>/<repository>' to look it up on GitHub")
@@ -353,8 +343,8 @@ class PluginCommand(Command):
 
         :param plugin: The plugin the information of which is being displayed.
         """
-        if plugin.state == STATE_SHADOWED:
-            logger.warning(f"Plugin {plugin.name!r} is shadowed by {plugin.shadowed_by!r} and cannot be loaded")
+        if plugin.state == STATE_BROKEN:
+            logger.warning(f"Plugin {plugin.name!r} is installed but could not be loaded")
 
         if plugin.archived:
             logger.warning(f"Repository {plugin.name!r} is archived and is not maintained anymore")
@@ -363,7 +353,7 @@ class PluginCommand(Command):
             logger.warning(
                 f"Repository {plugin.name!r} is a template used to create new plugins and cannot be installed"
             )
-        elif plugin.state == STATE_NOT_DOWNLOADED:
+        elif plugin.state == STATE_NOT_INSTALLED:
             logger.info(f"Run 'odev plugin --enable {plugin.name}' to install this plugin")
 
     def __plugin_info(self, name: str) -> PluginInfo | None:
@@ -424,7 +414,7 @@ class PluginCommand(Command):
 
         return PluginInfo(
             name=repository.full_name,
-            state=STATE_NOT_DOWNLOADED,
+            state=STATE_NOT_INSTALLED,
             version=manifest["version"],
             branch=repository.default_branch,
             depends=list(manifest["depends"]),
@@ -436,150 +426,43 @@ class PluginCommand(Command):
     # --- Discovering local plugins --------------------------------------------
 
     def _discover_plugins(self) -> list[PluginInfo]:
-        """List all the plugins known locally, whether they are enabled, disabled or broken.
+        """List the plugins installed on this machine, whether the framework could load them or not.
 
-        :return: The plugins known locally, sorted by state then by name.
+        The links under the plugins directory are the only thing consulted, and they were already read once when
+        the framework started, so this neither walks the filesystem again nor reaches GitHub.
+
+        :return: The installed plugins, sorted by state then by name.
         """
         if self.__local_plugins is None:
-            plugins = self.__discover_enabled()
-            plugins.update(self.__discover_configured(plugins))
-            plugins.update(self.__discover_downloaded(plugins))
+            plugins = [
+                PluginInfo(
+                    name=plugin.name,
+                    state=STATE_ENABLED,
+                    version=plugin.manifest["version"],
+                    branch=self.__repository_branch(plugin.target),
+                    path=plugin.target,
+                    depends=list(plugin.manifest["depends"]),
+                    description=(plugin.manifest["description"] or "").strip(),
+                )
+                for plugin in self.odev.plugins
+            ]
+            plugins += [
+                PluginInfo(
+                    name=plugin.name,
+                    state=STATE_BROKEN,
+                    branch=self.__repository_branch(plugin.path.resolve()),
+                    path=plugin.path.resolve() if plugin.path.is_dir() else None,
+                    description=plugin.reason,
+                )
+                for plugin in self.odev.skipped_plugins
+            ]
 
             self.__local_plugins = sorted(
-                plugins.values(),
+                plugins,
                 key=lambda plugin: (STATE_ORDER.index(plugin.state), plugin.name),
             )
 
         return self.__local_plugins
-
-    def __discover_enabled(self) -> dict[str, PluginInfo]:
-        """List the plugins linked under the plugins directory and loaded by the framework.
-
-        :return: The enabled plugins, mapped by name.
-        """
-        plugins: dict[str, PluginInfo] = {}
-
-        for plugin in self.odev.plugins:
-            resolved_path = plugin.path.resolve()
-
-            if plugin.path.name.startswith((".", "_")) or not resolved_path.is_dir():
-                continue
-
-            plugins[plugin.name] = PluginInfo(
-                name=plugin.name,
-                state=STATE_ENABLED,
-                version=plugin.manifest["version"],
-                branch=self.__repository_branch(resolved_path),
-                path=resolved_path,
-                depends=list(plugin.manifest["depends"]),
-                description=(plugin.manifest["description"] or "").strip(),
-            )
-
-        return plugins
-
-    def __discover_configured(self, enabled: Mapping[str, PluginInfo]) -> dict[str, PluginInfo]:
-        """List the plugins enabled in the configuration that the framework could not load.
-
-        :param enabled: The plugins already discovered as enabled, mapped by name.
-        :return: The plugins whose link is either missing or taken by another plugin, mapped by name.
-        """
-        modules = {plugin_module_name(name): name for name in enabled}
-        plugins: dict[str, PluginInfo] = {}
-
-        for name in self.config.plugins.enabled:
-            if name in enabled:
-                continue
-
-            shadowed_by = modules.get(plugin_module_name(name), "")
-            plugins[name] = self.__build_plugin(
-                name,
-                self.config.paths.repositories / name,
-                STATE_SHADOWED if shadowed_by else STATE_MISSING,
-                shadowed_by=shadowed_by,
-            )
-
-        return plugins
-
-    def __discover_downloaded(self, known: Mapping[str, PluginInfo]) -> dict[str, PluginInfo]:
-        """List the plugins cloned locally but neither enabled nor referenced in the configuration.
-
-        Repositories that cannot be installed are left out so they are never advertised as available, but a plugin
-        already enabled is always reported, whatever its repository.
-
-        :param known: The plugins already discovered, mapped by name.
-        :return: The plugins available locally but not enabled, mapped by name.
-        """
-        repositories_path = self.config.paths.repositories
-        plugins: dict[str, PluginInfo] = {}
-
-        if not repositories_path.is_dir():
-            return plugins
-
-        for manifest_path in sorted(repositories_path.glob(f"*/*/{PLUGIN_MANIFEST_FILENAME}")):
-            path = manifest_path.parent
-            name = f"{path.parent.name}/{path.name}"
-
-            if name in known or name in plugins or name in EXCLUDED_REPOSITORIES:
-                continue
-
-            manifest = self.__read_manifest(path, name)
-
-            if manifest is None:
-                continue
-
-            plugins[name] = self.__build_plugin(name, path, STATE_DISABLED, manifest=manifest)
-
-        return plugins
-
-    def __build_plugin(
-        self,
-        name: str,
-        path: Path,
-        state: str,
-        manifest: Manifest | None = None,
-        shadowed_by: str = "",
-    ) -> PluginInfo:
-        """Build the representation of a plugin that is not loaded by the framework.
-
-        :param name: The name of the plugin, in the format `organization/repository`.
-        :param path: The expected path to the local clone of the plugin.
-        :param state: The state of the plugin, one of the `STATE_*` constants.
-        :param manifest: The already parsed manifest of the plugin, read from `path` if omitted.
-        :param shadowed_by: The plugin already using the module name of this one, if any.
-        :return: The plugin as known locally.
-        """
-        manifest = manifest or self.__read_manifest(path, name)
-
-        return PluginInfo(
-            name=name,
-            state=state,
-            version=manifest["version"] if manifest else "",
-            branch=self.__repository_branch(path),
-            path=path if path.is_dir() else None,
-            depends=list(manifest["depends"]) if manifest else [],
-            description=manifest["description"] if manifest else "",
-            shadowed_by=shadowed_by,
-        )
-
-    def __read_manifest(self, path: Path, name: str) -> Manifest | None:
-        """Read the manifest of a plugin located at the given path, without executing it.
-
-        :param path: The path to the local clone of the plugin.
-        :param name: The name of the plugin, in the format `organization/repository`.
-        :return: The manifest of the plugin, or `None` if it is not a valid odev plugin.
-        """
-        manifest_path = path / PLUGIN_MANIFEST_FILENAME
-
-        if not manifest_path.is_file():
-            return None
-
-        try:
-            source = manifest_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            logger.debug(f"Could not read the manifest of plugin {name!r} at {manifest_path.as_posix()}")
-            return None
-
-        return parse_plugin_manifest(source, name)
 
     def __repository_branch(self, path: Path) -> str:
         """Return the branch currently checked out in the local clone of a plugin.

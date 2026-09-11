@@ -1,6 +1,5 @@
 """Self update Odev by pulling latest changes from the git repository."""
 
-import ast
 import contextlib
 import importlib
 import inspect
@@ -10,9 +9,8 @@ import re
 import sys
 from argparse import Namespace
 from collections import defaultdict
-from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import datetime
-from functools import lru_cache
 from hashlib import sha256
 from importlib.abc import Loader
 from importlib.machinery import FileFinder, ModuleSpec
@@ -25,8 +23,6 @@ from typing import (
     Any,
     ClassVar,
     Generic,
-    NamedTuple,
-    TypedDict,
     cast,
 )
 
@@ -43,6 +39,21 @@ from odev.common.connectors.git import GitConnector, Stash
 from odev.common.console import Console, console
 from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging
+from odev.common.plugins import (
+    PLUGIN_MANIFEST_FILENAME,
+    Discovery,
+    Manifest,
+    Plugin,
+    SkippedPlugin,
+    forget_plugins,
+    installed_plugins,
+    parse_plugin_manifest,
+    plugin_identity,
+    plugin_link,
+    plugin_module_name,
+    plugins_requiring,
+    read_plugin_manifest,
+)
 from odev.common.python import PythonEnv
 from odev.common.store import DataStore
 from odev.common.string import join_bullet
@@ -61,7 +72,16 @@ except ImportError:  # UTC is only available in Python 3.11+
     UTC = timezone.utc
 
 
-__all__ = ["Odev", "parse_plugin_manifest", "plugin_module_name"]
+# The plugin primitives now live in `odev.common.plugins`; they stay re-exported here as plugins import them
+# from this module.
+__all__ = [
+    "PLUGIN_MANIFEST_FILENAME",
+    "Manifest",
+    "Odev",
+    "Plugin",
+    "parse_plugin_manifest",
+    "plugin_module_name",
+]
 
 
 PRUNING_INTERVAL = 14
@@ -81,89 +101,7 @@ VENVS_DIRNAME = "virtualenvs"
 MIN_ARGV_LENGTH = 2
 """Minimum number of command line arguments required (command and subcommand)."""
 
-PLUGIN_MANIFEST_FILENAME = "__manifest__.py"
-"""Name of the manifest file located at the root of a plugin repository."""
-
-
-class Manifest(TypedDict):
-    """Plugin manifest information."""
-
-    name: str
-    description: str
-    version: str
-    depends: list[str]
-
-
-class Plugin(NamedTuple):
-    """Plugin information."""
-
-    name: str
-    path: Path
-    manifest: Manifest
-
-
 logger = logging.getLogger(__name__)
-
-
-def plugin_module_name(plugin: str) -> str:
-    """Convert the name of a plugin to the name of the module it is linked to under the plugins directory.
-
-    :param plugin: Name of the plugin, in the format `organization/repository`
-    :return: Name of the python module for this plugin
-    """
-    return plugin.split("/")[-1].replace("-", "_")
-
-
-def parse_plugin_manifest(source: str, name: str) -> Manifest | None:
-    """Extract the metadata of a plugin from the source of its manifest, without executing it.
-
-    Only the module docstring and top-level assignments of literal values are read, which makes this function safe
-    to use on manifests originating from untrusted repositories. A source that does not define a top-level
-    `__version__` string is not considered a valid odev plugin manifest.
-
-    :param source: Content of the `__manifest__.py` file
-    :param name: Name of the plugin, in the format `organization/repository`
-    :return: Manifest of the plugin, or `None` if the source is not a valid odev plugin manifest
-    """
-    try:
-        tree = ast.parse(source)
-    except (SyntaxError, ValueError, RecursionError):
-        logger.debug(f"Failed to parse the manifest of plugin {name!r}")
-        return None
-
-    assignments: dict[str, Any] = {}
-
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            targets, value = node.targets, node.value
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            targets, value = [node.target], node.value
-        else:
-            continue
-
-        try:
-            literal = ast.literal_eval(value)
-        except (SyntaxError, TypeError, ValueError, MemoryError, RecursionError):
-            continue
-
-        assignments.update({target.id: literal for target in targets if isinstance(target, ast.Name)})
-
-    manifest_version = assignments.get("__version__")
-
-    if not isinstance(manifest_version, str):
-        logger.debug(f"Manifest of plugin {name!r} does not declare a version number")
-        return None
-
-    depends = assignments.get("depends")
-
-    return {
-        "name": name,
-        "version": manifest_version,
-        "description": (ast.get_docstring(tree) or "").strip(),
-        "depends": [dependency for dependency in depends if isinstance(dependency, str)]
-        if isinstance(depends, list)
-        else [],
-    }
 
 
 class Odev(Generic[CommandType]):
@@ -307,13 +245,32 @@ class Odev(Generic[CommandType]):
         return self.config.paths.dumps
 
     @property
-    def plugins(self) -> Generator[Plugin, None, None]:
-        """Yields enabled plugins sorted topologically."""
-        for plugin_name in self._plugins_dependency_tree():
-            plugin_path = self.plugins_path / plugin_module_name(plugin_name)
+    def plugins(self) -> list[Plugin]:
+        """The plugins odev loads, in the order their dependencies require them to be imported.
 
-            plugin_manifest = self._load_plugin_manifest(plugin_path)
-            yield Plugin(plugin_name, plugin_path, plugin_manifest)
+        A plugin is a link under the plugins directory and nothing else, so this reads the filesystem and never
+        consults the configuration nor the network.
+        """
+        return self._plugin_discovery().loaded
+
+    @property
+    def skipped_plugins(self) -> list[SkippedPlugin]:
+        """The plugins that are installed but that could not be loaded, each with the reason it was left out."""
+        return self._plugin_discovery().skipped
+
+    def _plugin_discovery(self) -> Discovery:
+        """Read the plugins directory.
+
+        The result is cached against the modification time of the directory, so calling this repeatedly reads the
+        filesystem once and picks up a link that changed on its own.
+
+        :return: The plugins to load and the ones that were skipped
+        """
+        return installed_plugins(self.plugins_path)
+
+    def _forget_plugins(self) -> None:
+        """Discard the discovered plugins so the next access reads the plugins directory again."""
+        forget_plugins()
 
     @property
     def release(self) -> str:
@@ -423,8 +380,7 @@ class Odev(Generic[CommandType]):
 
             raise OdevError(f"Error while updating {self.name}") from error
 
-        manifest: Manifest = self._load_plugin_manifest(path)
-        git = GitConnector(cast(str, manifest["name"]), path)
+        git = GitConnector(plugin_identity(path.resolve()), path)
 
         if git.repository is None:
             raise OdevError(f"Repository for {self.name!r} not found at {path.as_posix()}")
@@ -487,12 +443,23 @@ class Odev(Generic[CommandType]):
                 logger.debug(f"Installing new package requirements for {prompt_name!r}")
                 PythonEnv().install_requirements(path)
 
-            self._load_plugin_manifest.cache_clear()
-            manifest = self._load_plugin_manifest(path)
-            self.config.plugins.enabled = {*self.config.plugins.enabled, *manifest["depends"]}
+            self._forget_plugins()
+            self._install_new_dependencies(path, plugin)
             self._show_release_notes(git, head_commit, prompt_name)
 
         return True
+
+    def _install_new_dependencies(self, path: Path, plugin: str | None) -> None:
+        """Install the dependencies a plugin gained since it was last updated.
+
+        :param path: Path to the repository that was just pulled
+        :param plugin: Name of the plugin, `None` when odev itself was updated
+        """
+        manifest = read_plugin_manifest(path, plugin) if plugin else None
+
+        for dependency in manifest["depends"] if manifest else []:
+            if not self._plugin_is_installed(dependency):
+                self.install_plugin(dependency, as_dependency=True)
 
     def _show_release_notes(self, git: GitConnector, head_commit: str, prompt_name: str):
         if not git.repository or not git.remote:
@@ -718,7 +685,7 @@ class Odev(Generic[CommandType]):
 
                 if not self._install_missing_plugin_requirements():
                     logger.error(
-                        f"Could not load plugin module {plugin.path.name}: {error}\n"
+                        f"Could not load plugin module {plugin.module}: {error}\n"
                         "The missing package is not declared in the requirements of any enabled plugin, "
                         f"consider reporting this issue to the maintainer of plugin {plugin.name!r}"
                     )
@@ -727,17 +694,16 @@ class Odev(Generic[CommandType]):
                 try:
                     self._load_plugin_module(plugin)
                 except Exception as retry_error:  # noqa: BLE001
-                    logger.error(f"Could not load plugin module {plugin.path.name}: {retry_error}")
+                    logger.error(f"Could not load plugin module {plugin.module}: {retry_error}")
             except Exception as error:  # noqa: BLE001
-                logger.error(f"Could not load plugin module {plugin.path.name}: {error}")
+                logger.error(f"Could not load plugin module {plugin.module}: {error}")
 
     def _load_plugin_module(self, plugin: Plugin) -> None:
         """Import a plugin module and register it under the `odev.plugins` namespace.
 
         :param plugin: Plugin whose module should be imported.
         """
-        # Module names MUST use underscores even if directories use dashes
-        module_basename = plugin.path.name.replace("-", "_")
+        module_basename = plugin.module
         module_name = f"odev.plugins.{module_basename}"
 
         # Try to import directly from sys.path first
@@ -822,8 +788,8 @@ class Odev(Generic[CommandType]):
         for plugin, error in self._register_plugin_commands([plugin for plugin, _ in failures]):
             logger.error(
                 f"Could not load commands of plugin {plugin.name!r} after updating: {error}\n"
-                f"Fix the repository in {plugin.path.as_posix()} or disable the plugin with "
-                f"'odev plugin --remove {plugin.name}'"
+                f"Fix the repository in {plugin.path.as_posix()} or delete the plugin with "
+                f"'odev plugin --delete {plugin.name}'"
             )
 
     def _register_plugin_commands(self, plugins: Iterable[Plugin]) -> list[tuple[Plugin, Exception]]:
@@ -938,18 +904,30 @@ class Odev(Generic[CommandType]):
         """Reload the configuration file."""
         self.__class__.config = Config(self.name)
 
+    def _plugin_link(self, name: str) -> Path | None:
+        """Find the link recording a plugin as installed.
+
+        Every link is considered, not only the one at the conventional path, so a plugin that odev could not load
+        still counts as installed and can be deleted, whatever name its link was given.
+
+        :param name: Name of the plugin to look up
+        :return: Path to the link, or `None` if the plugin is not installed
+        """
+        if (link := plugin_link(self._plugin_discovery(), name)) is not None:
+            return link
+
+        # A link pointing nowhere is not reported by the discovery, yet it is still installed and still holds the
+        # module name, so look the conventional path up as well.
+        plugin_path = self.plugins_path / plugin_module_name(name)
+        return plugin_path if plugin_path.is_symlink() or plugin_path.is_dir() else None
+
     def _plugin_is_installed(self, name: str) -> bool:
-        """Check whether a plugin is installed.
+        """Check whether a plugin is installed, that is whether it is linked under the plugins directory.
 
         :param name: Name of the plugin to check
         :return: Whether the plugin is installed
         """
-        plugin = next((p for p in self.plugins if name == p.name), None)
-
-        if plugin is None:
-            return False
-
-        return plugin.path.is_symlink() or plugin.path.is_dir()
+        return self._plugin_link(name) is not None
 
     def install_plugin(self, plugin: str, as_dependency: bool = False) -> None:
         """Install a new plugin from a git repository.
@@ -957,6 +935,18 @@ class Odev(Generic[CommandType]):
         :param plugin: Git repository of the plugin to install
         :param as_dependency: Whether the plugin is being installed as a dependency of another plugin
         """
+        plugin_path = self.plugins_path / plugin_module_name(plugin)
+
+        if (plugin_path.is_symlink() or plugin_path.exists()) and plugin_identity(plugin_path.resolve()) != plugin:
+            # The module name is what python imports a plugin as, so two plugins can never share one. The link
+            # already being taken is the filesystem refusing the collision, which nothing else has to track, and
+            # nothing is cloned before that is known.
+            raise OdevError(
+                f"Cannot install plugin {plugin!r}: another plugin already uses the module name "
+                f"{plugin_path.name!r}, delete it first with "
+                f"'odev plugin --delete {plugin_identity(plugin_path.resolve())}'"
+            )
+
         with progress.spinner(f"Installing plugin{' dependency' if as_dependency else ''} {plugin!r}"):
             repository = GitConnector(plugin)
             revision = self.config.update.release if self.config.update.release in ["main", "beta"] else None
@@ -968,79 +958,93 @@ class Odev(Generic[CommandType]):
             else:
                 repository.clone(revision=revision)
 
-            manifest = self._load_plugin_manifest(repository.path)
+            manifest = read_plugin_manifest(repository.path, plugin)
 
-            if depends := manifest.get("depends"):
-                for dependency in depends:
-                    self.install_plugin(dependency, as_dependency=True)
+            if manifest is None:
+                raise OdevError(
+                    f"Repository {plugin!r} is not an odev plugin: it does not expose a {PLUGIN_MANIFEST_FILENAME} "
+                    "declaring a '__version__'"
+                )
 
-            plugin_path = self.plugins_path / plugin_module_name(repository.name)
+            for dependency in manifest["depends"]:
+                self.install_plugin(dependency, as_dependency=True)
+
             self.plugins_path.mkdir(parents=True, exist_ok=True)
 
             if self._plugin_is_installed(plugin):
                 logger.info(f"Plugin {plugin!r} is already installed")
             else:
                 try:
-                    if not plugin_path.exists() and not plugin_path.is_symlink():
-                        logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
-                        plugin_path.symlink_to(repository.path, target_is_directory=True)
+                    logger.debug(f"Creating symbolic link {plugin_path.as_posix()} to {repository.path.as_posix()}")
+                    plugin_path.symlink_to(repository.path, target_is_directory=True)
 
+                    # The link has to exist before the setup script runs: the configuration sections a plugin
+                    # contributes are read from the links, and a setup script storing its own settings would have
+                    # nowhere to write them otherwise. Anything failing below removes the link again, leaving no
+                    # half-installed plugin behind.
+                    self._forget_plugins()
                     self._load_config()
-                    PythonEnv().install_requirements(plugin_path)
-                    self._setup_plugin(plugin_path, plugin)
+                    PythonEnv().install_requirements(repository.path)
+                    self._setup_plugin(repository.path, plugin)
                 except Exception as error:
                     plugin_path.unlink(missing_ok=True)
-                    raise OdevError(f"Error while installing requirements for plugin {plugin!r}: {error}") from error
+                    self._forget_plugins()
+                    self._load_config()
+                    raise OdevError(f"Error while installing plugin {plugin!r}: {error}") from error
 
                 logger.info(f"Installed plugin{' dependency' if as_dependency else ''} {plugin!r}")
 
-            self.config.plugins.enabled = {*self.config.plugins.enabled, plugin}
-            self._plugins_dependency_tree.cache_clear()
+            self._forget_plugins()
+            self._load_config()
 
-    def uninstall_plugin(self, plugin: str) -> None:
-        """Uninstall a plugin the plugins that depend on it.
+    def delete_plugin(self, plugin: str) -> None:
+        """Delete a plugin and the plugins that depend on it.
 
-        :param plugin: Name of the plugin to uninstall
+        Only the link making odev load the plugin is removed: the local clone is kept so enabling the plugin
+        again never downloads it a second time.
+
+        :param plugin: Name of the plugin to delete
         """
         if not self._plugin_is_installed(plugin):
-            if plugin in self.config.plugins.enabled:
-                self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != plugin}
-
             logger.info(f"Plugin {plugin!r} is not installed")
             return
 
-        with progress.spinner(f"Uninstalling plugin {plugin!r}"):
-            dependents: set[str] = set()
+        # Every installed plugin is considered, not only the ones odev could load: a plugin left out of this run
+        # still depends on what its manifest declares, and its link would otherwise survive the plugin it needs.
+        dependents = plugins_requiring(self._plugin_discovery().installed, plugin)
 
-            for installed_plugin in self._plugins_dependency_tree():
-                if installed_plugin == plugin:
+        if dependents:
+            logger.warning(
+                f"Deleting plugin {plugin!r} will also delete the following dependent plugins:\n"
+                f"{string.join_bullet(dependents)}"
+            )
+        else:
+            logger.warning(f"You are about to delete the plugin {plugin!r}")
+
+        if not self.console.confirm("Do you want to continue?", default=False):
+            raise OdevError("Aborting plugin deletion")
+
+        with progress.spinner(f"Deleting plugin {plugin!r}"):
+            for name in [plugin, *dependents]:
+                link = self._plugin_link(name)
+
+                if link is None:
                     continue
 
-                installed_plugin_path = self.plugins_path / plugin_module_name(installed_plugin)
-                manifest = self._load_plugin_manifest(installed_plugin_path)
+                if not (link.is_symlink() or link.is_file()):
+                    # Only the link recording the plugin is ever removed. A real directory is someone's checkout,
+                    # never something odev created, and deleting it would take their work with it.
+                    logger.warning(
+                        f"Plugin {name!r} is not a link but a directory at {link.as_posix()}, so it was left "
+                        "untouched; move or remove it yourself to stop odev from loading it"
+                    )
+                    continue
 
-                if any(dep in manifest.get("depends", []) for dep in dependents | {plugin}):
-                    dependents.add(installed_plugin)
+                link.unlink()
+                logger.info(f"Deleted plugin {name!r}")
 
-            if dependents:
-                logger.warning(
-                    f"Uninstalling plugin {plugin!r} will also uninstall the following dependent plugins:\n"
-                    f"{string.join_bullet(list(dependents))}"
-                )
-            else:
-                logger.warning(f"You are about to uninstall the plugin {plugin!r}")
-
-            if not self.console.confirm("Do you want to continue?", default=False):
-                raise OdevError("Aborting plugin uninstallation")
-
-            for dependent in dependents | {plugin}:
-                plugin_path = self.plugins_path / plugin_module_name(dependent)
-                plugin_path.unlink(missing_ok=True)
-                self.config.plugins.enabled = {p for p in self.config.plugins.enabled if p != dependent}
-                logger.info(f"Uninstalled plugin {dependent!r}")
-
+            self._forget_plugins()
             self._load_config()
-            self._plugins_dependency_tree.cache_clear()
 
     def _setup_plugin(self, plugin_path: Path, plugin: str | None = None) -> None:
         """Run the setup script of a plugin if it exists.
@@ -1061,139 +1065,6 @@ class Odev(Generic[CommandType]):
 
             if hasattr(setup_module, "setup"):
                 setup_module.setup(self)
-
-    @lru_cache  # noqa: B019 - cache result as it won't change during execution
-    def _load_plugin_manifest(self, plugin_path: Path) -> Manifest:
-        """Load the manifest file of a plugin."""
-        resolved_path = plugin_path.resolve()
-        defaults: Manifest = {
-            "name": f"{resolved_path.parent.name}/{resolved_path.name}",
-            "version": "1.0.0",
-            "description": "",
-            "depends": [],
-        }
-
-        manifest_path = plugin_path / PLUGIN_MANIFEST_FILENAME
-
-        if not manifest_path.exists():
-            return defaults
-
-        spec = spec_from_file_location(f"{plugin_path.name}.__manifest__", manifest_path.as_posix())
-
-        if spec is None:
-            raise ImportError(f"Cannot load manifest module from {manifest_path.as_posix()}")
-
-        manifest = module_from_spec(spec)
-        cast(Loader, spec.loader).exec_module(manifest)
-
-        return {
-            **defaults,
-            "version": getattr(manifest, "__version__", defaults["version"]),
-            "description": getattr(manifest, "__doc__", defaults["description"]),
-            "depends": getattr(manifest, "depends", defaults["depends"]),
-        }
-
-    @lru_cache  # noqa: B019 - cache result as it won't change during execution
-    def _plugins_dependency_tree(self) -> list[str]:
-        """Order plugins by mutual dependencies, the first one in the returned list being the first one that needs to
-        be imported to respect the dependency graph.
-        """
-        dependents: dict[str, list[str]] = {}
-
-        for plugin_path in self.plugins_path.iterdir():
-            manifest = self._load_plugin_manifest(plugin_path)
-            dependents.setdefault(manifest["name"], [])
-
-            for dependency in manifest["depends"]:
-                dependents.setdefault(dependency, []).append(manifest["name"])
-
-        resolved_graph = self.__topological_sort(dependents)
-        logger.debug(f"Resolved plugins dependency tree:\n{join_bullet(resolved_graph)}")
-
-        return resolved_graph
-
-    @classmethod
-    def __topological_sort(cls, dependents: Mapping[str, list[str]]) -> list[str]:
-        """Order nodes of a dependency graph so that each one comes after the nodes it depends on.
-
-        :param dependents: Mapping of each node to the nodes that directly depend on it.
-        :return: The ordered nodes.
-        :rtype: List[str]
-        :raise OdevError: If the graph contains a circular dependency.
-        """
-        indegrees = dict.fromkeys(dependents, 0)
-
-        for node_dependents in dependents.values():
-            for dependent in node_dependents:
-                indegrees[dependent] += 1
-
-        ordered: list[str] = []
-        generation = [node for node, indegree in indegrees.items() if not indegree]
-
-        while generation:
-            ordered.extend(generation)
-            next_generation: list[str] = []
-
-            for node in generation:
-                for dependent in dependents[node]:
-                    indegrees[dependent] -= 1
-
-                    if not indegrees[dependent]:
-                        next_generation.append(dependent)
-
-            generation = next_generation
-
-        if len(ordered) == len(dependents):
-            return ordered
-
-        cycles = cls.__find_cycles(dependents, set(dependents) - set(ordered))
-
-        if not cycles:
-            raise OdevError("Circular dependency detected in plugins")
-
-        described = [
-            f"{cycle[0]} depends on itself" if len(cycle) == 1 else " → ".join([*cycle, cycle[0]]) for cycle in cycles
-        ]
-
-        raise OdevError("Circular dependency detected in plugins: " + "; ".join(described))
-
-    @staticmethod
-    def __find_cycles(dependents: Mapping[str, list[str]], nodes: set[str], limit: int = 20) -> list[list[str]]:
-        """Find the circular dependencies formed by the given nodes, for reporting purposes.
-
-        :param dependents: Mapping of each node to the nodes that directly depend on it.
-        :param nodes: The nodes known to take part in a cycle.
-        :param limit: Maximum number of cycles to report.
-        :return: The cycles found, each as the list of nodes it goes through.
-        :rtype: List[List[str]]
-        """
-        cycles: list[list[str]] = []
-        reported: set[tuple[str, ...]] = set()
-
-        def walk(path: list[str]) -> None:
-            if len(cycles) >= limit:
-                return
-
-            for dependent in dependents.get(path[-1], []):
-                if dependent not in nodes:
-                    continue
-
-                if dependent not in path:
-                    walk([*path, dependent])
-                    continue
-
-                cycle = path[path.index(dependent) :]
-                start = cycle.index(min(cycle))
-                canonical = tuple(cycle[start:] + cycle[:start])
-
-                if canonical not in reported:
-                    reported.add(canonical)
-                    cycles.append(list(canonical))
-
-        for node in sorted(nodes):
-            walk([node])
-
-        return cycles
 
     def parse_arguments(self, command_cls: type[CommandType], *args) -> Namespace:
         """Parse arguments for a command.

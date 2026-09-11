@@ -1,20 +1,23 @@
-import glob
 import inspect
 import sys
-from collections.abc import Iterable
 from configparser import ConfigParser
 from datetime import datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 from typing import (
     Literal,
     cast,
 )
 
 from odev._version import __version__
-from odev.common.errors import OdevError
+from odev.common.logging import logging
+from odev.common.plugins import Plugin, installed_plugins
 
 
 __all__ = ["Config"]
+
+
+logger = logging.getLogger(__name__)
 
 
 CONFIG_DIR: Path = Path.home() / ".config" / "odev"
@@ -173,21 +176,6 @@ class UpdateSection(Section):
         self.set("release", value)
 
 
-class PluginsSection(Section):
-    """Odev plugins configuration."""
-
-    @property
-    def enabled(self) -> Iterable[str]:
-        """List of enabled plugins repositories.
-        Defaults to an empty list.
-        """
-        return [plugin for plugin in cast(str, self.get("enabled", "")).split(",") if plugin]
-
-    @enabled.setter
-    def enabled(self, value: str | Iterable[str]):
-        self.set("enabled", value if isinstance(value, str) else ",".join(list(value)))
-
-
 class PruningSection(Section):
     """Odev privacy configuration."""
 
@@ -332,9 +320,6 @@ class Config:
     update: UpdateSection
     """Configuration for odev auto-updates."""
 
-    plugins: PluginsSection
-    """Configuration for odev plugins."""
-
     pruning: PruningSection
     """Configuration for odev pruning of databases."""
 
@@ -366,34 +351,71 @@ class Config:
         return CONFIG_DIR / f"{self.name}.cfg"
 
     def __init_sections(self):
-        """Initialize all section attribute, including from plugins if enabled."""
-        import importlib.util  # noqa: PLC0415 - avoid circular import
-
+        """Initialize all section attributes, including the ones contributed by the installed plugins."""
         modules = [inspect.getmodule(self)]
 
-        # Find all ~/.config/odev/plugins/*/config.py files and import their Section subclasses
-        plugins_config_paths = glob.glob(str(CONFIG_DIR / "plugins" / "*" / "config.py"))
+        for plugin in installed_plugins(CONFIG_DIR / "plugins").loaded:
+            module = self.__import_plugin_config(plugin)
 
-        for config_path in plugins_config_paths:
-            module_name = f"odev.plugins.{Path(config_path).parent.name}.config"
-            spec = importlib.util.spec_from_file_location(module_name, config_path)
-
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                spec.loader.exec_module(module)
+            if module is not None:
                 modules.append(module)
 
         for module in modules:
-            for _, cls in inspect.getmembers(
-                module, lambda member: inspect.isclass(member) and issubclass(member, Section) and member is not Section
-            ):
-                section = cls(getattr(cls, "_name", cls.__name__.replace("Section", "").lower()), self)
+            self.__add_sections(module)
 
-                if hasattr(self, section.name):
-                    raise OdevError(f"Config already has a section named {section.name!r}, cannot add {cls!r}")
+    def __import_plugin_config(self, plugin: Plugin) -> ModuleType | None:
+        """Import the `config.py` of a plugin, which contributes its own configuration sections.
 
-                setattr(self, section.name, section)
+        The plugins are read from the links under the plugins directory, the same source of truth the framework
+        loads them from, so a plugin that is not installed never contributes a section. A plugin failing to import
+        is reported and skipped: configuration is built before anything else, and one broken plugin must not keep
+        odev from starting.
+
+        :param plugin: The plugin to import the configuration of
+        :return: The imported module, or `None` if the plugin has no configuration or it could not be imported
+        """
+        import importlib.util  # noqa: PLC0415 - avoid circular import
+
+        config_path = plugin.path / "config.py"
+
+        if not config_path.is_file():
+            return None
+
+        module_name = f"odev.plugins.{plugin.module}.config"
+        spec = importlib.util.spec_from_file_location(module_name, config_path)
+
+        if spec is None or spec.loader is None:
+            return None
+
+        module = importlib.util.module_from_spec(spec)
+
+        try:
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+        except Exception as error:  # noqa: BLE001
+            sys.modules.pop(module_name, None)
+            logger.error(f"Could not load the configuration of plugin {plugin.name!r}: {error}")
+            return None
+
+        return module
+
+    def __add_sections(self, module: ModuleType) -> None:
+        """Add the configuration sections defined by a module.
+
+        :param module: The module to read the `Section` subclasses from
+        """
+        for _, cls in inspect.getmembers(
+            module, lambda member: inspect.isclass(member) and issubclass(member, Section) and member is not Section
+        ):
+            section = cls(getattr(cls, "_name", cls.__name__.replace("Section", "").lower()), self)
+
+            if hasattr(self, section.name):
+                logger.error(
+                    f"Ignoring section {section.name!r} of {module.__name__}: a section by that name already exists"
+                )
+                continue
+
+            setattr(self, section.name, section)
 
     def load(self):
         """Load the content of the config file, creating it if need be."""

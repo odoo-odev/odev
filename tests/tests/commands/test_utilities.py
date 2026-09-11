@@ -198,7 +198,7 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn(f"Updated to {__version__}!", stdout)
 
     def test_plugin_01_single(self):
-        """Run the command to enable or disable a plugin."""
+        """Run the command to enable or delete a plugin."""
         plugin = "test/test-plugin"
         plugin_link = Path(self.odev.plugins_path) / "test_plugin"
         self.odev.config.paths.repositories = self.res_path / "repositories"
@@ -213,7 +213,6 @@ class TestCommandUtilities(OdevCommandTestCase):
         ):
             self.dispatch_command("plugin", "--enable", plugin)
 
-        self.assertIn(plugin, self.odev.config.plugins.enabled)
         self.assertTrue(plugin_link.is_symlink())
 
         stdout, _ = self.dispatch_command("plugin", "--enable", plugin)
@@ -221,13 +220,12 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertTrue(self.odev._plugin_is_installed(plugin))
 
         with self.patch(self.odev.console, "confirm", return_value=True):
-            self.dispatch_command("plugin", "--disable", plugin)
+            self.dispatch_command("plugin", "--delete", plugin)
 
-        self.assertNotIn(plugin, self.odev.config.plugins.enabled)
         self.assertFalse(plugin_link.is_symlink())
 
         with self.patch(self.odev.console, "confirm", return_value=True):
-            stdout, _ = self.dispatch_command("plugin", "--disable", plugin)
+            stdout, _ = self.dispatch_command("plugin", "--delete", plugin)
 
         self.assertIn(f"Plugin '{plugin}' is not installed", stdout)
         self.assertFalse(self.odev._plugin_is_installed(plugin))
@@ -255,9 +253,9 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertTrue(self.odev._plugin_is_installed(plugin))
 
         with self.patch(self.odev.console, "confirm", return_value=True):
-            stdout, _ = self.dispatch_command("plugin", "--disable", plugin)
+            stdout, _ = self.dispatch_command("plugin", "--delete", plugin)
 
-        self.assertIn(f"Uninstalling plugin {plugin!r} will also uninstall the following dependent plugins", stdout)
+        self.assertIn(f"Deleting plugin {plugin!r} will also delete the following dependent plugins", stdout)
         self.assertFalse(self.odev._plugin_is_installed(plugin))
         self.assertFalse(self.odev._plugin_is_installed(dependent))
 
@@ -268,19 +266,87 @@ class TestCommandUtilities(OdevCommandTestCase):
 
         self.assertRegex(stdout, r"Plugin\s+Version\s+Branch\s+State\s+Depends")
         self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+enabled")
-        self.assertRegex(stdout, r"test/test-plugin-dep\s+1\.0\.0\s+disabled\s+test-plugin")
+        self.assertNotIn("test/test-plugin-dep", stdout)
         self.assertNotIn("test/test-addons", stdout)
 
-    def test_plugin_05_list_shadowed(self):
-        """Run the command to list plugins when two enabled plugins share the same module name."""
+    def test_plugin_05_enable_module_name_taken(self):
+        """Installing a plugin whose module name is already linked should be refused, not silently shadowed."""
         self.__enable_test_plugin()
-        self.odev.config.plugins.enabled = [*self.odev.config.plugins.enabled, "other/test-plugin"]
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            _, stderr = self.dispatch_command("plugin", "--enable", "other/test-plugin")
+
+        self.assertIn("another plugin already uses the module name 'test_plugin'", stderr)
+
+    def test_plugin_06_list_broken(self):
+        """A link that odev could not load should be listed as broken, with the reason it was left out."""
+        self.__enable_test_plugin()
+        broken_link = Path(self.odev.plugins_path) / "broken_plugin"
+        broken_link.symlink_to(self.res_path / "repositories" / "test" / "test-addons", target_is_directory=True)
+        self.addCleanup(broken_link.unlink, missing_ok=True)
+        self.odev._forget_plugins()
 
         stdout, _ = self.__dispatch_plugin("--list")
 
         self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+enabled")
-        self.assertRegex(stdout, r"other/test-plugin\s+shadowed")
-        self.assertIn("other/test-plugin (shadowed by test/test-plugin)", stdout)
+        self.assertRegex(stdout, r"test/test-addons\s+broken")
+        self.assertIn("The following plugins are installed but could not be loaded", stdout)
+
+    def test_plugin_15_delete_keeps_a_directory(self):
+        """Deleting a plugin whose entry is a real directory should leave it alone, not erase someone's checkout."""
+        plugin_directory = Path(self.odev.plugins_path) / "directory_plugin"
+        plugin_directory.mkdir(parents=True, exist_ok=True)
+        (plugin_directory / "__manifest__.py").write_text('"""A plugin."""\n\n__version__ = "1.0.0"\n')
+        self.addCleanup(shutil.rmtree, plugin_directory, ignore_errors=True)
+        self.odev._forget_plugins()
+
+        with self.patch(self.odev.console, "confirm", return_value=True):
+            _, stderr = self.dispatch_command("plugin", "--delete", "plugins/directory_plugin")
+
+        self.assertIn("is not a link but a directory", stderr)
+        self.assertTrue((plugin_directory / "__manifest__.py").is_file())
+
+    def test_plugin_16_delete_a_link_named_otherwise(self):
+        """A plugin should be deletable by the name it is listed under, whatever its link was named."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        link = Path(self.odev.plugins_path) / "renamed_link"
+        link.symlink_to(self.res_path / "repositories" / "test" / "test-plugin", target_is_directory=True)
+        self.addCleanup(link.unlink, missing_ok=True)
+        self.odev._forget_plugins()
+
+        self.assertTrue(self.odev._plugin_is_installed("test/test-plugin"))
+
+        with self.patch(self.odev.console, "confirm", return_value=True):
+            self.dispatch_command("plugin", "--delete", "test/test-plugin")
+
+        self.assertFalse(link.is_symlink())
+        self.assertFalse(self.odev._plugin_is_installed("test/test-plugin"))
+
+    def test_plugin_17_delete_a_dependent_odev_could_not_load(self):
+        """A dependent left out of this run should be deleted too, never left behind pointing at nothing."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        plugin_link = Path(self.odev.plugins_path) / "test_plugin"
+        dependent_link = Path(self.odev.plugins_path) / "test_plugin_dep"
+        plugin_link.symlink_to(self.res_path / "repositories" / "test" / "test-plugin", target_is_directory=True)
+        dependent_link.symlink_to(self.res_path / "repositories" / "test" / "test-plugin-dep", target_is_directory=True)
+        self.addCleanup(plugin_link.unlink, missing_ok=True)
+        self.addCleanup(dependent_link.unlink, missing_ok=True)
+
+        # The dependent is installed but cannot be loaded, as one of the plugins it needs is not installed.
+        with self.patch("odev.common.plugins", "_drop_missing_dependencies") as drop:
+            drop.side_effect = lambda plugins: ({}, [])
+            self.odev._forget_plugins()
+            self.assertEqual(self.odev.plugins, [])
+
+            with self.patch(self.odev.console, "confirm", return_value=True):
+                stdout, _ = self.dispatch_command("plugin", "--delete", "test/test-plugin")
+
+        self.assertIn("test/test-plugin-dep", stdout)
+        self.assertFalse(plugin_link.is_symlink())
+        self.assertFalse(dependent_link.is_symlink())
 
     def test_plugin_06_search(self):
         """Run the command to search plugins on GitHub, keeping only valid plugin repositories."""
@@ -301,8 +367,8 @@ class TestCommandUtilities(OdevCommandTestCase):
             stdout, _ = self.__dispatch_plugin("--search")
 
         self.assertRegex(stdout, r"Plugin\s+Version\s+Stars\s+State\s+Description")
-        self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+3\s+disabled")
-        self.assertRegex(stdout, r"other/remote-plugin\s+1\.0\.0\s+0\s+not downloaded")
+        self.assertRegex(stdout, r"test/test-plugin\s+1\.0\.0\s+3\s+not installed")
+        self.assertRegex(stdout, r"other/remote-plugin\s+1\.0\.0\s+0\s+not installed")
         self.assertNotIn("other/not-a-plugin", stdout)
         self.assertNotIn("test/archived-plugin", stdout)
         self.assertNotIn("odev-plugin-template", stdout)
@@ -352,19 +418,14 @@ class TestCommandUtilities(OdevCommandTestCase):
         stdout, _ = self.dispatch_command("plugin", "--show", "test-plugin")
         self.assertIn("Plugin 'test/test-plugin' is enabled", stdout)
 
-    def test_plugin_10_show_downloaded(self):
-        """Run the command to show a plugin available locally but not enabled, without querying GitHub."""
+    def test_plugin_10_show_cloned_but_not_linked(self):
+        """A plugin whose clone is present but that is not linked is not installed, whatever is on disk."""
         self.__enable_test_plugin()
 
-        with self.patch(GITHUB_PATH, "get_repository", return_value=None) as get_repository:
+        with self.patch(GITHUB_PATH, "get_repository", return_value=None):
             stdout, _ = self.__dispatch_plugin("--show", "test/test-plugin-dep")
 
-        self.assertIn("Plugin 'test/test-plugin-dep' is disabled", stdout)
-        self.assertRegex(stdout, r"Version:\s+1\.0\.0")
-        self.assertRegex(stdout, r"Depends:\s+test/test-plugin")
-        self.assertRegex(stdout, r"Path:\s+.*test-plugin-dep")
-        self.assertRegex(stdout, r"URL:\s+https://github\.com/test/test-plugin-dep")
-        get_repository.assert_not_called()
+        self.assertIn("Plugin 'test/test-plugin-dep' is not installed", stdout)
 
     def test_plugin_11_show_not_downloaded(self):
         """Run the command to show a plugin that is not available locally, fetching its manifest from GitHub."""
@@ -381,7 +442,7 @@ class TestCommandUtilities(OdevCommandTestCase):
         ):
             stdout, _ = self.__dispatch_plugin("--show", "other/remote-plugin")
 
-        self.assertIn("Plugin 'other/remote-plugin' is not downloaded", stdout)
+        self.assertIn("Plugin 'other/remote-plugin' is not installed", stdout)
         self.assertRegex(stdout, r"Version:\s+1\.0\.0")
         self.assertRegex(stdout, r"Branch:\s+main")
         self.assertRegex(stdout, r"Stars:\s+42")
@@ -427,13 +488,13 @@ class TestCommandUtilities(OdevCommandTestCase):
         with self.patch(GITHUB_PATH, "get_repository", return_value=None):
             stdout, _ = self.__dispatch_plugin("--show", "other/unknown-plugin")
 
-        self.assertIn("Plugin 'other/unknown-plugin' is not downloaded", stdout)
+        self.assertIn("Plugin 'other/unknown-plugin' is not installed", stdout)
         self.assertNotIn("Version:", stdout)
 
         with self.patch(GITHUB_PATH, "get_repository", return_value=None) as get_repository:
             stdout, _ = self.__dispatch_plugin("--show", "unknown-plugin")
 
-        self.assertIn("Plugin 'unknown-plugin' is not downloaded", stdout)
+        self.assertIn("Plugin 'unknown-plugin' is not installed", stdout)
         self.assertIn("Use the full name of the plugin", stdout)
         get_repository.assert_not_called()
 
@@ -445,7 +506,7 @@ class TestCommandUtilities(OdevCommandTestCase):
             stdout, _ = self.__dispatch_plugin("--show")
 
         self.assertIn("Plugin 'test/test-plugin' is enabled", stdout)
-        self.assertIn("Plugin 'test/test-plugin-dep' is disabled", stdout)
+        self.assertNotIn("test/test-plugin-dep", stdout)
         get_repository.assert_not_called()
 
     def __dispatch_plugin(self, *arguments: str) -> tuple[str, str]:

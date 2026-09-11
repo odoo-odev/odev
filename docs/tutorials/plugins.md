@@ -1,9 +1,10 @@
 # Plugins
 
 Odev relies on plugins to add new features or extend existing ones. Those plugins are hosted in external GitHub
-repositories and can be enabled and disabled directly within Odev.
+repositories and can be enabled and deleted directly within Odev.
 
-To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
+To enable a plugin, run `odev plugin --enable <organization>/<repository>`, and
+`odev plugin --delete <organization>/<repository>` to stop loading it.
 
 ## Table of contents
 
@@ -13,6 +14,7 @@ To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
         -   [Searching for plugins](#searching-for-plugins)
         -   [Listing local plugins](#listing-local-plugins)
         -   [Inspecting a plugin](#inspecting-a-plugin)
+        -   [Deleting a plugin](#deleting-a-plugin)
     -   [Creating a new plugin](#creating-a-new-plugin)
         -   [Plugin structure](#plugin-structure)
             -   [The manifest](#the-manifest)
@@ -49,14 +51,16 @@ of stars and whether it is already available locally. Archived repositories and 
 
 ### Listing local plugins
 
-Run `odev plugin --list` to display every plugin available on your machine, in one of the following states:
+Run `odev plugin --list` to display every plugin installed on your machine, in one of the following states:
 
-| State      | Meaning                                                                                       |
-| ---------- | --------------------------------------------------------------------------------------------- |
-| `enabled`  | The plugin is loaded by odev.                                                                   |
-| `shadowed` | The plugin is enabled but another plugin already uses its module name, so it cannot be loaded.  |
-| `missing`  | The plugin is enabled but its link under `~/.config/odev/plugins` is gone.                      |
-| `disabled` | The plugin was downloaded previously but is not enabled; re-enabling it will not clone it again. |
+| State     | Meaning                                                                                   |
+| --------- | ----------------------------------------------------------------------------------------- |
+| `enabled` | The plugin is loaded by odev.                                                               |
+| `broken`  | The plugin is installed but could not be loaded; the reason is reported when odev starts.   |
+
+A plugin is installed when it is linked under `~/.config/odev/plugins`, and it is not when it is not: that link is
+the only record odev keeps. A repository merely cloned under the repositories directory is therefore not a plugin
+and is not listed, even when it is a plugin that used to be installed.
 
 ### Inspecting a plugin
 
@@ -65,7 +69,7 @@ branch, path, dependencies and description. Without an argument, `--show` detail
 the same order as `--list`.
 
 A plugin that is not on your machine is looked up on GitHub, so `--show` also describes plugins you have not installed
-yet, or that you uninstalled and whose clone you deleted:
+yet, or whose clone you removed from the repositories directory:
 
 ```sh
 odev plugin --show odoo-odev/odev-plugin-editor-vscode
@@ -79,6 +83,22 @@ matched against the plugins present on your machine, as long as it is not ambigu
 >
 > When GitHub cannot be reached — no token configured, no network, rate limit exceeded — `--show` silently falls back
 > to the information available locally instead of failing.
+
+### Deleting a plugin
+
+Run `odev plugin --delete <organization>/<repository>` to stop odev from loading a plugin. Its link under
+`~/.config/odev/plugins` is removed, and that is the whole of it: installing and deleting a plugin is creating and
+removing that one link.
+
+```sh
+odev plugin --delete odoo-odev/odev-plugin-editor-vscode
+```
+
+The plugins depending on the deleted one are deleted along with it: without their dependency they could not be
+loaded anymore. They are listed before the confirmation is asked.
+
+The local clone under the repositories directory is left untouched, so enabling the plugin again never downloads
+it a second time. This is why a deleted plugin keeps showing up in `--list`.
 
 ## Creating a new plugin
 
