@@ -256,8 +256,8 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertIn("Error while pulling latest changes", logger_warning.call_args.args[0])
 
-    def test_16_plugins_dependency_tree_cycle_raises(self):
-        """Circular plugin dependencies should raise an explicit framework error."""
+    def test_16_plugins_dependency_cycle_is_skipped(self):
+        """Circular plugin dependencies should be reported and left out, never stop odev from running."""
         cycle_root = self.run_path / "cycle-plugins"
         plugin_a = cycle_root / "test_plugin_cycle_a"
         plugin_b = cycle_root / "test_plugin_cycle_b"
@@ -270,13 +270,17 @@ class TestCommonOdev(OdevTestCase):
         (plugin_b / "__manifest__.py").write_text(plugin_b_manifest)
 
         try:
-            self.odev._plugins_dependency_tree.cache_clear()
+            self.odev._forget_plugins()
+
             with (
                 self.patch_property(type(self.odev), "plugins_path", cycle_root),
-                self.assertRaisesRegex(Exception, "Circular dependency detected in plugins"),
+                self.patch("odev.common.plugins.logger", "warning") as logger_warning,
             ):
-                self.odev._plugins_dependency_tree()
+                self.assertEqual(self.odev.plugins, [])
+
+            self.assertIn("circular dependency", logger_warning.call_args.args[0])
         finally:
+            self.odev._forget_plugins()
             shutil.rmtree(cycle_root, ignore_errors=True)
 
     def test_17_load_plugins_installs_missing_requirements_and_retries(self):
@@ -429,12 +433,9 @@ class TestCommonOdev(OdevTestCase):
         """Nothing should be pulled, and the user should not be prompted, when the local branch has no incoming
         changes left after fetching.
         """
-        manifest = Manifest(name="odev", description="Odev", version=__version__, depends=[])
-
         with (
             self.patch("odev.common.odev", "Repo", return_value=MagicMock()),
             self.patch("odev.common.odev", "GitConnector", return_value=MagicMock()) as git_connector,
-            self.patch(self.odev, "_load_plugin_manifest", return_value=manifest),
             self.patch(self.odev, "_Odev__git_branch_behind", return_value=False),
             self.patch(self.odev, "_Odev__update_prompt", return_value=True) as update_prompt,
         ):

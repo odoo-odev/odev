@@ -2,8 +2,7 @@ coverage
 ipdb
 pre-commit>=3.2.0
 pudb
-pytest>=6,<7; python_version < '3.12'
-pytest>=7; python_version >= '3.12'
+pytest>=7
 pytest-cov
 testfixtures
 types-psycopg2>=2.8.0,<3
