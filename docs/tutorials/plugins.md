@@ -13,6 +13,7 @@ To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
         -   [Searching for plugins](#searching-for-plugins)
         -   [Listing local plugins](#listing-local-plugins)
         -   [Inspecting a plugin](#inspecting-a-plugin)
+        -   [Enabling a plugin on a specific revision](#enabling-a-plugin-on-a-specific-revision)
     -   [Creating a new plugin](#creating-a-new-plugin)
         -   [Plugin structure](#plugin-structure)
             -   [The manifest](#the-manifest)
@@ -79,6 +80,28 @@ matched against the plugins present on your machine, as long as it is not ambigu
 >
 > When GitHub cannot be reached — no token configured, no network, rate limit exceeded — `--show` silently falls back
 > to the information available locally instead of failing.
+
+### Enabling a plugin on a specific revision
+
+Enabling a plugin checks out the branch matching your release channel — the `update.release` configuration key,
+either `main` or `beta` — so that odev and its plugins stay in sync. Pass `--branch` to enable a plugin from another
+revision instead, which is what you want when working on a plugin or trying out a pull request:
+
+```sh
+odev plugin --enable odoo-odev/odev-plugin-export --branch my-new-feature
+```
+
+The revision can be a branch, a tag or a commit hash. It applies to the plugin being enabled only: its dependencies
+keep following the release channel. Requesting a revision that does not exist on the remote fails instead of
+silently falling back to the default branch of the repository.
+
+A plugin pinned this way stays where you put it: `odev update` skips plugins that are not on `main` or `beta` and
+`odev config update.release <branch>` leaves them alone too. Use `odev plugin --list` or `--show` to see the revision
+each plugin is on, and `--branch main` (or `--branch beta`) to bring one back to the release channel:
+
+```sh
+odev plugin --enable odoo-odev/odev-plugin-export --branch main
+```
 
 ## Creating a new plugin
 

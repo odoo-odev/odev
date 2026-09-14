@@ -448,6 +448,46 @@ class TestCommandUtilities(OdevCommandTestCase):
         self.assertIn("Plugin 'test/test-plugin-dep' is disabled", stdout)
         get_repository.assert_not_called()
 
+    def test_plugin_15_enable_forces_a_branch(self):
+        """Run the command to enable an already downloaded plugin on a forced revision."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        plugin_link = Path(self.odev.plugins_path) / "test_plugin"
+        self.addCleanup(plugin_link.unlink, missing_ok=True)
+        plugin_link.unlink(missing_ok=True)
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=True),
+            self.patch(GIT_PATH, "update"),
+            self.patch(GIT_PATH, "checkout") as checkout,
+            self.patch(GIT_PATH, "clone") as clone,
+        ):
+            self.__dispatch_plugin("--enable", "test/test-plugin", "--branch", "feature/branch")
+
+        checkout.assert_called_once_with("feature/branch")
+        clone.assert_not_called()
+        self.assertTrue(plugin_link.is_symlink())
+
+    def test_plugin_16_enable_clones_a_branch(self):
+        """Run the command to enable a plugin that is not downloaded yet on a forced revision."""
+        self.odev.config.paths.repositories = self.res_path / "repositories"
+        plugin_link = Path(self.odev.plugins_path) / "test_plugin"
+        self.addCleanup(plugin_link.unlink, missing_ok=True)
+        plugin_link.unlink(missing_ok=True)
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=False),
+            self.patch(GIT_PATH, "update"),
+            self.patch(GIT_PATH, "clone") as clone,
+        ):
+            self.__dispatch_plugin("--enable", "test/test-plugin", "--branch", "feature/branch")
+
+        clone.assert_called_once_with(revision="feature/branch")
+
+    def test_plugin_17_branch_requires_enable(self):
+        """Run the command with a forced revision but no plugin to enable."""
+        _, stderr = self.__dispatch_plugin("--show", "test/test-plugin", "--branch", "feature/branch")
+        self.assertIn("Argument --branch can only be used together with --enable", stderr)
+
     def __dispatch_plugin(self, *arguments: str) -> tuple[str, str]:
         """Run the plugin command on a wide terminal so table columns are not cropped."""
         with patch.dict(os.environ, {"COLUMNS": "200"}):
