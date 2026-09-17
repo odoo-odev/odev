@@ -22,7 +22,15 @@ class PathfinderCommand(OdoobinShellScriptCommand):
 
     def run_script_handle_result(self, result: str):
         """Handle the result of the script execution."""
-        paths: list[list[tuple[str, str, str]]] = ast.literal_eval(result)
+        # A shell that failed still answers, with whatever it had printed until then -
+        # nothing, most of the time. Parsing that raises a SyntaxError about line 0 of
+        # an unknown file, which says nothing about the script having died in the shell.
+        try:
+            paths: list[list[tuple[str, str, str]]] = ast.literal_eval(result.strip())
+        except (SyntaxError, ValueError) as error:
+            raise self.error(
+                "The script did not return a list of paths; check the output of the shell above."
+            ) from error
         headers = [
             TableHeader(align="right", style="color.black"),
             TableHeader(min_width=30),
