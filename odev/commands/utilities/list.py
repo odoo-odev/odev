@@ -1,4 +1,4 @@
-"""Gets help about commands."""
+"""List local databases."""
 
 from collections.abc import Callable, MutableMapping, Sequence
 from dataclasses import dataclass

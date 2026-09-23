@@ -2,7 +2,7 @@ from argparse import Namespace
 from unittest.mock import MagicMock
 
 from odev.commands.git.pull import PullCommand
-from odev.commands.scripts.assets import PathfinderCommand as AssetsCommand
+from odev.commands.scripts.assets import AssetsCommand
 from odev.commands.scripts.pathfinder import PathfinderCommand
 from odev.common.connectors.git import GitConnector
 from odev.scripts.assets import regenerate_assets
