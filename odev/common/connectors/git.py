@@ -13,7 +13,7 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-from git import GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
+from git import Git, GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
 
 from odev.common import bash, progress, string
 from odev.common.connectors.base import Connector
@@ -1142,15 +1142,20 @@ class GitConnector(GithubConnector):
                         logger.error(f"Failed to pull changes in worktree {worktree.path!s}:\n{error.args[2].decode()}")
 
     def list_remote_branches(self) -> list[str]:
-        """List all remote branches of the repository.
+        """List all remote branches of the repository, as they are on the remote now.
+
+        Asked of git rather than of the GitHub API: the API hands back a hundred
+        branches per request, which is forty round trips and a minute and a half on a
+        repository the size of `odoo-ps/psbe-custom`, where `ls-remote` answers with all
+        four thousand of them in under two seconds. Over the same SSH URL the clone uses,
+        and without needing one - the repository does not have to be local to be listed.
 
         :return: A list of all remote branches of the repository.
         :rtype: List[str]
         """
-        with self:
-            branches = cast("Github", self._connection).get_repo(self.name).get_branches()
+        references = Git().ls_remote("--heads", self.ssh_url).splitlines()
 
-        return [branch.name for branch in branches]
+        return [reference.split("refs/heads/", 1)[1] for reference in references if "refs/heads/" in reference]
 
     def fix_corrupted(self, path: Path | str | None = None, revision: str | None = None):
         """Fix a corrupted worktree by re-cloning the repository and creating a new worktree.
