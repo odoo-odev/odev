@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from odev.commands.database.run import merge_modules_option
 from odev.common.databases import Repository
 from odev.common.odoobin import OdoobinProcess
 
@@ -37,6 +38,49 @@ class TestExpandAddonsPaths(OdevTestCase):
 
     def test_no_paths_yields_no_addons_paths(self):
         self.assertEqual(OdoobinProcess.expand_addons_paths([]), [])
+
+
+class TestListAddons(OdevTestCase):
+    """`list_addons` returns the names of the modules found recursively in a directory."""
+
+    @property
+    def addons_path(self) -> Path:
+        return self.res_path / "repositories" / "test" / "test-addons"
+
+    def test_lists_modules_nested_in_subdirectories(self):
+        self.assertEqual(OdoobinProcess.list_addons([self.addons_path]), ["addon_01", "addon_02"])
+
+    def test_deduplicates_overlapping_inputs(self):
+        paths = [self.addons_path, self.addons_path / "submodule"]
+        self.assertEqual(OdoobinProcess.list_addons(paths), ["addon_01", "addon_02"])
+
+    def test_ignores_directories_without_modules(self):
+        empty = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, empty, ignore_errors=True)
+        self.assertEqual(OdoobinProcess.list_addons([empty]), [])
+
+
+class TestMergeModulesOption(OdevTestCase):
+    """`merge_modules_option` gathers the modules passed to an odoo-bin option into a single occurrence."""
+
+    def test_adds_option_when_missing(self):
+        args = merge_modules_option(["--stop-after-init"], ("-i", "--init"), ["a", "b"])
+        self.assertEqual(args, ["--stop-after-init", "-i", "a,b"])
+
+    def test_merges_all_forms_of_the_option(self):
+        args = merge_modules_option(["-i", "a", "--init=b", "-ic", "--dev=all"], ("-i", "--init"), ["d"])
+        self.assertEqual(args, ["--dev=all", "-i", "a,b,c,d"])
+
+    def test_deduplicates_modules(self):
+        args = merge_modules_option(["--init", "a,b"], ("-i", "--init"), ["b", "c"])
+        self.assertEqual(args, ["-i", "a,b,c"])
+
+    def test_leaves_other_options_untouched(self):
+        args = merge_modules_option(["-u", "a", "--i18n-overwrite"], ("-i", "--init"), ["b"])
+        self.assertEqual(args, ["-u", "a", "--i18n-overwrite", "-i", "b"])
+
+    def test_no_modules_leaves_arguments_untouched(self):
+        self.assertEqual(merge_modules_option(["--dev=all"], ("-i", "--init"), []), ["--dev=all"])
 
 
 class TestAdditionalAddonsPaths(OdevTestCase):
