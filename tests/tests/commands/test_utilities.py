@@ -545,3 +545,27 @@ class TestCommandUtilitiesVenv(OdevCommandTestCase):
         """Run the command with a pip command."""
         stdout, _ = self.dispatch_command("venv", self.venv.path.as_posix(), "--command", "pip --version")
         self.assertRegex(stdout, r"python[\d.?]*\s-m\spip\s--version\' in virtual environment \'test\'")
+
+
+class TestCommandUtilitiesListModules(OdevCommandTestCase):
+    @property
+    def addons_path(self) -> Path:
+        return self.res_path / "repositories" / "test" / "test-addons"
+
+    def test_01_list_modules(self):
+        """Run the command on a repository keeping modules both at its root and in subdirectories."""
+        stdout, _ = self.dispatch_command("list-modules", self.addons_path.as_posix())
+        self.assertEqual(stdout.strip(), "addon_01,addon_02")
+
+    def test_02_list_modules_current_directory(self):
+        """Run the command without argument from within a repository."""
+        cwd = Path.cwd()
+        os.chdir(self.addons_path)
+        self.addCleanup(os.chdir, cwd)
+        stdout, _ = self.dispatch_command("list-modules")
+        self.assertEqual(stdout.strip(), "addon_01,addon_02")
+
+    def test_03_list_modules_none_found(self):
+        """Run the command on a directory without modules."""
+        _, stderr = self.dispatch_command("list-modules", (self.res_path / "setup").as_posix())
+        self.assertIn("No Odoo module found", stderr)
