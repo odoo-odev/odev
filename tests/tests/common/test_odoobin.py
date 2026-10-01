@@ -82,3 +82,35 @@ class TestAdditionalAddonsPaths(OdevTestCase):
         process = self.make_process(Repository("test-addons", "test"))
         process.additional_addons_paths = []
         self.assertEqual(process.additional_addons_paths, [])
+
+
+class EditionDatabase:
+    """Minimal stand-in for a database, exposing only the edition installed in it."""
+
+    def __init__(self, edition: str):
+        self.edition = edition
+
+
+class TestForcedEdition(OdevTestCase):
+    """`with_edition` forces the edition both ways, regardless of the one installed in the database."""
+
+    def make_process(self, edition: str) -> OdoobinProcess:
+        process = OdoobinProcess.__new__(OdoobinProcess)
+        process.database = EditionDatabase(edition)  # type: ignore [assignment]
+        process._forced_edition = None
+        return process
+
+    def repository_names(self, process: OdoobinProcess) -> list[str]:
+        return [repository.name for repository in process.odoo_repositories]
+
+    def test_defaults_to_the_database_edition(self):
+        self.assertIn("odoo/enterprise", self.repository_names(self.make_process("enterprise")))
+        self.assertNotIn("odoo/enterprise", self.repository_names(self.make_process("community")))
+
+    def test_community_forced_on_an_enterprise_database(self):
+        process = self.make_process("enterprise").with_edition("community")
+        self.assertNotIn("odoo/enterprise", self.repository_names(process))
+
+    def test_enterprise_forced_on_a_community_database(self):
+        process = self.make_process("community").with_edition("enterprise")
+        self.assertIn("odoo/enterprise", self.repository_names(process))

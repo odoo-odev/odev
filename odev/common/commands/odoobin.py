@@ -88,9 +88,9 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
 
     def __init__(self, args: Namespace, **kwargs):
         super().__init__(args, **kwargs)
-        self._set_odoobin_process(
-            force=any([self.args.version, self.args.venv, self.args.worktree, self.args.enterprise])
-        )
+        # `enterprise` defaults to True and `-c` turns it off: either value is an explicit choice of edition,
+        # so the process prepared on access to `LocalDatabase.process` is always replaced.
+        self._set_odoobin_process(force=True)
 
     @property
     def odoobin(self) -> OdoobinProcess | None:
@@ -227,9 +227,7 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
             )
         venv = self.venv
         worktree = self.worktree
-        edition: Literal["community", "enterprise"] = (
-            "enterprise" if self.args.enterprise or self._database.edition == "enterprise" else "community"
-        )
+        edition: Literal["community", "enterprise"] = "enterprise" if self.args.enterprise else "community"
         process = self.odev.odoobin_process_class(
             database=self._database,
             version=version,

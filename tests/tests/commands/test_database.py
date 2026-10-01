@@ -393,6 +393,31 @@ class TestDatabaseCommands(OdevCommandTestCase):
             stdout,
         )
 
+    def test_11a_run_community_with_addons_path_argument(self):
+        """Command `odev run -c` should run an existing database in community, with the addons paths given."""
+        self.assertDatabaseExist(self.database_name)
+        self.assertDatabaseIsOdoo(self.database_name)
+        addons_path_end = "repositories/test/test-addons"
+        addons_path = self.res_path / addons_path_end
+
+        with patch.object(
+            OdoobinProcess, "with_edition", autospec=True, side_effect=OdoobinProcess.with_edition
+        ) as with_edition:
+            stdout, _ = self.dispatch_command(
+                "run", self.database_name, addons_path.as_posix(), "--community", "--stop-after-init"
+            )
+
+        assert_last_odoobin_invocation(
+            self,
+            self._odoobin_run_script_calls,
+            database_name=self.database_name,
+            argv_contains=["--stop-after-init"],
+        )
+        _interp, _script, argv, _st, _inp = list(iter_odoobin_calls(self._odoobin_run_script_calls))[-1]
+        self.assertIn(addons_path_end, " ".join(argv))
+        self.assertEqual(with_edition.call_args.args[1], "community")
+        self.assertIn(f"Running 'odoo-bin' in version '{ODOO_DB_VERSION}' on database '{self.database_name}'", stdout)
+
     def test_12_run_with_addons_path(self):
         """Command `odev run` should pass detected addons paths and persist the repository on the database."""
         self.assertDatabaseExist(self.database_name)
