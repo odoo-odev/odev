@@ -1,8 +1,11 @@
 import os
 import shutil
+from collections.abc import Mapping
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 from odev._version import __version__
 from odev.common.python import PythonEnv
@@ -166,6 +169,19 @@ class TestCommandUtilities(OdevCommandTestCase):
             _, stderr = self.dispatch_command("list", "--expression", "test3")
 
         self.assertIn("No database found matching pattern 'test3'", stderr)
+
+    def test_list_06_sort_by_size(self):
+        """Run the command sorted by size, order the databases by their actual size and not by its text."""
+        megabyte = 1024**2
+        sizes = {"test1": 900 * megabyte, "test2": 2048 * megabyte, "test3": 5 * megabyte}
+        self.assertEqual(self.__list_sorted("size", size=sizes), ["test3", "test1", "test2"])
+        self.assertEqual(self.__list_sorted("size_fs", filestore_size=sizes), ["test3", "test1", "test2"])
+
+    def test_list_07_sort_by_date(self):
+        """Run the command sorted by date, order the databases from the least to the most recently used one."""
+        now = datetime.now()
+        dates = {"test1": now - timedelta(days=3), "test2": now - timedelta(hours=10), "test3": None}
+        self.assertEqual(self.__list_sorted("date", last_date=dates), ["test3", "test1", "test2"])
 
     def test_setup_cmd_01_no_argument(self):
         """Run the command without arguments, run all scripts."""
@@ -487,6 +503,37 @@ class TestCommandUtilities(OdevCommandTestCase):
         """Run the command with a forced revision but no plugin to enable."""
         _, stderr = self.__dispatch_plugin("--show", "test/test-plugin", "--branch", "feature/branch")
         self.assertIn("Argument --branch can only be used together with --enable", stderr)
+
+    def __list_sorted(self, order: str, **values: Mapping[str, Any]) -> list[str]:
+        """Run the list command on fake databases and return their names in the order they are displayed.
+
+        :param order: Name of the column to sort the databases by.
+        :param values: Values of the databases keyed by name, for each attribute that should not be left empty.
+        :return: The names of the databases, in the order they are listed.
+        :rtype: list[str]
+        """
+        names = ["test1", "test2", "test3"]
+
+        def fake_database(name: str) -> MagicMock:
+            database = MagicMock(version=None, edition="", size=0, worktree=None, repository=None, last_date=None)
+            database.configure_mock(name=name)
+            database.filestore.size = values.get("filestore_size", {}).get(name, 0)
+            database.__enter__.return_value = database
+
+            for attribute in values.keys() - {"filestore_size"}:
+                setattr(database, attribute, values[attribute][name])
+
+            return database
+
+        with (
+            self.patch(POSTGRES_PATH, "query", [(name,) for name in names]),
+            # Command modules are loaded by the framework under their own name, out of reach of a dotted path.
+            patch.dict(self.odev.commands["list"].run.__globals__, {"LocalDatabase": fake_database}),
+            patch.dict(os.environ, {"COLUMNS": "200"}),
+        ):
+            stdout, _ = self.dispatch_command("list", "--all", "--sort", order)
+
+        return sorted(names, key=stdout.index)
 
     def __dispatch_plugin(self, *arguments: str) -> tuple[str, str]:
         """Run the plugin command on a wide terminal so table columns are not cropped."""

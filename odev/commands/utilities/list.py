@@ -43,6 +43,21 @@ class Mapped:
     of the rendered table.
     """
 
+    sort: Callable[[Any], Any] | None = None
+    """A callable that takes the value and returns the key to sort the rows of the table with. The formatted
+    value is used when omitted, which only suits columns that read in the same order as they sort.
+    """
+
+
+def sort_missing_first(value: Any) -> tuple[bool, Any]:
+    """Build a sort key that orders values naturally and puts the missing ones first.
+
+    :param value: The raw value of a column for a database.
+    :return: A key that can be compared with the ones of other values, missing or not.
+    :rtype: tuple[bool, Any]
+    """
+    return value is not None, value
+
 
 STATUS_RUNNING = string.stylize("⬤", "color.green")
 STATUS_STOPPED = string.stylize("⬤", "color.black")
@@ -69,6 +84,7 @@ TABLE_MAPPING: list[Mapped] = [
         justify="right",
         format=lambda value: str(value or ""),
         total=False,
+        sort=sort_missing_first,
     ),
     Mapped(
         value=lambda database: database.edition,
@@ -83,6 +99,7 @@ TABLE_MAPPING: list[Mapped] = [
         justify="right",
         format=lambda value: string.bytes_size(value or 0),
         total=True,
+        sort=lambda value: value or 0,
     ),
     Mapped(
         value=lambda database: database.filestore.size if database.filestore else 0,
@@ -90,6 +107,7 @@ TABLE_MAPPING: list[Mapped] = [
         justify="right",
         format=lambda value: string.bytes_size(value) if value else "",
         total=True,
+        sort=lambda value: value or 0,
     ),
     Mapped(
         value=lambda database: database.venv,
@@ -118,6 +136,7 @@ TABLE_MAPPING: list[Mapped] = [
         justify=None,
         format=lambda value: string.ago(value) if value else "",
         total=False,
+        sort=sort_missing_first,
     ),
     Mapped(
         value=lambda database: database.whitelisted,
@@ -208,6 +227,9 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         headers: list[TableHeader] = []
         rows: list[list[Any]] = []
         totals: list[int] = []
+        sort_keys: list[Any] = []
+        sort_title = ORDER_MAPPING[self.args.order]
+        sort_index = next((index for index, mapped in enumerate(TABLE_MAPPING) if mapped.title == sort_title), 1)
 
         for mapped in TABLE_MAPPING:
             headers.append(TableHeader(title=mapped.title or "", align=mapped.justify or "left"))
@@ -224,13 +246,14 @@ class ListCommand(ListLocalDatabasesMixin, Command):
                     if mapped.total:
                         totals[index] += value or 0
 
+                    if index == sort_index:
+                        # Sizes and dates are formatted for reading: "1.2 GB" sorts before "900 MB" as text.
+                        sort_keys.append(mapped.sort(value) if callable(mapped.sort) else row[index])
+
             rows.append(row)
 
         if self.args.order != "name":
-            column_index = next(
-                (index for index, header in enumerate(headers) if header.title == ORDER_MAPPING[self.args.order]), 1
-            )
-            rows.sort(key=lambda row: row[column_index])
+            rows = [row for _, row in sorted(zip(sort_keys, rows, strict=True), key=lambda keyed_row: keyed_row[0])]
 
         totals_formatted: list[str] = [string.bytes_size(total) if total != 0 else "" for total in totals]
         totals_formatted[1] = f"{len(databases)} databases"
