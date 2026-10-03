@@ -49,7 +49,7 @@ env:
   VERSION_FILE: ${{ inputs.version-file }}
   RELEASE_BRANCH: ${{ inputs.release-branch }}
   PRERELEASE_BRANCH: ${{ inputs.prerelease-branch }}
-  TOOLING: .release-tooling/.github/scripts/release.py
+  TOOLING: .release-tooling/.github/scripts
 
 jobs:
 
@@ -102,63 +102,19 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app.outputs.token }}
 
+      - name: checkout-release-tooling
+        uses: actions/checkout@v4
+        with:
+          repository: odoo-odev/odev
+          ref: ${{ inputs.tooling-ref }}
+          path: .release-tooling
+          sparse-checkout: .github/scripts
+
       - name: sync-prerelease-branch
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
-        run: |
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
-
-          release="origin/$RELEASE_BRANCH"
-          prerelease="origin/$PRERELEASE_BRANCH"
-
-          if ! git ls-remote --exit-code --heads origin "$PRERELEASE_BRANCH" > /dev/null; then
-            git push origin "$release:refs/heads/$PRERELEASE_BRANCH"
-            echo "::notice::Created '$PRERELEASE_BRANCH' from '$RELEASE_BRANCH'"
-            exit 0
-          fi
-
-          if git merge-base --is-ancestor "$release" "$prerelease"; then
-            echo "::notice::'$PRERELEASE_BRANCH' already contains '$RELEASE_BRANCH'"
-            exit 0
-          fi
-
-          if git merge-base --is-ancestor "$prerelease" "$release"; then
-            git push origin "$release:refs/heads/$PRERELEASE_BRANCH"
-            echo "::notice::Fast-forwarded '$PRERELEASE_BRANCH' to '$RELEASE_BRANCH'"
-            exit 0
-          fi
-
-          # Both branches diverged: commits were added to the release branch without a fast-forward. Replay on
-          # top of the release branch the changes it does not contain yet; version bumps are computed again by
-          # the `prepare` job once the branch is pushed.
-          echo "::warning::'$PRERELEASE_BRANCH' diverged from '$RELEASE_BRANCH', rebasing it"
-          expected=$(git rev-parse "$prerelease")
-          git switch --detach "$release"
-
-          for commit in $(git rev-list --reverse --no-merges --cherry-pick --right-only "$release...$prerelease"); do
-            case "$(git log -1 --format=%s "$commit")" in
-              "[REL]"*) continue ;;
-            esac
-
-            if ! git cherry-pick --empty=drop "$commit"; then
-              git cherry-pick --abort || true
-              title="'$PRERELEASE_BRANCH' diverged from '$RELEASE_BRANCH' and needs a manual repair"
-
-              if [ -z "$(gh issue list --state open --search "in:title $title" --json number --jq '.[].number')" ]; then
-                gh issue create --title "$title" --body \
-                  "Commit $commit could not be replayed on top of \`$RELEASE_BRANCH\`, see $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
-              fi
-
-              echo "::error::Cannot replay $commit on top of '$RELEASE_BRANCH'"
-              exit 1
-            fi
-          done
-
-          git push origin "HEAD:refs/heads/$PRERELEASE_BRANCH" \
-            --force-with-lease="refs/heads/$PRERELEASE_BRANCH:$expected"
-          echo "::notice::Rebased '$PRERELEASE_BRANCH' on top of '$RELEASE_BRANCH'"
+        run: bash "$TOOLING/sync-prerelease-branch.sh"
 
   prepare:
     name: prepare-release
@@ -198,62 +154,14 @@ jobs:
         id: version
         env:
           APP_SLUG: ${{ steps.app.outputs.app-slug }}
-        run: |
-          release="origin/$RELEASE_BRANCH"
-
-          if ! git merge-base --is-ancestor "$release" HEAD; then
-            echo "::warning::'$PRERELEASE_BRANCH' does not contain '$RELEASE_BRANCH', waiting for the branches to be synced"
-            exit 0
-          fi
-
-          version=$(python3 "$TOOLING" next-version --base "$release" --head HEAD --version-file "$VERSION_FILE")
-
-          if [ -z "$version" ]; then
-            echo "::notice::Nothing to release"
-            exit 0
-          fi
-
-          python3 "$TOOLING" changelog --base "$release" --head HEAD > "$RUNNER_TEMP/changelog.md"
-          python3 "$TOOLING" bump --version-file "$VERSION_FILE" --version "$version"
-
-          if ! git diff --quiet -- "$VERSION_FILE"; then
-            git config user.name "${APP_SLUG}[bot]"
-            git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
-            git commit --message "[REL] $PACKAGE: bump the version to $version" -- "$VERSION_FILE"
-            git push origin "HEAD:refs/heads/$PRERELEASE_BRANCH"
-            echo "::notice::Bumped the version to $version"
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        run: bash "$TOOLING/bump-version.sh"
 
       - name: update-release-pull-request
         if: steps.version.outputs.version
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          title="[REL] $PACKAGE: release $VERSION"
-
-          {
-            echo "> [!IMPORTANT]"
-            echo "> Do **not** merge this pull request with the merge button: it rewrites the commits and makes"
-            echo "> \`$PRERELEASE_BRANCH\` diverge from \`$RELEASE_BRANCH\`. Once it is approved and its checks pass,"
-            echo "> comment \`/release\` to fast-forward \`$RELEASE_BRANCH\`, tag \`v$VERSION\` and publish the release."
-            echo
-            echo "## $PACKAGE $VERSION"
-            echo
-            cat "$RUNNER_TEMP/changelog.md"
-          } > "$RUNNER_TEMP/body.md"
-
-          number=$(gh pr list --base "$RELEASE_BRANCH" --head "$PRERELEASE_BRANCH" --state open \
-            --json number --jq '.[0].number // empty')
-
-          if [ -z "$number" ]; then
-            gh pr create --base "$RELEASE_BRANCH" --head "$PRERELEASE_BRANCH" --title "$title" \
-              --body-file "$RUNNER_TEMP/body.md"
-          else
-            gh pr edit "$number" --title "$title" --body-file "$RUNNER_TEMP/body.md"
-          fi
+        run: bash "$TOOLING/update-release-pull-request.sh"
 
   release:
     name: release
@@ -300,88 +208,7 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           ACTOR: ${{ github.actor }}
           COMMENTED_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          release="origin/$RELEASE_BRANCH"
-          number=$(gh pr list --base "$RELEASE_BRANCH" --head "$PRERELEASE_BRANCH" --state open \
-            --json number --jq '.[0].number // empty')
-
-          refuse() {
-            echo "::error::$1"
-
-            if [ -n "$number" ]; then
-              gh pr comment "$number" --body ":x: Cannot release: $1"
-            fi
-
-            exit 1
-          }
-
-          if [ -z "$number" ]; then
-            refuse "there is no open release pull request from '$PRERELEASE_BRANCH' to '$RELEASE_BRANCH'"
-          fi
-
-          if [ -n "$COMMENTED_NUMBER" ] && [ "$COMMENTED_NUMBER" != "$number" ]; then
-            echo "::notice::Ignoring '/release' on #$COMMENTED_NUMBER, the release pull request is #$number"
-            exit 0
-          fi
-
-          permission=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" --jq '.permission')
-
-          if [ "$permission" != "admin" ] && [ "$permission" != "write" ]; then
-            refuse "@$ACTOR is not allowed to release, write access to the repository is required"
-          fi
-
-          pull_request=$(gh pr view "$number" --json headRefOid,reviewDecision,latestReviews,statusCheckRollup)
-          revision=$(jq --raw-output '.headRefOid' <<< "$pull_request")
-
-          if [ "$revision" != "$(git rev-parse HEAD)" ]; then
-            refuse "the pull request is not in sync with '$PRERELEASE_BRANCH' yet, try again in a moment"
-          fi
-
-          if ! git merge-base --is-ancestor "$release" "$revision"; then
-            refuse "'$RELEASE_BRANCH' cannot be fast-forwarded to '$PRERELEASE_BRANCH', the branches diverged"
-          fi
-
-          approved=$(jq --raw-output '
-            (.reviewDecision == "APPROVED" or .reviewDecision == "" or .reviewDecision == null)
-            and ([.latestReviews[] | select(.state == "APPROVED")] | length > 0)
-            and ([.latestReviews[] | select(.state == "CHANGES_REQUESTED")] | length == 0)
-          ' <<< "$pull_request")
-
-          if [ "$approved" != "true" ]; then
-            refuse "the pull request is not approved"
-          fi
-
-          unsuccessful=$(jq --raw-output '
-            [
-              .statusCheckRollup[]
-              | (if (.conclusion // "") != "" then .conclusion else (.state // "PENDING") end)
-              | select(. != "SUCCESS" and . != "SKIPPED" and . != "NEUTRAL")
-            ] | length
-          ' <<< "$pull_request")
-
-          if [ "$unsuccessful" != "0" ]; then
-            refuse "$unsuccessful check(s) did not pass or are still running on $revision"
-          fi
-
-          version=$(python3 "$TOOLING" next-version --base "$release" --head HEAD --version-file "$VERSION_FILE")
-
-          if [ -z "$version" ]; then
-            refuse "there is nothing to release"
-          fi
-
-          python3 "$TOOLING" bump --version-file "$VERSION_FILE" --version "$version"
-
-          if ! git diff --quiet -- "$VERSION_FILE"; then
-            refuse "the version was not bumped to $version on '$PRERELEASE_BRANCH' yet, try again in a moment"
-          fi
-
-          python3 "$TOOLING" changelog --base "$release" --head HEAD > "$RUNNER_TEMP/changelog.md"
-
-          {
-            echo "number=$number"
-            echo "revision=$revision"
-            echo "version=$version"
-          } >> "$GITHUB_OUTPUT"
+        run: bash "$TOOLING/check-release.sh"
 
       - name: publish-release
         if: steps.check.outputs.version
@@ -390,16 +217,7 @@ jobs:
           NUMBER: ${{ steps.check.outputs.number }}
           REVISION: ${{ steps.check.outputs.revision }}
           VERSION: ${{ steps.check.outputs.version }}
-        run: |
-          # Pushing the very same commits keeps both branches identical: the pull request is marked as merged
-          # and the pre-release branch remains untouched, ready for the next changes.
-          git push origin "$REVISION:refs/heads/$RELEASE_BRANCH"
-          git push origin "$REVISION:refs/tags/v$VERSION"
-
-          gh release create "v$VERSION" --verify-tag --title "$PACKAGE $VERSION" \
-            --notes-file "$RUNNER_TEMP/changelog.md"
-          gh pr comment "$NUMBER" --body \
-            ":rocket: Released as [v$VERSION]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$VERSION)"
+        run: bash "$TOOLING/publish-release.sh"
 
   retarget:
     name: retarget-pull-request
