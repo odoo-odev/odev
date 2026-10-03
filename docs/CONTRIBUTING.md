@@ -54,11 +54,11 @@ the installed plugins into the repository so your editor can resolve them:
 ./install-dev.sh
 ```
 
-Create a new branch based on the `main` branch and give it a name that accurately represents the changes you are about
+Create a new branch based on the `beta` branch and give it a name that accurately represents the changes you are about
 to make:
 
 ```sh
-git checkout -b my-new-feature origin/main
+git checkout -b my-new-feature origin/beta
 ```
 
 Start with your changes!
@@ -82,7 +82,8 @@ speed up the review process!
 
 ### Pull Request
 
-When you're finished with the changes, create a pull request.
+When you're finished with the changes, create a pull request targeting the `beta` branch. Changes reach `main` with the
+next [release](./contributing/releasing.md).
 
 -   Fill the "Ready for review" template so that we can review your PR. This template helps reviewers understand your
     changes as well as the purpose of your pull request.

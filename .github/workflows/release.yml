@@ -1,0 +1,53 @@
+name: release
+
+# Keeps the `beta` branch alive and fast-forwardable, bumps the version and releases `beta` to `main`.
+# See docs/contributing/releasing.md.
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+  delete:
+  issue_comment:
+    types:
+      - created
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - edited
+    branches:
+      - main
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Release beta to main (requires an approved release pull request)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+
+  release-flow:
+    name: release-flow
+    if: >-
+      (github.event_name != 'delete' || github.event.ref == 'beta')
+      && (
+        github.event_name != 'issue_comment'
+        || (github.event.issue.pull_request && startsWith(github.event.comment.body, '/release'))
+      )
+    uses: ./.github/workflows/release-flow.yml
+    with:
+      package: odev
+      version-file: odev/_version.py
+      release: ${{ inputs.release || false }}
+      tooling-ref: ${{ github.sha }}
+    secrets:
+      app_id: ${{ secrets.ODEV_RELEASE_APP_ID }}
+      app_private_key: ${{ secrets.ODEV_RELEASE_APP_PRIVATE_KEY }}

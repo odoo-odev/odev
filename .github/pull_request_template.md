@@ -15,5 +15,5 @@ Link the issues that this PR solves, if any:
 - [ ] I made sure the documentation is up-to-date both in doctrings and the `docs` directory
 - [ ] I have added or modified unit tests where necessary
 - [ ] I have added new libraries to the `requirements.txt` file, if any
-- [ ] I have incremented the version number according the [versioning guide](../../docs/contributing/versioning.md)
+- [ ] My PR targets the `beta` branch and does not change the version number, see the [versioning guide](../../docs/contributing/versioning.md)
 - [ ] The PR contains **my changes only** and **no other external commit**

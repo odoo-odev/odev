@@ -1,9 +1,18 @@
 # Versioning
 
-When making changes, the version number of Odev must be incremented so that upgrades can be run.
+The version number of Odev is incremented with each release so that upgrades can be run.
 
-Increment parts of the version number in [`odev/_version.py`](../../odev/_version.py) according to the following
-requirements:
+**Do not change the version number in your pull request.** The version in
+[`odev/_version.py`](../../odev/_version.py) is incremented automatically, once per release, according to the prefixes
+of the commits being [released](./releasing.md):
+
+| Commit prefix                | Incremented part |
+| ---------------------------- | ---------------- |
+| `[REF]`                      | `major`          |
+| `[IMP]`, `[FEAT]`, `[ADD]`   | `minor`          |
+| `[FIX]`, `[DOC]`, any other  | `patch`          |
+
+The prefix of the commit merged into `beta` therefore matters: pick the one matching the following definitions.
 
 **Version number breakdown:** `<major>.<minor>.<patch>`
 
@@ -16,4 +25,6 @@ requirements:
     incremented when a new migration script is added. This number is reset to 0 when the minor version number is
     incremented.
 
-**Version number should be incremented once and only once per pull request or merged change.**
+Upgrade scripts are stored under `odev/upgrades/<version>`, named after the version in which they are released. When adding
+one, use the version announced by the open release pull request, or the next patch version if there is none, and make
+sure the prefix of your commit leads to a version that is at least as high.
