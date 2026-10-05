@@ -1,6 +1,10 @@
-"""Find the shortest path between two models in a database using the BFS algorithm."""
+"""Find the shortest path between two models in a database using the BFS algorithm.
 
-from odev.common.errors import OdevError
+Piped as-is into `odoo-bin shell` by OdoobinShellScriptCommand, so it runs in the
+interpreter of the database's Odoo virtualenv and not in odev's: nothing of odev is
+importable here, and an import of it takes the whole script down before a single line
+of it runs.
+"""
 
 
 def check_installed_models(env, models):
@@ -8,11 +12,9 @@ def check_installed_models(env, models):
     missing_models = [model for model in models if model not in env]
 
     if missing_models:
-        raise OdevError(
-            f"""
-            Model(s) {", ".join(missing_models)} not found in database.
-            Make sure all modules are installed and up-to-date.
-            """
+        raise ValueError(
+            f"Model(s) {', '.join(missing_models)} not found in database. "
+            "Make sure all modules are installed and up-to-date."
         )
 
 
