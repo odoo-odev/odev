@@ -175,8 +175,8 @@ class OdoobinProcess(OdevFrameworkMixin):
         self._venv: PythonEnv | None = None
         """Cached python virtual environment used by the Odoo installation."""
 
-        self._force_enterprise: bool = False
-        """Force using the enterprise version of Odoo."""
+        self._forced_edition: Literal["community", "enterprise"] | None = None
+        """Edition to run regardless of the one installed in the database, if any."""
 
     def __repr__(self) -> str:
         return (
@@ -294,7 +294,7 @@ class OdoobinProcess(OdevFrameworkMixin):
     @property
     def odoo_repositories(self) -> Generator[GitConnector, None, None]:
         """Return the list of Odoo repositories the current version."""
-        return odoo_repositories(self.database.edition == "enterprise" or self._force_enterprise)
+        return odoo_repositories((self._forced_edition or self.database.edition) == "enterprise")
 
     @property
     def odoo_support_repository(self) -> GitConnector:
@@ -376,7 +376,7 @@ class OdoobinProcess(OdevFrameworkMixin):
         if edition is None:
             edition = "enterprise"
 
-        self._force_enterprise = edition == "enterprise"
+        self._forced_edition = edition
         return self
 
     def with_venv(self, venv: PythonEnv | str) -> "OdoobinProcess":

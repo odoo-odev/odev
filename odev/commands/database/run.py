@@ -50,9 +50,7 @@ class RunCommand(OdoobinTemplateCommand):
                 f"for database {self._database.name!r} which is set to {self._database.edition!r}"
             )
 
-        self._set_odoobin_process(
-            force=any([self.args.version, self.args.venv, self.args.worktree, self.args.enterprise])
-        )
+        self._set_odoobin_process(force=True)
 
     @property
     def _database_exists_required(self) -> bool:

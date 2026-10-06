@@ -128,12 +128,7 @@ class TestCommand(OdoobinCommand):
         odoobin = self.test_database.process or self.odev.odoobin_process_class(self.test_database)
         odoobin.with_version(self.version)
 
-        edition = (
-            "enterprise"
-            if self.args.enterprise or (self._database.exists and self._database.edition == "enterprise")
-            else "community"
-        )
-        odoobin.with_edition(edition)
+        odoobin.with_edition("enterprise" if self.args.enterprise else "community")
         odoobin.with_venv(self.venv)
         odoobin.with_worktree(self.worktree)
 
