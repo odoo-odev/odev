@@ -72,6 +72,12 @@ class PostgresConnector(Connector):
     _nocache: bool = False
     """Whether to disable caching of SQL queries."""
 
+    _collation_checked: ClassVar[set[str]] = set()
+    """Names of the databases whose collation was already checked by this process."""
+
+    _open: bool = False
+    """Whether the connector is in use, its connection being opened by the first query that needs one."""
+
     def __init__(self, database: str | None = None):
         """Initialize the connector."""
         super().__init__()
@@ -84,8 +90,25 @@ class PostgresConnector(Connector):
         """Return the URL of the database."""
         return f"postgresql://localhost/{self.database}"
 
+    @property
+    def connected(self) -> bool:
+        """Return whether the connector is in use, whether or not a query already had it reach the server."""
+        return self._open
+
+    def __enter__(self) -> "PostgresConnector":
+        """Make the connector usable without connecting to the database engine yet.
+
+        Most of the queries a command runs are answered by the cache, and a connection opened ahead of them
+        is a backend PostgreSQL forks for nothing: :meth:`query` connects when it first has to.
+        """
+        self._open = True
+
+        return self
+
     def connect(self):
         """Connect to the database engine."""
+        self._open = True
+
         if self._connection is None:
             self._connection = psycopg2.connect(database=self.database)  # type: ignore [assignment]
             self._connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -94,8 +117,24 @@ class PostgresConnector(Connector):
 
         self._check_collation()
 
+    def _cursor(self) -> Cursor:
+        """Return the cursor to the database engine, connecting to it if no query needed it so far.
+
+        :return: The cursor to run queries with.
+        :rtype: Cursor
+        """
+        if self.cr is None:
+            self.connect()
+
+        if self.cr is None:
+            raise ConnectorError("The cursor is not initialized, connect first", self)
+
+        return self.cr
+
     def disconnect(self):
         """Disconnect from the database engine."""
+        self._open = False
+
         if self.cr is not None:
             self.cr.close()
             del self.cr
@@ -137,7 +176,7 @@ class PostgresConnector(Connector):
         if self.__class__._has_collation_mismatch or (self._connection and self._connection.notices):
             self._check_collation()
 
-        if self.cr is None:
+        if not self.connected:
             raise ConnectorError("The cursor is not initialized, connect first", self)
 
         query = textwrap.dedent(query).strip()
@@ -153,6 +192,8 @@ class PostgresConnector(Connector):
                 console.code(string.indent(str(result), 4), "python")
             return result
 
+        cursor = self._cursor()
+
         def signal_handler_cancel_statement(*args, **kwargs):
             """Cancel the SQL query currently running."""
             logger.warning("Aborting execution of SQL query")
@@ -161,14 +202,14 @@ class PostgresConnector(Connector):
                 self.cr.connection.cancel()
 
         with (
-            self.cr.transaction() if transaction else nullcontext(),
+            cursor.transaction() if transaction else nullcontext(),
             capture_signals(handler=signal_handler_cancel_statement),
         ):
             if LOG_LEVEL == "DEBUG" and DEBUG_SQL:
                 logger.debug(f"Executing PostgreSQL query against database {self.database!r}:")
                 console.code(string.indent(query, 4), "postgresql")
 
-            thread = Thread(target=self.cr.execute, args=(query, params))
+            thread = Thread(target=cursor.execute, args=(query, params))
 
             try:
                 thread.start()
@@ -178,7 +219,7 @@ class PostgresConnector(Connector):
                     return False
                 raise error from error
 
-            result = self.cr.fetchall() if self.cr.description else True
+            result = cursor.fetchall() if cursor.description else True
 
         if is_select and not self.__class__._nocache:
             if DEBUG_SQL:
@@ -363,8 +404,14 @@ class PostgresConnector(Connector):
         if not self.odev or self.odev.in_test_mode or self.__class__._checking_collation:
             return
 
+        # The outcome is the same for every connection to a database, and a command opens many of them.
+        if self.database in self.__class__._collation_checked and not self.__class__._has_collation_mismatch:
+            return
+
         self.__class__._checking_collation = True
         try:
+            self.__class__._collation_checked.add(self.database)
+
             if self.database not in COLLATION_WHITELIST and not self.table_exists("ir_module_module"):
                 return
 

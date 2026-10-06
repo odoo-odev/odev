@@ -96,7 +96,15 @@ class LocalDatabase(PostgresConnectorMixin, Database):
 
         if self.is_odoo:
             info = self.store.databases.get(self)
-            self.whitelisted = info is not None and info.whitelisted
+
+            if info is None:
+                # First time this database is seen: saving it records the virtual environment it uses,
+                # which is what tells whether an environment is still needed when deleting another database.
+                self.whitelisted = False
+            else:
+                # Assigned without going through the property: its setter saves the database, which
+                # computes every value the data store holds, and nothing changed that is worth saving.
+                self._whitelisted = info.whitelisted
 
     def __enter__(self):
         self._enter_connector(self.name)
@@ -220,10 +228,45 @@ class LocalDatabase(PostgresConnectorMixin, Database):
     def filestore(self) -> Filestore:
         if self._filestore is None:
             path: Path = Path.home() / ".local/share/Odoo/filestore/" / self.name
-            size: int = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-            self._filestore = Filestore(path=path, size=size)
+            self._filestore = Filestore(path=path, size=self._directory_size(path))
 
         return self._filestore
+
+    @staticmethod
+    def _directory_size(directory: Path) -> int:
+        """Sum the sizes of the files under a directory, at any depth.
+
+        A filestore holds one file per attachment: the entries are read as the directories are scanned
+        rather than through a path object each, which would cost several system calls per file.
+
+        :param directory: The directory to measure.
+        :return: The size of the files in bytes, zero if the directory does not exist.
+        :rtype: int
+        """
+        size: int = 0
+        pending: list[str] = [directory.as_posix()]
+
+        while pending:
+            try:
+                with os.scandir(pending.pop()) as entries:
+                    for entry in entries:
+                        try:
+                            if entry.is_dir(follow_symlinks=False):
+                                pending.append(entry.path)
+
+                            elif entry.is_file():
+                                size += entry.stat().st_size
+
+                        except OSError:
+                            # Removed while the directory was being measured, as a running Odoo does with
+                            # the attachments it no longer needs: the other files still count.
+                            continue
+
+            except OSError:
+                # Missing altogether, or not readable: there is nothing to count.
+                continue
+
+        return size
 
     @property
     def url(self) -> str | None:
@@ -303,17 +346,18 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         if not self.is_odoo:
             return None
 
-        with self.psql(self.odev.name) as psql:
-            result = psql.query(
-                f"""
-                SELECT date
-                FROM history
-                WHERE database = '{self.name}'
-                ORDER BY date DESC
-                LIMIT 1
-                """
-            )
-            return None if not result or isinstance(result, bool) else result[0][0]
+        # The data store keeps its connection open, there is no need for another one to the same database.
+        result = self.store.query(
+            f"""
+            SELECT date
+            FROM history
+            WHERE database = '{self.name}'
+            ORDER BY date DESC
+            LIMIT 1
+            """
+        )
+
+        return None if not result or isinstance(result, bool) else result[0][0]
 
     @property
     def last_access_date(self) -> datetime | None:

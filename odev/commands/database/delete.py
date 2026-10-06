@@ -112,6 +112,11 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         """Delete a single database and its resources.
         :param database: the database to delete.
         """
+        if "venv" not in self.args.keep:
+            # Read while it can still be told: the virtual environment of a database comes from its
+            # configuration or from its version, and neither is left once the steps below are done.
+            _ = database.venv
+
         if "filestore" not in self.args.keep:
             self.remove_filestore(database)
 
