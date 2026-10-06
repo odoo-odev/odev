@@ -17,6 +17,7 @@ from subprocess import (
     Popen,
     run as run_subprocess,
 )
+from time import monotonic
 
 from odev.common.console import console
 from odev.common.logging import logging
@@ -28,6 +29,12 @@ __all__ = ["detached", "execute", "stream"]
 logger = logging.getLogger(__name__)
 
 CTRL_C, CTRL_D = b"\x03", b"\x04"
+
+STREAM_CHUNK_SIZE = 65536
+"""Maximum number of bytes read at once from the output of a streamed process."""
+
+STREAM_DRAIN_TIMEOUT = 1.0
+"""Seconds given to read what a streamed process left unread when it exited."""
 
 global sudo_password  # noqa: PLW0604
 sudo_password: str | None = None
@@ -175,18 +182,66 @@ def _stream_no_tty(
     yield from exec_process.stdout.decode().splitlines()
 
 
-def _write_to_stdout(data: str | bytes) -> None:
-    """Write data to stdout, handling both bytes and strings and falling back to buffer if necessary."""
-    try:
-        if isinstance(data, str):
-            sys.stdout.write(data)
-        else:
-            sys.stdout.buffer.write(data)
-    except OSError:
-        if hasattr(sys.stdout, "buffer"):
-            sys.stdout.buffer.write(data if isinstance(data, bytes) else data.encode())
-        else:
-            sys.stdout.write(data if isinstance(data, str) else data.decode())
+def _set_raw_input(terminal: int) -> None:
+    """Put a terminal in raw mode for what is typed in it, leaving what is written to it alone.
+
+    Raw mode hands over every key as it is pressed, which is what lets CTRL+C and CTRL+D be passed on to
+    a streamed process. It also stops the terminal from returning to the start of the line on a line
+    break, leaving the cursor below the end of the last line written: that part is turned back on.
+
+    :param terminal: The file descriptor of the terminal.
+    """
+    tty.setraw(terminal)
+    attributes = termios.tcgetattr(terminal)
+    attributes[1] |= termios.OPOST | termios.ONLCR
+    termios.tcsetattr(terminal, termios.TCSANOW, attributes)
+
+
+def _split_lines(received: bytes) -> tuple[list[str], bytes]:
+    """Split the output received from a streamed process into the lines it completes.
+
+    :param received: The output received so far and not yet yielded.
+    :return: The complete lines, and the beginning of a line whose end was not received yet.
+    :rtype: tuple[list[str], bytes]
+    """
+    *lines, remainder = received.split(b"\n")
+
+    return [_decode_line(line) for line in lines], remainder
+
+
+def _decode_line(line: bytes) -> str:
+    """Decode a line of output from a streamed process.
+
+    :param line: The line as it was received, without its line break.
+    :return: The text of the line, bytes that are not valid text being replaced rather than failing the
+        lines received along with them.
+    :rtype: str
+    """
+    return line.decode(errors="replace").rstrip("\r")
+
+
+def _read_lines(master: int, pending: bytearray) -> Generator[str, None, None]:
+    """Read what a streamed process has written so far and yield the lines it completes.
+
+    Reading one byte at a time costs a system call per character of output, which is what an Odoo server
+    logging thousands of lines ends up waiting on.
+
+    :param master: The file descriptor to read the output of the process from.
+    :param pending: The beginning of a line whose end was not received yet, updated in place.
+    :yield: Each line completed by what was read, without its line break.
+    """
+    received = os.read(master, STREAM_CHUNK_SIZE)
+
+    if b"\n" not in received:
+        # Nothing to split yet, and splitting again what is pending on every read of a very long line
+        # would cost more with each of them.
+        pending += received
+        return
+
+    lines, remainder = _split_lines(bytes(pending) + received)
+    pending[:] = remainder
+
+    yield from lines
 
 
 def stream(
@@ -204,7 +259,7 @@ def stream(
         return
 
     original_tty = termios.tcgetattr(sys.stdin)
-    tty.setraw(sys.stdin.fileno())
+    _set_raw_input(sys.stdin.fileno())
     master, slave = pty.openpty()
 
     process: Popen | None = None
@@ -225,7 +280,7 @@ def stream(
                 input_data = input_data.encode()
             os.write(master, input_data)
 
-        received_buffer: bytes = b""
+        pending = bytearray()
 
         while process.poll() is None:
             rlist, _, _ = select.select([sys.stdin, master], [], [], 0.1)
@@ -246,26 +301,24 @@ def stream(
 
             # Output received from process, yield for further processing
             if master in rlist:
-                received = os.read(master, 1)
+                yield from _read_lines(master, pending)
 
-                if not received:
-                    continue
+        # The process may exit between two reads, with its last lines still waiting to be read. A process
+        # it left behind could keep writing forever though, and nothing reads the keyboard anymore.
+        drain_deadline = monotonic() + STREAM_DRAIN_TIMEOUT
 
-                if received != b"\n":
-                    received_buffer += received
-                    continue
+        while monotonic() < drain_deadline and select.select([master], [], [], 0)[0]:
+            yield from _read_lines(master, pending)
 
-                line = received_buffer.decode().rstrip("\r")
-                received_buffer = b""
-
-                _write_to_stdout(b"\r")
-
-                yield line
+        if pending:
+            yield _decode_line(bytes(pending))
 
     finally:
         os.close(slave)
         os.close(master)
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, original_tty)
 
-        if process is not None and process.returncode:
-            raise CalledProcessError(process.returncode, command)
+    # Raised once the output was consumed, not while cleaning up: a caller that stops reading early is
+    # closing the generator, and an error raised then is reported as ignored instead of reaching it.
+    if process is not None and process.returncode:
+        raise CalledProcessError(process.returncode, command)
