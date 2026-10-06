@@ -412,17 +412,8 @@ class Odev(Generic[CommandType]):
         :return: Whether updates were pulled and installed
         :rtype: bool
         """
+        repository = self.__open_repository(path, plugin)
         path = path.resolve()
-
-        try:
-            repository = Repo(path)
-        except NoSuchPathError as error:
-            if plugin:
-                logger.warning(f"Plugin {plugin!r} not found, maybe a missing dependency")
-                self.install_plugin(plugin)
-
-            raise OdevError(f"Error while updating {self.name}") from error
-
         manifest: Manifest = self._load_plugin_manifest(path)
         git = GitConnector(cast(str, manifest["name"]), path)
 
@@ -493,6 +484,37 @@ class Odev(Generic[CommandType]):
             self._show_release_notes(git, head_commit, prompt_name)
 
         return True
+
+    def __open_repository(self, path: Path, plugin: str | None = None) -> Repo:
+        """Open the git repository odev or one of its plugins runs from.
+
+        A plugin whose files are gone, typically because its repository was moved and left a broken symbolic link
+        behind, is installed again instead of failing the update.
+
+        :param path: Path to the repository, or to a symbolic link pointing to it.
+        :param plugin: Name of the plugin the repository belongs to, if it is not the one of odev itself.
+        :return: The repository found at the given path.
+        :rtype: Repo
+        :raise OdevError: If there is no repository at the given path.
+        """
+        try:
+            return Repo(path.resolve())
+        except NoSuchPathError as error:
+            if plugin is None:
+                raise OdevError(
+                    f"Cannot update {self.name}: no repository found at {path.resolve().as_posix()}"
+                ) from error
+
+        logger.warning(f"Plugin {plugin!r} not found at {path.resolve().as_posix()}, installing it again")
+        self.install_plugin(plugin)
+
+        try:
+            return Repo(path.resolve())
+        except NoSuchPathError as error:
+            raise OdevError(
+                f"Cannot update plugin {plugin!r}: no repository found at {path.resolve().as_posix()}\n"
+                f"Remove {path.as_posix()} and enable the plugin again"
+            ) from error
 
     def _show_release_notes(self, git: GitConnector, head_commit: str, prompt_name: str):
         if not git.repository or not git.remote:
@@ -985,6 +1007,11 @@ class Odev(Generic[CommandType]):
 
             plugin_path = self.plugins_path / plugin_module_name(repository.name)
             self.plugins_path.mkdir(parents=True, exist_ok=True)
+
+            if plugin_path.is_symlink() and not plugin_path.exists():
+                logger.debug(f"Removing broken symbolic link {plugin_path.as_posix()}")
+                plugin_path.unlink()
+                self._load_plugin_manifest.cache_clear()
 
             if self._plugin_is_installed(plugin):
                 logger.info(f"Plugin {plugin!r} is already installed")
