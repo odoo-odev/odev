@@ -13,9 +13,16 @@ on:
 
 jobs:
 
-  version-bump:
-    name: version-bump
+  version-untouched:
+    name: version-untouched
     runs-on: ubuntu-22.04
+    # The version is bumped by the release workflow, only the release pull request (beta -> main) carries it
+    if: >-
+      github.event_name == 'pull_request'
+      && (
+        github.event.pull_request.head.ref != 'beta'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
     steps:
       - name: checkout-repository
         uses: actions/checkout@v4
@@ -23,8 +30,15 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: check-version-bump
-        run: bash .github/workflows/version_check.sh ${{ github.event.pull_request.base.ref }}
+      - name: check-version-untouched
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          VERSION_FILE: odev/_version.py
+        run: |
+          if ! git diff --quiet "origin/$BASE_BRANCH...HEAD" -- "$VERSION_FILE"; then
+            echo "::error file=$VERSION_FILE,title=Version Updated::The version is bumped automatically when releasing, please revert the changes made to $VERSION_FILE"
+            exit 1
+          fi
 
   pre-commit:
     name: pre-commit

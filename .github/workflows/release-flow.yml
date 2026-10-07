@@ -1,0 +1,244 @@
+name: release-flow
+
+# Reusable release flow shared by odev and its plugins, see docs/contributing/releasing.md.
+#
+# - sync:     the pre-release branch always exists and always contains the release branch
+# - prepare:  the version is bumped on the pre-release branch and a release pull request is kept up-to-date
+# - release:  the release branch is fast-forwarded to the pre-release branch, tagged and published
+# - retarget: pull requests opened against the release branch are moved to the pre-release branch
+#
+# Branches are protected: pushes are made by a GitHub App listed in the bypass list of the branch ruleset.
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: Name of the released package, used in commit messages and titles
+        type: string
+        required: true
+      version-file:
+        description: Path to the file assigning `__version__`
+        type: string
+        default: __manifest__.py
+      release-branch:
+        description: Branch tracking the latest release
+        type: string
+        default: main
+      prerelease-branch:
+        description: Branch collecting the changes of the next release
+        type: string
+        default: beta
+      release:
+        description: Release the pre-release branch when the workflow is run manually
+        type: boolean
+        default: false
+      tooling-ref:
+        description: Revision of odoo-odev/odev from which the release tooling is fetched
+        type: string
+        default: main
+    secrets:
+      app_id:
+        description: Identifier of the GitHub App allowed to bypass the branch ruleset
+        required: false
+      app_private_key:
+        description: Private key of the GitHub App allowed to bypass the branch ruleset
+        required: false
+
+env:
+  PACKAGE: ${{ inputs.package }}
+  VERSION_FILE: ${{ inputs.version-file }}
+  RELEASE_BRANCH: ${{ inputs.release-branch }}
+  PRERELEASE_BRANCH: ${{ inputs.prerelease-branch }}
+  TOOLING: .release-tooling/.github/scripts
+
+jobs:
+
+  credentials:
+    name: credentials
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request_target'
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - name: check-app-credentials
+        id: check
+        env:
+          APP_ID: ${{ secrets.app_id }}
+          APP_PRIVATE_KEY: ${{ secrets.app_private_key }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$APP_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Release flow disabled::The release GitHub App is not configured for this repository"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sync:
+    name: sync-${{ inputs.prerelease-branch }}
+    runs-on: ubuntu-latest
+    needs: credentials
+    if: >-
+      needs.credentials.outputs.configured == 'true' && (
+        github.event_name == 'schedule'
+        || (github.event_name == 'workflow_dispatch' && !inputs.release)
+        || (github.event_name == 'delete' && github.event.ref == inputs.prerelease-branch)
+        || (github.event_name == 'push' && github.ref_name == inputs.release-branch)
+      )
+    concurrency:
+      group: release-flow-branches-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: create-app-token
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
+      - name: checkout-repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release-branch }}
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: checkout-release-tooling
+        uses: actions/checkout@v4
+        with:
+          repository: odoo-odev/odev
+          ref: ${{ inputs.tooling-ref }}
+          path: .release-tooling
+          sparse-checkout: .github/scripts
+
+      - name: sync-prerelease-branch
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: bash "$TOOLING/sync-prerelease-branch.sh"
+
+  prepare:
+    name: prepare-release
+    runs-on: ubuntu-latest
+    needs: credentials
+    if: >-
+      needs.credentials.outputs.configured == 'true'
+      && github.event_name == 'push'
+      && github.ref_name == inputs.prerelease-branch
+    concurrency:
+      group: release-flow-branches-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: create-app-token
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
+      - name: checkout-repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.prerelease-branch }}
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: checkout-release-tooling
+        uses: actions/checkout@v4
+        with:
+          repository: odoo-odev/odev
+          ref: ${{ inputs.tooling-ref }}
+          path: .release-tooling
+          sparse-checkout: .github/scripts
+
+      - name: bump-version
+        id: version
+        env:
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: bash "$TOOLING/bump-version.sh"
+
+      - name: update-release-pull-request
+        if: steps.version.outputs.version
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: bash "$TOOLING/update-release-pull-request.sh"
+
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    needs: credentials
+    if: >-
+      needs.credentials.outputs.configured == 'true' && (
+        (github.event_name == 'workflow_dispatch' && inputs.release)
+        || (
+          github.event_name == 'issue_comment'
+          && github.event.issue.pull_request
+          && startsWith(github.event.comment.body, '/release')
+        )
+      )
+    concurrency:
+      group: release-flow-release-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: create-app-token
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
+      - name: checkout-repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.prerelease-branch }}
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - name: checkout-release-tooling
+        uses: actions/checkout@v4
+        with:
+          repository: odoo-odev/odev
+          ref: ${{ inputs.tooling-ref }}
+          path: .release-tooling
+          sparse-checkout: .github/scripts
+
+      - name: check-release
+        id: check
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ACTOR: ${{ github.actor }}
+          COMMENTED_NUMBER: ${{ github.event.issue.number }}
+        run: bash "$TOOLING/check-release.sh"
+
+      - name: publish-release
+        if: steps.check.outputs.version
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          NUMBER: ${{ steps.check.outputs.number }}
+          REVISION: ${{ steps.check.outputs.revision }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: bash "$TOOLING/publish-release.sh"
+
+  retarget:
+    name: retarget-pull-request
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request_target'
+      && github.event.pull_request.base.ref == inputs.release-branch
+      && (
+        github.event.pull_request.head.ref != inputs.prerelease-branch
+        || github.event.pull_request.head.repo.full_name != github.repository
+      )
+      && !contains(github.event.pull_request.labels.*.name, 'hotfix')
+    permissions:
+      pull-requests: write
+    steps:
+      # Only calls the API: the code of the pull request is never checked out nor run
+      - name: retarget-to-prerelease-branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --base "$PRERELEASE_BRANCH"
+          gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body \
+            "Changes are merged into \`$PRERELEASE_BRANCH\` and reach \`$RELEASE_BRANCH\` with the next release: this pull request now targets \`$PRERELEASE_BRANCH\`. You may need to rebase it if it shows unrelated commits."
