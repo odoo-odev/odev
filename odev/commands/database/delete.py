@@ -1,4 +1,4 @@
-"""Create a new database."""
+"""Delete a local database and its associated resources."""
 
 import shutil
 

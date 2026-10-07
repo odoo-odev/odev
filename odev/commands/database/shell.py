@@ -1,4 +1,4 @@
-"""Run an Odoo database locally."""
+"""Run odoo-bin in shell mode on a local database."""
 
 from odev.common.commands import OdoobinShellCommand
 from odev.common.logging import logging
