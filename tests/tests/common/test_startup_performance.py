@@ -32,13 +32,17 @@ HEAVY_MODULES = (
     "github",
     "InquirerPy",
     "networkx",
+    "odoolib",
     "paramiko",
     "prompt_toolkit",
+    "requests",
+    "virtualenv",
 )
 """Third-party modules that are expensive to import and that the framework must not need in order to start.
 
 Each is only useful to a fraction of odev's commands: a GitHub API client, an SSH agent client, a code formatter,
-a project scaffolder, a graph library and an interactive prompt toolkit. They belong at their point of use.
+a project scaffolder, a graph library, an interactive prompt toolkit, an RPC client with the HTTP client it is
+built on and a virtual environment builder. They belong at their point of use.
 """
 
 

@@ -10,8 +10,6 @@ from typing import (
 )
 from urllib.parse import urlparse
 
-import odoolib  # type: ignore [import]
-
 from odev.common import string
 from odev.common.connectors.base import Connector
 from odev.common.console import console
@@ -21,6 +19,8 @@ from odev.typings.odoo import Domain, RecordData, RecordDataList
 
 
 if TYPE_CHECKING:
+    import odoolib  # type: ignore [import]
+
     from odev.common.databases import Database
 
 
@@ -44,7 +44,7 @@ HTTPS_PORT = 443
 class Model:
     """Extended odoolib Model class to add some convenience methods."""
 
-    _model: odoolib.Model
+    _model: "odoolib.Model"
     """The underlying odoolib Model instance."""
 
     _connector: "RpcConnector"
@@ -243,7 +243,7 @@ class Model:
 class RpcConnector(Connector):
     """Interact with any Odoo database using XML/JSON RPC."""
 
-    _connection: odoolib.Connection | None = None
+    _connection: "odoolib.Connection | None" = None
     """The instance of a connection to the service."""
 
     def __init__(self, database: "Database"):
@@ -289,8 +289,12 @@ class RpcConnector(Connector):
 
         return cast(int, self._connection.user_id)
 
-    def connect(self) -> odoolib.Connection:
+    def connect(self) -> "odoolib.Connection":
         """Open a connection to the external service."""
+        # Imported here as it drags in an HTTP client, which every odev command would otherwise pay for
+        # whether or not it ever talks to a database over RPC.
+        import odoolib  # type: ignore [import]  # noqa: PLC0415
+
         if not self.connected:
             if not self.database.running:
                 raise ConnectorError(
@@ -353,6 +357,8 @@ class RpcConnector(Connector):
         """Monkey patch calls to `execute_kw` to log RPC calls from the connector to a database
         and catch exceptions thrown by the connector for better handling of errors.
         """
+        import odoolib  # type: ignore [import]  # noqa: PLC0415 - see `connect`
+
         logger.debug(f"Connected to {self.database.platform.display} database {self.database.name!r}'s RPC API")
         original_send = self._connection.connector.send
 

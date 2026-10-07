@@ -1,5 +1,9 @@
+import os
+import pty
+import termios
 from subprocess import CalledProcessError, CompletedProcess
 from time import monotonic
+from unittest.mock import patch
 
 from odev.common import bash
 from odev.common.console import console
@@ -34,6 +38,89 @@ class TestCommonBash(OdevTestCase):
         start = monotonic()
         bash.detached("sleep 1")
         self.assertLess(monotonic() - start, 1)
+
+
+class TestCommonBashStream(OdevTestCase):
+    """Streaming a command should yield every line of its output, however it is split between reads.
+
+    Streaming only happens with a terminal on the standard input, which a test suite does not have: a
+    pseudo-terminal stands in for it.
+    """
+
+    def setUp(self):
+        super().setUp()
+        master, slave = pty.openpty()
+        stdin = os.fdopen(slave, "rb", buffering=0)
+        self.addCleanup(os.close, master)
+        self.addCleanup(stdin.close)
+        self.terminal: int = slave
+
+        patcher = patch.object(bash.sys, "stdin", stdin)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_01_lines_are_split_within_a_read(self):
+        """Lines received together should be yielded one by one, without their line endings."""
+        self.assertEqual(bash._split_lines(b"first\r\nsecond\r\n"), (["first", "second"], b""))
+
+    def test_02_incomplete_line_is_kept(self):
+        """The beginning of a line should be kept until its end is received."""
+        lines, remainder = bash._split_lines(b"first\r\nlas")
+
+        self.assertEqual(lines, ["first"])
+        self.assertEqual(bash._split_lines(remainder + b"t\r\n"), (["last"], b""))
+
+    def test_03_stream_yields_all_lines(self):
+        """A command writing more than a read can hold should have all its lines yielded in order."""
+        lines = list(bash.stream("seq 1 20000"))
+        self.assertEqual(lines, [str(number) for number in range(1, 20001)])
+
+    def test_04_stream_yields_unterminated_last_line(self):
+        """Output that does not end with a line break should not be lost."""
+        self.assertEqual(list(bash.stream("printf 'first\\nlast'")), ["first", "last"])
+
+    def test_05_stream_survives_invalid_text(self):
+        """Bytes that are not valid text should not cost the lines received along with them."""
+        self.assertEqual(
+            list(bash.stream("printf 'before\\n\\377\\376\\nafter\\n'")),
+            ["before", "\ufffd\ufffd", "after"],
+        )
+
+    def test_06_stream_is_silent_when_abandoned(self):
+        """A caller that stops reading a failing command should not have an error raised behind its back.
+
+        An error raised while a generator is being closed never reaches the caller: the interpreter
+        reports it as ignored, which is what is watched for here.
+        """
+        lines = bash.stream("seq 1 20000; echo Failed; exit 1")
+
+        with patch.object(bash.sys, "unraisablehook") as unraisable:
+            for line in lines:
+                if line == "Failed":
+                    break
+
+            lines.close()
+
+        unraisable.assert_not_called()
+
+    def test_07_terminal_keeps_processing_output(self):
+        """Only what is typed should be read raw: a line break still has to return to the start of the line."""
+        original = termios.tcgetattr(self.terminal)
+        lines = bash.stream("echo streaming")
+        next(lines)
+        _, output_flags, _, local_flags, *_ = termios.tcgetattr(self.terminal)
+
+        self.assertTrue(output_flags & termios.OPOST and output_flags & termios.ONLCR)
+        self.assertFalse(local_flags & (termios.ICANON | termios.ECHO))
+
+        list(lines)
+
+        self.assertEqual(termios.tcgetattr(self.terminal), original)
+
+    def test_08_stream_raises_on_failure(self):
+        """A streamed command that fails should raise once its output was consumed."""
+        with self.assertRaises(CalledProcessError):
+            list(bash.stream("echo failing; exit 3"))
 
 
 class TestCommonBashSudo(OdevTestCase):

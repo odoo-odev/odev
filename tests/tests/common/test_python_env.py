@@ -94,7 +94,7 @@ class TestSystemPackages(OdevTestCase):
         error = RuntimeError("failed to find interpreter for Builtin discover of python_spec='3.10'")
 
         with (
-            patch("odev.common.python.virtualenv.cli_run", side_effect=error),
+            patch("virtualenv.cli_run", side_effect=error),
             patch("odev.common.python.console.confirm", return_value=True),
             self.patch(PythonEnv, "install_system_packages", return_value=False) as install,
             self.assertRaises(OdevError),

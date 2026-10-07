@@ -10,7 +10,6 @@ from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess
 from typing import ClassVar
 
-import virtualenv
 from packaging.markers import default_environment
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.version import InvalidVersion, Version, parse as parse_version
@@ -172,6 +171,10 @@ class PythonEnv:
 
         with progress.spinner(f"Creating {venv_description}"):
             try:
+                # Imported here as it is only needed to create an environment, and costs every odev command
+                # the import of a file locking library and of asyncio otherwise.
+                import virtualenv  # noqa: PLC0415
+
                 with silence_loggers("distlib.util", "filelock", "virtualenv"):
                     virtualenv.cli_run(["--python", self.version, self.path.as_posix()], setup_logging=False)
             except RuntimeError as error:
