@@ -1,7 +1,11 @@
+from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock
+from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock, PropertyMock
 
+from odev.commands.database.delete import DeleteCommand
 from odev.common.databases import LocalDatabase
+from odev.common.store.tables.databases import DatabaseInfo
 from odev.common.version import OdooVersion
 
 from tests.fixtures import OdevTestCase
@@ -77,3 +81,91 @@ class TestNeutralizeScripts(OdevTestCase):
     def test_older_versions_get_the_legacy_script(self):
         scripts = self.neutralize_scripts(["base"], version="14.0")
         self.assertIn(self.odev.static_path / "neutralize-post-before-15.0.sql", scripts)
+
+
+class TestLocalDatabaseCost(OdevTestCase):
+    """Commands build a database object for every database they look at: doing so has to stay cheap."""
+
+    def stored_info(self, whitelisted: bool) -> DatabaseInfo:
+        """Build the values the data store would hold for a database.
+
+        :param whitelisted: Whether the database is saved as whitelisted.
+        :return: The saved values of the database.
+        :rtype: DatabaseInfo
+        """
+        return DatabaseInfo(
+            name="test-cost",
+            platform="local",
+            virtualenv="",
+            arguments="",
+            whitelisted=whitelisted,
+            repository=None,
+            branch=None,
+            worktree="",
+            url="",
+        )
+
+    def test_01_building_a_database_does_not_save_it(self):
+        """Building a database object should read the data store and leave it as it is."""
+        with (
+            self.patch_property(LocalDatabase, "is_odoo", value=True),
+            self.patch(self.odev.store.databases, "get", self.stored_info(whitelisted=True)),
+            self.patch(self.odev.store.databases, "set") as patched_set,
+        ):
+            database = LocalDatabase("test-cost")
+
+        patched_set.assert_not_called()
+        self.assertTrue(database._whitelisted, "the saved flag should be kept for the next time the database is saved")
+
+    def test_02_unknown_database_is_saved_once(self):
+        """A database the data store knows nothing about should be saved, so that what it uses is known."""
+        with (
+            self.patch_property(LocalDatabase, "is_odoo", value=True),
+            self.patch(self.odev.store.databases, "get", None),
+            self.patch(self.odev.store.databases, "set") as patched_set,
+        ):
+            database = LocalDatabase("test-cost")
+
+        patched_set.assert_called_once_with(database)
+        self.assertFalse(database._whitelisted)
+
+    def test_03_directory_size_counts_files_at_any_depth(self):
+        """The size of a filestore is the sum of its files, wherever they are in it."""
+        with TemporaryDirectory() as temporary_directory:
+            filestore = Path(temporary_directory)
+            (filestore / "ab").mkdir()
+            (filestore / "cd" / "nested").mkdir(parents=True)
+            (filestore / "ab" / "first").write_bytes(b"1" * 10)
+            (filestore / "cd" / "second").write_bytes(b"2" * 200)
+            (filestore / "cd" / "nested" / "third").write_bytes(b"3" * 3000)
+            (filestore / "empty").mkdir()
+
+            self.assertEqual(LocalDatabase._directory_size(filestore), 3210)
+
+    def test_04_missing_directory_has_no_size(self):
+        """A database without a filestore should report an empty one rather than fail."""
+        with TemporaryDirectory() as temporary_directory:
+            self.assertEqual(LocalDatabase._directory_size(Path(temporary_directory) / "missing"), 0)
+
+    def test_05_delete_reads_the_venv_before_removing_anything(self):
+        """Deleting a database should know its virtual environment before dropping what tells which one it is."""
+        steps: list[str] = []
+
+        def record(step: str, result: object = None):
+            return lambda *_: steps.append(step) or result
+
+        database = MagicMock()
+        type(database).venv = PropertyMock(side_effect=record("venv", MagicMock()))
+        database.drop.side_effect = record("drop")
+
+        command = DeleteCommand.__new__(DeleteCommand)
+        command.args = Namespace(keep=[])
+
+        with (
+            self.patch(command, "remove_filestore", side_effect=record("filestore")),
+            self.patch(command, "remove_configuration", side_effect=record("configuration")),
+            self.patch(command, "remove_venv", side_effect=record("remove_venv")),
+        ):
+            command.delete_one(database)
+
+        self.assertEqual(steps, ["venv", "filestore", "configuration", "drop", "remove_venv"])

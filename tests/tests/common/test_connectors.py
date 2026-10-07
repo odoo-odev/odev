@@ -1,13 +1,20 @@
 from typing import cast
+from unittest.mock import patch
 
+import psycopg2
 from requests import Session
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from odev.common.connectors.postgres import Cursor, PostgresConnector
 from odev.common.connectors.rest import RestConnector
+from odev.common.errors import ConnectorError
 from odev.common.postgres import PostgresDatabase
 
 from tests.fixtures import OdevTestCase
+
+
+PSYCOPG_CONNECT_PATH = "odev.common.connectors.postgres.psycopg2.connect"
+"""Import path of the function opening a connection to PostgreSQL, as the connector reaches it."""
 
 
 class DummyResponse:
@@ -173,3 +180,48 @@ class TestPostgresConnectionLifecycle(OdevTestCase):
         self.assertIs(self.odev.store.connector, connector, "the store should keep the same connector")
         self.assertTrue(connector.connected, "a block should not close the connection the store holds")
         self.assertEqual(self.backends(self.odev.store.name), backends, "the store should hold a single backend")
+
+    def test_05_cached_query_does_not_connect(self):
+        """A block whose queries are all answered by the cache should never reach the server."""
+        query = "SELECT 'connection opened on demand'"
+
+        with PostgresConnector() as psql:
+            psql.query(query)
+
+        with patch(PSYCOPG_CONNECT_PATH, wraps=psycopg2.connect) as connect:
+            with PostgresConnector() as psql:
+                self.assertTrue(psql.connected, "the connector should be usable before it connects")
+                self.assertEqual(psql.query(query), [("connection opened on demand",)])
+
+            connect.assert_not_called()
+
+    def test_06_uncached_queries_share_one_connection(self):
+        """Queries the cache cannot answer should connect once, however many of them a block runs."""
+        with patch(PSYCOPG_CONNECT_PATH, wraps=psycopg2.connect) as connect:
+            with PostgresConnector() as psql, psql.nocache():
+                psql.query("SELECT 1")
+                psql.query("SELECT 1")
+
+            connect.assert_called_once()
+
+        self.assertFalse(psql.connected, "the block should close the connection its queries opened")
+        self.assertIsNone(psql._connection, "no connection should be left behind once the block is over")
+
+    def test_07_query_outside_of_a_block_is_refused(self):
+        """A connector nobody opened should refuse to run a query rather than connect behind the caller's back."""
+        with self.assertRaises(ConnectorError):
+            PostgresConnector().query("SELECT 'never sent to the server'")
+
+    def test_08_collation_is_checked_once_per_database(self):
+        """The collation of a database should be checked once, not for every connection opened to it."""
+        connector = PostgresConnector("not-an-odoo-database")
+
+        with (
+            patch.object(self.odev, "in_test_mode", new=False),
+            patch.object(PostgresConnector, "_collation_checked", set()),
+            patch.object(PostgresConnector, "table_exists", return_value=False) as table_exists,
+        ):
+            connector._check_collation()
+            PostgresConnector(connector.database)._check_collation()
+
+        table_exists.assert_called_once_with("ir_module_module")

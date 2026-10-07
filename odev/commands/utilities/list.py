@@ -1,5 +1,6 @@
 """List local databases."""
 
+from argparse import Namespace
 from collections.abc import Callable, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import (
@@ -196,11 +197,20 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         """,
     )
 
+    def __init__(self, arguments: Namespace) -> None:
+        super().__init__(arguments)
+
+        self._local_databases: dict[str, LocalDatabase] = {}
+        """Databases already looked at, by name: filtering and rendering both need each of them."""
+
     def run(self) -> None:
         with progress.spinner("Listing databases"):
             databases = self.list_databases(
                 predicate=lambda database: (not self.args.expression or self.args.expression.search(database))
-                and (self.args.show_all or (LocalDatabase(database).is_odoo and not database.endswith(":template")))
+                and (
+                    self.args.show_all
+                    or (self._local_database(database).is_odoo and not database.endswith(":template"))
+                )
             )
 
             if not databases:
@@ -222,6 +232,18 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         self.console.print(string.stylize(f"{STATUS_RUNNING} Running\n{STATUS_STOPPED} Stopped", "color.black"))
         self.console.print()
 
+    def _local_database(self, name: str) -> LocalDatabase:
+        """Return the database with a given name, built the first time it is asked for.
+
+        :param name: The name of the database.
+        :return: The same database object for as long as the command runs.
+        :rtype: LocalDatabase
+        """
+        if name not in self._local_databases:
+            self._local_databases[name] = LocalDatabase(name)
+
+        return self._local_databases[name]
+
     def get_table_data(self, databases: Sequence[str]) -> tuple[list[TableHeader], list[list[Any]], list[str]]:
         """Get the table data for the list of databases."""
         headers: list[TableHeader] = []
@@ -238,7 +260,7 @@ class ListCommand(ListLocalDatabasesMixin, Command):
         for database in databases:
             row: list[Any] = []
 
-            with LocalDatabase(database) as db:
+            with self._local_database(database) as db:
                 for index, mapped in enumerate(TABLE_MAPPING):
                     value = mapped.value(db)
                     row.append(mapped.format(value) if callable(mapped.format) else value)
