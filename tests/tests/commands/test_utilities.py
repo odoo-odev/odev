@@ -504,6 +504,29 @@ class TestCommandUtilities(OdevCommandTestCase):
         _, stderr = self.__dispatch_plugin("--show", "test/test-plugin", "--branch", "feature/branch")
         self.assertIn("Argument --branch can only be used together with --enable", stderr)
 
+    def test_plugin_18_enable_replaces_broken_link(self):
+        """Run the command to enable a plugin whose link points to a repository that was moved away."""
+        plugin = "test/test-plugin"
+        repositories_path = self.res_path / "repositories"
+        self.odev.config.paths.repositories = repositories_path
+        plugin_link = Path(self.odev.plugins_path) / "test_plugin"
+        self.addCleanup(plugin_link.unlink, missing_ok=True)
+        plugin_link.unlink(missing_ok=True)
+        plugin_link.parent.mkdir(parents=True, exist_ok=True)
+        plugin_link.symlink_to(self.run_path / "moved" / plugin, target_is_directory=True)
+        self.odev._load_plugin_manifest.cache_clear()
+        self.odev._plugins_dependency_tree.cache_clear()
+
+        with (
+            self.patch_property(GIT_PATH, "exists", value=True),
+            self.patch(GIT_PATH, "update"),
+        ):
+            stdout, _ = self.__dispatch_plugin("--enable", plugin)
+
+        self.assertNotIn("is already installed", stdout)
+        self.assertEqual(plugin_link.resolve(), (repositories_path / plugin).resolve())
+        self.assertIn(plugin, self.odev.config.plugins.enabled)
+
     def __list_sorted(self, order: str, **values: Mapping[str, Any]) -> list[str]:
         """Run the list command on fake databases and return their names in the order they are displayed.
 

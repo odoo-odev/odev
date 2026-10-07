@@ -4,10 +4,11 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
-from git import GitCommandError
+from git import GitCommandError, NoSuchPathError
 
 from odev._version import __version__
 from odev.common.commands import Command
+from odev.common.errors import OdevError
 from odev.common.odev import Manifest, Odev, Plugin, logger, parse_plugin_manifest, plugin_module_name
 
 from tests.fixtures import CaptureOutput, OdevTestCase
@@ -493,3 +494,50 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertEqual(output.stdout, "")
         self.assertEqual(self.odev.config.update.version, __version__)
+
+    def test_31_update_reinstalls_missing_plugin(self):
+        """A plugin whose repository cannot be found should be installed again, then checked for updates as any
+        other plugin instead of failing the whole update.
+        """
+        plugin = self.plugin_fixture()
+
+        with (
+            self.patch("odev.common.odev", "Repo", side_effect=[NoSuchPathError(plugin.path), MagicMock()]),
+            self.patch("odev.common.odev", "GitConnector", return_value=MagicMock()),
+            self.patch(self.odev, "install_plugin") as install_plugin,
+            self.patch(self.odev, "_load_plugin_manifest", return_value=plugin.manifest),
+            self.patch(self.odev, "_Odev__git_branch_behind", return_value=False),
+        ):
+            self.assertFalse(REAL_UPDATE(self.odev, plugin.path, plugin.name))
+
+        install_plugin.assert_called_once_with(plugin.name)
+
+    def test_32_update_plugin_still_missing(self):
+        """The error raised when a plugin is still missing after installing it again should tell which plugin is
+        affected and where it was expected.
+        """
+        plugin = self.plugin_fixture()
+
+        with (
+            self.patch("odev.common.odev", "Repo", side_effect=NoSuchPathError(plugin.path)),
+            self.patch(self.odev, "install_plugin"),
+            self.assertRaises(OdevError) as raised,
+        ):
+            REAL_UPDATE(self.odev, plugin.path, plugin.name)
+
+        self.assertIn(f"Cannot update plugin {plugin.name!r}", str(raised.exception))
+        self.assertIn(plugin.path.as_posix(), str(raised.exception))
+
+    def test_33_update_without_repository(self):
+        """The error raised when odev itself has no repository should tell where it was expected, and no plugin
+        should be installed.
+        """
+        with (
+            self.patch("odev.common.odev", "Repo", side_effect=NoSuchPathError(self.odev.path)),
+            self.patch(self.odev, "install_plugin") as install_plugin,
+            self.assertRaises(OdevError) as raised,
+        ):
+            REAL_UPDATE(self.odev, self.odev.path)
+
+        self.assertIn(f"no repository found at {self.odev.path.as_posix()}", str(raised.exception))
+        install_plugin.assert_not_called()
