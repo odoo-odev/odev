@@ -22,6 +22,8 @@ To enable a plugin, run `odev plugin --enable <organization>/<repository>`.
         -   [Cross-module imports](#cross-module-imports)
         -   [Adding a new command](#adding-a-new-command)
         -   [Extending a command](#extending-a-command)
+        -   [Adding config parameters](#adding-config-parameters)
+        -   [Testing a plugin](#testing-a-plugin)
 
 ## Finding and managing plugins
 
@@ -295,3 +297,62 @@ From within odev, you can fetch or set a value from the configuration at any tim
 value = odev.config.test.test  # -> "TEST"
 odev.config.test.test = "New Value"  # -> "NEW VALUE"
 ```
+
+### Testing a plugin
+
+Unit tests live in the `tests` directory of the plugin. A plugin is only importable through odev, as
+`odev.plugins.<module>`, so two files copied from the template repository make pytest aware of it:
+
+-   `tests/pytest.ini` keeps the root directory of pytest in `tests`, the plugin itself is a package that pytest must
+    not try to import on its own;
+-   `tests/conftest.py` makes the odev framework importable, locating it through the `odev` executable.
+
+Tests then import the plugin the same way odev does and can use the test cases odev provides in `tests.fixtures`:
+
+```python
+from unittest import TestCase
+
+from odev.plugins.odev_plugin_example.common.feature import Feature
+
+
+class TestFeature(TestCase):
+    def test_01_feature(self):
+        self.assertTrue(Feature().enabled)
+```
+
+Run them from the repository of the plugin, with the interpreter of odev. The plugin and its dependencies must be
+enabled locally.
+
+```bash
+~/.config/odev/venv/bin/python -m pytest tests
+```
+
+To run the tests on each pull request, add the file `.github/workflows/tests.yml` to the plugin:
+
+```yaml
+name: tests
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [beta]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    uses: odoo-odev/odev/.github/workflows/plugin-tests.yml@beta
+```
+
+The reusable workflow [`plugin-tests`](../../.github/workflows/plugin-tests.yml) checks out odev, fetches the plugins
+listed in `depends` (and theirs), links everything where odev expects plugins, installs the requirements of odev and
+of each plugin, then runs pytest. It accepts a few inputs:
+
+| Input             | Default                                                   | Description                                   |
+| ----------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `odev-ref`        | `main` for changes targeting `main`, `beta` otherwise     | Revision of odev to test against              |
+| `python-versions` | `["3.10", "3.13"]`                                        | Versions of python to run the tests with      |
+| `postgresql`      | `true`                                                    | Start a local PostgreSQL server for the tests |
+
+Dependencies are fetched on the same branch as odev when it exists, on their default branch otherwise, and must be
+public repositories.
