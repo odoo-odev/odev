@@ -321,7 +321,8 @@ class TestFeature(TestCase):
 ```
 
 Run them from the repository of the plugin, with the interpreter of odev. The plugin and its dependencies must be
-enabled locally.
+enabled locally, in a [development setup](../contributing/working-in-odev-repository.md): `install-dev.sh` links the
+plugins into the repository of odev, which is what makes `odev.plugins` importable outside of a running odev.
 
 ```bash
 ~/.config/odev/venv/bin/python -m pytest tests
