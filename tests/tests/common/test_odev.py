@@ -19,6 +19,11 @@ REAL_UPDATE = Odev._update
 prevent tests from running git operations on the odev repository.
 """
 
+REAL_PRUNE_DATABASES = Odev.prune_databases
+"""Reference to the real implementation of `Odev.prune_databases`, taken before the test fixtures patch it away
+to prevent tests from dropping databases.
+"""
+
 
 class TestCommonOdev(OdevTestCase):
     """Global sanity check of the odev framework."""
@@ -541,3 +546,22 @@ class TestCommonOdev(OdevTestCase):
 
         self.assertIn(f"no repository found at {self.odev.path.as_posix()}", str(raised.exception))
         install_plugin.assert_not_called()
+
+    def test_34_prune_databases_unattended(self):
+        """Unused databases should be neither deleted nor whitelisted when nobody is there to decide, and the
+        question should be asked again on the next run.
+        """
+        self.odev.config.pruning.date = "1995-12-21 00:00:00"
+        delete_command_cls = self.odev.commands.get("delete")
+
+        with (
+            self.patch(delete_command_cls, "list_databases", return_value=["unused"]) as list_databases,
+            self.patch(delete_command_cls, "delete_one") as delete_one,
+            self.patch(self.odev.console, "checkbox", return_value=["unused"]) as whitelist_prompt,
+        ):
+            REAL_PRUNE_DATABASES(self.odev)
+
+        list_databases.assert_called_once()
+        delete_one.assert_not_called()
+        whitelist_prompt.assert_not_called()
+        self.assertEqual(self.odev.config.pruning.date.year, 1995)
