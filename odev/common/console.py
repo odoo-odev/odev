@@ -504,6 +504,11 @@ class Console(RichConsole):
         """
         from InquirerPy import inquirer  # noqa: PLC0415 - importing prompt_toolkit is expensive
 
+        is_checkbox = prompt_name == "checkbox"
+        default_key = "defaults" if is_checkbox else "default"
+        has_default = default_key in kwargs
+        default_value = kwargs.pop(default_key) if is_checkbox and has_default else kwargs.get(default_key)
+
         self.pause_live()
         prompt = getattr(inquirer, prompt_name)(
             raise_keyboard_interrupt=True,
@@ -516,26 +521,25 @@ class Console(RichConsole):
         original_run = prompt._run
 
         def patched_run():
-            if self.bypass_prompt:
-                default_key = "defaults" if prompt_name == "checkbox" else "default"
+            if self.bypass_prompt and has_default:
+                prompt.status = {
+                    "answered": True,
+                    "result": [choice.name for choice in kwargs["choices"] if choice.enabled]
+                    if is_checkbox
+                    else default_value,
+                    "skipped": False,
+                }
 
-                if default_key in kwargs:
-                    prompt.status = {
-                        "answered": True,
-                        "result": kwargs[default_key],
-                        "skipped": False,
-                    }
+                prompt_message: list[tuple[str, str]] = prompt._get_prompt_message()  # type: ignore [call_args]
+                question: str = next(m for m in prompt_message if m[0] == "class:answered_question")[1].strip()
+                answer: str = next(m for m in prompt_message if m[0] == "class:answer")[1].strip()
 
-                    prompt_message: list[tuple[str, str]] = prompt._get_prompt_message()  # type: ignore [call_args]
-                    question: str = next(m for m in prompt_message if m[0] == "class:answered_question")[1].strip()
-                    answer: str = next(m for m in prompt_message if m[0] == "class:answer")[1].strip()
-
-                    self.print(
-                        f"{string.stylize(INQUIRER_MARK, 'bold color.purple')} "
-                        f"{question} {string.stylize(answer, 'color.purple')}",
-                        highlight=False,
-                    )
-                    return kwargs[default_key]
+                self.print(
+                    f"{string.stylize(INQUIRER_MARK, 'bold color.purple')} "
+                    f"{question} {string.stylize(answer, 'color.purple')}",
+                    highlight=False,
+                )
+                return default_value
 
             return original_run()
 
@@ -716,13 +720,17 @@ class Console(RichConsole):
         """
         from InquirerPy.base.control import Choice  # noqa: PLC0415 - importing prompt_toolkit is expensive
 
-        defaults = defaults or []
+        enabled = defaults or []
+        bypass_answer = (
+            {} if defaults is None else {"defaults": [choice[0] for choice in choices if choice[0] in enabled]}
+        )
 
         return self.__prompt_factory(
             "checkbox",
             message=message,
-            choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in defaults) for choice in choices],
+            choices=[Choice(choice[0], name=choice[-1], enabled=choice[0] in enabled) for choice in choices],
             transformer=lambda selected: string.join_and(selected) if selected else "None",
+            **bypass_answer,
         )
 
     def fuzzy(self, message: str, choices: Sequence[tuple[str, str | None]], default: str | None = None) -> Any | None:
