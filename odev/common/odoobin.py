@@ -1078,7 +1078,7 @@ class OdoobinProcess(OdevFrameworkMixin):
             if choice != "replace":
                 return
 
-        self.database.repository = Repository(repository._repository, repository._organization)
+        self.database.repository = Repository(repository._repository, repository._organization, repository.host)
 
         if repository.branch is not None:
             self.database.branch = Branch(repository.branch, cast(Repository, self.database.repository))

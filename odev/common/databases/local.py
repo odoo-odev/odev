@@ -410,8 +410,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
             if not info or not info.repository:
                 return None
 
-            organization, name = info.repository.split("/", 1)
-            self._repository = Repository(organization=organization, name=name)
+            self._repository = Repository.parse(info.repository)
 
         return self._repository
 
@@ -428,7 +427,7 @@ class LocalDatabase(PostgresConnectorMixin, Database):
         """Link a git repository to this database and save the link in the data store.
 
         The value is normalized through :class:`GitConnector`, so repository names, HTTPS and SSH
-        URLs and paths to local clones are all accepted and stored as `organization/repository`.
+        URLs and paths to local clones are all accepted and stored as the name of the repository.
 
         :param repository: The repository to link, or None to unlink the current one.
         :return: The linked repository, or None if it was unlinked.
@@ -443,7 +442,11 @@ class LocalDatabase(PostgresConnectorMixin, Database):
                 repository.full_name if isinstance(repository, Repository) else repository,
             )
 
-        self.repository = Repository(name=repository._repository, organization=repository._organization)
+        self.repository = Repository(
+            name=repository._repository,
+            organization=repository._organization,
+            host=repository.host,
+        )
         return self._repository
 
     @property

@@ -63,8 +63,8 @@ class PathsSection(Section):
     @property
     def repositories(self) -> Path:
         """Path to the directory where repositories will be saved to and read from.
-        Git repositories will be cloned from GitHub and stored under this directory
-        with the path `<directory>/<organization>/<name>`.
+        Git repositories are cloned under this directory with the path `<directory>/<organization>/<name>`,
+        or `<directory>/<host>/<group>/.../<name>` when they are not hosted on GitHub.
         Defaults to ~/odoo/repositories.
         """
         return Path(cast(str, self.get("repositories", "~/odoo/repositories"))).expanduser()

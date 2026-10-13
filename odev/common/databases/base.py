@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import ClassVar, Literal
 
 from odev.common import string
+from odev.common.connectors.git import GITHUB_DOMAIN, RepositoryReference
 from odev.common.connectors.rpc import RpcConnector
 from odev.common.mixins.framework import OdevFrameworkMixin
 from odev.common.version import OdooVersion
@@ -58,17 +59,35 @@ class Repository:
     """Name of the repository."""
 
     organization: str
-    """Name of the organization owning the repository."""
+    """Name of the organization owning the repository, or of its nested groups as in `group/subgroup`."""
+
+    host: str = GITHUB_DOMAIN
+    """Domain of the host serving the repository."""
 
     @property
     def full_name(self) -> str:
-        """Return the full name of the repository."""
-        return f"{self.organization}/{self.name}"
+        """Return the full name of the repository, starting with its host unless it is hosted on GitHub."""
+        return RepositoryReference(self.host, self.organization, self.name).full_name
 
     @property
     def url(self) -> str:
         """Return the URL of the repository."""
-        return f"https://github.com/{self.full_name}"
+        return f"https://{self.host}/{self.organization}/{self.name}"
+
+    @classmethod
+    def parse(cls, repository: str) -> "Repository | None":
+        """Read a repository out of its full name or of a git URL.
+
+        Args:
+            repository: A repository name or a git URL.
+
+        Returns:
+            The repository, or None if the value does not identify one.
+        """
+        if (reference := RepositoryReference.parse(repository)) is None:
+            return None
+
+        return cls(name=reference.name, organization=reference.namespace, host=reference.host)
 
 
 DatabaseInfoSection = dict[str, str]
