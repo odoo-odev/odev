@@ -54,12 +54,24 @@ The branch ruleset forbids creating, deleting and pushing to `main` and `beta`, 
 be exempted from it. The workflow therefore acts as a GitHub App. This is done once by an administrator of the
 organization:
 
-1. Create a GitHub App owned by the organization with the repository permissions _Contents_, _Pull requests_ and
-   _Issues_ set to _Read and write_. No webhook is needed.
-2. Install the app on the repositories of odev and its plugins.
+1. Create a private GitHub App owned by the organization, without webhook, with the repository permissions:
+    - _Contents_, _Pull requests_, _Issues_ and _Workflows_: _Read and write_ (_Workflows_ is required to push commits
+      changing `.github/workflows`, which releases regularly contain);
+    - _Checks_ and _Commit statuses_: _Read-only_, to verify that the checks of the release pull request passed.
+2. Install the app on the repositories using the release flow only (_Only select repositories_).
 3. Add the app to the bypass list of the ruleset protecting `main` and `beta`, with the mode _Always allow_.
-4. Store the identifier and a private key of the app as organization secrets named `ODEV_RELEASE_APP_ID` and
-   `ODEV_RELEASE_APP_PRIVATE_KEY`.
+4. In each of these repositories, create an environment named `release` whose deployment branches are limited to
+   `main` and `beta`, and store the identifier and a private key of the app in it as the environment secrets
+   `ODEV_RELEASE_APP_ID` and `ODEV_RELEASE_APP_PRIVATE_KEY`. Delete the local copy of the key afterwards.
+
+> [!CAUTION]
+>
+> Never store the key as a repository or organization secret: any workflow pushed on any branch could read it and push
+> to `main` with it, bypassing reviews. Restricted to the `release` environment, it is only available to workflows
+> running from the protected branches.
+
+Environments and rulesets are not available to private repositories on the free plan of the organization, such
+repositories cannot use the release flow.
 
 Until the secrets exist the workflow does nothing but report that it is disabled.
 
