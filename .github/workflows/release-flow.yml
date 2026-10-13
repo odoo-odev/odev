@@ -7,7 +7,8 @@ name: release-flow
 # - release:  the release branch is fast-forwarded to the pre-release branch, tagged and published
 # - retarget: pull requests opened against the release branch are moved to the pre-release branch
 #
-# Branches are protected: pushes are made by a GitHub App listed in the bypass list of the branch ruleset.
+# Branches are protected: pushes are made by a GitHub App listed in the bypass list of the branch ruleset. Its key is
+# stored in the `release` environment, restricted to the protected branches, so that no other branch can use it.
 
 on:
   workflow_call:
@@ -56,6 +57,7 @@ jobs:
   credentials:
     name: credentials
     runs-on: ubuntu-latest
+    environment: release
     if: github.event_name != 'pull_request_target'
     outputs:
       configured: ${{ steps.check.outputs.configured }}
@@ -76,6 +78,7 @@ jobs:
   sync:
     name: sync-${{ inputs.prerelease-branch }}
     runs-on: ubuntu-latest
+    environment: release
     needs: credentials
     if: >-
       needs.credentials.outputs.configured == 'true' && (
@@ -119,6 +122,7 @@ jobs:
   prepare:
     name: prepare-release
     runs-on: ubuntu-latest
+    environment: release
     needs: credentials
     if: >-
       needs.credentials.outputs.configured == 'true'
@@ -166,6 +170,7 @@ jobs:
   release:
     name: release
     runs-on: ubuntu-latest
+    environment: release
     needs: credentials
     if: >-
       needs.credentials.outputs.configured == 'true' && (
