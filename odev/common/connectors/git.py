@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 from git import Git, GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
 
-from odev.common import bash, progress, string
+from odev.common import bash, progress, ssh_hosts, string
 from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
@@ -39,7 +39,7 @@ GIT_FETCH_REMOTE_ORIGIN_ALL = "+refs/heads/*:refs/remotes/origin/*"
 GIT_EXPECTED_REPO_PARTS = 2
 """The number of parts in the name of a repository hosted on GitHub (organization/repository)."""
 
-GIT_SCP_URL_PATTERN = re.compile(r"^(?:[^@/\s]+@)?(?P<host>[^:/\s]+):(?P<path>[^/\s]\S*)$")
+GIT_SCP_URL_PATTERN = ssh_hosts.SCP_URL_PATTERN
 """An SSH URL in the scp-like syntax git accepts, as in `git@github.com:organization/repository.git`."""
 
 GIT_WEB_PATH_SEPARATOR = "-"
@@ -786,6 +786,8 @@ class GitConnector(GithubConnector):
         if detached:
             bash.detached(f"cd {self.path} && git fetch")
         else:
+            self._ensure_host_trusted()
+
             with progress.spinner(f"Fetching changes in repository {self.name!r}"):
                 self.repository.git.fetch("--all")
 
@@ -815,6 +817,8 @@ class GitConnector(GithubConnector):
         logger.debug(
             f"Cloning repository {self.name!r} to {self.path}" + (f" on revision {revision!r}" if revision else "")
         )
+
+        self._ensure_host_trusted()
 
         try:
             self._git_progress(
@@ -851,6 +855,8 @@ class GitConnector(GithubConnector):
         self.check_requirements()
 
         if force or console.confirm("Pull changes now?", default=True):
+            self._ensure_host_trusted()
+
             try:
                 with Stash(self.repository):
                     self._git_progress(self.remote.pull, ff_only=True)
@@ -888,6 +894,8 @@ class GitConnector(GithubConnector):
             if error.stderr:
                 if "error: pathspec" in error.stderr:
                     logger.warning(f"Git ref {revision!r} not found in repository {self.name!r}")
+
+                    self._ensure_host_trusted()
 
                     with progress.spinner(f"Fetching revision {revision!r} from remote, this might take a while"):
                         self._set_remote_origin_fetch_config()
@@ -955,6 +963,38 @@ class GitConnector(GithubConnector):
             logger.debug(f"Repository {self.name!r} requirements have changed since last version")
 
         self._requirements_changed = bool(diff)
+
+    def _transport_url(self) -> str | None:
+        """Read the URL git connects to, once it has applied the `insteadOf` rewrites of its configuration.
+
+        Returns:
+            The URL, or None if git runs its own ssh command, whose options odev cannot see.
+        """
+        git = self.repository.git if self.repository is not None else Git()
+
+        try:
+            if git.config("--get", "core.sshCommand"):
+                return None
+        except GitCommandError:
+            logger.debug("No ssh command set in the configuration of git")
+
+        try:
+            return cast(str, git.ls_remote("--get-url", self.remote_url)).strip()
+        except GitCommandError:
+            return self.remote_url
+
+    def _ensure_host_trusted(self) -> None:
+        """Settle whether to trust the SSH host of the remote while the terminal is still free to ask."""
+        if (url := self._transport_url()) is None:
+            return
+
+        try:
+            ssh_hosts.ensure_trusted(url)
+        except ssh_hosts.UntrustedHostError as error:
+            raise ConnectorError(
+                f"Cannot reach repository {self.name!r}: {error}, add it to your known hosts to proceed",
+                self,
+            ) from error
 
     def _git_progress(self, operation: Callable, *args, **kwargs):
         """Display a progress bar when performing time-consuming git operations."""
@@ -1057,6 +1097,8 @@ class GitConnector(GithubConnector):
             shutil.rmtree(path, ignore_errors=True)
 
         message = f"worktree {path.parent.name!r} for {self.name!r} in version {revision!r}"
+
+        self._ensure_host_trusted()
 
         with spinner(f"Creating {message}"):
             logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {revision!r}")
@@ -1270,6 +1312,8 @@ class GitConnector(GithubConnector):
                     if not console.confirm("Pull changes now?", default=True):
                         continue
 
+                self._ensure_host_trusted()
+
                 with Stash(worktree.repository), progress.spinner(f"Pulling changes in worktree {worktree.path!s}"):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
 
@@ -1290,6 +1334,7 @@ class GitConnector(GithubConnector):
         :return: A list of all remote branches of the repository.
         :rtype: List[str]
         """
+        self._ensure_host_trusted()
         references = Git().ls_remote("--heads", self.remote_url).splitlines()
 
         return [reference.split("refs/heads/", 1)[1] for reference in references if "refs/heads/" in reference]
