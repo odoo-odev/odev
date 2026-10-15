@@ -29,6 +29,9 @@ INTERRUPT_MESSAGE = "interrupted"
 SIGNAL_INSTALLER = "odev.common.signal_handling.signal"
 """Where odev installs the signal handlers it uses to cancel the operation it is running."""
 
+SSH_OPTIONS_RESOLVER = "odev.common.ssh_hosts.resolve_options"
+"""Where odev reads the ssh configuration of the user to tell whether a host is known."""
+
 
 class InterruptRecorder:
     """Signal handler noting an interrupt for the session, then handing it over to odev.
@@ -65,6 +68,11 @@ def pytest_configure(config: pytest.Config) -> None:
     installer = patch(SIGNAL_INSTALLER, new=install_handler)
     installer.start()
     config.add_cleanup(installer.stop)
+
+    # The known hosts of whoever runs the suite must neither decide its outcome nor be written to
+    resolver = patch(SSH_OPTIONS_RESOLVER, return_value=None)
+    resolver.start()
+    config.add_cleanup(resolver.stop)
 
     detach_odev_log_handler()
 
