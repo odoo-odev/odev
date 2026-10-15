@@ -1,10 +1,17 @@
+import os
 from argparse import Namespace
-from unittest.mock import MagicMock
+from datetime import datetime, timedelta
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from git import Repo
 
 from odev.commands.git.pull import PullCommand
 from odev.commands.scripts.assets import AssetsCommand
 from odev.commands.scripts.pathfinder import PathfinderCommand
 from odev.common.connectors.git import GitConnector
+from odev.common.mixins import ListLocalDatabasesMixin
+from odev.common.string import suid
 from odev.scripts.assets import regenerate_assets
 
 from tests.fixtures import OdevCommandTestCase, OdevTestCase
@@ -55,6 +62,109 @@ class TestGitCommands(OdevCommandTestCase):
 
         self.assertEqual(titled, ["17.0"])
         self.assertEqual(printed, [""])
+
+
+class TestRepositoriesCommand(OdevCommandTestCase):
+    def setUp(self):
+        super().setUp()
+        self.odev.config.paths.repositories = self.run_path / suid() / "repositories"
+
+    def test_01_list_status(self):
+        """Run the command, list the repositories with their branch, changes, remote status and linked databases."""
+        origin = self.__repository("test/origin", days=10)
+        clone = Repo.clone_from(origin.working_dir, self.odev.config.paths.repositories / "test/clone")
+        self.__commit(clone, days=1)
+        dirty = self.__repository("test/dirty", days=5)
+        (Path(dirty.working_dir) / "untracked.txt").write_text("untracked")
+        Repo.init(self.odev.config.paths.repositories / "test/empty")
+        (self.odev.config.paths.repositories / "test/not-a-repository").mkdir()
+
+        with (
+            self.patch(self.odev.store.databases, "linked_repositories", {"test/clone": ["linked_db", "deleted_db"]}),
+            self.patch(ListLocalDatabasesMixin, "list_databases", ["linked_db"]),
+        ):
+            stdout, _ = self.__dispatch()
+
+        self.assertRegex(stdout, r"test/clone\s+main\s+↑1\s+1 day ago\s+linked_db\s")
+        self.assertRegex(stdout, r"test/dirty\s+main\s+1\s+no upstream\s+5 days ago")
+        self.assertRegex(stdout, r"test/empty\s+<empty>")
+        self.assertNotIn("deleted_db", stdout)
+        self.assertNotIn("not-a-repository", stdout)
+        self.assertIn("4 repositories", stdout)
+
+    def test_02_names_only_expression(self):
+        """Run the command with `--names-only` and `--expression`, print the names of the matching repositories."""
+        for name in ("test/first", "test/second", "other/first"):
+            self.__repository(name)
+
+        stdout, _ = self.__dispatch("--names-only", "--expression", "first")
+        self.assertIn("other/first\ntest/first\n", stdout)
+        self.assertNotIn("test/second", stdout)
+
+    def test_03_no_result(self):
+        """Run the command when no repository matches, print an error message."""
+        self.__repository("test/first")
+        _, stderr = self.__dispatch("--expression", "missing")
+        self.assertIn("No repository found", stderr)
+        self.assertIn("matching pattern 'missing'", stderr)
+
+    def test_04_sort_by_date(self):
+        """Run the command sorted by date, order the repositories from the oldest to the latest commit."""
+        self.__repository("test/recent", days=1)
+        self.__repository("test/old", days=30)
+        Repo.init(self.odev.config.paths.repositories / "test/empty")
+
+        stdout, _ = self.__dispatch("--sort", "date")
+        names = ["test/empty", "test/old", "test/recent"]
+        self.assertEqual(sorted(names, key=stdout.index), names)
+
+    def test_05_nested_repository(self):
+        """Run the command with a repository cloned from another host, list it under its full name and link it."""
+        self.__repository("gitlab.com/group/subgroup/project")
+        Repo.init(self.odev.config.paths.repositories / "gitlab.com/group/subgroup/project/nested")
+
+        with (
+            self.patch(
+                self.odev.store.databases, "linked_repositories", {"gitlab.com/group/subgroup/project": ["linked_db"]}
+            ),
+            self.patch(ListLocalDatabasesMixin, "list_databases", ["linked_db"]),
+        ):
+            stdout, _ = self.__dispatch()
+
+        self.assertRegex(stdout, r"gitlab.com/group/subgroup/project\s+main\s.*linked_db")
+        self.assertNotIn("project/nested", stdout)
+        self.assertIn("1 repositories", stdout)
+
+    def test_06_behind_and_detached(self):
+        """Run the command, show the commits to pull and the commit checked out on a detached head."""
+        origin = self.__repository("test/origin", days=10)
+        clone = Repo.clone_from(origin.working_dir, self.odev.config.paths.repositories / "test/clone")
+        self.__commit(origin, days=1)
+        clone.remotes.origin.fetch()
+        origin.git.checkout(origin.head.commit.hexsha)
+
+        stdout, _ = self.__dispatch()
+        self.assertRegex(stdout, r"test/clone\s+main\s+↓1\s")
+        self.assertRegex(stdout, rf"test/origin\s+<detached> {origin.head.commit.hexsha[:8]}\s")
+
+    def __dispatch(self, *arguments: str) -> tuple[str, str]:
+        """Run the command on a wide terminal so table columns are not cropped."""
+        with patch.dict(os.environ, {"COLUMNS": "200"}):
+            return self.dispatch_command("repos", *arguments)
+
+    def __repository(self, name: str, days: int = 1) -> Repo:
+        """Create a git repository under the repositories path with a single commit."""
+        repository = Repo.init(self.odev.config.paths.repositories / name, initial_branch="main")
+        self.__commit(repository, days)
+        return repository
+
+    def __commit(self, repository: Repo, days: int):
+        """Commit a new file in a repository, dated some days ago."""
+        path = Path(repository.working_dir) / f"file_{len(list(Path(repository.working_dir).iterdir()))}.txt"
+        path.write_text(name := path.name)
+        repository.index.add([name])
+        date = datetime.now().astimezone() - timedelta(days=days, minutes=1)
+        repository.index.commit(f"Add {name}", author_date=date, commit_date=date)
 
 
 class TestScriptCommands(OdevTestCase):
