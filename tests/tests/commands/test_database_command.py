@@ -1,6 +1,9 @@
 """Tests for the `odev database` command, which edits a database's parameters without starting it."""
 
+from typing import cast
+
 from odev.common.databases import LocalDatabase, Repository
+from odev.common.store.tables.databases import DatabaseInfo
 
 from tests.fixtures import OdevCommandTestCase
 
@@ -37,8 +40,8 @@ class TestDatabaseParametersCommand(OdevCommandTestCase):
         self.assertEqual(self.stored().repository, "odoo-ps/psbe-project")
 
     def test_set_repository_normalizes_urls(self):
-        """A URL must be stored as `organization/repository`: the stored value is split on the
-        first slash when read back, so storing a URL yields a nonsensical repository.
+        """A URL to GitHub must be stored as `organization/repository`, the name every stored link
+        and every plugin already uses.
         """
         self.dispatch_command("database", self.database_name, "--set-repo", "https://github.com/odoo-ps/psbe-project")
         self.assertEqual(self.stored().repository, "odoo-ps/psbe-project")
@@ -129,3 +132,17 @@ class TestDatabaseLinkRepository(OdevCommandTestCase):
     def test_none_unlinks(self):
         self.database.link_repository("odoo-ps/psbe-project")
         self.assertIsNone(self.database.link_repository(None))
+
+    def test_nested_repository_on_another_host_reads_back(self):
+        """The host and every group must survive the data store, or the link resolves to GitHub."""
+        database = cast(LocalDatabase, self.database)
+        linked = database.link_repository("git@gitlab.com:group/subgroup/project.git")
+        self.assertEqual(linked, Repository("project", "group/subgroup", "gitlab.com"))
+
+        stored = cast(DatabaseInfo, self.odev.store.databases.get(database))
+        self.assertEqual(stored.repository, "gitlab.com/group/subgroup/project")
+
+        database._repository = None
+
+        with self.patch_property(LocalDatabase, "is_odoo", value=True):
+            self.assertEqual(database.repository, linked)

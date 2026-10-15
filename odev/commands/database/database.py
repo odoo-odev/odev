@@ -22,7 +22,8 @@ class DatabaseSetCommand(LocalDatabaseCommand, GitCommand):
     set_repository = args.String(
         aliases=["--set-repo"],
         description="""Change the repository linked to the database. Accepts a repository name in
-        the format <organization>/<repository>, a git URL or the path to a local clone.
+        the format <organization>/<repository>, or <host>/<group>/.../<project> when it is not hosted on GitHub,
+        a git URL or the path to a local clone.
         """,
         metavar="REPOSITORY",
     )
@@ -141,7 +142,7 @@ class DatabaseSetCommand(LocalDatabaseCommand, GitCommand):
         if not connector.exists and self.console.confirm(
             f"Repository {connector.name!r} not found locally, clone now?"
         ):
-            self.odev.run_command("clone", connector.name)
+            self.odev.run_command("clone", connector.remote_url)
 
         linked = self._database.link_repository(connector)
         logger.info(f"Repository set to {linked.full_name!r}")
