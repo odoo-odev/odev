@@ -14,7 +14,13 @@ class TestQuickStartLinksRepository(OdevTestCase):
     def make_command(self, repository: Repository | None) -> QuickStartCommand:
         command = QuickStartCommand.__new__(QuickStartCommand)
         command._framework = self.odev
-        command.args = Namespace(branch=None, version=None, name="quickstart-target", filestore=False)
+        command.args = Namespace(
+            branch=None,
+            version=None,
+            name="quickstart-target",
+            filestore=False,
+            toggle_clone_repo=False,
+        )
 
         source = MagicMock()
         source.name = "quickstart-source"

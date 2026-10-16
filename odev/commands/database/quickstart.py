@@ -4,6 +4,10 @@ from typing import Any
 from odev.common import args
 from odev.common.commands import DatabaseCommand
 from odev.common.databases import LocalDatabase, Repository
+from odev.common.logging import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class QuickStartCommand(DatabaseCommand):
@@ -37,6 +41,13 @@ class QuickStartCommand(DatabaseCommand):
         aliases=["-F", "--filestore"],
         description="Include the filestore when downloading a backup of the database.",
     )
+    toggle_clone_repo = args.Flag(
+        aliases=["-C", "--toggle_clone_repo"],
+        description="""Toggle to clone the repository containing code customization for the selected database.
+        If not given, default to `quickstart should_clone_repo` configuration value (`True` if unset).
+        If given, negate the configuration value
+        """,
+    )
 
     _database_allowed_platforms = []
 
@@ -51,7 +62,10 @@ class QuickStartCommand(DatabaseCommand):
         if self.args.version:
             self.odev.run_command("create", "--version", self.args.version, database=self._database)
         else:
-            self.odev.run_command("clone", *passthrough_args, database=self._database)
+            if self.args.toggle_clone_repo ^ self.odev.config.quickstart.should_clone_repo:
+                self.odev.run_command("clone", *passthrough_args, database=self._database)
+            else:
+                logger.info("Skipping repository cloning")
             dumped = self.odev.run_command(
                 "dump",
                 *(passthrough_args + (["--filestore"] if self.args.filestore else [])),
