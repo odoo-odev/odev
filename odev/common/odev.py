@@ -787,6 +787,8 @@ class Odev(Generic[CommandType]):
         sys.modules[module_name] = module
         setattr(sys.modules["odev.plugins"], module_basename, module)
 
+        self._import_plugin_common_modules(plugin)
+
     def _install_missing_plugin_requirements(self) -> bool:
         """Install missing python packages from the requirements of all enabled plugins.
 
@@ -955,6 +957,23 @@ class Odev(Generic[CommandType]):
             {plugin.name: plugin.manifest["version"] for plugin in self.plugins},
             sha256("\n".join(sorted(modules)).encode()).hexdigest(),
         ]
+
+    def _import_plugin_common_modules(self, plugin) -> None:
+        """Import every submodule under a plugin's `common/` directory so their
+        import-time side effects (subclass registration, decorators, patches) run.
+        """
+        common_path = plugin.path / "common"
+        if not common_path.is_dir():
+            return
+
+        for module_info in pkgutil.iter_modules([common_path.as_posix()]):
+            module_name = f"odev.plugins.{plugin.path.name}.common.{module_info.name}"
+            if module_name in sys.modules:
+                continue
+            try:
+                importlib.import_module(module_name)
+            except ImportError as error:
+                logger.debug(f"Could not import common module {module_info.name} from plugin {plugin.name!r}: {error}")
 
     def _load_config(self) -> None:
         """Reload the configuration file."""
