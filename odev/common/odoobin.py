@@ -948,6 +948,26 @@ class OdoobinProcess(OdevFrameworkMixin):
         return sorted(path for path in candidates if cls.check_addons_path(path))
 
     @classmethod
+    def list_addons(cls, paths: Sequence[Path]) -> list[str]:
+        """List the names of the Odoo modules found in the given paths.
+
+        Modules are looked up recursively, the same way as addons paths are expanded, so that repositories
+        keeping their modules in subdirectories or in git submodules are handled as well.
+
+        :param paths: Paths to search for modules.
+        :return: Sorted list of unique module names.
+        :rtype: List[str]
+        """
+        return sorted(
+            {
+                addon.name
+                for addons_path in cls.expand_addons_paths(paths)
+                for addon in addons_path.iterdir()
+                if cls.check_addon_path(addon) and (addon / "__init__.py").is_file()
+            }
+        )
+
+    @classmethod
     def check_addon_path(cls, path: Path) -> bool:
         """Return whether the given path is a valid Odoo addon.
 
