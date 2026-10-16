@@ -1,7 +1,11 @@
 import shutil
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
+from odev.common import string
+from odev.common.commands.odoobin import OdoobinCommand
 from odev.common.databases import Repository
 from odev.common.odoobin import OdoobinProcess
 
@@ -114,3 +118,67 @@ class TestForcedEdition(OdevTestCase):
     def test_enterprise_forced_on_a_community_database(self):
         process = self.make_process("community").with_edition("enterprise")
         self.assertIn("odoo/enterprise", self.repository_names(process))
+
+
+class LogFormatCommand(OdoobinCommand):
+    """Concrete odoo-bin command, only used to reach the log formatting methods."""
+
+    def run(self):
+        pass
+
+
+class TestWerkzeugLogFormat(OdevTestCase):
+    """Werkzeug request lines are pretty-printed with or without the query stats Odoo appends to them."""
+
+    LOG_PREFIX = "2026-10-16 09:18:02,123 4242 INFO db werkzeug: 127.0.0.1 - - [16/Oct/2026 09:18:02] "
+
+    def setUp(self):
+        super().setUp()
+        self.printed: list[str] = []
+        self.command = LogFormatCommand.__new__(LogFormatCommand)
+        self.command.args = SimpleNamespace(pretty=True)  # type: ignore [assignment]
+        print_patch = patch.object(
+            self.command, "print", side_effect=lambda renderable, **_: self.printed.append(renderable)
+        )
+        print_patch.start()
+        self.addCleanup(print_patch.stop)
+
+    def format_request(self, request: str) -> str:
+        self.command.odoobin_progress(self.LOG_PREFIX + request)
+
+        return self.printed[-1]
+
+    def assert_request_without_timings(self, formatted: str, request: str, code: str) -> None:
+        self.assertTrue(formatted.endswith(f"{request} ({code})"), formatted)
+        self.assertNotIn("SQL:", formatted)
+        self.assertNotIn("Python:", formatted)
+
+    def test_request_with_stats_shows_timings(self):
+        # Exact markup on purpose: lines with stats must print as they did before stats became optional.
+        self.assertEqual(
+            self.format_request('"GET /web/login HTTP/1.1" 200 - 262 0.105 0.303'),
+            "[dim]09:18:02,123[/dim] [bold #98c379]INFO[/bold #98c379] [#af5faf]db[/#af5faf] [dim]werkzeug[/dim]: "
+            "[dim]127.0.0.1[/dim] [dim]-[/dim] GET /web/login ([dim]200[/dim]) [dim]-[/dim] "
+            "[#d19a66]0.408[/#d19a66] [dim][SQL: 0.105 (262 queries), Python: [#d19a66 dim]0.303[/#d19a66 dim]][/dim]",
+        )
+
+    def test_request_without_stats_omits_timings(self):
+        formatted = self.format_request('"GET /web/static/src/img/favicon.ico HTTP/1.1" 200 - - - -')
+        self.assert_request_without_timings(
+            formatted, "GET /web/static/src/img/favicon.ico", string.stylize("200", "color.black")
+        )
+
+    def test_not_found_without_stats_omits_timings(self):
+        formatted = self.format_request('"GET /web/missing HTTP/1.1" 404 - - - -')
+        self.assert_request_without_timings(formatted, "GET /web/missing", string.stylize("404", "color.yellow"))
+
+    def test_server_error_without_stats_omits_timings(self):
+        formatted = self.format_request('"POST /web/dataset/call_kw HTTP/1.1" 500 - - - -')
+        self.assert_request_without_timings(formatted, "POST /web/dataset/call_kw", string.stylize("500", "color.red"))
+
+    def test_no_pretty_prints_raw_line(self):
+        line = self.LOG_PREFIX + '"GET /web/static/src/img/favicon.ico HTTP/1.1" 200 - - - -'
+        self.command.args = SimpleNamespace(pretty=False)  # type: ignore [assignment]
+        self.command.odoobin_progress(line)
+
+        self.assertEqual(self.printed, [line])
