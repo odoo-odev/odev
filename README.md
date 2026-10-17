@@ -39,6 +39,10 @@ Make sure `git` is properly setup with SSH key authentication before using comma
 the Odoo [Community](https://github.com/odoo/odoo) and [Enterprise](https://github.com/odoo/enterprise) repositories
 to pull sources when required.
 
+The first time a repository is hosted somewhere SSH has never connected to, Odev shows the fingerprints of the keys
+that host presents and asks whether to trust it. Answering yes records the keys in your `known_hosts` file; answering
+no, or running with prompts bypassed, stops before anything is downloaded.
+
 ## Installation
 
 Clone the [odev repository](https://github.com/odoo-odev/odev) to your computer and navigate to the `odev` folder:

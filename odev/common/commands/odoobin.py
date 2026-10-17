@@ -255,26 +255,29 @@ class OdoobinCommand(LocalDatabaseCommand, ABC):
                 case _:
                     code = string.stylize(code, "color.black")
 
-            time_query_num = float(http_match.group("time_query"))
-            time_python_num = float(http_match.group("time_remaining"))
-            time_total_num = time_query_num + time_python_num
-
-            thresholds = {0.3: "color.yellow", 1.0: "color.red"}
-            time_total = self._colorize_duration_by_threshold(time_total_num, thresholds)
-
-            thresholds = {key: f"{value} dim" for key, value in thresholds.items()}
-            time_query = self._colorize_duration_by_threshold(time_query_num, thresholds)
-            time_python = self._colorize_duration_by_threshold(time_python_num, thresholds)
-
             description = (
                 f"{string.stylize(http_match.group('ip'), 'color.black')} {dash} "
-                f"{http_match.group('verb')} {http_match.group('url')} ({code}) {dash} "
-                f"{time_total} "
-                + string.stylize(
+                f"{http_match.group('verb')} {http_match.group('url')} ({code})"
+            )
+
+            # Odoo logs `- - -` when the request thread carries no query counters; the regex then leaves
+            # the whole stats group unset.
+            if (time_query_raw := http_match.group("time_query")) is not None:
+                time_query_num = float(time_query_raw)
+                time_python_num = float(http_match.group("time_remaining"))
+                time_total_num = time_query_num + time_python_num
+
+                thresholds = {0.3: "color.yellow", 1.0: "color.red"}
+                time_total = self._colorize_duration_by_threshold(time_total_num, thresholds)
+
+                thresholds = {key: f"{value} dim" for key, value in thresholds.items()}
+                time_query = self._colorize_duration_by_threshold(time_query_num, thresholds)
+                time_python = self._colorize_duration_by_threshold(time_python_num, thresholds)
+
+                description += f" {dash} {time_total} " + string.stylize(
                     f"[SQL: {time_query} ({http_match.group('count_query')} queries), Python: {time_python}]",
                     "color.black",
                 )
-            )
 
         self.print(
             f"{string.stylize(match.group('time'), 'color.black')} "

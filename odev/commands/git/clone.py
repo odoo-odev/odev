@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class CloneCommand(DatabaseOrRepositoryCommand):
-    """Clone a GitHub repository locally, under the path managed by odev. A database name can be passed instead
+    """Clone a git repository locally, under the path managed by odev. A database name can be passed instead
     of a repository address to find and clone the repository linked to that database.
     """
 

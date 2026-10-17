@@ -630,7 +630,7 @@ class Odev(Generic[CommandType]):
                         ("review", "Review databases and whitelist some of them"),
                         ("delete", "Delete all databases"),
                     ],
-                    default="Skip",
+                    default="skip",
                 )
 
                 if action == "skip":
@@ -928,7 +928,7 @@ class Odev(Generic[CommandType]):
         try:
             default_branch = git.default_branch
         except Exception as error:  # noqa: BLE001
-            # Resolving the default branch goes through the Github API, which the recovery path cannot depend on.
+            # Resolving the default branch may ask the remote, which the recovery path cannot depend on.
             logger.debug(f"Could not resolve the default branch of {git.name!r}: {error}")
 
         return {branch for branch in (default_branch, "main", "master", "beta") if branch}

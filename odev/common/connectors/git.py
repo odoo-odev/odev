@@ -9,13 +9,14 @@ from types import FrameType
 from typing import (
     TYPE_CHECKING,
     ClassVar,
+    NamedTuple,
     cast,
 )
 from urllib.parse import urlparse
 
 from git import Git, GitCommandError, InvalidGitRepositoryError, NoSuchPathError, Remote, RemoteReference, Repo
 
-from odev.common import bash, progress, string
+from odev.common import bash, progress, ssh_hosts, string
 from odev.common.connectors.base import Connector
 from odev.common.console import console
 from odev.common.errors import ConnectorError
@@ -30,13 +31,22 @@ if TYPE_CHECKING:
 
 
 GITHUB_DOMAIN = "github.com"
-"""The domain of the GitHub API."""
+"""The domain of GitHub, the host of every repository named without one."""
 
 GIT_FETCH_REMOTE_ORIGIN_ALL = "+refs/heads/*:refs/remotes/origin/*"
 """The git config value to fetch all branches from the remote."""
 
 GIT_EXPECTED_REPO_PARTS = 2
-"""The expected number of parts in a git repository name (organization/repository)."""
+"""The number of parts in the name of a repository hosted on GitHub (organization/repository)."""
+
+GIT_SCP_URL_PATTERN = ssh_hosts.SCP_URL_PATTERN
+"""An SSH URL in the scp-like syntax git accepts, as in `git@github.com:organization/repository.git`."""
+
+GIT_WEB_PATH_SEPARATOR = "-"
+"""The path segment GitLab puts between a project and its pages, as in `group/project/-/tree/main`."""
+
+GIT_LOCAL_PATH_PREFIXES = ("/", ".", "~")
+"""What a remote URL starts with when it points to a directory rather than to a host."""
 
 GITHUB_SEARCH_DEFAULT_LIMIT = 20
 """The default maximum number of repositories returned by a search on the GitHub API."""
@@ -48,6 +58,77 @@ GIT_OPCODE_DONE = 66
 
 
 logger = logging.getLogger(__name__)
+
+
+class RepositoryReference(NamedTuple):
+    """What identifies a git repository: the host serving it and its path on that host."""
+
+    host: str
+    """The domain of the host, without port."""
+
+    namespace: str
+    """The organization or nested groups owning the repository, as in `group/subgroup`."""
+
+    name: str
+    """The name of the repository, without its namespace."""
+
+    @property
+    def full_name(self) -> str:
+        """The name `parse` reads back to the same reference.
+
+        Returns:
+            `namespace/name` on GitHub, `host/namespace/name` anywhere else.
+        """
+        if self.host == GITHUB_DOMAIN:
+            return f"{self.namespace}/{self.name}"
+
+        return f"{self.host}/{self.namespace}/{self.name}"
+
+    @classmethod
+    def parse(cls, repository: str) -> "RepositoryReference | None":
+        """Read a reference out of a repository name or git URL.
+
+        A name of two parts is hosted on GitHub. GitHub has no nested namespaces, so a longer
+        name starts with its host, a domain, as in `gitlab.com/group/subgroup/project`.
+
+        Args:
+            repository: A repository name or a git URL, over HTTPS or SSH.
+
+        Returns:
+            The reference, or None if the value does not identify a repository.
+        """
+        repository = repository.strip()
+        host: str | None = None
+        location = repository
+
+        if "://" in repository:
+            url = urlparse(repository)
+            host, location = (url.hostname if url.scheme != "file" else None), url.path
+        elif match := GIT_SCP_URL_PATTERN.match(repository):
+            host, location = match["host"], match["path"]
+
+        parts = [part for part in location.rstrip("/").removesuffix(".git").split("/") if part]
+
+        if GIT_WEB_PATH_SEPARATOR in parts:
+            parts = parts[: parts.index(GIT_WEB_PATH_SEPARATOR)]
+
+        if host is None:
+            if repository.startswith(GIT_LOCAL_PATH_PREFIXES) or "://" in repository:
+                # A directory says nothing of the host, keep what GitHub would name it
+                parts = parts[-GIT_EXPECTED_REPO_PARTS:]
+            elif len(parts) > GIT_EXPECTED_REPO_PARTS and "." in parts[0]:
+                host, *parts = parts
+
+        host = (host or GITHUB_DOMAIN).lower()
+
+        if host.endswith(f".{GITHUB_DOMAIN}"):
+            # GitHub answers on subdomains too, as `ssh.github.com` does for SSH over port 443
+            host = GITHUB_DOMAIN
+
+        if len(parts) < GIT_EXPECTED_REPO_PARTS or (host == GITHUB_DOMAIN and len(parts) > GIT_EXPECTED_REPO_PARTS):
+            return None
+
+        return cls(host=host, namespace="/".join(parts[:-1]), name=parts[-1])
 
 
 class Stash:
@@ -407,20 +488,27 @@ class GithubConnector(Connector):
 
 
 class GitConnector(GithubConnector):
-    """A class for connecting to a git repository hosted on GitHub."""
+    """A class for connecting to a git repository, hosted on GitHub unless it names another host."""
+
+    _host: str
+    """The domain of the host serving the repository."""
 
     _organization: str
-    """The organization to which the repository belongs."""
+    """The organization or nested groups to which the repository belongs."""
 
     _repository: str
     """The name of repository to connect to."""
+
+    _ssh_url: str | None = None
+    """The `ssh://` URL the connector was created with: it may carry a port or a user the name cannot."""
 
     _requirements_changed: bool = False
     """Whether the requirements.txt file has been modified since the last pull."""
 
     def __init__(self, repo: str, path: Path | None = None):
-        """Initialize the Github connector.
-        :param repo: The repository to connect to in the format `organization/repository`.
+        """Initialize the git connector.
+        :param repo: The repository to connect to, as a name, a git URL or the path to a local clone.
+            A name is `organization/repository` on GitHub, `host/group/.../project` on another host.
         :param path: The path to the repository, inferred from the Odev config if omitted.
         """
         super().__init__()
@@ -430,12 +518,17 @@ class GitConnector(GithubConnector):
             path = Path(repo)
 
         self._path: Path | None = path
-        name: tuple[str, str] | None = None
+        reference: RepositoryReference | None = None
 
         if path is not None and path.joinpath(".git").exists():
-            name = self._name_from_remote(path)
+            reference = self._name_from_remote(path)
 
-        self._organization, self._repository = name or self._name_from_string(self._fallback_name(repo, path))
+        if repo.strip().startswith("ssh://"):
+            self._ssh_url = repo.strip()
+
+        self._host, self._organization, self._repository = reference or self._name_from_string(
+            self._fallback_name(repo, path)
+        )
 
     @staticmethod
     def _fallback_name(repo: str, path: Path | None) -> str:
@@ -450,12 +543,12 @@ class GitConnector(GithubConnector):
         return repo
 
     @classmethod
-    def _name_from_remote(cls, path: Path) -> tuple[str, str] | None:
-        """Read the organization and repository names from the remote of a local git repository.
+    def _name_from_remote(cls, path: Path) -> RepositoryReference | None:
+        """Read the host and name of a local git repository from its remote.
         The remote is the only reliable source of truth: the directory a repository is cloned to
         may not follow the `<repositories>/<organization>/<repository>` convention.
         :param path: The path to the local repository.
-        :return: The organization and repository names, or None if they cannot be determined.
+        :return: The reference to the repository, or None if it cannot be determined.
         """
         try:
             remotes = list(Repo(path).remotes)
@@ -469,28 +562,29 @@ class GitConnector(GithubConnector):
             logger.debug(f"No git remote configured for the repository at {path.as_posix()}")
             return None
 
-        parts = remote.url.removesuffix(".git").rstrip("/").split("/")
+        reference = RepositoryReference.parse(remote.url)
 
-        if len(parts) < GIT_EXPECTED_REPO_PARTS:
+        if reference is None:
             logger.debug(f"Unexpected git remote URL {remote.url!r} for the repository at {path.as_posix()}")
             return None
 
-        organization, repository = parts[-2:]
-        return organization.split(":")[-1], repository
+        layout = (reference.host, *reference.namespace.split("/"), reference.name)
 
-    def _name_from_string(self, repo: str) -> tuple[str, str]:
-        """Parse the organization and repository names out of a repository name or git URL.
-        :param repo: The repository in the format `organization/repository` or a valid git URL.
-        :return: The organization and repository names.
+        if reference.host != GITHUB_DOMAIN and path.parts[-len(layout) :] != layout:
+            # The host of a remote may be an alias of GitHub set in the SSH config. Only a clone
+            # stored as `<host>/<group>/.../<project>` is known to belong to another host.
+            return RepositoryReference(GITHUB_DOMAIN, reference.namespace.rsplit("/", 1)[-1], reference.name)
+
+        return reference
+
+    def _name_from_string(self, repo: str) -> RepositoryReference:
+        """Parse the host and name of a repository out of a repository name or git URL.
+        :param repo: The repository name or a valid git URL.
+        :return: The reference to the repository.
         """
-        if "@" in repo and ":" in repo:
-            # Assume the repo is in the format git@github.com:organization/repository.git
-            repo = repo.split(":")[-1]
+        reference = RepositoryReference.parse(repo)
 
-        repo = urlparse(repo).path.removeprefix("/").removesuffix(".git")
-        repo_values = repo.split("/")
-
-        if len(repo_values) != GIT_EXPECTED_REPO_PARTS:
+        if reference is None:
             raise ConnectorError(
                 "Invalid repository format: expected a valid git URL or repository name in one of the formats:\n"
                 + string.join_bullet(
@@ -500,14 +594,16 @@ class GitConnector(GithubConnector):
                             "organization/repository",
                             "https://github.com/organization/repository",
                             "git@github.com:organization/repository.git",
+                            "gitlab.com/group/subgroup/project",
+                            "https://gitlab.com/group/subgroup/project",
+                            "git@gitlab.com:group/subgroup/project.git",
                         )
                     ],
                 ),
                 self,
             )
 
-        organization, repository = repo_values
-        return organization, repository
+        return reference
 
     def __repr__(self) -> str:
         return f"GitConnector({self.name!r})"
@@ -519,9 +615,14 @@ class GitConnector(GithubConnector):
         return hash(self.name)
 
     @property
+    def host(self) -> str:
+        """The domain of the host serving the repository."""
+        return self._host
+
+    @property
     def name(self) -> str:
-        """The name of the repository."""
-        return f"{self._organization}/{self._repository}"
+        """The name of the repository, starting with its host unless it is hosted on GitHub."""
+        return RepositoryReference(self._host, self._organization, self._repository).full_name
 
     @property
     def path(self) -> Path:
@@ -536,12 +637,20 @@ class GitConnector(GithubConnector):
     @property
     def url(self) -> str:
         """The URL to the repository."""
-        return f"https://{GITHUB_DOMAIN}/{self.name}"
+        return f"https://{self._host}/{self._organization}/{self._repository}"
 
     @property
     def ssh_url(self) -> str:
         """The SSH URL to the repository."""
-        return f"git@{GITHUB_DOMAIN}:{self.name}.git"
+        return f"git@{self._host}:{self._organization}/{self._repository}.git"
+
+    @property
+    def remote_url(self) -> str:
+        """The URL git reaches the repository at: its remote once cloned, an SSH URL before that."""
+        if self.remote is not None:
+            return self.remote.url
+
+        return self._ssh_url or self.ssh_url
 
     @property
     def repository(self) -> Repo | None:
@@ -588,8 +697,36 @@ class GitConnector(GithubConnector):
 
             return self.repository.heads[0].name.split("/")[-1]
 
-        with self:
-            return cast("Github", self._connection).get_repo(self.name).default_branch
+        return self._remote_default_branch(self.repository, self.remote.name)
+
+    def _remote_default_branch(self, repository: Repo, remote: str) -> str | None:
+        """Read the branch a remote points its HEAD to, from the local references when they record it.
+
+        Args:
+            repository: The local repository.
+            remote: The name of the remote.
+
+        Returns:
+            The name of the branch, or None if the remote cannot tell.
+        """
+        try:
+            reference: str = repository.git.symbolic_ref(f"refs/remotes/{remote}/HEAD")
+            # The local HEAD of a remote outlives the branch it points to when that branch is renamed
+            repository.git.rev_parse("--verify", "--quiet", reference)
+        except GitCommandError:
+            logger.debug(f"No default branch known locally for repository {self.name!r}, asking the remote")
+        else:
+            return reference.removeprefix(f"refs/remotes/{remote}/")
+
+        try:
+            references = cast(str, repository.git.ls_remote("--symref", remote, "HEAD"))
+        except GitCommandError as error:
+            logger.debug(f"Failed to read the default branch of repository {self.name!r}: {error}")
+            return None
+
+        match = re.search(r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", references, re.MULTILINE)
+
+        return match["branch"] if match else None
 
     @property
     def branch(self) -> str | None:
@@ -649,6 +786,8 @@ class GitConnector(GithubConnector):
         if detached:
             bash.detached(f"cd {self.path} && git fetch")
         else:
+            self._ensure_host_trusted()
+
             with progress.spinner(f"Fetching changes in repository {self.name!r}"):
                 self.repository.git.fetch("--all")
 
@@ -679,10 +818,12 @@ class GitConnector(GithubConnector):
             f"Cloning repository {self.name!r} to {self.path}" + (f" on revision {revision!r}" if revision else "")
         )
 
+        self._ensure_host_trusted()
+
         try:
             self._git_progress(
                 Repo.clone_from,
-                self.ssh_url,
+                self.remote_url,
                 self.path,
                 multi_options=self._get_clone_options(revision),
             )
@@ -714,6 +855,8 @@ class GitConnector(GithubConnector):
         self.check_requirements()
 
         if force or console.confirm("Pull changes now?", default=True):
+            self._ensure_host_trusted()
+
             try:
                 with Stash(self.repository):
                     self._git_progress(self.remote.pull, ff_only=True)
@@ -751,6 +894,8 @@ class GitConnector(GithubConnector):
             if error.stderr:
                 if "error: pathspec" in error.stderr:
                     logger.warning(f"Git ref {revision!r} not found in repository {self.name!r}")
+
+                    self._ensure_host_trusted()
 
                     with progress.spinner(f"Fetching revision {revision!r} from remote, this might take a while"):
                         self._set_remote_origin_fetch_config()
@@ -818,6 +963,38 @@ class GitConnector(GithubConnector):
             logger.debug(f"Repository {self.name!r} requirements have changed since last version")
 
         self._requirements_changed = bool(diff)
+
+    def _transport_url(self) -> str | None:
+        """Read the URL git connects to, once it has applied the `insteadOf` rewrites of its configuration.
+
+        Returns:
+            The URL, or None if git runs its own ssh command, whose options odev cannot see.
+        """
+        git = self.repository.git if self.repository is not None else Git()
+
+        try:
+            if git.config("--get", "core.sshCommand"):
+                return None
+        except GitCommandError:
+            logger.debug("No ssh command set in the configuration of git")
+
+        try:
+            return cast(str, git.ls_remote("--get-url", self.remote_url)).strip()
+        except GitCommandError:
+            return self.remote_url
+
+    def _ensure_host_trusted(self) -> None:
+        """Settle whether to trust the SSH host of the remote while the terminal is still free to ask."""
+        if (url := self._transport_url()) is None:
+            return
+
+        try:
+            ssh_hosts.ensure_trusted(url)
+        except ssh_hosts.UntrustedHostError as error:
+            raise ConnectorError(
+                f"Cannot reach repository {self.name!r}: {error}, add it to your known hosts to proceed",
+                self,
+            ) from error
 
     def _git_progress(self, operation: Callable, *args, **kwargs):
         """Display a progress bar when performing time-consuming git operations."""
@@ -920,6 +1097,8 @@ class GitConnector(GithubConnector):
             shutil.rmtree(path, ignore_errors=True)
 
         message = f"worktree {path.parent.name!r} for {self.name!r} in version {revision!r}"
+
+        self._ensure_host_trusted()
 
         with spinner(f"Creating {message}"):
             logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {revision!r}")
@@ -1133,6 +1312,8 @@ class GitConnector(GithubConnector):
                     if not console.confirm("Pull changes now?", default=True):
                         continue
 
+                self._ensure_host_trusted()
+
                 with Stash(worktree.repository), progress.spinner(f"Pulling changes in worktree {worktree.path!s}"):
                     logger.debug(f"Pulling changes in worktree {worktree.path!s}")
 
@@ -1147,13 +1328,14 @@ class GitConnector(GithubConnector):
         Asked of git rather than of the GitHub API: the API hands back a hundred
         branches per request, which is forty round trips and a minute and a half on a
         repository the size of `odoo-ps/psbe-custom`, where `ls-remote` answers with all
-        four thousand of them in under two seconds. Over the same SSH URL the clone uses,
+        four thousand of them in under two seconds. Over the same URL the clone uses,
         and without needing one - the repository does not have to be local to be listed.
 
         :return: A list of all remote branches of the repository.
         :rtype: List[str]
         """
-        references = Git().ls_remote("--heads", self.ssh_url).splitlines()
+        self._ensure_host_trusted()
+        references = Git().ls_remote("--heads", self.remote_url).splitlines()
 
         return [reference.split("refs/heads/", 1)[1] for reference in references if "refs/heads/" in reference]
 

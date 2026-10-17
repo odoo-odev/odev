@@ -185,7 +185,7 @@ class DatabaseOrRepositoryCommand(DatabaseCommand, ABC):
 
     _database_arg_required = False
 
-    repository = args.String(description="GitHub URL or name of a repository.", nargs="?")
+    repository = args.String(description="Git URL or name of a repository.", nargs="?")
 
     @property
     def _database_exists_required(self) -> bool:

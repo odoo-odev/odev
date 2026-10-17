@@ -83,12 +83,9 @@ class QuickStartCommand(DatabaseCommand):
             return
 
         if isinstance(self._database.repository, Repository):
-            repo_org = self._database.repository.organization
-            repo_name = self._database.repository.name
+            database.repository = self._database.repository
         else:
-            repo_org, repo_name = self._database.repository.name.split("/")
-
-        database.repository = Repository(repo_name, repo_org)
+            database.repository = Repository.parse(self._database.repository.name)
 
     def get_dump_filename_kwargs(self) -> MutableMapping[str, Any]:
         """Return the keyword arguments to pass to Database.get_dump_filename()."""

@@ -2,15 +2,24 @@ import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 from git import Repo
 from github import GithubException, UnknownObjectException
 
-from odev.common.connectors.git import GitConnector, GithubConnector
+from odev.common.connectors.git import GitConnector, GithubConnector, RepositoryReference
 from odev.common.errors import ConnectorError
 from odev.common.odoobin import OdoobinProcess
 
 from tests.fixtures import OdevTestCase
+
+
+GIT_IDENTITY = {
+    "GIT_AUTHOR_NAME": "odev",
+    "GIT_AUTHOR_EMAIL": "odev@example.com",
+    "GIT_COMMITTER_NAME": "odev",
+    "GIT_COMMITTER_EMAIL": "odev@example.com",
+}
 
 
 class GitRepositoryMixin:
@@ -55,6 +64,158 @@ class TestGitConnectorInit(OdevTestCase):
         with self.assertRaises(ConnectorError) as ctx:
             GitConnector("onlyonepart")
         self.assertIn("Invalid repository format", str(ctx.exception))
+
+    def test_github_has_no_nested_namespaces(self):
+        with self.assertRaises(ConnectorError):
+            GitConnector("https://github.com/acme/myrepo/tree/main")
+
+    def test_longer_name_without_a_domain_raises(self):
+        with self.assertRaises(ConnectorError):
+            GitConnector("odoo/odoo/17.0")
+
+
+class TestRepositoryReference(OdevTestCase):
+    """A repository is hosted on GitHub unless its name or URL says otherwise."""
+
+    def assertReference(self, repository: str, host: str, namespace: str, name: str):  # noqa: N802
+        self.assertEqual(RepositoryReference.parse(repository), RepositoryReference(host, namespace, name))
+
+    def test_name_of_two_parts_is_hosted_on_github(self):
+        self.assertReference("acme/myrepo", "github.com", "acme", "myrepo")
+
+    def test_longer_name_starts_with_its_host(self):
+        self.assertReference("gitlab.com/group/project", "gitlab.com", "group", "project")
+        self.assertReference("gitlab.com/group/subgroup/project", "gitlab.com", "group/subgroup", "project")
+
+    def test_https_url(self):
+        self.assertReference("https://gitlab.com/group/subgroup/project.git", "gitlab.com", "group/subgroup", "project")
+        self.assertReference("https://gitlab.com/group/project/", "gitlab.com", "group", "project")
+
+    def test_scp_like_ssh_url(self):
+        self.assertReference(
+            "git@gitlab.acme.com:group/subgroup/project.git", "gitlab.acme.com", "group/subgroup", "project"
+        )
+
+    def test_scp_like_ssh_url_without_user(self):
+        self.assertReference("gitlab.com:group/project.git", "gitlab.com", "group", "project")
+        self.assertReference("github.com:acme/myrepo.git", "github.com", "acme", "myrepo")
+
+    def test_ssh_url_leaves_the_port_out_of_the_host(self):
+        self.assertReference("ssh://git@GitLab.acme.com:2222/group/project.git", "gitlab.acme.com", "group", "project")
+
+    def test_github_subdomains_are_github(self):
+        self.assertReference("ssh://git@ssh.github.com:443/acme/myrepo.git", "github.com", "acme", "myrepo")
+        self.assertReference("https://www.github.com/acme/myrepo", "github.com", "acme", "myrepo")
+
+    def test_gitlab_page_url_stops_at_the_project(self):
+        self.assertReference("https://gitlab.com/group/project/-/tree/main", "gitlab.com", "group", "project")
+
+    def test_directory_is_named_as_on_github(self):
+        self.assertReference("/srv/git/acme/myrepo.git", "github.com", "acme", "myrepo")
+        self.assertReference("file:///srv/git/acme/myrepo.git", "github.com", "acme", "myrepo")
+
+    def test_missing_namespace(self):
+        self.assertIsNone(RepositoryReference.parse("myrepo"))
+        self.assertIsNone(RepositoryReference.parse("https://gitlab.com/project"))
+
+    def test_full_name_reads_back_to_the_same_reference(self):
+        for repository in ("acme/myrepo", "gitlab.com/group/project", "gitlab.com/group/subgroup/project"):
+            with self.subTest(repository=repository):
+                reference = cast(RepositoryReference, RepositoryReference.parse(repository))
+                self.assertEqual(reference.full_name, repository)
+
+
+class TestGitConnectorHost(GitRepositoryMixin, OdevTestCase):
+    """Names, paths and URLs must keep the host and every group of a repository not hosted on GitHub."""
+
+    def test_github_repository(self):
+        connector = GitConnector("https://github.com/acme/myrepo")
+        self.assertEqual(connector.host, "github.com")
+        self.assertEqual(connector.url, "https://github.com/acme/myrepo")
+        self.assertEqual(connector.ssh_url, "git@github.com:acme/myrepo.git")
+
+    def test_nested_repository_on_another_host(self):
+        connector = GitConnector("https://gitlab.com/group/subgroup/project")
+        self.assertEqual(connector.name, "gitlab.com/group/subgroup/project")
+        self.assertEqual(connector.path, self.odev.config.paths.repositories / "gitlab.com/group/subgroup/project")
+        self.assertEqual(connector.url, "https://gitlab.com/group/subgroup/project")
+        self.assertEqual(connector.ssh_url, "git@gitlab.com:group/subgroup/project.git")
+        self.assertEqual(GitConnector(connector.name), connector)
+
+    def test_same_name_on_two_hosts_are_different_repositories(self):
+        self.assertNotEqual(GitConnector("acme/myrepo"), GitConnector("gitlab.com/acme/myrepo"))
+
+    def test_name_from_nested_remote(self):
+        for remote in ("git@gitlab.com:group/subgroup/project.git", "https://gitlab.com/group/subgroup/project.git"):
+            with self.subTest(remote=remote):
+                path = self.make_repository("gitlab.com", "group", "subgroup", "project", remote=remote)
+                self.assertEqual(GitConnector("whatever/project", path).name, "gitlab.com/group/subgroup/project")
+
+    def test_remote_host_is_ignored_outside_of_its_directory(self):
+        """A clone stored as `<organization>/<repository>` keeps that name whatever host its remote
+        names: the host may be an alias of GitHub, and the name must resolve back to the clone.
+        """
+        for remote in (
+            "git@github-work:acme/myrepo.git",
+            "work:acme/myrepo.git",
+            "git@gitlab.com:group/acme/myrepo.git",
+        ):
+            with self.subTest(remote=remote):
+                path = self.make_repository("acme", "myrepo", remote=remote)
+                self.assertEqual(GitConnector("acme/myrepo", path).name, "acme/myrepo")
+
+    def test_remote_url_before_cloning(self):
+        self.assertEqual(
+            GitConnector("https://gitlab.com/group/project").remote_url, "git@gitlab.com:group/project.git"
+        )
+
+    def test_remote_url_keeps_the_port_of_an_ssh_url(self):
+        url = "ssh://git@gitlab.acme.com:2222/group/project.git"
+        self.assertEqual(GitConnector(url).remote_url, url)
+
+    def test_remote_url_of_a_clone_is_its_remote(self):
+        path = self.make_repository("myrepo", remote="https://github.com/acme/myrepo.git")
+        self.assertEqual(GitConnector("acme/myrepo", path).remote_url, "https://github.com/acme/myrepo.git")
+
+
+class TestGitConnectorDefaultBranch(GitRepositoryMixin, OdevTestCase):
+    """The default branch is asked of git, so it resolves on any host and without an API token."""
+
+    def make_clone(self, default_branch: str) -> Path:
+        """Clone a throwaway repository whose default branch is the one given.
+        :param default_branch: The branch the origin of the clone points its HEAD to.
+        :return: The path to the clone.
+        """
+        origin = Repo(self.make_repository("acme", "origin", remote=None))
+        origin.git.checkout("-b", default_branch)
+        origin.git.commit(
+            "--allow-empty", "-m", "Initial commit", env={"GIT_CONFIG_GLOBAL": "/dev/null"} | GIT_IDENTITY
+        )
+
+        path = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
+        Repo.clone_from(origin.working_dir, path)
+
+        return path
+
+    def test_default_branch_known_locally(self):
+        path = self.make_clone("trunk")
+        Repo(path).git.remote("set-url", "origin", "/nonexistent/acme/myrepo.git")
+        self.assertEqual(GitConnector("acme/myrepo", path).default_branch, "trunk")
+
+    def test_default_branch_pointing_to_a_deleted_branch_is_asked_of_the_remote(self):
+        path = self.make_clone("trunk")
+        Repo(path).git.symbolic_ref("refs/remotes/origin/HEAD", "refs/remotes/origin/renamed")
+        self.assertEqual(GitConnector("acme/myrepo", path).default_branch, "trunk")
+
+    def test_default_branch_asked_of_the_remote(self):
+        path = self.make_clone("trunk")
+        Repo(path).git.remote("set-head", "origin", "--delete")
+        self.assertEqual(GitConnector("acme/myrepo", path).default_branch, "trunk")
+
+    def test_default_branch_of_an_unreachable_remote(self):
+        path = self.make_repository("myrepo", remote="/nonexistent/acme/myrepo.git")
+        self.assertIsNone(GitConnector("acme/myrepo", path).default_branch)
 
 
 class TestGithubConnectorRepositories(OdevTestCase):

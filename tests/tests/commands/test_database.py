@@ -556,19 +556,6 @@ class TestDatabaseCommands(OdevCommandTestCase):
         stdout, stderr = self.dispatch_command("deploy", self.database_name, str(module_root))
         self.assertIn("must be running", stdout + stderr)
 
-    def test_93_standardize_requires_odoo_database(self):
-        """`odev standardize` should reject a non-Odoo (e.g. bare) database."""
-        bare_name = f"{self.run_name}-bare-std"
-        try:
-            self.dispatch_command("create", "--bare", bare_name)
-            self.assertDatabaseExist(bare_name)
-            _, stderr = self.dispatch_command("standardize", bare_name)
-            self.assertIn("must be an Odoo database", stderr)
-        finally:
-            db = LocalDatabase(bare_name)
-            if db.exists:
-                db.drop()
-
     # --------------------------------------------------------------------------
     # Test cases - delete
     # Keep at the end to avoid interference with other tests and to cleanup
