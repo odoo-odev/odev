@@ -630,7 +630,7 @@ class Odev(Generic[CommandType]):
                         ("review", "Review databases and whitelist some of them"),
                         ("delete", "Delete all databases"),
                     ],
-                    default="Skip",
+                    default="skip",
                 )
 
                 if action == "skip":
