@@ -20,16 +20,6 @@
         }
       }
     ],
-    "./odev/commands/database/standardize.py": [
-      {
-        "code": "reportOptionalMemberAccess",
-        "range": {
-          "endColumn": 36,
-          "lineCount": 1,
-          "startColumn": 25
-        }
-      }
-    ],
     "./odev/commands/database/test.py": [
       {
         "code": "reportAttributeAccessIssue",
