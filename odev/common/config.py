@@ -1,6 +1,8 @@
 import glob
 import inspect
+import os
 import sys
+import tempfile
 from collections.abc import Iterable
 from configparser import ConfigParser
 from datetime import datetime, timedelta
@@ -406,11 +408,14 @@ class Config:
 
     def fill_defaults(self):
         """Fill the config file with default values."""
+        changed = False
+
         for section_name, section in cast(
             list[tuple[str, Section]], inspect.getmembers(self, lambda member: isinstance(member, Section))
         ):
             if section_name not in self.parser.sections():
                 self.parser.add_section(section_name)
+                changed = True
 
             for option_name, option in cast(
                 list[tuple[str, property]],
@@ -418,8 +423,12 @@ class Config:
             ):
                 if not self.parser.has_option(section_name, option_name):
                     option.fset(section, option.fget(section))
+                    changed = True
 
-        self.save()
+        # Every odev process runs this on startup: rewriting an unchanged file would only widen the window in
+        # which concurrent processes race on it.
+        if changed:
+            self.save()
 
     def reload(self):
         """Reload the content of the config file."""
@@ -428,9 +437,21 @@ class Config:
 
     def save(self):
         """Save the configuration file in its current state."""
-        with open(self.path, "w") as file:
-            self.parser.write(file)
+        # Writing in place truncates the file first: another odev process reading it meanwhile would see it
+        # empty and write the defaults back over every value. Replacing it atomically shows either version.
+        with tempfile.NamedTemporaryFile("w", dir=self.path.parent, prefix=f".{self.path.name}.", delete=False) as file:
+            temporary_path = Path(file.name)
 
+            try:
+                os.chmod(file.fileno(), 0o600)
+                self.parser.write(file)
+                file.flush()
+                os.fsync(file.fileno())
+            except BaseException:
+                temporary_path.unlink(missing_ok=True)
+                raise
+
+        os.replace(temporary_path, self.path)
         self.reload()
 
     def check_attribute(self, section: str, option: str | None = None):
