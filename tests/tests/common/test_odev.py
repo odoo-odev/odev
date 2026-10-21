@@ -1,3 +1,4 @@
+import importlib.util
 import shutil
 import sys
 from pathlib import Path
@@ -6,8 +7,10 @@ from unittest.mock import MagicMock, patch
 
 from git import GitCommandError, NoSuchPathError
 
+import odev
 from odev._version import __version__
 from odev.common.commands import Command
+from odev.common.config import Section
 from odev.common.errors import OdevError
 from odev.common.odev import Manifest, Odev, Plugin, logger, parse_plugin_manifest, plugin_module_name
 
@@ -565,3 +568,42 @@ class TestCommonOdev(OdevTestCase):
         delete_one.assert_not_called()
         whitelist_prompt.assert_not_called()
         self.assertEqual(self.odev.config.pruning.date.year, 1995)
+
+    def test_35_config_none_default(self):
+        """An option whose getter defaults to `None` should stay unset when filling in the defaults, rather than
+        being saved as the text "None" read back as a value on the next run.
+        """
+
+        class OptionalSection(Section):
+            @property
+            def url(self) -> str | None:
+                return self.get("url")
+
+            @url.setter
+            def url(self, value: str):
+                self.set("url", value)
+
+        config = self.odev.config
+        config.optional = OptionalSection("optional", config)  # type: ignore[attr-defined]
+        self.addCleanup(config.save)
+        self.addCleanup(config.parser.remove_section, "optional")
+        self.addCleanup(delattr, config, "optional")
+        config.fill_defaults()
+        self.assertFalse(config.parser.has_option("optional", "url"))
+        self.assertIsNone(config.optional.url)  # type: ignore[attr-defined]
+
+    def test_36_upgrade_removes_none_options(self):
+        """The 4.34.0 upgrade script should remove the options saved as "None", and only those."""
+        config = self.odev.config
+        config.parser.add_section("optional")
+        self.addCleanup(config.save)
+        self.addCleanup(config.parser.remove_section, "optional")
+        config.parser.set("optional", "url", "None")
+        config.parser.set("optional", "name", "kept")
+        script = Path(odev.__file__).parent / "upgrades" / "4.34.0" / "upgrade.py"
+        spec = importlib.util.spec_from_file_location("upgrade_4_34_0", script)
+        module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        module.run(self.odev)
+        self.assertFalse(config.parser.has_option("optional", "url"))
+        self.assertEqual(config.parser.get("optional", "name"), "kept")

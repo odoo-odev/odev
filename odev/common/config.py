@@ -416,8 +416,12 @@ class Config:
                 list[tuple[str, property]],
                 inspect.getmembers(section.__class__, lambda member: isinstance(member, property)),
             ):
-                if not self.parser.has_option(section_name, option_name):
-                    option.fset(section, option.fget(section))
+                # A `None` default means "unset": saving it would write the text "None", read back as a value
+                if (
+                    not self.parser.has_option(section_name, option_name)
+                    and (value := option.fget(section)) is not None
+                ):
+                    option.fset(section, value)
 
         self.save()
 
