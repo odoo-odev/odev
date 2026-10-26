@@ -72,7 +72,12 @@ must be dropped if not used.
 MAX_GIT_PULL_RETRIES = 3
 """Maximum number of retries for a git pull operation."""
 
-HOME_PATH = Path("~").expanduser() / "odev"
+LEGACY_HOME_PATH = Path("~").expanduser() / "odev"
+"""Home directory used by installs that predate `~/odoo`, kept as long as it exists so that
+their worktrees and virtual environments (which embed absolute paths) keep working.
+"""
+
+HOME_PATH = LEGACY_HOME_PATH if LEGACY_HOME_PATH.is_dir() else Path("~").expanduser() / "odoo"
 """Local path to the odev home directory containing application data for the current user."""
 
 VENVS_DIRNAME = "virtualenvs"

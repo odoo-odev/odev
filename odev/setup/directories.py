@@ -86,11 +86,12 @@ def setup(odev: Odev) -> None:
     :param config: Odev configuration
     """
     logger.info(
-        """
+        f"""
         Odev manages a few directories on your system. You can change their location to your liking.
         These directories include:
         - Odoo and project repositories, stored under /chosen/path/organization/repository
         - Dump files, which are downloaded when using the dump command to restore a database
+        Worktrees and virtual environments are stored under {odev.home_path}.
         """
     )
 

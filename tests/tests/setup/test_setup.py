@@ -1,4 +1,8 @@
+import os
 import shutil
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 from odev.setup import completion, directories, symlink, update
@@ -129,3 +133,32 @@ class TestSetupDirectories(OdevTestCase):
 
         logger_debug.assert_any_call(f"Directory {new_dir_path.as_posix()} exists but is empty, removing it")
         logger_debug.assert_any_call(f"Moving {self.dir_path} to {new_dir_path}")
+
+
+class TestHomePath(OdevTestCase):
+    """The home directory is resolved when `odev.common.odev` is imported, so it is checked in a fresh
+    interpreter pointed at a fake user home rather than by reloading the module under the running suite.
+    """
+
+    def _resolve_home_path(self, home: Path) -> Path:
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, "-c", "from odev.common.odev import HOME_PATH; print(HOME_PATH)"],
+            cwd=self.odev.path,
+            env={**os.environ, "HOME": home.as_posix()},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+
+    def test_01_home_path_new_install(self):
+        """New installs store their application data under ~/odoo."""
+        home = self.run_path / "home-new"
+        home.mkdir(parents=True, exist_ok=True)
+        self.assertEqual(self._resolve_home_path(home), home / "odoo")
+
+    def test_02_home_path_legacy_install(self):
+        """Installs that already use ~/odev keep it, as their worktrees and virtualenvs live there."""
+        home = self.run_path / "home-legacy"
+        (home / "odev").mkdir(parents=True, exist_ok=True)
+        self.assertEqual(self._resolve_home_path(home), home / "odev")
