@@ -34,6 +34,9 @@ class OdevTestCase(TestCase):
     run_path: ClassVar[Path]
     """Path to the test case run directory, inside the sandbox of the current suite run."""
 
+    __home_path: ClassVar[Path]
+    """Home directory of odev before the test case redirected it to `run_path`, restored on teardown."""
+
     _patches: ClassVar[list[_patch]]
     """The patches applied to the test case.
 
@@ -86,7 +89,7 @@ class OdevTestCase(TestCase):
         # sandbox: either when the suite ends or at the start of the next one.
         shutil.rmtree(cls.run_path, ignore_errors=True)
 
-        odev.HOME_PATH = (Path.home() / ".local" / "share" / "odev").resolve()
+        odev.HOME_PATH = cls.__home_path
 
     @classmethod
     def patch(cls, target: Any, attribute: str, return_value: Any = None, **kwargs):
@@ -236,6 +239,7 @@ class OdevTestCase(TestCase):
     @classmethod
     def __patch_odev(cls):
         """Patch framework low-level features that could conflict with the tests execution."""
+        cls.__home_path = odev.HOME_PATH
         odev.HOME_PATH = cls.run_path
 
         cls._patch_object(
