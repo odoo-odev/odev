@@ -79,6 +79,30 @@ class DatabaseStore(PostgresTable):
 
         return DatabaseInfo(*result[0])
 
+    def linked_repositories(self, platform: str = "local") -> dict[str, list[str]]:
+        """List the databases linked to each custom repository.
+
+        :param platform: The platform of the databases to look at.
+        :return: The names of the databases, sorted, indexed by the name of the repository they are linked to.
+        :rtype: Dict[str, List[str]]
+        """
+        result = self.database.query(
+            f"""
+            SELECT repository, name FROM {self.name}
+            WHERE platform = %s
+                AND repository IS NOT NULL
+            ORDER BY name
+            """,
+            (platform,),
+            nocache=True,
+        )
+        repositories: dict[str, list[str]] = {}
+
+        for repository, name in result or []:
+            repositories.setdefault(repository, []).append(name)
+
+        return repositories
+
     def set(self, database: Database, arguments: str | None = None):
         """Save values for a database."""
         values = {
