@@ -487,7 +487,10 @@ class PythonEnv:
                     logger.debug(f"Missing git python package {package_name!r}")
                     yield line
 
-                elif installed_version != package_version:
+                # A branch or tag cannot be compared with the commit pip freeze reports, only a commit can
+                elif re.fullmatch(r"[0-9a-f]{7,40}", package_version) and not str(installed_version).startswith(
+                    package_version
+                ):
                     logger.debug(
                         f"Incorrect git python package version {package_name!r} "
                         f"({installed_version!r} != {package_version!r})"
