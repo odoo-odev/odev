@@ -111,6 +111,24 @@ class TestMissingRequirements(OdevTestCase):
     def test_comments_and_blank_lines_are_skipped(self):
         self.assertEqual(self.missing("# just a comment", {}), [])
 
+    def test_git_branch_is_satisfied_by_any_installed_commit(self):
+        """Pip freeze reports the commit a branch resolved to, which never equals the branch name: comparing them
+        reinstalled the package on every run, and failed outright on a read-only virtual environment.
+        """
+        requirement = "odoo_upgrade @ git+https://github.com/odoo/upgrade-util@master"
+        commit = "47e6df5364cfe59d32f14e5457fa6fc50952155e"
+        self.assertEqual(self.missing(requirement, {"odoo_upgrade": commit}), [])
+        self.assertEqual(self.missing(requirement, {}), [requirement])
+
+    def test_git_commit_is_compared(self):
+        commit = "47e6df5364cfe59d32f14e5457fa6fc50952155e"
+        for pinned in (commit, commit[:7]):
+            requirement = f"odoo_upgrade @ git+https://github.com/odoo/upgrade-util@{pinned}"
+            self.assertEqual(self.missing(requirement, {"odoo_upgrade": commit}), [])
+            self.assertEqual(
+                self.missing(requirement, {"odoo_upgrade": "9c90348f3cfdcb64ac84172c2c1b957257284286"}), [requirement]
+            )
+
 
 class TestSatisfies(OdevTestCase):
     """`PythonEnv.satisfies` answers whether an installed package matches a specification."""
