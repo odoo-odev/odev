@@ -1,5 +1,6 @@
 """Shared method for debugging odev or interacting with debuggers."""
 
+import ast
 import json
 import os
 import subprocess
@@ -50,6 +51,32 @@ def find_debuggers(root: str | Path, *, follow_symlinks: bool = True) -> list[tu
         found.append((Path(file), int(position)))
 
     return found
+
+
+def enclosing_function(file: Path, line: int) -> str | None:
+    """Find the name of the innermost function containing the given line of a Python file.
+
+    :param file: The Python file to inspect.
+    :param line: The line number to locate.
+    :return: The name of the function, or None if the line is outside of any function or the file cannot be parsed.
+    """
+    try:
+        tree = ast.parse(file.read_bytes(), filename=file.as_posix())
+    except (OSError, SyntaxError, ValueError):
+        return None
+
+    name: str | None = None
+    start: int = 0
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+            and node.lineno <= line <= (node.end_lineno or node.lineno)
+            and node.lineno > start
+        ):
+            name, start = node.name, node.lineno
+
+    return name
 
 
 def debuggers() -> list[str]:
