@@ -24,7 +24,7 @@ from odev.common.cache import TTLCache
 from odev.common.connectors import GitConnector, GitWorktree
 from odev.common.databases import Branch, Repository
 from odev.common.databases.remote import RemoteDatabase
-from odev.common.debug import find_debuggers
+from odev.common.debug import enclosing_function, find_debuggers
 from odev.common.errors import OdevError
 from odev.common.logging import LOG_LEVEL, logging, silence_loggers
 from odev.common.mixins.framework import OdevFrameworkMixin
@@ -69,6 +69,13 @@ PROBED_DEPENDENCIES: Sequence[SystemDependency] = (system.C_COMPILER, system.POS
 to the ones an executable on the `PATH` proves present, so that nothing is ever reported as missing
 on a distribution that just names it differently.
 """
+
+ODOO_DEBUGGERS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("odoo/odoo/addons/base/models/ir_qweb.py", "_debug_trace"),
+    }
+)
+"""Debuggers that are part of the standard that must be ignored"""
 
 
 ODOO_PYTHON_VERSIONS: Mapping[int, str] = {
@@ -1017,7 +1024,27 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         for addon in addons_paths:
             if addon.is_dir():
-                yield from find_debuggers(addon)
+                yield from (
+                    (file, line) for file, line in find_debuggers(addon) if not self.is_odoo_debugger(file, line)
+                )
+
+    def is_odoo_debugger(self, file: Path, line: int) -> bool:
+        """Whether a call to an interactive debugger is part of the standard Odoo.
+
+        :param file: The path to the file containing the call.
+        :param line: The line of the call.
+        """
+        worktree_path: Path = self.odoo_path.parent
+
+        if not file.is_relative_to(worktree_path):
+            return False
+
+        relative_path = file.relative_to(worktree_path).as_posix()
+
+        if not any(relative_path == path for path, _ in ODOO_DEBUGGERS):
+            return False
+
+        return (relative_path, enclosing_function(file, line)) in ODOO_DEBUGGERS
 
     def save_database_repository(self):
         """Link the database to the first repository in additional addons-paths, allowing for reusing it in subsequent
