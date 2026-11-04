@@ -866,6 +866,10 @@ class OdoobinProcess(OdevFrameworkMixin):
             if len(list(self.odoo_repositories)) != len(list(self.odoo_worktrees)):
                 repository.create_worktree(f"{self.worktree}/{repository.path.name}", str(self.version or "master"))
 
+        # Leave the pull for the next interactive run, without recording a date that would postpone it
+        if self.console.non_interactive:
+            return logger.debug("Skipping worktree update in non-interactive mode")
+
         # Pull changes once per week, on Monday (or a later day if odev was not run)
         if not self.odev.config.repositories.is_pull_needed(self.version):
             next_monday = self.odev.config.repositories.next_pull_date(self.version)

@@ -82,6 +82,13 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         aliases=["-f", "--force"],
         description="Bypass confirmation prompts and assume a default value to all, use with caution!",
     )
+    non_interactive = args.Flag(
+        aliases=["--non-interactive"],
+        description="""Never wait for user input, for use by scripts and agents: skip updates and database pruning,
+        answer prompts with their default and fail on prompts without one or discarding data unless --force is set.
+        Can also be enabled by setting the ODEV_NON_INTERACTIVE environment variable.
+        """,
+    )
 
     # --------------------------------------------------------------------------
 
@@ -100,6 +107,9 @@ class Command(OdevFrameworkMixin, ABC, metaclass=OrderedClassAttributes):
         self.args.log_level = LOG_LEVEL
         self._bypass_prompt_orig = self.console.bypass_prompt
         self.console.bypass_prompt = self.args.bypass_prompt
+
+        if self.args.non_interactive:
+            self.console.non_interactive = True
 
     def __repr__(self) -> str:
         arguments = ", ".join(f"{k}={v!r}" for k, v in self.args.__dict__.items())

@@ -97,12 +97,14 @@ class DeleteCommand(ListLocalDatabasesMixin, LocalDatabaseCommand):
         confirm: bool = self.console.confirm(
             f"Are you sure you want to delete the database {self._database.name!r}?",
             default=True,
+            destructive=True,
         )
 
         if confirm and not self.args.include_whitelisted and self._database.whitelisted:
             confirm = self.console.confirm(
                 f"Database {self._database.name!r} is whitelisted, are you really sure?",
                 default=True,
+                destructive=True,
             )
 
         if not confirm:
