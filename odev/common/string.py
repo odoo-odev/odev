@@ -273,11 +273,12 @@ def float_to_hours(value: float) -> str:
 def ago(date: datetime.datetime) -> str:
     """Return a human readable representation of a datetime to show how long ago it was.
 
-    :param date: The datetime to convert.
+    :param date: The datetime to convert, compared with the current time in its timezone when it is aware
+        so that a daylight saving time change in between does not shift it by an hour.
     :return: The human readable representation.
     :rtype: str
     """
-    return timeago.format(date, datetime.datetime.now())
+    return timeago.format(date, datetime.datetime.now(date.tzinfo))
 
 
 def quote(string: str, dirty_only: bool = False, force_single: bool = False) -> str:
