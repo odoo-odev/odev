@@ -2,7 +2,8 @@
 
 import re
 import shutil
-import subprocess
+import tempfile
+import zipfile
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,6 +20,9 @@ class Chrome:
 
     VERSION = "145.0.7632.116"
     """Fallback version if Runbot fetching fails."""
+
+    DOWNLOAD_URL = "https://storage.googleapis.com/chrome-for-testing-public/{version}/linux64/chrome-linux64.zip"
+    """Chrome for Testing archive, the same one `npx @puppeteer/browsers install` fetches."""
 
     @classmethod
     @lru_cache(maxsize=1)
@@ -55,34 +59,48 @@ class Chrome:
         """
         if not self.executable.exists():
             logger.info(f"Provisioning Chrome {self.version} for tours...")
-            self.base_path.mkdir(parents=True, exist_ok=True)
-            npx = shutil.which("npx")
-            if not npx:
-                logger.warning("npx not found, skipping Chrome provisioning")
-                return None
 
             try:
-                subprocess.run(  # noqa: S603
-                    [
-                        npx,
-                        "-y",
-                        "@puppeteer/browsers",
-                        "install",
-                        f"chrome@{self.version}",
-                        "--path",
-                        str(self.base_path),
-                    ],
-                    check=True,
-                    capture_output=True,
-                )
-            except subprocess.CalledProcessError as e:
-                logger.warning(f"Failed to provision Chrome {self.version}: {e.stderr.decode()}")
-                return None
-            except OSError as e:
-                logger.warning(f"OS error provisioning Chrome {self.version}: {e}")
+                self._download()
+            except (requests.RequestException, zipfile.BadZipFile, OSError) as e:
+                logger.warning(f"Failed to provision Chrome {self.version}: {e}")
                 return None
 
         return self.executable if self.executable.exists() else None
+
+    def _download(self) -> None:
+        """Download and unpack Chrome for Testing where `self.executable` expects it.
+
+        The archive is unpacked next to its destination and moved in place only once
+        complete, so an interrupted download never leaves a broken install behind that
+        `provision` would then mistake for a finished one.
+        """
+        install_dir = self.executable.parent.parent  # <base>/chrome/linux-<version>
+        install_dir.parent.mkdir(parents=True, exist_ok=True)
+
+        with tempfile.TemporaryDirectory(dir=install_dir.parent, prefix=".download-") as tmp:
+            archive = Path(tmp) / "chrome-linux64.zip"
+            extracted = Path(tmp) / "extracted"
+            url = self.DOWNLOAD_URL.format(version=self.version)
+            logger.debug(f"Downloading Chrome from {url}")
+
+            with requests.get(url, stream=True, timeout=30) as response:
+                response.raise_for_status()
+
+                with archive.open("wb") as file:
+                    for chunk in response.iter_content(chunk_size=1 << 20):
+                        file.write(chunk)
+
+            with zipfile.ZipFile(archive) as zip_file:
+                for member in zip_file.infolist():
+                    path = Path(zip_file.extract(member, extracted))
+
+                    # `zipfile` drops Unix permissions, without which Chrome cannot run.
+                    if mode := (member.external_attr >> 16) & 0o777:
+                        path.chmod(mode)
+
+            shutil.rmtree(install_dir, ignore_errors=True)
+            extracted.rename(install_dir)
 
     def get_wrapper(self, chrome_bin: Path | None = None) -> Path:
         """Create a Chrome wrapper script with consistent rendering flags.
