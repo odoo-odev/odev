@@ -318,6 +318,22 @@ class UserSection(Section):
         self.set("xgram", value)
 
 
+class QuickStartSection(Section):
+    """Quickstart configuration."""
+
+    @property
+    def should_clone_repo(self) -> bool:
+        """Wherever the repository should be cloned on quickstart"""
+        value = cast(str, self.get("should_clone_repo", "True")).capitalize()
+        if value not in ("True", "False"):
+            raise ValueError(f"'should_clone_repo' config must be one of 'True', 'False', got {value!r}")
+        return value == "True"
+
+    @should_clone_repo.setter
+    def should_clone_repo(self, value: str | bool):
+        self.set("should_clone_repo", str(value))
+
+
 class Config:
     """Odev configuration.
     Light wrapper around configparser to write and retrieve configuration values saved on disk.
@@ -346,6 +362,9 @@ class Config:
 
     security: SecuritySection
     """Configuration for security and secrets encryption."""
+
+    quickstart: QuickStartSection
+    """Configuration for Odoo quickstart options."""
 
     def __init__(self, name: str = "odev"):
         self.name: str = name
