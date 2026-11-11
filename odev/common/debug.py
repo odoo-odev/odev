@@ -1,5 +1,6 @@
 """Shared method for debugging odev or interacting with debuggers."""
 
+import ast
 import json
 import os
 import subprocess
@@ -15,6 +16,13 @@ logger = logging.getLogger(__name__)
 
 DEBUG_CACHE_PATH: Path = CONFIG_DIR / "debuggers.json"
 """Path to the file caching the result of the last scan for interactive debuggers."""
+
+
+IGNORED_DEBUGGERS: tuple[tuple[str, str], ...] = (
+    # Reached only when a QWeb template uses `t-debug` (Odoo 17.0+).
+    ("odoo/addons/base/models/ir_qweb.py", "_debug_trace"),
+)
+"""Calls to debuggers shipped in Odoo itself, as (path suffix, enclosing function), never reported by the scan."""
 
 
 _debuggers: list[str] | None = None
@@ -47,9 +55,54 @@ def find_debuggers(root: str | Path, *, follow_symlinks: bool = True) -> list[tu
 
     for line in output.splitlines():
         file, position, _ = line.split(":", 2)
-        found.append((Path(file), int(position)))
+        file_path = Path(file)
+        line_number = int(position)
+
+        if not _is_ignored(file_path, line_number):
+            found.append((file_path, line_number))
 
     return found
+
+
+def _is_ignored(file: Path, line: int) -> bool:
+    """Whether a call to a debugger is part of a known upstream feature rather than left behind by a developer.
+
+    Matching on the enclosing function keeps the exclusion valid when the file changes around it, while a call added
+    anywhere else in the same file is still reported.
+    """
+    ignored_functions = {
+        function
+        for suffix, function in IGNORED_DEBUGGERS
+        if file.parts[-len(Path(suffix).parts) :] == Path(suffix).parts
+    }
+
+    if not ignored_functions:
+        return False
+
+    return _enclosing_function(file, line) in ignored_functions
+
+
+def _enclosing_function(file: Path, line: int) -> str | None:
+    """Find the name of the innermost function containing the given line of a Python file.
+
+    :return: The name of the function, or None if the line is at module or class level or the file cannot be parsed.
+    """
+    try:
+        tree = ast.parse(file.read_bytes(), filename=file.as_posix())
+    except (OSError, SyntaxError, ValueError):
+        return None
+
+    enclosing: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+            and node.lineno <= line <= (node.end_lineno or node.lineno)
+            and (enclosing is None or node.lineno > enclosing.lineno)
+        ):
+            enclosing = node
+
+    return enclosing.name if enclosing is not None else None
 
 
 def debuggers() -> list[str]:
