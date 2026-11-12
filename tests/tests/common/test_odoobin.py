@@ -2,7 +2,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from odev.common import string
 from odev.common.commands.odoobin import OdoobinCommand
@@ -182,3 +182,18 @@ class TestWerkzeugLogFormat(OdevTestCase):
         self.command.odoobin_progress(line)
 
         self.assertEqual(self.printed, [line])
+
+
+class TestUpdateWorktrees(OdevTestCase):
+    """Odoo worktrees are pulled at most once a week, and never without someone to accept it."""
+
+    def test_non_interactive_skips_pull(self):
+        """Pending changes should be left for the next interactive run, without postponing it."""
+        process = MagicMock(odoo_repositories=[], odoo_worktrees=[])
+        process.console.non_interactive = True
+
+        OdoobinProcess.update_worktrees(process)
+
+        process.clone_repositories.assert_called_once_with()
+        process.outdated_odoo_worktrees.assert_not_called()
+        process.odev.config.repositories.set_date.assert_not_called()

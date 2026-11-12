@@ -2,10 +2,18 @@ from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
 from InquirerPy.prompts.checkbox import CheckboxPrompt
+from InquirerPy.prompts.confirm import ConfirmPrompt
 
 from odev.common.console import Console
+from odev.common.errors import OdevError
 
 from tests.fixtures import OdevTestCase
+
+
+REAL_BYPASS_PROMPT = Console.__dict__["bypass_prompt"]
+"""Reference to the real `Console.bypass_prompt` property, taken before the test fixtures patch it away to prevent
+tests from waiting for user input.
+"""
 
 
 class TestCommonConsoleCheckbox(OdevTestCase):
@@ -73,3 +81,64 @@ class TestCommonConsoleCheckbox(OdevTestCase):
 
         run.assert_called_once_with()
         self.assertEqual(selected, ["themes"])
+
+
+class TestCommonConsoleNonInteractive(OdevTestCase):
+    """Prompts should never wait for the user in non-interactive mode."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.console = Console()
+
+    def setUp(self):
+        super().setUp()
+        self.enterContext(patch.object(Console, "bypass_prompt", REAL_BYPASS_PROMPT))
+        self.enterContext(patch.object(Console, "_non_interactive", new=True))
+        self.enterContext(patch.object(Console, "_bypass_prompt", new=False))
+
+    def test_01_defaults_are_assumed(self):
+        """Prompts with a default should be answered with it without waiting for the user."""
+        with patch.object(ConfirmPrompt, "_run", side_effect=AssertionError("prompt was run")):
+            self.assertTrue(self.console.confirm("Pull changes now?", default=True))
+
+    def test_02_prompt_without_default(self):
+        """Prompts without an answer to fall back on should fail rather than wait for the user."""
+        with self.assertRaisesRegex(OdevError, "non-interactive mode"):
+            self.console.secret("Session password:")
+
+        with self.assertRaisesRegex(OdevError, "non-interactive mode"):
+            self.console.text("Specific commit SHA to track:")
+
+        with self.assertRaisesRegex(OdevError, "non-interactive mode"):
+            self.console.fuzzy("Select a branch to track:", [("master", None)])
+
+        with self.assertRaisesRegex(OdevError, "non-interactive mode"):
+            self.console.checkbox("Select databases to whitelist:", choices=[("test", None)])
+
+    def test_03_destructive_confirmation(self):
+        """Discarding data should not be confirmed on behalf of the user unless prompts were bypassed explicitly."""
+        with self.assertRaisesRegex(OdevError, "without --force"):
+            self.console.confirm("Overwrite it?", default=True, destructive=True)
+
+        self.assertFalse(self.console.confirm("Overwrite it?", default=False, destructive=True))
+
+        with self.console.force_bypass_prompt(force=True):
+            self.assertTrue(self.console.confirm("Overwrite it?", default=True, destructive=True))
+
+    def test_04_force_bypass_prompt_is_restored(self):
+        """Leaving a forced bypass should restore the explicit value, not the one implied by non-interactive mode."""
+        with self.console.force_bypass_prompt(force=True):
+            pass
+
+        self.assertFalse(Console._bypass_prompt)
+
+    def test_05_force_bypass_prompt_is_restored_on_error(self):
+        """An error raised while prompts are bypassed should not leave them bypassed for the rest of the run."""
+        with self.assertRaises(OdevError), self.console.force_bypass_prompt(force=True):
+            raise OdevError("Failed to delete the database")
+
+        self.assertFalse(Console._bypass_prompt)
+
+        with self.assertRaisesRegex(OdevError, "without --force"):
+            self.console.confirm("Overwrite it?", default=True, destructive=True)
