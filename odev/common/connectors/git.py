@@ -1071,6 +1071,20 @@ class GitConnector(GithubConnector):
             )
             self.repository.git.config("remote.origin.fetch", GIT_FETCH_REMOTE_ORIGIN_ALL)
 
+    def _has_local_revision(self, revision: str) -> bool:
+        """Whether the clone already holds a revision to create a worktree from, without fetching it.
+
+        :param revision: Branch (tracked from the remote) or commit SHA.
+        """
+        reference = revision if re.match("^[a-f0-9]{40}$", revision) else f"origin/{revision}"
+
+        try:
+            self.repository.git.rev_parse("--verify", "--quiet", f"{reference}^{{commit}}")
+        except GitCommandError:
+            return False
+
+        return True
+
     def create_worktree(self, path: Path | str, revision: str | None = None):
         """Create a new worktree for the repository based on a specific revision or the default branch
         of the repository.
@@ -1097,8 +1111,14 @@ class GitConnector(GithubConnector):
             shutil.rmtree(path, ignore_errors=True)
 
         message = f"worktree {path.parent.name!r} for {self.name!r} in version {revision!r}"
+        # Without anyone to answer the SSH prompts, nor always a key to authenticate with (agents run sandboxed),
+        # build from what the clone already holds, the same way the weekly pull of the worktrees is skipped.
+        offline = console.non_interactive and self._has_local_revision(revision)
 
-        self._ensure_host_trusted()
+        if offline:
+            logger.debug(f"Non-interactive mode, creating {message} from the local clone without fetching")
+        else:
+            self._ensure_host_trusted()
 
         with spinner(f"Creating {message}"):
             logger.debug(f"Creating worktree {path!s} for repository {self.name!r} on branch {revision!r}")
@@ -1108,7 +1128,8 @@ class GitConnector(GithubConnector):
                 name = path.parent.name
                 local_revision = revision
 
-                self.repository.git.fetch("origin", revision)
+                if not offline:
+                    self.repository.git.fetch("origin", revision)
 
                 if name != revision and not re.match("^[a-f0-9]{40}$", revision):
                     local_revision = f"{revision}-odev-{name}"
