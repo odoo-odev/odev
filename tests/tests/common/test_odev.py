@@ -8,6 +8,7 @@ from git import GitCommandError, NoSuchPathError
 
 from odev._version import __version__
 from odev.common.commands import Command
+from odev.common.console import Console
 from odev.common.errors import OdevError
 from odev.common.odev import Manifest, Odev, Plugin, logger, parse_plugin_manifest, plugin_module_name
 
@@ -564,4 +565,33 @@ class TestCommonOdev(OdevTestCase):
         list_databases.assert_called_once()
         delete_one.assert_not_called()
         whitelist_prompt.assert_not_called()
+        self.assertEqual(self.odev.config.pruning.date.year, 1995)
+
+    def test_35_start_non_interactive(self):
+        """No update should be looked for when nobody is there to accept it."""
+        with (
+            patch.object(Console, "_non_interactive", new=True),
+            self.patch(self.odev, "_should_update_now", return_value=True) as should_update_now,
+            self.patch(self.odev, "update") as update,
+        ):
+            self.odev._started = False
+            self.odev.start()
+
+        should_update_now.assert_not_called()
+        update.assert_not_called()
+
+    def test_36_prune_databases_non_interactive(self):
+        """Databases should not even be listed for pruning in non-interactive mode, and pruning should still be due
+        on the next interactive run.
+        """
+        self.odev.config.pruning.date = "1995-12-21 00:00:00"
+        delete_command_cls = self.odev.commands.get("delete")
+
+        with (
+            patch.object(Console, "_non_interactive", new=True),
+            self.patch(delete_command_cls, "list_databases", return_value=["unused"]) as list_databases,
+        ):
+            REAL_PRUNE_DATABASES(self.odev)
+
+        list_databases.assert_not_called()
         self.assertEqual(self.odev.config.pruning.date.year, 1995)

@@ -366,7 +366,9 @@ class Odev(Generic[CommandType]):
 
         self.plugins_path.mkdir(parents=True, exist_ok=True)
 
-        if self._should_update_now():
+        if self.console.non_interactive:
+            logger.debug("Skipping update check in non-interactive mode")
+        elif self._should_update_now():
             self.check_release()
             self.update()
 
@@ -606,6 +608,10 @@ class Odev(Generic[CommandType]):
         """Prune existing local databases to free up resources and stay compliant with
         the General Data Protection Regulation (GDPR) as restored dumps may contain customer data.
         """
+        if self.console.non_interactive:
+            logger.debug("Skipping database pruning in non-interactive mode")
+            return
+
         last_pruning = (datetime.today() - self.config.pruning.date).days
         logger.debug(f"Last pruning of databases was {last_pruning} days ago")
 

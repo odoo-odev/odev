@@ -98,7 +98,7 @@ class CreateCommand(OdoobinTemplateCommand):
 
                 logger.warning(f"Database {self._database.name!r} already exists")
 
-                if not self.console.confirm("Overwrite it?", default=True):
+                if not self.console.confirm("Overwrite it?", default=True, destructive=True):
                     raise self.error(f"Cannot create database with an already existing name {self._database.name!r}")
 
                 with progress.spinner(f"Dropping database {self._database.name!r}"):
@@ -126,7 +126,7 @@ class CreateCommand(OdoobinTemplateCommand):
             if fs_database.exists():
                 logger.warning(f"Filestore for {self._database.name!r} already exists")
 
-                if not self.console.confirm("Overwrite it?", default=True):
+                if not self.console.confirm("Overwrite it?", default=True, destructive=True):
                     raise self.error(f"Cannot copy template filestore to existing directory {fs_database!s}")
 
                 with progress.spinner(f"Removing {fs_database!s}"):
