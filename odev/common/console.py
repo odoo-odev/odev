@@ -26,6 +26,7 @@ from rich.theme import Theme
 
 from odev.common import string
 from odev.common.deprecation import deprecated
+from odev.common.errors.odev import OdevError
 
 
 if TYPE_CHECKING:
@@ -39,6 +40,24 @@ __all__ = ["Colors", "console"]
 CONTROL_LINE_UP = Control((ControlType.CURSOR_UP, 1))
 CONTROL_LINE_ERASE = Control((ControlType.ERASE_IN_LINE, 2))
 CONTROL_CURSOR_RESET = Control((ControlType.CURSOR_MOVE_TO_COLUMN, 0))
+
+NON_INTERACTIVE_ARGUMENT = "--non-interactive"
+"""Command line argument switching odev to non-interactive mode."""
+
+NON_INTERACTIVE_ENVIRONMENT = "ODEV_NON_INTERACTIVE"
+"""Environment variable switching odev to non-interactive mode when set to a truthy value."""
+
+
+def non_interactive_requested() -> bool:
+    """Whether non-interactive mode was requested from the command line or the environment.
+
+    Read before the arguments of the command are parsed, as the framework prompts for updates and database pruning
+    while starting, ahead of any command.
+    """
+    if NON_INTERACTIVE_ARGUMENT in sys.argv[1:]:
+        return True
+
+    return os.environ.get(NON_INTERACTIVE_ENVIRONMENT, "").strip().lower() not in ("", "0", "false", "no")
 
 
 def resolve_styles(styles: str) -> str:
@@ -270,6 +289,11 @@ class Console(RichConsole):
     _headless: ClassVar[bool] = False
     """If True, run in headless mode (no decorative output)."""
 
+    _non_interactive: ClassVar[bool] = False
+    """If True, never wait for user input: optional steps are skipped and prompts are answered with their default,
+    or fail when they have none.
+    """
+
     _is_live: ClassVar[bool] = False
     """If True, the console is in live mode and lines clearing will be disabled."""
 
@@ -282,6 +306,9 @@ class Console(RichConsole):
             self.headless = True
             self.bypass_prompt = True
 
+        if non_interactive_requested():
+            self.non_interactive = True
+
     @property
     def headless(self) -> bool:
         """Return True if the console is running in headless mode."""
@@ -293,9 +320,23 @@ class Console(RichConsole):
         Console._headless = value
 
     @property
+    def non_interactive(self) -> bool:
+        """Return True if odev must never wait for user input."""
+        return Console._non_interactive
+
+    @non_interactive.setter
+    def non_interactive(self, value: bool):
+        """Set the non_interactive property."""
+        Console._non_interactive = value
+
+        if value:
+            # Git would otherwise ask for credentials on the terminal and hang until someone answers
+            os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
+
+    @property
     def bypass_prompt(self) -> bool:
         """Return True if prompts should be bypassed."""
-        return Console._bypass_prompt
+        return Console._bypass_prompt or Console._non_interactive
 
     @bypass_prompt.setter
     def bypass_prompt(self, value: bool):
@@ -322,10 +363,13 @@ class Console(RichConsole):
     @contextmanager
     def force_bypass_prompt(self, force: bool = False):
         """Context manager to temporarily force prompt bypassing."""
-        original_bypass = self.bypass_prompt
-        self.bypass_prompt = force
-        yield
-        self.bypass_prompt = original_bypass
+        original_bypass = Console._bypass_prompt
+        Console._bypass_prompt = force
+
+        try:
+            yield
+        finally:
+            Console._bypass_prompt = original_bypass
 
     def clear_line(self, count: int = 1):
         """Clear up a number of lines from the terminal.
@@ -509,6 +553,11 @@ class Console(RichConsole):
         has_default = default_key in kwargs
         default_value = kwargs.pop(default_key) if is_checkbox and has_default else kwargs.get(default_key)
 
+        if self.non_interactive and (
+            not has_default or default_value is None or (prompt_name == "text" and not default_value)
+        ):
+            raise OdevError(f"Cannot answer {message!r} in non-interactive mode: no default answer to fall back on")
+
         self.pause_live()
         prompt = getattr(inquirer, prompt_name)(
             raise_keyboard_interrupt=True,
@@ -639,14 +688,19 @@ class Console(RichConsole):
             mandatory_message="A value is required",
         )
 
-    def confirm(self, message: str, default: bool = False) -> bool:
+    def confirm(self, message: str, default: bool = False, destructive: bool = False) -> bool:
         """Prompt for a confirmation.
 
         :param message: Question to ask the user
         :param default: Set the default text value of the prompt
+        :param destructive: Whether confirming discards existing data; in non-interactive mode, a destructive
+            default answer is only assumed when prompts were explicitly bypassed with `--force`
         :return: True if the user confirmed, False otherwise
         :rtype: bool
         """
+        if destructive and default and self.non_interactive and not Console._bypass_prompt:
+            raise OdevError(f"Cannot answer {message!r} in non-interactive mode without --force: it discards data")
+
         return self.__prompt_factory(
             "confirm",
             message=message,

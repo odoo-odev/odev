@@ -3,11 +3,13 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import patch
 
 from git import Repo
 from github import GithubException, UnknownObjectException
 
 from odev.common.connectors.git import GitConnector, GithubConnector, RepositoryReference
+from odev.common.console import Console
 from odev.common.errors import ConnectorError
 from odev.common.odoobin import OdoobinProcess
 
@@ -216,6 +218,56 @@ class TestGitConnectorDefaultBranch(GitRepositoryMixin, OdevTestCase):
     def test_default_branch_of_an_unreachable_remote(self):
         path = self.make_repository("myrepo", remote="/nonexistent/acme/myrepo.git")
         self.assertIsNone(GitConnector("acme/myrepo", path).default_branch)
+
+
+class TestGitConnectorCreateWorktree(GitRepositoryMixin, OdevTestCase):
+    """In non-interactive mode, worktrees are created from the local clone when it holds the revision."""
+
+    def make_offline_clone(self) -> Path:
+        """Clone a throwaway repository holding a `17.0` branch, then point its remote somewhere unreachable.
+        :return: The path to the clone.
+        """
+        origin = Repo(self.make_repository("acme", "origin", remote=None))
+        origin.git.checkout("-b", "17.0")
+        origin.git.commit(
+            "--allow-empty", "-m", "Initial commit", env={"GIT_CONFIG_GLOBAL": "/dev/null"} | GIT_IDENTITY
+        )
+
+        path = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, path, ignore_errors=True)
+        Repo.clone_from(origin.working_dir, path)
+        Repo(path).git.remote("set-url", "origin", "/nonexistent/acme/myrepo.git")
+        return path
+
+    def worktree_path(self, name: str) -> Path:
+        """A path to create a worktree at, in its own temporary directory."""
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        return root / name / "myrepo"
+
+    def test_non_interactive_creates_worktree_without_fetching(self):
+        connector = GitConnector("acme/myrepo", self.make_offline_clone())
+        path = self.worktree_path("17.0")
+
+        with patch.object(Console, "_non_interactive", new=True):
+            connector.create_worktree(path, "17.0")
+
+        self.assertEqual(Repo(path).active_branch.name, "17.0")
+
+    def test_non_interactive_names_the_branch_after_the_worktree(self):
+        connector = GitConnector("acme/myrepo", self.make_offline_clone())
+        path = self.worktree_path("mydb")
+
+        with patch.object(Console, "_non_interactive", new=True):
+            connector.create_worktree(path, "17.0")
+
+        self.assertEqual(Repo(path).active_branch.name, "17.0-odev-mydb")
+
+    def test_non_interactive_fetches_a_revision_missing_locally(self):
+        connector = GitConnector("acme/myrepo", self.make_offline_clone())
+
+        with patch.object(Console, "_non_interactive", new=True), self.assertRaises(ConnectorError):
+            connector.create_worktree(self.worktree_path("18.0"), "18.0")
 
 
 class TestGithubConnectorRepositories(OdevTestCase):

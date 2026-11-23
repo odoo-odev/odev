@@ -496,7 +496,6 @@ class OdoobinProcess(OdevFrameworkMixin):
 
         with spinner(f"Preparing virtual environment {self.venv.name!r}"):
             self.prepare_venv()
-            self.prepare_npm()
             self.prepare_psql()
 
     def format_command(
@@ -699,39 +698,6 @@ class OdoobinProcess(OdevFrameworkMixin):
         if self.version >= OdooVersion("19.0") and psql_version < Version("16.0"):
             raise OdevError(f"Odoo {self.version} requires PostgreSQL 16 or higher, current version is {psql_version}")
 
-    def prepare_npm(self):
-        """Prepare the packages of the Odoo installation."""
-        logger.debug("Verifying NPM installation")
-
-        with silence_loggers("odev.common.bash"):
-            npm_process = bash.execute("which npm", raise_on_error=False)
-
-        if npm_process is None or npm_process.returncode:
-            raise OdevError("NPM is not installed, please install it first")
-
-        packages = ["rtlcss"]
-
-        if cast(OdooVersion, self.version).major <= 10:  # noqa: PLR2004
-            packages.extend(["less", "less-plugin-clean-css"])
-
-        missing = list(self.missing_npm_packages(packages))
-
-        if any(missing):
-            bash.execute(f"cd {self.odoo_path} && npm install {' '.join(missing)}")
-
-    def missing_npm_packages(self, packages: Sequence[str]) -> Generator[str, None, None]:
-        """Check whether the given NPM packages are installed in the version folder of Odoo."""
-        installed_packages_process = bash.execute(f"cd {self.odoo_path} && npm list")
-
-        if installed_packages_process is None:
-            raise OdevError("Failed to check installed NPM packages")
-
-        installed_packages = installed_packages_process.stdout.decode()
-
-        for package in packages:
-            if f" {package}" not in installed_packages:
-                yield package
-
     def missing_debian_packages(self) -> list[str] | None:
         """List the packages Odoo declares in `debian/control` and that are not installed.
 
@@ -865,6 +831,10 @@ class OdoobinProcess(OdevFrameworkMixin):
 
             if len(list(self.odoo_repositories)) != len(list(self.odoo_worktrees)):
                 repository.create_worktree(f"{self.worktree}/{repository.path.name}", str(self.version or "master"))
+
+        # Leave the pull for the next interactive run, without recording a date that would postpone it
+        if self.console.non_interactive:
+            return logger.debug("Skipping worktree update in non-interactive mode")
 
         # Pull changes once per week, on Monday (or a later day if odev was not run)
         if not self.odev.config.repositories.is_pull_needed(self.version):
