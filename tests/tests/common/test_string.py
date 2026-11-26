@@ -238,6 +238,12 @@ class TestCommonStringMisc(OdevTestCase):
         """Past datetimes should be rendered relative to now."""
         self.assertEqual(string.ago(datetime.datetime.now() - datetime.timedelta(hours=2)), "2 hours ago")
 
+    def test_03_ago_aware(self):
+        """Aware datetimes should be rendered relative to now whatever their offset from the local timezone."""
+        timezone = datetime.timezone(datetime.timedelta(hours=5))
+        date = datetime.datetime.now(timezone) - datetime.timedelta(hours=2)
+        self.assertEqual(string.ago(date), "2 hours ago")
+
     def test_04_float_to_hours_drops_minutes(self):
         """Fractions of an hour are lost, minutes always come out as zero.
 
