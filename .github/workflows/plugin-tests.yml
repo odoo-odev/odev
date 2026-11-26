@@ -1,0 +1,100 @@
+name: plugin-tests
+
+# Reusable workflow running the unit tests of a plugin, see docs/tutorials/plugins.md.
+#
+# A plugin is imported as `odev.plugins.<module>` and may depend on other plugins: its tests run from a checkout
+# of odev into which the plugin and its dependencies are linked.
+
+on:
+  workflow_call:
+    inputs:
+      odev-ref:
+        description: Revision of odoo-odev/odev to test against, defaults to the branch targeted by the changes
+        type: string
+        default: ''
+      python-versions:
+        description: Versions of python to run the tests with, as a JSON array
+        type: string
+        default: '["3.10", "3.13"]'
+      postgresql:
+        description: Start a local PostgreSQL server, required by the test cases provided by odev
+        type: boolean
+        default: true
+
+jobs:
+
+  unit-tests:
+    name: unit-tests-python${{ matrix.python-version }}
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+
+    env:
+      # Changes released to `main` are tested against the released odev, anything else against the next release
+      ODEV_REF: ${{ inputs.odev-ref || ((github.base_ref || github.ref_name) == 'main' && 'main' || 'beta') }}
+
+    steps:
+      - name: checkout-plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: checkout-odev
+        uses: actions/checkout@v4
+        with:
+          repository: odoo-odev/odev
+          ref: ${{ env.ODEV_REF }}
+          path: odev
+
+      - name: setup-python
+        uses: actions/setup-python@v5.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+
+      - name: link-plugins
+        run: |
+          python odev/.github/scripts/plugin_tests.py \
+            --name "$GITHUB_REPOSITORY" \
+            --plugin plugin \
+            --odev odev \
+            --dependencies dependencies \
+            --revision "$ODEV_REF" > plugin-requirements.txt
+
+      - name: setup-python-requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r odev/requirements.txt -r odev/requirements-dev.txt
+          while read -r requirements; do pip install -r "$requirements"; done < plugin-requirements.txt
+
+      - name: setup-postgresql
+        if: inputs.postgresql
+        run: |
+          sudo apt-get update --quiet
+          sudo apt-get install --quiet --yes postgresql postgresql-client
+          sudo service postgresql start
+          sudo -u postgres createuser -s $USER
+          for i in {1..10}; do pg_isready -h localhost -p 5432 && exit 0; sleep 1; done
+          exit 1
+
+      - name: run-unit-tests
+        working-directory: plugin
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          PYTHONPATH: ${{ github.workspace }}/odev
+        run: |
+          status=0
+          python -m pytest tests || status=$?
+
+          # Exit code 5: no test was collected, a plugin is allowed not to have tests yet
+          if [ "$status" -eq 5 ]; then
+            echo "::notice title=No tests::No unit test was found in the tests directory of this plugin"
+            exit 0
+          fi
+
+          exit "$status"
